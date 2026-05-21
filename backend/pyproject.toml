@@ -1,0 +1,34 @@
+[project]
+name = "ai-assistant-backend"
+version = "0.1.0"
+description = "AI Assistant Backend - FastAPI + SQLAlchemy + OpenAI SDK"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "sqlalchemy>=2.0.0",
+    "aiosqlite>=0.20.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "openai>=1.55.0",
+    "python-multipart>=0.0.9",
+    "python-docx>=1.1.0",
+    "openpyxl>=3.1.0",
+    "pypdf>=5.0.0",
+    "chromadb>=1.0.0",
+    "tiktoken>=0.7.0",
+    "mcp>=1.27.1",
+    "httpx>=0.28.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"

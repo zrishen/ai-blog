@@ -1,0 +1,2 @@
+- [User Profile](user.md) — Developer building a full-stack AI assistant with React + FastAPI
+- [Project Info](project.md) — Tech stack, API config, multimodal chat & theme features

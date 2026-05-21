@@ -1,0 +1,33 @@
+"""统一路由注册入口。
+
+所有业务路由按功能模块拆分为独立文件，在此汇总并通过 prefix 挂载到 /api 下。
+"""
+
+from fastapi import APIRouter
+
+from src.api.chat import router as chat_router
+from src.api.conversations import router as conversations_router
+from src.api.kb import router as kb_router
+from src.api.mcp import router as mcp_router
+from src.api.status import router as status_router
+from src.api.files import router as files_router
+
+router = APIRouter()
+
+# 状态检查
+router.include_router(status_router)
+
+# 对话管理
+router.include_router(conversations_router)
+
+# 聊天（流式 / 非流式）
+router.include_router(chat_router)
+
+# 文件上传
+router.include_router(files_router)
+
+# 知识库
+router.include_router(kb_router)
+
+# MCP 服务配置
+router.include_router(mcp_router)
