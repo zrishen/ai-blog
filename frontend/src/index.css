@@ -1,49 +1,131 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --radius-full: 9999px;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-chart-1: hsl(var(--chart-1));
+  --color-chart-2: hsl(var(--chart-2));
+  --color-chart-3: hsl(var(--chart-3));
+  --color-chart-4: hsl(var(--chart-4));
+  --color-chart-5: hsl(var(--chart-5));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-sidebar-background: hsl(var(--sidebar-background));
+}
+
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-sidebar: #0f172a;
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(255, 255, 255, 0.08);
-  --bg-input: #1e293b;
-  --bg-elevated: #1e293b;
-  --bg-code: #0f172a;
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --border-color: #1e293b;
-  --accent-color: #6366f1;
-  --accent-hover: #4f46e5;
+  --background: 218 42% 98%;
+  --foreground: 225 38% 9%;
+  --card: 0 0% 100%;
+  --card-foreground: 225 38% 9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 225 38% 9%;
+  --primary: 222 86% 56%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 222 48% 96%;
+  --secondary-foreground: 224 34% 16%;
+  --muted: 220 35% 95%;
+  --muted-foreground: 220 13% 42%;
+  --accent: 222 62% 95%;
+  --accent-foreground: 224 34% 16%;
+  --destructive: 0 78% 58%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 220 32% 88%;
+  --input: 220 32% 90%;
+  --ring: 222 86% 56%;
+  --radius: 1rem;
+  --chart-1: 12 76% 61%;
+  --chart-2: 173 58% 39%;
+  --chart-3: 197 37% 24%;
+  --chart-4: 43 74% 66%;
+  --chart-5: 27 87% 67%;
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-primary: 240 5.9% 10%;
+  --sidebar-primary-foreground: 0 0% 98%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --sidebar-accent-foreground: 240 5.9% 10%;
+  --sidebar-border: 220 13% 91%;
+  --sidebar-ring: 217.2 91.2% 59.8%;
 }
 
-[data-theme="light"] {
-  --bg-primary: #f8f9fa;
-  --bg-secondary: #ffffff;
-  --bg-sidebar: #f1f3f5;
-  --bg-hover: rgba(0, 0, 0, 0.04);
-  --bg-active: rgba(0, 0, 0, 0.08);
-  --bg-input: #ffffff;
-  --bg-elevated: #e9ecef;
-  --bg-code: #e9ecef;
-  --text-primary: #212529;
-  --text-secondary: #495057;
-  --text-muted: #868e96;
-  --border-color: #dee2e6;
-  --accent-color: #4f46e5;
-  --accent-hover: #4338ca;
+[data-theme="dark"] {
+  --background: 225 38% 7%;
+  --foreground: 215 30% 94%;
+  --card: 224 32% 10%;
+  --card-foreground: 215 30% 94%;
+  --popover: 224 32% 10%;
+  --popover-foreground: 215 30% 94%;
+  --primary: 216 92% 64%;
+  --primary-foreground: 224 34% 10%;
+  --secondary: 222 28% 15%;
+  --secondary-foreground: 215 30% 94%;
+  --muted: 222 28% 14%;
+  --muted-foreground: 218 15% 68%;
+  --accent: 221 30% 17%;
+  --accent-foreground: 215 30% 94%;
+  --destructive: 0 70% 45%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 222 24% 20%;
+  --input: 222 24% 18%;
+  --ring: 216 92% 64%;
+  --chart-1: 220 70% 50%;
+  --chart-2: 160 60% 45%;
+  --chart-3: 30 80% 55%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+  --sidebar-background: 240 5.9% 10%;
+  --sidebar-foreground: 240 4.8% 95.9%;
+  --sidebar-primary: 224.3 76.3% 48%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 240 3.7% 15.9%;
+  --sidebar-accent-foreground: 240 4.8% 95.9%;
+  --sidebar-border: 240 3.7% 15.9%;
+  --sidebar-ring: 217.2 91.2% 59.8%;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@layer base {
+  *, ::before, ::after, ::backdrop, ::file-selector-button {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Segoe UI Variable", "LXGW WenKai Screen", "Microsoft YaHei UI", "PingFang SC", -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
 #root {
@@ -59,18 +141,43 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
+  background: hsl(var(--border));
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: hsl(var(--primary) / 0.55);
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.18);
+  color: hsl(var(--foreground));
 }
 
 [data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: hsl(var(--border));
 }
 
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: hsl(var(--primary) / 0.55);
+}
+
+/* Layout variables */
+:root {
+  --nav-height: 56px;
+  --leftbar-width: 260px;
+  --aisidebar-width: 320px;
+}
+
+/* Radix ScrollArea: constrain internal display:table wrapper */
+[data-slot="scroll-area-viewport"] > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed;
+}
+
+/* Keyframes */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }

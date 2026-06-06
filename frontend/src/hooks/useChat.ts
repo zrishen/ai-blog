@@ -10,7 +10,6 @@ import {
   listKBDocuments,
   deleteKBDocument,
   listMCPServers,
-  addMCPServer,
   deleteMCPServer,
 } from "../api/client";
 
@@ -76,22 +75,23 @@ export function useChatHooks() {
     [state.conversations, state.currentConversationId],
   );
 
-  const loadKBDocuments = useCallback(async () => {
+  const loadKBDocuments = useCallback(async (categoryId?: number) => {
     try {
-      const data = await listKBDocuments();
+      const data = await listKBDocuments(categoryId);
       dispatch({ type: "SET_KB_DOCUMENTS", payload: data.documents });
     } catch (error) {
       console.error("Failed to load KB documents:", error);
+      throw error;
     }
   }, []);
 
   const uploadToKnowledgeBase = useCallback(
-    async (file: File) => {
+    async (file: File, categoryId?: number) => {
       dispatch({ type: "SET_LOADING", payload: true });
+      const targetCategoryId = categoryId ?? state.kbSelectedCategoryId ?? undefined;
       try {
-        const doc = await uploadToKB(file);
-        dispatch({ type: "SET_KB_DOCUMENTS", payload: [doc, ...state.kbDocuments] });
-        await loadKBDocuments();
+        const doc = await uploadToKB(file, targetCategoryId);
+        await loadKBDocuments(targetCategoryId);
         return doc;
       } catch (error) {
         console.error("KB upload failed:", error);
@@ -100,7 +100,7 @@ export function useChatHooks() {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [state.kbDocuments, loadKBDocuments],
+    [state.kbSelectedCategoryId, loadKBDocuments],
   );
 
   const removeKBDocument = useCallback(
@@ -144,6 +144,7 @@ export function useChatHooks() {
 
       let currentConvId = convId;
       let assistantContent = "";
+      const toolResults: string[] = [];
 
       try {
         await sendChat(
@@ -172,12 +173,13 @@ export function useChatHooks() {
             });
           },
           (toolName, result) => {
+            toolResults.push(`${toolName}: ${result}`);
             dispatch({
               type: "UPDATE_MESSAGE",
               payload: {
                 id: assistantMsgId,
                 tool_calls: undefined,
-                tool_results: [...(assistantMsg.tool_results || []), `${toolName}: ${result}`],
+                tool_results: [...toolResults],
               },
             });
           },
@@ -208,7 +210,7 @@ export function useChatHooks() {
     } catch (error) {
       console.error("Failed to load MCP servers:", error);
     }
-  }, []);
+  }, [dispatch]);
 
   const addMCPServer = useCallback(
     async (data: {
@@ -220,11 +222,13 @@ export function useChatHooks() {
       url?: string;
       tools?: string[];
     }) => {
-      const server = await addMCPServer(data);
-      dispatch({ type: "SET_MCP_SERVERS", payload: [...state.mcpServers, server] });
+      const { addMCPServer: addMCPServerAPI } = await import("../api/client");
+      const server = await addMCPServerAPI(data);
+      const refreshed = await listMCPServers();
+      dispatch({ type: "SET_MCP_SERVERS", payload: refreshed.servers });
       return server;
     },
-    [state.mcpServers],
+    [dispatch],
   );
 
   const removeMCPServer = useCallback(
@@ -232,7 +236,7 @@ export function useChatHooks() {
       await deleteMCPServer(id);
       dispatch({ type: "REMOVE_MCP_SERVER", payload: id });
     },
-    [],
+    [dispatch],
   );
 
   return {

@@ -1,31 +1,32 @@
 """Document chunking utility for RAG."""
 
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
-    """Split text into overlapping chunks.
+_CHINESE_SEPARATORS = ["\n\n", "\n", "。", "！", "？", "；", ". ", " ", ""]
+_DEFAULT_CHUNK_SIZE = 500
+_DEFAULT_OVERLAP = 100
 
-    Args:
-        text: Input text to chunk.
-        chunk_size: Target size of each chunk in characters.
-        overlap: Number of overlapping characters between consecutive chunks.
+_splitter = RecursiveCharacterTextSplitter(
+    separators=_CHINESE_SEPARATORS,
+    chunk_size=_DEFAULT_CHUNK_SIZE,
+    chunk_overlap=_DEFAULT_OVERLAP,
+    length_function=len,
+    keep_separator="end",
+)
 
-    Returns:
-        List of text chunks.
-    """
+
+def chunk_text(text: str, chunk_size: int = _DEFAULT_CHUNK_SIZE, overlap: int = _DEFAULT_OVERLAP) -> list[str]:
+    """Split text into overlapping chunks."""
     if not text or not text.strip():
         return []
 
-    chunks: list[str] = []
-    start = 0
-    text_len = len(text)
+    if chunk_size == _DEFAULT_CHUNK_SIZE and overlap == _DEFAULT_OVERLAP:
+        return _splitter.split_text(text)
 
-    while start < text_len:
-        end = start + chunk_size
-        chunk = text[start:end].strip()
-        if chunk:
-            chunks.append(chunk)
-        if end >= text_len:
-            break
-        start = end - overlap
-
-    return chunks
+    splitter = RecursiveCharacterTextSplitter(
+        separators=_CHINESE_SEPARATORS,
+        chunk_size=chunk_size,
+        chunk_overlap=overlap,
+        length_function=len,
+    )
+    return splitter.split_text(text)

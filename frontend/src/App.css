@@ -1,23 +1,38 @@
-.app-layout {
+/* === Root Layout === */
+.app-root {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   overflow: hidden;
 }
 
-.chat-page {
+/* === Body area (below NavBar) === */
+.app-body {
   flex: 1;
+  overflow: hidden;
+}
+
+/* === Main Content === */
+.main-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  min-width: 0;
+  background: hsl(var(--muted) / 0.55);
 }
 
+/* === Chat Messages === */
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 8px;
+  padding-bottom: 16px;
 }
 
+/* === Empty State === */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -25,18 +40,19 @@
   justify-content: center;
   height: 100%;
   text-align: center;
-  gap: 12px;
-  color: var(--text-secondary);
+  gap: 16px;
+  color: hsl(var(--muted-foreground));
 }
 
 .empty-state h2 {
   font-size: 28px;
   font-weight: 500;
-  color: var(--text-primary);
+  color: hsl(var(--foreground));
   margin: 0;
+  margin-bottom: 4px;
 }
 
 .empty-state p {
   font-size: 15px;
-  color: var(--text-muted);
+  color: hsl(var(--muted-foreground));
 }

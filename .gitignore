@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 *.egg-info
+.python-version
 
 # Virtual environments
 .venv/
@@ -12,6 +13,7 @@ venv/
 
 # Environment variables
 .env
+.claude
 
 # Database
 *.db
@@ -27,6 +29,8 @@ dist/
 .idea/
 *.swp
 *.swo
+.playwright-mcp
+.pytest_cache
 
 # OS
 .DS_Store
@@ -37,6 +41,23 @@ backend/src/uploads/
 
 # ChromaDB
 chroma_db/
+backend/uploads
 
 # Logs
 *.log
+docs
+LOG.md
+PROMPT.md
+temp
+
+*.bat
+
+# data
+content
+month.md
+p.md
+backups
+ai_assistant.db-shm
+ai_assistant.db-wal
+=0.1.0
+logs/

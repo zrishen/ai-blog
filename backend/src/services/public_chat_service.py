@@ -1,0 +1,137 @@
+"""受限公开 AI 聊天服务：不绑定工具、不访问私有知识库、不保存工作台会话。"""
+
+import json
+import logging
+from datetime import datetime
+from typing import AsyncGenerator
+
+from langchain_openai import ChatOpenAI
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.config import settings
+from src.database.models import BlogPost, User
+from src.services.official_intro_service import build_intro_post_payload
+
+logger = logging.getLogger(__name__)
+
+
+def _truncate(text: str, max_chars: int) -> str:
+    return text if len(text) <= max_chars else text[:max_chars]
+
+
+_PROTOCOL_MARKERS = ("REASONING", "TOOLDONE", "BLOGDELTA", "PATCHSTART", "PATCHDELTA", "DONE")
+
+
+def _strip_public_protocol_markers(text: str) -> str:
+    normalized = text.replace("\x00", "").replace("�", "")
+    decoder = json.JSONDecoder()
+    parts: list[str] = []
+    index = 0
+
+    while index < len(normalized):
+        marker = next((name for name in _PROTOCOL_MARKERS if normalized.startswith(name, index)), None)
+        if not marker:
+            parts.append(normalized[index])
+            index += 1
+            continue
+
+        payload_start = index + len(marker)
+        while payload_start < len(normalized) and normalized[payload_start].isspace():
+            payload_start += 1
+        if payload_start < len(normalized) and normalized[payload_start] == "{":
+            try:
+                _, payload_end = decoder.raw_decode(normalized[payload_start:])
+                index = payload_start + payload_end
+                continue
+            except ValueError:
+                break
+
+        parts.append(normalized[index])
+        index += 1
+
+    return "".join(parts)
+
+
+async def _landing_context(db: AsyncSession) -> str:
+    doc = build_intro_post_payload()
+    parts = [
+        "[平台公开介绍]",
+        f"标题：{doc['title']}\n摘要：{doc.get('excerpt', '') or ''}\n内容：{_truncate(doc.get('content', '') or '', 1500)}",
+    ]
+    return _truncate("\n\n".join(parts), settings.public_chat_max_context_chars)
+
+
+async def _user_public_context(db: AsyncSession, username: str, post_slug: str | None = None) -> str | None:
+    user_result = await db.execute(select(User).where(User.username == username))
+    owner = user_result.scalar_one_or_none()
+    if not owner:
+        return None
+
+    stmt = select(BlogPost).where(BlogPost.user_id == owner.id, BlogPost.status == "published")
+    if post_slug:
+        stmt = stmt.where(BlogPost.slug == post_slug)
+    stmt = stmt.order_by(BlogPost.created_at.desc()).limit(8)
+    result = await db.execute(stmt)
+    posts = result.scalars().all()
+
+    parts = [f"[公开博客上下文]\n博客作者：{owner.username}"]
+    if not posts:
+        parts.append("该用户暂无公开文章。")
+    for post in posts:
+        parts.append(f"标题：{post.title}\n摘要：{post.excerpt or ''}\n内容：{_truncate(post.content or '', 1500)}")
+    return _truncate("\n\n".join(parts), settings.public_chat_max_context_chars)
+
+
+def _system_prompt(context: str) -> str:
+    today = datetime.now().strftime("%Y年%m月%d日")
+    return (
+        f"当前日期：{today}。\n\n"
+        "你是 AI Blog 的公开访客助手，只能进行普通聊天。"
+        "你不能创建、编辑、删除或发布博客，不能访问私有知识库，不能调用 MCP 或任何工具。"
+        "如果用户要求执行管理操作，请说明需要登录为站点主人并使用完整助手。"
+        "你可以基于以下公开上下文和通用知识回答：\n\n"
+        f"{context}"
+    )
+
+
+async def public_stream_chat(
+    db: AsyncSession,
+    content: str,
+    *,
+    username: str | None = None,
+    post_slug: str | None = None,
+) -> AsyncGenerator[str, None]:
+    if len(content) > settings.public_chat_max_input_chars:
+        yield f"输入过长，请控制在 {settings.public_chat_max_input_chars} 字以内。"
+        return
+
+    if username:
+        context = await _user_public_context(db, username, post_slug)
+        if context is None:
+            yield "用户不存在。"
+            return
+    else:
+        context = await _landing_context(db)
+
+    llm = ChatOpenAI(
+        api_key=settings.openai_api_key,
+        base_url=settings.base_url,
+        model=settings.model_name,
+        temperature=0.7,
+        max_tokens=settings.public_chat_max_output_tokens,
+    )
+    messages = [
+        {"role": "system", "content": _system_prompt(context)},
+        {"role": "user", "content": content},
+    ]
+
+    try:
+        async for chunk in llm.astream(messages):
+            if chunk.content:
+                text = _strip_public_protocol_markers(str(chunk.content))
+                if text:
+                    yield text
+    except Exception as e:
+        logger.error("Public chat failed: %s", e, exc_info=True)
+        yield "抱歉，公开 AI 助手暂时无法响应。"

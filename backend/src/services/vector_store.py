@@ -1,12 +1,13 @@
 """Vector store service using ChromaDB."""
 
 from dataclasses import dataclass
+from uuid import uuid4
 
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from chromadb.errors import NotFoundError
 
-from src.core.config import settings
+from src.config import settings
 
 _client: chromadb.PersistentClient | None = None
 
@@ -33,6 +34,7 @@ async def add_documents(
     collection_name: str,
     documents: list[str],
     metadata_list: list[dict] | None = None,
+    embeddings: list[list[float]] | None = None,
 ) -> None:
     """Add documents to a collection.
 
@@ -40,6 +42,7 @@ async def add_documents(
         collection_name: Name of the ChromaDB collection.
         documents: List of text documents to add.
         metadata_list: Optional list of metadata dicts (one per document).
+        embeddings: Optional embedding vectors matching the documents.
     """
     if not documents:
         return
@@ -53,8 +56,11 @@ async def add_documents(
     if metadata_list is None:
         metadata_list = [{}] * len(documents)
 
-    ids = [f"{collection_name}_{i}" for i in range(len(documents))]
-    collection.upsert(documents=documents, metadatas=metadata_list, ids=ids)
+    ids = [str(metadata.get("chunk_id") or f"{collection_name}_{uuid4().hex}_{i}") for i, metadata in enumerate(metadata_list)]
+    upsert_kwargs = {"documents": documents, "metadatas": metadata_list, "ids": ids}
+    if embeddings is not None:
+        upsert_kwargs["embeddings"] = embeddings
+    collection.upsert(**upsert_kwargs)
 
 
 async def search(
@@ -98,6 +104,18 @@ async def search(
         ))
 
     return results_list
+
+
+async def delete_document_chunks(collection_name: str, stored_name: str) -> bool:
+    """Delete chunks for one stored document from a collection."""
+    client = _get_client()
+    try:
+        collection = client.get_collection(name=collection_name)
+    except (ValueError, NotFoundError):
+        return False
+
+    collection.delete(where={"stored_name": stored_name})
+    return True
 
 
 async def delete_collection(collection_name: str) -> bool:

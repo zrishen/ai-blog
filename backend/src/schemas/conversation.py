@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -26,10 +26,10 @@ class MessageRequest(BaseModel):
     conversation_id: Optional[int] = None
     image_url: Optional[str] = None
     file_url: Optional[str] = None
-
-
-class MemoryCompactRequest(BaseModel):
-    conversation_id: int
+    use_rag: bool = False
+    rag_mode: Literal["normal", "knowledge", "auto"] | None = None
+    thinking_mode: Literal["normal", "deep"] = "normal"
+    context: Optional[dict] = None
 
 
 class MessageResponse(BaseModel):
@@ -45,6 +45,4 @@ class MessageResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ChatResponse(BaseModel):
-    message: MessageResponse
-    conversation: ConversationResponse
+

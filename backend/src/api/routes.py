@@ -11,17 +11,26 @@ from src.api.kb import router as kb_router
 from src.api.mcp import router as mcp_router
 from src.api.status import router as status_router
 from src.api.files import router as files_router
+from src.api.blog import router as blog_router
+from src.api.research import router as research_router
+from src.api.preview import router as preview_router
+from src.api.auth import router as auth_router
+from src.api.public_chat import router as public_chat_router
 
 router = APIRouter()
 
 # 状态检查
 router.include_router(status_router)
 
+# 用户认证
+router.include_router(auth_router)
+
 # 对话管理
 router.include_router(conversations_router)
 
 # 聊天（流式 / 非流式）
 router.include_router(chat_router)
+router.include_router(public_chat_router)
 
 # 文件上传
 router.include_router(files_router)
@@ -31,3 +40,10 @@ router.include_router(kb_router)
 
 # MCP 服务配置
 router.include_router(mcp_router)
+
+# 博客
+router.include_router(blog_router)
+router.include_router(research_router)
+
+# 文件预览
+router.include_router(preview_router)
