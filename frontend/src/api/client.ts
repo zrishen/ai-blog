@@ -993,6 +993,36 @@ export async function runResearchTopic(topicId: number, idempotencyKey?: string)
   return res.json();
 }
 
+export async function listResearchRuns(topicId: number): Promise<ResearchRun[]> {
+  const res = await apiFetch(`${API_BASE}/research/topics/${topicId}/runs`);
+  if (!res.ok) throw new Error("Failed to list research runs");
+  return res.json();
+}
+
+export interface ResearchDraftReference {
+  evidence_id?: number;
+  quote?: string;
+  source_id?: number;
+  title?: string;
+  url?: string;
+}
+
+export interface ResearchDraftPreview {
+  title: string;
+  outline: string[];
+  content: string;
+  references: ResearchDraftReference[];
+}
+
+export async function draftResearch(topicId: number): Promise<ResearchDraftPreview> {
+  const res = await apiFetch(`${API_BASE}/research/topics/${topicId}/draft-preview`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to generate research draft preview");
+  return res.json();
+}
+
 export async function createResearchClaim(topicId: number, data: {
   claim_text: string;
   status?: string;

@@ -222,6 +222,26 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     };
   }, [isPrivate, state.aiSidebarConversationId, historyReloadKey, dispatch]);
 
+  useEffect(() => {
+    if (!state.trustWritingEnabled || !isPrivate) return;
+    if (state.researchCurrentTopicId) return;
+    if (historyLoading) return;
+    const hasTrustChoice = state.aiSidebarMessages.some(
+      (m: any) => m.trustChoiceOptions && m.trustChoiceOptions.length > 0
+    );
+    if (hasTrustChoice) return;
+    (async () => {
+      const topics = state.researchTopics.length > 0
+        ? state.researchTopics
+        : await listResearchTopics().catch(() => []);
+      if (topics.length > 0) {
+        showTrustChoicePayload(buildTopicSelectChoices(topics));
+      } else {
+        showTrustChoicePayload(buildOpenResearchChoices(state.researchCurrentTopic?.title));
+      }
+    })();
+  }, [state.trustWritingEnabled, isPrivate, state.researchCurrentTopicId, historyLoading, state.aiSidebarMessages, state.researchTopics, showTrustChoicePayload, listResearchTopics, buildTopicSelectChoices, buildOpenResearchChoices, state.researchCurrentTopic?.title]);
+
   const handleNewChat = useCallback(async () => {
     dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: null });
     dispatch({ type: "SET_AI_SIDEBAR_MSGS", payload: [] });
@@ -317,6 +337,23 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   const handleSend = useCallback(async (textOverride?: string) => {
     const text = (textOverride ?? input).trim();
     if (!text || streaming) return;
+
+    if (state.trustWritingEnabled && !state.researchCurrentTopicId && isPrivate) {
+      const hasTrustChoice = state.aiSidebarMessages.some(
+        (m: any) => m.trustChoiceOptions && m.trustChoiceOptions.length > 0
+      );
+      if (!hasTrustChoice) {
+        const topics = state.researchTopics.length > 0
+          ? state.researchTopics
+          : await listResearchTopics().catch(() => []);
+        if (topics.length > 0) {
+          showTrustChoicePayload(buildTopicSelectChoices(topics));
+        } else {
+          showTrustChoicePayload(buildOpenResearchChoices(state.researchCurrentTopic?.title));
+        }
+        return;
+      }
+    }
 
     if (topicCreateMode) {
       setTopicCreateMode(false);
@@ -491,7 +528,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     } finally {
       setStreaming(false);
     }
-  }, [dispatch, input, isPrivate, loadConvs, postSlug, refreshOwnPosts, refreshResearchTopicIfNeeded, siteUsername, state.aiSidebarConversationId, state.aiSidebarMode, state.aiSidebarThinkingMode, streaming, pageType, postTitle, state.aiSelectionContext, state.blogCurrentPostId, state.researchCurrentTopicId, state.researchCurrentTopic?.title, state.trustWritingEnabled, topicCreateMode, topicCreateMessageId, setTopicCreateMode]);
+  }, [dispatch, input, isPrivate, loadConvs, postSlug, refreshOwnPosts, refreshResearchTopicIfNeeded, siteUsername, state.aiSidebarConversationId, state.aiSidebarMode, state.aiSidebarThinkingMode, streaming, pageType, postTitle, state.aiSelectionContext, state.blogCurrentPostId, state.researchCurrentTopicId, state.researchCurrentTopic?.title, state.trustWritingEnabled, topicCreateMode, topicCreateMessageId, setTopicCreateMode, showTrustChoicePayload, state.researchTopics, state.aiSidebarMessages, listResearchTopics, buildTopicSelectChoices, buildOpenResearchChoices]);
 
   const handleTrustChoiceSelect = useCallback(async (messageId: number, option: TrustChoiceOption) => {
     const isInlineUpdate = option.kind === "action" && option.action === "select_topic";
@@ -672,10 +709,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
                     try {
                       const topics = await listResearchTopics();
                       dispatch({ type: "SET_RESEARCH_TOPICS", payload: topics });
-                      showTrustChoicePayload(buildTopicSelectChoices(topics));
-                    } catch {
-                      showTrustChoicePayload(buildOpenResearchChoices(state.researchCurrentTopic?.title));
-                    }
+                    } catch { /* topics will be fetched on demand later */ }
                   }
                 }}>
                   <Search className="mr-2 h-4 w-4" />

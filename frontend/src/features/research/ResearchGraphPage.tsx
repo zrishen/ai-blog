@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertCircle, BrainCircuit, CheckCircle2, ExternalLink, FileSearch, GitBranch, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { getResearchTopic, resolveResearchConflict, updateResearchClaim, updateR
 import type { ResearchTopicDetail } from "../../api/client";
 import { LoginDialog } from "../auth/LoginDialog";
 import { ResearchGraphView } from "./ResearchGraphView";
+import { ResearchProcessPanel } from "./ResearchProcessPanel";
 
 function formatDate(dateStr?: string | null) {
   if (!dateStr) return "未检查";
@@ -60,6 +61,22 @@ function statusTone(status: string) {
   if (["supported", "ready", "approved", "applied"].includes(status)) return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   if (["conflicting", "stale", "rejected", "failed"].includes(status)) return "border-destructive/25 bg-destructive/10 text-destructive";
   return "border-primary/20 bg-primary/10 text-primary";
+}
+
+const RESEARCH_TABS = [
+  ["overview", "概览"],
+  ["process", "过程"],
+  ["claims", "事实"],
+  ["sources", "来源"],
+  ["conflicts", "冲突"],
+  ["graph", "图谱"],
+  ["proposals", "提案"],
+] as const;
+
+type ResearchTabKey = (typeof RESEARCH_TABS)[number][0];
+
+function isResearchTabKey(value: string | null): value is ResearchTabKey {
+  return RESEARCH_TABS.some(([key]) => key === value);
 }
 
 type ProposalConflictSummary = {
@@ -191,10 +208,14 @@ function ProposalPayloadSummary({ payload, topic }: { payload: Record<string, un
 export function ResearchGraphPage() {
   const { topicId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const { state, dispatch } = useChat();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<ResearchTabKey>(() => {
+    const tab = searchParams.get("tab");
+    return isResearchTabKey(tab) ? tab : "overview";
+  });
   const [error, setError] = useState<string | null>(null);
   const [runNote, setRunNote] = useState<string | null>(null);
   const [proposalNote, setProposalNote] = useState<string | null>(null);
@@ -202,6 +223,23 @@ export function ResearchGraphPage() {
   const [resolvingConflictId, setResolvingConflictId] = useState<number | null>(null);
 
   const selectedTopic = state.researchCurrentTopic;
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const nextTab = isResearchTabKey(tab) ? tab : "overview";
+    setActiveTab((current) => current === nextTab ? current : nextTab);
+  }, [searchParams]);
+
+  const handleTabChange = useCallback((key: ResearchTabKey) => {
+    setActiveTab(key);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (key === "overview") {
+      nextSearchParams.delete("tab");
+    } else {
+      nextSearchParams.set("tab", key);
+    }
+    setSearchParams(nextSearchParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // Sync URL topicId to state and load detail
   useEffect(() => {
@@ -428,15 +466,6 @@ export function ResearchGraphPage() {
     );
   }
 
-  const tabs = [
-    ["overview", "概览"],
-    ["claims", "事实"],
-    ["sources", "来源"],
-    ["conflicts", "冲突"],
-    ["graph", "图谱"],
-    ["proposals", "提案"],
-  ];
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-background p-2">
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.8rem] border border-border/70 bg-card/86 shadow-xl shadow-foreground/5 backdrop-blur-xl">
@@ -488,13 +517,13 @@ export function ResearchGraphPage() {
         </div>
 
         <div className="flex gap-1 border-b border-border/70 px-4 py-2">
-          {tabs.map(([key, label]) => (
+          {RESEARCH_TABS.map(([key, label]) => (
             <Button
               key={key}
               variant={activeTab === key ? "default" : "ghost"}
               size="sm"
               className="rounded-full"
-              onClick={() => setActiveTab(key)}
+              onClick={() => handleTabChange(key)}
             >
               {label}
             </Button>
@@ -560,6 +589,8 @@ export function ResearchGraphPage() {
                 </div>
               </div>
             </div>
+          ) : activeTab === "process" ? (
+            <ResearchProcessPanel topicId={selectedTopic.id} />
           ) : activeTab === "claims" ? (
             <div className="space-y-3">
               {selectedTopic.claims.length ? selectedTopic.claims.map((claim) => {

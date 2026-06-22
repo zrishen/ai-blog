@@ -57,8 +57,80 @@ async def test_run_research_topic_is_idempotent(client: AsyncClient):
     first = first_resp.json()
     second = second_resp.json()
     assert first["id"] == second["id"]
-    assert first["status"] in {"queued", "running", "completed", "failed", "cancelled"}
+    assert first["status"] == "completed"
     assert first["progress"]
+
+
+@pytest.mark.asyncio
+async def test_list_research_runs_returns_latest_first_for_owned_topic(client: AsyncClient):
+    topic_resp = await client.post("/api/research/topics", json={"title": "运行历史"})
+    topic_id = topic_resp.json()["id"]
+    first_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers={"Idempotency-Key": "run-a"})
+    second_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers={"Idempotency-Key": "run-b"})
+
+    runs_resp = await client.get(f"/api/research/topics/{topic_id}/runs")
+
+    assert runs_resp.status_code == 200
+    runs = runs_resp.json()
+    assert [run["id"] for run in runs] == [second_resp.json()["id"], first_resp.json()["id"]]
+    assert runs[0]["progress"]["search_sources"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_run_research_topic_completes_frontend_progress_and_creates_reviewable_claim(client: AsyncClient):
+    topic_resp = await client.post("/api/research/topics", json={
+        "title": "可信 AI 写作",
+        "description": "研究 RAG 如何降低 AI 幻觉。",
+    })
+    topic_id = topic_resp.json()["id"]
+
+    run_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers={"Idempotency-Key": "complete-run"})
+
+    assert run_resp.status_code == 202
+    run = run_resp.json()
+    assert run["status"] == "completed"
+    assert run["finished_at"] is not None
+    assert run["progress"] == {
+        "search_sources": "completed",
+        "fetch_pages": "completed",
+        "extract_claims": "completed",
+        "detect_conflicts": "completed",
+        "await_review": "completed",
+    }
+
+    detail_resp = await client.get(f"/api/research/topics/{topic_id}")
+    assert detail_resp.status_code == 200
+    detail = detail_resp.json()
+    assert detail["status"] == "reviewing"
+    assert detail["claim_count"] == 1
+    assert detail["claims"][0]["status"] == "pending"
+    assert "可信 AI 写作" in detail["claims"][0]["claim_text"]
+
+
+@pytest.mark.asyncio
+async def test_generate_research_draft_preview_returns_stable_fields(client: AsyncClient, db_session: AsyncSession):
+    topic_resp = await client.post("/api/research/topics", json={"title": "可信写作草稿"})
+    topic_id = topic_resp.json()["id"]
+    claim = ResearchClaim(
+        topic_id=topic_id,
+        user_id=1,
+        claim_text="RAG 可以通过引用外部证据降低 AI 幻觉风险。",
+        status="supported",
+        confidence=91,
+        adopted=True,
+    )
+    db_session.add(claim)
+    await db_session.commit()
+
+    draft_resp = await client.post(f"/api/research/topics/{topic_id}/draft-preview")
+
+    assert draft_resp.status_code == 200
+    draft = draft_resp.json()
+    assert set(draft) == {"title", "outline", "content", "references"}
+    assert draft["title"] == "可信写作草稿"
+    assert draft["outline"]
+    assert "RAG 可以通过引用外部证据降低 AI 幻觉风险。" in draft["content"]
+    assert draft["references"] == []
 
 
 @pytest.mark.asyncio

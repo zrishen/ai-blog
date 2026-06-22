@@ -3,13 +3,14 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
+from src.config import settings
 from src.utils import file_parser
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = Path(__file__).parent.parent.parent / "content" / "uploads"
+UPLOAD_DIR = Path(settings.upload_dir)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 

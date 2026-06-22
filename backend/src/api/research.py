@@ -18,6 +18,7 @@ from src.schemas.research import (
     ResearchClaimRead,
     ResearchClaimUpdate,
     ResearchConflictResolve,
+    ResearchDraftPreview,
     ResearchEntityCreate,
     ResearchEntityRead,
     ResearchEntityUpdate,
@@ -180,6 +181,30 @@ async def run_research_topic(
     if not run:
         raise HTTPException(status_code=404, detail="Research topic not found")
     return research_service.run_response(run)
+
+
+@router.get("/research/topics/{topic_id}/runs", response_model=list[ResearchRunRead])
+async def list_research_runs(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    runs = await research_service.list_research_runs(db, topic_id, user.id)
+    if runs is None:
+        raise HTTPException(status_code=404, detail="Research topic not found")
+    return runs
+
+
+@router.post("/research/topics/{topic_id}/draft-preview", response_model=ResearchDraftPreview)
+async def generate_research_draft_preview(
+    topic_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    draft = await research_service.generate_draft_preview(db, topic_id, user.id)
+    if not draft:
+        raise HTTPException(status_code=404, detail="Research topic not found")
+    return draft
 
 
 @router.post("/research/topics/{topic_id}/claims", response_model=ResearchClaimRead, status_code=201)

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogCategory as BlogCategoryModel
 from src.database.models import BlogPost as BlogPostModel
+from src.database.models import User as UserModel
 from src.utils.slug import slugify
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,6 @@ def normalize_post_body(title: str, body: str) -> str:
 
 def _get_content_dir() -> Path:
     path = Path(settings.blog_content_dir)
-    if not path.is_absolute():
-        path = Path(__file__).parent.parent.parent / settings.blog_content_dir
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -290,6 +289,11 @@ async def sync_all_files_to_db(db: AsyncSession) -> int:
         try:
             uid = int(user_dir.name)
         except ValueError:
+            continue
+        # 跳过用户目录中没有对应用户的目录（如历史残留数据）
+        user_exists = await db.scalar(select(UserModel.id).where(UserModel.id == uid))
+        if not user_exists:
+            logger.debug("跳过不存在的用户目录: user_id=%d", uid)
             continue
         for filepath in sorted(user_dir.glob("*.md")):
             slug = filepath.stem

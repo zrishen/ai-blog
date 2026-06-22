@@ -196,6 +196,13 @@ class ResearchRunRead(BaseModel):
     updated_at: datetime
 
 
+class ResearchDraftPreview(BaseModel):
+    title: str
+    outline: list[str]
+    content: str
+    references: list[dict[str, Any]]
+
+
 class ResearchTopicDetail(ResearchTopicRead):
     sources: list[ResearchSourceRead] = []
     evidence: list[ResearchEvidenceRead] = []
