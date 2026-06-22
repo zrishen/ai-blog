@@ -1,3 +1,4 @@
+from src.config import settings, BASE_DIR
 from src.database.models import Base
 from src.database.session import engine
 
@@ -684,7 +685,7 @@ async def _migrate_blog_file_storage():
     from shutil import move as shutil_move
     from sqlalchemy import text
 
-    content_dir = Path(__file__).parent.parent.parent / "content" / "blog"
+    content_dir = Path(settings.blog_content_dir)
     if not content_dir.exists():
         return
 
@@ -705,7 +706,7 @@ async def _migrate_blog_file_storage():
     async with engine.connect() as conn:
         for filepath in flat_files:
             slug = filepath.stem
-            new_path = str((target_dir / filepath.name).resolve().relative_to(Path.cwd().resolve()))
+            new_path = str((target_dir / filepath.name).resolve().relative_to(BASE_DIR))
             await conn.execute(
                 text("UPDATE blog_posts SET file_path = :path WHERE slug = :slug AND user_id = 1"),
                 {"path": new_path, "slug": slug},

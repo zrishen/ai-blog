@@ -1,14 +1,19 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings
+
+# 项目根目录（backend/），所有数据路径基于此绝对路径，不依赖 cwd
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
 
 
 class Settings(BaseSettings):
     openai_api_key: str
     base_url: str
     model_name: str = "Qwen3.6-35B"
-    database_url: str = "sqlite+aiosqlite:///./ai-blog.db"
+    database_url: str = f"sqlite+aiosqlite:///{(DATA_DIR / 'ai-blog.db').as_posix()}"
     max_memory_tokens: int = 4096
     memory_compact_threshold: int = 2000
-    chroma_db_path: str = "./chroma_db"
+    chroma_db_path: str = str(DATA_DIR / "chroma_db")
     embedding_provider: str = "onnx"
     embedding_model: str = "Qwen3-Embedding-8B"
     embedding_base_url: str | None = "https://dygptapi.duoyioa.com/openai/v1"
@@ -21,7 +26,8 @@ class Settings(BaseSettings):
     router_enabled: bool = True
     jwt_secret: str = "dev-secret-key-change-in-production-env"
     jwt_expire_seconds: int = 7 * 24 * 3600
-    blog_content_dir: str = "./content/blog"
+    blog_content_dir: str = str(DATA_DIR / "content" / "blog")
+    upload_dir: str = str(DATA_DIR / "content" / "uploads")
     image_generation_model: str = "gpt-image-1"
     image_generation_size: str = "1536x1024"
     public_chat_max_input_chars: int = 2000

@@ -36,12 +36,11 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Uploads
+# Uploads (legacy path, kept for existing clones)
 backend/src/uploads/
 
-# ChromaDB
-chroma_db/
-backend/uploads
+# ChromaDB & all runtime data
+backend/data/
 
 # Logs
 *.log
@@ -53,11 +52,9 @@ temp
 *.bat
 
 # data
-content
+backend/data/
 month.md
 p.md
 backups
-ai_assistant.db-shm
-ai_assistant.db-wal
 =0.1.0
 logs/

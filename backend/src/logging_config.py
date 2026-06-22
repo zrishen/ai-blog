@@ -9,9 +9,9 @@
 import logging
 import logging.handlers
 import sys
-from pathlib import Path
+from src.config import DATA_DIR
 
-LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+LOG_DIR = DATA_DIR / "logs"
 LOG_FILE = LOG_DIR / "app.log"
 LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 LOG_BACKUP_COUNT = 5
