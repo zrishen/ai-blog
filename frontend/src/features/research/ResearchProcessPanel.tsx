@@ -115,6 +115,123 @@ const LOG_STATUS_ICON: Record<OperationLog["status"], typeof CheckCircle2> = {
   info: Search,
 };
 
+interface StageProgressItem {
+  key: StageKey;
+  label: string;
+  done: boolean;
+  current: boolean;
+}
+
+interface StageRowProps {
+  stage: StageProgressItem;
+  logs: OperationLog[];
+  isRunningStage: boolean;
+}
+
+function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const Icon = STAGE_ICONS[stage.key];
+  const hasLogs = logs.length > 0;
+  const defaultOpen = isRunningStage || hasLogs;
+
+  useEffect(() => {
+    if (hasLogs && logContainerRef.current) {
+      logContainerRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [logs.length, hasLogs]);
+
+  return (
+    <div>
+      <div
+        className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition ${
+          stage.current
+            ? "border-primary/30 bg-primary/8"
+            : stage.done
+              ? "border-emerald-500/15 bg-emerald-500/5"
+              : "border-border/60 bg-background/40"
+        }`}
+      >
+        <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg ${
+          stage.done
+            ? "bg-emerald-500/10 text-emerald-600"
+            : stage.current
+              ? "bg-primary/10 text-primary ring-1 ring-primary/20"
+              : "bg-muted text-muted-foreground"
+        }`}>
+          {stage.done ? (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          ) : (
+            <Icon className="h-3.5 w-3.5" />
+          )}
+        </div>
+        <span className={`text-[13px] font-medium ${
+          stage.done ? "text-emerald-700 dark:text-emerald-300" : stage.current ? "text-primary" : "text-muted-foreground"
+        }`}>
+          {stage.label}
+        </span>
+        {isRunningStage && (
+          <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            执行中
+          </span>
+        )}
+        {stage.done && (
+          <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-500" />
+        )}
+      </div>
+
+      {(hasLogs || isRunningStage) && (
+        <Collapsible defaultOpen={defaultOpen} className="ml-10 mt-1">
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
+              <ChevronDown className="h-3 w-3 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+              <span>操作日志</span>
+              <span className="text-primary">({logs.length})</span>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-1.5 space-y-1.5 rounded-lg border border-border/40 bg-muted/25 p-2.5">
+            {!hasLogs && isRunningStage && (
+              <div className="flex items-center gap-2 py-3 text-[11px] text-muted-foreground/60">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/50" />
+                等待操作日志...
+              </div>
+            )}
+            <div ref={logContainerRef}>
+              {logs.map((log, li) => {
+                const StatusIcon = LOG_STATUS_ICON[log.status] ?? Search;
+                const isError = log.status === "error";
+                const timeStr = new Date(log.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                return (
+                  <div
+                    key={li}
+                    className={`flex items-start gap-1.5 text-[11px] text-muted-foreground ${isError ? "rounded-md bg-destructive/5 pl-2 border-l-2 border-destructive/30" : ""}`}
+                  >
+                    {log.type === "thinking" ? (
+                      <Brain className="mt-0.5 h-3 w-3 flex-shrink-0 text-primary/60" />
+                    ) : (
+                      <StatusIcon className={`mt-0.5 h-3 w-3 flex-shrink-0 ${isError ? "text-destructive" : log.status === "ok" ? "text-primary/70" : "text-muted-foreground/70"}`} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 font-medium text-foreground">
+                        {log.action}
+                        {log.tool && <span className="font-normal text-muted-foreground">· {log.tool}</span>}
+                        <span className="ml-auto flex-shrink-0 text-[10px] font-normal text-muted-foreground/50">{timeStr}</span>
+                      </div>
+                      {log.detail && (
+                        <div className="mt-0.5 truncate pl-2 text-[10px] text-muted-foreground/80">{log.detail}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </div>
+  );
+}
+
 interface ResearchProcessPanelProps {
   topicId: number;
 }
@@ -158,8 +275,9 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
 
   useEffect(() => {
     mountedRef.current = true;
-    setLoading(true);
-    loadRuns();
+    queueMicrotask(() => {
+      if (mountedRef.current) void loadRuns();
+    });
     return () => {
       mountedRef.current = false;
       if (pollRef.current) clearInterval(pollRef.current);
@@ -189,7 +307,9 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
       try {
         const detail = await getResearchTopic(topicId);
         dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
-      } catch {}
+      } catch {
+        // 主题详情刷新是启动研究后的最佳努力同步。
+      }
       await loadRuns(true);
     } catch {
       setError("启动研究任务失败，请稍后重试");
@@ -400,112 +520,14 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
                 <div className="rounded-[1.6rem] border border-border/70 bg-background/55 p-5">
                   <div className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">阶段进度</div>
                   <div className="space-y-2">
-                    {getStageProgress(selectedRun.progress ?? {}).map((stage) => {
-                      const Icon = STAGE_ICONS[stage.key];
-                      const logs = getStageLogs(selectedRun.progress ?? {}, stage.key);
-                      const hasLogs = logs.length > 0;
-                      const isRunningStage = stage.current && isRunning;
-                      const defaultOpen = isRunningStage || hasLogs;
-                      const logContainerRef = useRef<HTMLDivElement>(null);
-
-                      useEffect(() => {
-                        if (hasLogs && logContainerRef.current) {
-                          logContainerRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-                        }
-                      }, [logs.length, hasLogs]);
-
-                      return (
-                        <div key={stage.key}>
-                          <div
-                            className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition ${
-                              stage.current
-                                ? "border-primary/30 bg-primary/8"
-                                : stage.done
-                                  ? "border-emerald-500/15 bg-emerald-500/5"
-                                  : "border-border/60 bg-background/40"
-                            }`}
-                          >
-                            <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg ${
-                              stage.done
-                                ? "bg-emerald-500/10 text-emerald-600"
-                                : stage.current
-                                  ? "bg-primary/10 text-primary ring-1 ring-primary/20"
-                                  : "bg-muted text-muted-foreground"
-                            }`}>
-                              {stage.done ? (
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                              ) : (
-                                <Icon className="h-3.5 w-3.5" />
-                              )}
-                            </div>
-                            <span className={`text-[13px] font-medium ${
-                              stage.done ? "text-emerald-700 dark:text-emerald-300" : stage.current ? "text-primary" : "text-muted-foreground"
-                            }`}>
-                              {stage.label}
-                            </span>
-                            {isRunningStage && (
-                              <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-primary">
-                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                                执行中
-                              </span>
-                            )}
-                            {stage.done && (
-                              <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-500" />
-                            )}
-                          </div>
-
-                          {/* Operation log panel inside each stage */}
-                          {(hasLogs || isRunningStage) && (
-                            <Collapsible defaultOpen={defaultOpen} className="ml-10 mt-1">
-                              <CollapsibleTrigger asChild>
-                                <button className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
-                                  <ChevronDown className="h-3 w-3 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
-                                  <span>操作日志</span>
-                                  <span className="text-primary">({logs.length})</span>
-                                </button>
-                              </CollapsibleTrigger>
-                              <CollapsibleContent className="mt-1.5 space-y-1.5 rounded-lg border border-border/40 bg-muted/25 p-2.5">
-                                {!hasLogs && isRunningStage && (
-                                  <div className="flex items-center gap-2 py-3 text-[11px] text-muted-foreground/60">
-                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/50" />
-                                    等待操作日志...
-                                  </div>
-                                )}
-                                <div ref={logContainerRef}>
-                                  {logs.map((log, li) => {
-                                    const StatusIcon = LOG_STATUS_ICON[log.status] ?? Search;
-                                    const isError = log.status === "error";
-                                    const timeStr = new Date(log.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-                                    return (
-                                      <div
-                                        key={li}
-                                        className={`flex items-start gap-1.5 text-[11px] text-muted-foreground ${isError ? "rounded-md bg-destructive/5 pl-2 border-l-2 border-destructive/30" : ""}`}
-                                      >
-                                        {log.type === "thinking" ? (
-                                          <Brain className="mt-0.5 h-3 w-3 flex-shrink-0 text-primary/60" />
-                                        ) : (
-                                          <StatusIcon className={`mt-0.5 h-3 w-3 flex-shrink-0 ${isError ? "text-destructive" : log.status === "ok" ? "text-primary/70" : "text-muted-foreground/70"}`} />
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                          <div className="flex items-center gap-2 font-medium text-foreground">
-                                            {log.action}
-                                            {log.tool && <span className="font-normal text-muted-foreground">· {log.tool}</span>}
-                                            <span className="ml-auto flex-shrink-0 text-[10px] font-normal text-muted-foreground/50">{timeStr}</span>
-                                          </div>
-                                          {log.detail && (
-                                            <div className="mt-0.5 truncate pl-2 text-[10px] text-muted-foreground/80">{log.detail}</div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </CollapsibleContent>
-                            </Collapsible>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {getStageProgress(selectedRun.progress ?? {}).map((stage) => (
+                      <StageRow
+                        key={stage.key}
+                        stage={stage}
+                        logs={getStageLogs(selectedRun.progress ?? {}, stage.key)}
+                        isRunningStage={stage.current && isRunning}
+                      />
+                    ))}
                   </div>
                 </div>
 

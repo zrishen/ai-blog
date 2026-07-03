@@ -449,7 +449,7 @@ async def _count_stage_output(db: AsyncSession, stage: str, topic_id: int, user_
 
 async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id: int,
                            stage: str, instruction: str) -> bool:
-    """执行单个 Agent 阶段。返回 True 表示有产出，False 表示无产出或失败。"""
+    """返回 False 仅在 agent 抛异常/超时，或全程零工具调用且零产出；零产出但有过工具调用视为 completed。"""
     from src.services.chat_service import _chat_model_kwargs, _create_llm
     from src.tools.research_tools import RESEARCH_TOOLS
 
@@ -466,6 +466,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
     before_count = await _count_stage_output(db, stage, topic_id, user_id)
 
     token = current_user_id_cv.set(user_id)
+    tool_call_count = 0
     try:
         messages = [{"role": "user", "content": instruction}]
         _tool_start_times: dict[str, datetime] = {}
@@ -483,6 +484,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                     logger.info("Research stage %s tool start: %s", stage, tool_name)
                     action = _TOOL_ACTION_MAP.get(tool_name, tool_name)
                     _tool_start_times[event["run_id"]] = datetime.utcnow()
+                    tool_call_count += 1
                     detail_parts = []
                     if isinstance(tool_input, dict):
                         LONG_FIELDS = {"payload", "quote", "claim_text", "content", "description", "reasoning"}
@@ -574,13 +576,22 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
 
     after_count = await _count_stage_output(db, stage, topic_id, user_id)
     has_output = after_count > before_count
-    logger.info("Research stage %s done: output count %d -> %d", stage, before_count, after_count)
+    logger.info(
+        "Research stage %s done: output count %d -> %d, tool_calls=%d",
+        stage, before_count, after_count, tool_call_count,
+    )
 
-    if not has_output:
-        logger.warning("Research stage %s produced no output", stage)
+    if not has_output and tool_call_count == 0:
+        logger.warning("Research stage %s produced no output and no tool calls", stage)
         await _update_run_progress(db, run_id, stage, "failed")
         await db.commit()
         return False
+
+    if not has_output:
+        logger.info(
+            "Research stage %s produced no rows for its primary table but ran %d tool call(s); treating as completed",
+            stage, tool_call_count,
+        )
 
     return True
 
@@ -607,13 +618,13 @@ async def _execute_research_run(run_id: int, topic_id: int, user_id: int):
                     await db.commit()
                 else:
                     stage_failed = True
-                    break  # 阶段失败或零产出，跳过后续阶段
+                    break  # 阶段抛异常、超时或全程零工具调用零产出，跳过后续阶段
 
             run = await db.get(ResearchRun, run_id)
             if stage_failed:
                 if run:
                     run.status = "failed"
-                    run.error_message = "研究阶段执行失败，部分阶段未完成"
+                    run.error_message = "研究阶段执行异常或无任何工具调用与产出"
                     run.finished_at = datetime.utcnow()
             else:
                 await _update_run_progress(db, run_id, "await_review", "completed")

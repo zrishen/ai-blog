@@ -31,6 +31,7 @@ dist/
 *.swo
 .playwright-mcp
 .pytest_cache
+.ruff_cache/
 
 # OS
 .DS_Store
