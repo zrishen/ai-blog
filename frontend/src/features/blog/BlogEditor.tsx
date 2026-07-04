@@ -270,14 +270,26 @@ export function BlogEditor() {
   }, [title, content, tags, coverImage, existingPost, state.blogPosts, dispatch, draftKey]);
 
   const handleCancel = useCallback(() => {
-    const coverChanged = coverImage !== (existingPost?.cover_image || "");
-    if (title.trim() || content.trim() || coverChanged) {
+    let currentContent = content;
+    try {
+      currentContent = vditorRef.current?.getValue?.() ?? content;
+    } catch {
+      currentContent = content;
+    }
+
+    const hasUnsavedChanges =
+      title !== (existingPost?.title || "") ||
+      currentContent !== (existingPost?.content || "") ||
+      tags !== (existingPost?.tags || "") ||
+      coverImage !== (existingPost?.cover_image || "");
+
+    if (hasUnsavedChanges) {
       setShowCancelModal(true);
     } else {
       localStorage.removeItem(draftKey);
       dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
     }
-  }, [title, content, coverImage, draftKey, existingPost, dispatch]);
+  }, [title, content, tags, coverImage, draftKey, existingPost, dispatch]);
 
   const handleSaveDraft = useCallback(() => {
     localStorage.setItem(draftKey, JSON.stringify({
