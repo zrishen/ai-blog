@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useChat } from "../stores/chatStore";
+import { useChat, type Message } from "../stores/chatStore";
 import {
   fetchConversations,
   createConversation,
@@ -26,7 +26,7 @@ export function useChatHooks() {
     } finally {
       dispatch({ type: "SET_LOADING", payload: false });
     }
-  }, []);
+  }, [dispatch]);
 
   const loadMessages = useCallback(
     async (conversationId: number) => {
@@ -40,7 +40,7 @@ export function useChatHooks() {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [],
+    [dispatch],
   );
 
   const createNewChat = useCallback(async () => {
@@ -49,7 +49,7 @@ export function useChatHooks() {
     dispatch({ type: "SET_CURRENT_CONVERSATION", payload: data.id });
     dispatch({ type: "SET_MESSAGES", payload: [] });
     return data.id;
-  }, [state.conversations]);
+  }, [state.conversations, dispatch]);
 
   const selectConversation = useCallback(
     (id: number) => {
@@ -57,7 +57,7 @@ export function useChatHooks() {
       dispatch({ type: "SET_MESSAGES", payload: [] });
       loadMessages(id);
     },
-    [loadMessages],
+    [loadMessages, dispatch],
   );
 
   const removeConversation = useCallback(
@@ -72,7 +72,7 @@ export function useChatHooks() {
         dispatch({ type: "SET_MESSAGES", payload: [] });
       }
     },
-    [state.conversations, state.currentConversationId],
+    [state.conversations, state.currentConversationId, dispatch],
   );
 
   const loadKBDocuments = useCallback(async (categoryId?: number) => {
@@ -83,7 +83,7 @@ export function useChatHooks() {
       console.error("Failed to load KB documents:", error);
       throw error;
     }
-  }, []);
+  }, [dispatch]);
 
   const uploadToKnowledgeBase = useCallback(
     async (file: File, categoryId?: number) => {
@@ -100,7 +100,7 @@ export function useChatHooks() {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [state.kbSelectedCategoryId, loadKBDocuments],
+    [state.kbSelectedCategoryId, loadKBDocuments, dispatch],
   );
 
   const removeKBDocument = useCallback(
@@ -109,7 +109,7 @@ export function useChatHooks() {
       dispatch({ type: "REMOVE_KB_DOCUMENT", payload: id });
       await loadKBDocuments();
     },
-    [loadKBDocuments],
+    [loadKBDocuments, dispatch],
   );
 
   const sendMessage = useCallback(
@@ -117,30 +117,30 @@ export function useChatHooks() {
       const convId = state.currentConversationId;
 
       // Add user message
-      const userMsg: any = {
+      const userMsg: Message = {
         id: Date.now(),
         role: "user",
         content,
         image_url: image_url || undefined,
         file_url: file_url || undefined,
-        conversation_id: convId,
+        conversation_id: convId ?? 0,
         token_count: 0,
         created_at: new Date().toISOString(),
       };
-      dispatch({ type: "ADD_MESSAGE", payload: userMsg as any });
+      dispatch({ type: "ADD_MESSAGE", payload: userMsg });
       dispatch({ type: "SET_STREAMING", payload: true });
 
       // Create placeholder for assistant message
       const assistantMsgId = Date.now() + 1;
-      const assistantMsg: any = {
+      const assistantMsg: Message = {
         id: assistantMsgId,
         role: "assistant",
         content: "",
-        conversation_id: convId,
+        conversation_id: convId ?? 0,
         token_count: 0,
         created_at: new Date().toISOString(),
       };
-      dispatch({ type: "ADD_MESSAGE", payload: assistantMsg as any });
+      dispatch({ type: "ADD_MESSAGE", payload: assistantMsg });
 
       let currentConvId = convId;
       let assistantContent = "";

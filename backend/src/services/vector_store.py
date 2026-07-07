@@ -1,5 +1,7 @@
 """Vector store service using ChromaDB."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from uuid import uuid4
 

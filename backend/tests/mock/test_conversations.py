@@ -1,6 +1,6 @@
 """对话管理测试。"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from httpx import AsyncClient
@@ -101,7 +101,7 @@ async def test_get_messages_hides_tool_messages_but_keeps_db_history(
     assert create_resp.status_code == 200
     conv_id = create_resp.json()["id"]
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     db_session.add_all([
         Message(
             conversation_id=conv_id,
@@ -163,7 +163,7 @@ async def test_get_messages_keeps_regular_user_and_assistant_history(
     assert create_resp.status_code == 200
     conv_id = create_resp.json()["id"]
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     db_session.add_all([
         Message(
             conversation_id=conv_id,

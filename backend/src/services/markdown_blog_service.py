@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogCategory as BlogCategoryModel
 from src.database.models import BlogPost as BlogPostModel
-from src.database.models import User as UserModel
 from src.utils.slug import slugify
+from src.utils.user_dir import resolve_username as _resolve_username
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _get_content_dir() -> Path:
 
 
 def _filepath_for_slug(slug: str, user_id: int) -> Path:
-    return _get_content_dir() / str(user_id) / f"{slug}.md"
+    return _get_content_dir() / _resolve_username(user_id) / f"{slug}.md"
 
 
 # ── Frontmatter ──
@@ -106,28 +106,6 @@ def delete_post_file(slug: str, user_id: int) -> bool:
     return True
 
 
-def list_post_files(status: Optional[str] = None, user_id: Optional[int] = None) -> list[dict]:
-    results = []
-    base_dir = _get_content_dir()
-    if user_id is not None:
-        dirs = [base_dir / str(user_id)]
-    else:
-        dirs = [d for d in base_dir.iterdir() if d.is_dir()]
-    for user_dir in dirs:
-        if not user_dir.exists():
-            continue
-        for filepath in sorted(user_dir.glob("*.md")):
-            text = filepath.read_text(encoding="utf-8")
-            meta, _body = _parse_frontmatter(text)
-            slug = filepath.stem
-            if "slug" not in meta:
-                meta["slug"] = slug
-            if status and meta.get("status") != status:
-                continue
-            results.append({"slug": slug, "meta": meta})
-    return results
-
-
 # ── Slug helpers ──
 
 def slug_from_title(title: str) -> str:
@@ -178,28 +156,6 @@ def _path_for_db(filepath: Path) -> str:
         return str(filepath.resolve().relative_to(Path.cwd().resolve()))
     except ValueError:
         return str(filepath.resolve())
-
-
-def _file_path_exists(file_path: Optional[str]) -> bool:
-    if not file_path:
-        return False
-    path = Path(file_path)
-    if path.is_absolute():
-        return path.exists()
-    return (Path.cwd() / path).exists()
-
-
-def _datetime_to_meta(value: Optional[datetime]) -> Optional[str]:
-    return value.isoformat() if value else None
-
-
-async def _category_name_from_id(db: AsyncSession, category_id: Optional[int], user_id: int) -> Optional[str]:
-    if not category_id:
-        return None
-    category = await db.get(BlogCategoryModel, category_id)
-    if not category or category.user_id != user_id:
-        return None
-    return category.name
 
 
 def _parse_datetime(value: object) -> Optional[datetime]:
@@ -264,11 +220,11 @@ async def sync_file_to_db(
             setattr(post, field, parsed)
 
     if is_new:
-        post.created_at = post.created_at or datetime.utcnow()
-    post.updated_at = datetime.utcnow()
+        post.created_at = post.created_at or datetime.now(timezone.utc).replace(tzinfo=None)
+    post.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     if post.status == "published" and not post.published_at:
-        post.published_at = datetime.utcnow()
+        post.published_at = datetime.now(timezone.utc).replace(tzinfo=None)
     elif post.status != "published":
         post.published_at = None
 
@@ -276,75 +232,3 @@ async def sync_file_to_db(
     await db.refresh(post)
     logger.info("Markdown → DB [同步] slug=%s id=%d user_id=%s is_new=%s", slug, post.id, user_id, is_new)
     return post
-
-
-async def sync_all_files_to_db(db: AsyncSession) -> int:
-    count = 0
-    base_dir = _get_content_dir()
-    if not base_dir.exists():
-        return 0
-    for user_dir in sorted(base_dir.iterdir()):
-        if not user_dir.is_dir():
-            continue
-        try:
-            uid = int(user_dir.name)
-        except ValueError:
-            continue
-        # 跳过用户目录中没有对应用户的目录（如历史残留数据）
-        user_exists = await db.scalar(select(UserModel.id).where(UserModel.id == uid))
-        if not user_exists:
-            logger.debug("跳过不存在的用户目录: user_id=%d", uid)
-            continue
-        for filepath in sorted(user_dir.glob("*.md")):
-            slug = filepath.stem
-            file_mtime = filepath.stat().st_mtime
-
-            result = await db.execute(
-                select(BlogPostModel.updated_at).where(
-                    BlogPostModel.slug == slug,
-                    BlogPostModel.user_id == uid,
-                )
-            )
-            row = result.scalar_one_or_none()
-            if row and row.timestamp() >= file_mtime:
-                continue
-
-            post = await sync_file_to_db(slug, db, user_id=uid)
-            if post:
-                count += 1
-    logger.info("Markdown → DB 增量同步完成: %d 篇", count)
-    return count
-
-
-async def sync_db_posts_to_files(db: AsyncSession) -> int:
-    result = await db.execute(select(BlogPostModel).order_by(BlogPostModel.id))
-    posts = result.scalars().all()
-    migrated = 0
-
-    for post in posts:
-        if _file_path_exists(post.file_path):
-            continue
-
-        if read_post_by_slug(post.slug, post.user_id):
-            await sync_file_to_db(post.slug, db, user_id=post.user_id, existing_post_id=post.id)
-            continue
-
-        meta = {
-            "title": post.title,
-            "slug": post.slug,
-            "tags": post.tags,
-            "status": post.status or "draft",
-            "category": await _category_name_from_id(db, post.category_id, post.user_id),
-            "author": post.author or "ai-blog",
-            "excerpt": post.excerpt,
-            "cover_image": post.cover_image,
-            "created_at": _datetime_to_meta(post.created_at),
-            "updated_at": _datetime_to_meta(post.updated_at),
-            "published_at": _datetime_to_meta(post.published_at),
-        }
-        write_post(post.slug, meta, post.content or "", post.user_id)
-        await sync_file_to_db(post.slug, db, user_id=post.user_id, existing_post_id=post.id)
-        migrated += 1
-
-    logger.info("DB-only → Markdown 迁移完成: %d 篇", migrated)
-    return migrated

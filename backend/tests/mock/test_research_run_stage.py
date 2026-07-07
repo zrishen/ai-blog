@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -24,7 +24,7 @@ async def _seed_topic_and_run(stage: str):
             user_id=1,
             idempotency_key=f"test-{topic.id}",
             status="running",
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc).replace(tzinfo=None),
             progress_json=dict(research_service.DEFAULT_RUN_PROGRESS),
         )
         db.add(run)
@@ -44,7 +44,7 @@ class _FakeAgent:
 
 def _patch_agent(monkeypatch, events):
     from src.services import chat_service
-    monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode: {})
+    monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode, llm_settings=None: {})
     monkeypatch.setattr(chat_service, "_create_llm", lambda kw, mode: object())
     monkeypatch.setattr(
         research_service,
@@ -102,7 +102,7 @@ async def test_stage_fails_when_agent_stream_raises(monkeypatch):
             yield  # pragma: no cover - 让 astream_events 成为 async generator
 
     from src.services import chat_service
-    monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode: {})
+    monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode, llm_settings=None: {})
     monkeypatch.setattr(chat_service, "_create_llm", lambda kw, mode: object())
     monkeypatch.setattr(
         research_service,

@@ -11,6 +11,7 @@
 
 import json
 import logging
+from datetime import datetime, timezone
 
 from langchain_core.tools import tool
 from sqlalchemy import select
@@ -345,7 +346,7 @@ async def research_add_source(
             except (ValueError, TypeError):
                 pass
 
-        source.fetched_at = __import__("datetime").datetime.utcnow()
+        source.fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
         db.add(source)
         await db.commit()
         await db.refresh(source)

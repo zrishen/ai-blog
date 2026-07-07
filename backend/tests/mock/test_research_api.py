@@ -19,7 +19,15 @@ from src.database.models import (
     User,
 )
 from src.main import app
+from src.services import research_service
 from src.utils.auth import get_current_user
+
+
+def _disable_background_research(monkeypatch):
+    async def fake_execute_research_run(run_id, topic_id, user_id):
+        return None
+
+    monkeypatch.setattr(research_service, "_execute_research_run", fake_execute_research_run)
 
 
 @pytest.mark.asyncio
@@ -44,7 +52,8 @@ async def test_create_and_list_research_topics(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_run_research_topic_is_idempotent(client: AsyncClient):
+async def test_run_research_topic_is_idempotent(client: AsyncClient, monkeypatch):
+    _disable_background_research(monkeypatch)
     topic_resp = await client.post("/api/research/topics", json={"title": "可信写作"})
     topic_id = topic_resp.json()["id"]
 
@@ -57,12 +66,13 @@ async def test_run_research_topic_is_idempotent(client: AsyncClient):
     first = first_resp.json()
     second = second_resp.json()
     assert first["id"] == second["id"]
-    assert first["status"] == "completed"
-    assert first["progress"]
+    assert first["status"] == "running"
+    assert first["progress"] == research_service.DEFAULT_RUN_PROGRESS
 
 
 @pytest.mark.asyncio
-async def test_list_research_runs_returns_latest_first_for_owned_topic(client: AsyncClient):
+async def test_list_research_runs_returns_latest_first_for_owned_topic(client: AsyncClient, monkeypatch):
+    _disable_background_research(monkeypatch)
     topic_resp = await client.post("/api/research/topics", json={"title": "运行历史"})
     topic_id = topic_resp.json()["id"]
     first_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers={"Idempotency-Key": "run-a"})
@@ -73,11 +83,12 @@ async def test_list_research_runs_returns_latest_first_for_owned_topic(client: A
     assert runs_resp.status_code == 200
     runs = runs_resp.json()
     assert [run["id"] for run in runs] == [second_resp.json()["id"], first_resp.json()["id"]]
-    assert runs[0]["progress"]["search_sources"] == "completed"
+    assert runs[0]["progress"]["search_sources"] == "queued"
 
 
 @pytest.mark.asyncio
-async def test_run_research_topic_completes_frontend_progress_and_creates_reviewable_claim(client: AsyncClient):
+async def test_run_research_topic_starts_with_queued_progress(client: AsyncClient, monkeypatch):
+    _disable_background_research(monkeypatch)
     topic_resp = await client.post("/api/research/topics", json={
         "title": "可信 AI 写作",
         "description": "研究 RAG 如何降低 AI 幻觉。",
@@ -88,23 +99,9 @@ async def test_run_research_topic_completes_frontend_progress_and_creates_review
 
     assert run_resp.status_code == 202
     run = run_resp.json()
-    assert run["status"] == "completed"
-    assert run["finished_at"] is not None
-    assert run["progress"] == {
-        "search_sources": "completed",
-        "fetch_pages": "completed",
-        "extract_claims": "completed",
-        "detect_conflicts": "completed",
-        "await_review": "completed",
-    }
-
-    detail_resp = await client.get(f"/api/research/topics/{topic_id}")
-    assert detail_resp.status_code == 200
-    detail = detail_resp.json()
-    assert detail["status"] == "reviewing"
-    assert detail["claim_count"] == 1
-    assert detail["claims"][0]["status"] == "pending"
-    assert "可信 AI 写作" in detail["claims"][0]["claim_text"]
+    assert run["status"] == "running"
+    assert run["finished_at"] is None
+    assert run["progress"] == research_service.DEFAULT_RUN_PROGRESS
 
 
 @pytest.mark.asyncio

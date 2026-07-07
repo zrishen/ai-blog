@@ -1,12 +1,12 @@
-import { Component, createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Component, createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, matchPath, useLocation } from "react-router-dom";
 import { useChat } from "./stores/chatStore";
 import { useAuth } from "./stores/authStore";
 import { NavBar } from "./components/NavBar";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { AISidebar } from "./features/ai-chat/AISidebar";
-import { SiteBlogRoute } from "./features/blog/SiteBlogRoute";
-import { SitePostRoute } from "./features/blog/SitePostRoute";
+import { SiteBlogRoute } from "./features/blog/components/SiteBlogRoute";
+import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
 import { KnowledgeBasePage } from "./features/knowledge-base/KnowledgeBasePage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
@@ -23,7 +23,9 @@ function loadPanelLayout() {
       const { leftSize, aiOpenSize } = JSON.parse(raw);
       return { leftSize: leftSize ?? 20, aiOpenSize: aiOpenSize ?? 20 };
     }
-  } catch {}
+  } catch {
+    /* ignore malformed layout JSON */
+  }
   return { leftSize: 20, aiOpenSize: 20 };
 }
 
@@ -37,7 +39,6 @@ type PanelGroupAPI = {
 } | null;
 
 const PanelGroupCtx = createContext<PanelGroupAPI>(null);
-export const usePanelGroupCtx = () => useContext(PanelGroupCtx);
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -197,9 +198,9 @@ function AuthenticatedApp() {
   const { state } = useChat();
   const aiContext = useAISidebarRouteContext();
   const [groupApi, groupRef] = useGroupCallbackRef();
-  const persisted = useRef(loadPanelLayout());
-  const lastOpenAiSizeRef = useRef(persisted.current.aiOpenSize);
-  const leftSizeRef = useRef(persisted.current.leftSize);
+  const [initialLayout] = useState(loadPanelLayout);
+  const lastOpenAiSizeRef = useRef(initialLayout.aiOpenSize);
+  const leftSizeRef = useRef(initialLayout.leftSize);
   useEffect(() => {
     if (!groupApi) return;
     const aiSize = state.aiSidebarOpen ? lastOpenAiSizeRef.current : 4;
@@ -228,13 +229,13 @@ function AuthenticatedApp() {
               savePanelLayout(leftSize, lastOpenAiSizeRef.current);
             }}
           >
-            <Panel id="left" defaultSize={`${persisted.current.leftSize}%`} minSize="10%" maxSize="40%">
+            <Panel id="left" defaultSize={`${initialLayout.leftSize}%`} minSize="10%" maxSize="40%">
               <LeftSidebar />
             </Panel>
             <PanelResizeHandle className="w-[6px] -ml-[3px] -mr-[3px] relative z-10 cursor-col-resize group">
               <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border/60 group-hover:w-[2px] group-hover:bg-primary/40 group-active:bg-primary/60 transition-all" />
             </PanelResizeHandle>
-            <Panel id="main" defaultSize={`${100 - persisted.current.leftSize - persisted.current.aiOpenSize}%`} minSize="40%">
+            <Panel id="main" defaultSize={`${100 - initialLayout.leftSize - initialLayout.aiOpenSize}%`} minSize="40%">
               <main className="main-content">
                 <MainContent />
               </main>
@@ -246,7 +247,7 @@ function AuthenticatedApp() {
               id="ai"
               collapsible
               collapsedSize="4%"
-              defaultSize={state.aiSidebarOpen ? `${persisted.current.aiOpenSize}%` : "4%"}
+              defaultSize={state.aiSidebarOpen ? `${initialLayout.aiOpenSize}%` : "4%"}
               minSize="10%"
               maxSize="50%"
             >

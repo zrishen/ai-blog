@@ -243,12 +243,12 @@ export function MCPModal() {
           <div className="p-5">
             {/* Installed Services */}
             <div className="mb-5">
-              <div className="flex justify-between items-center text-[13px] font-semibold text-muted-foreground mb-2 pb-1.5 border-b border-border">
+              <div className="flex justify-between items-center text-sm font-semibold text-muted-foreground mb-2 pb-1.5 border-b border-border">
                 <span>已安装服务</span>
               </div>
               <div className="flex flex-col gap-1.5">
                 {servers.length === 0 ? (
-                  <div className="text-muted-foreground text-[13px] py-3">暂无已安装的服务。从下方服务库导入或添加自定义服务。</div>
+                  <div className="text-muted-foreground text-sm py-3">暂无已安装的服务。从下方服务库导入或添加自定义服务。</div>
                 ) : (
                   servers.map((server: MCPServerConfig) => (
                     <motion.div
@@ -258,12 +258,12 @@ export function MCPModal() {
                       className="flex justify-between items-center py-2 px-3 bg-card border border-border rounded-xl"
                     >
                       <div className="flex flex-col gap-0.5 min-w-0">
-                        <span className="text-[13px] font-medium text-foreground flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-foreground flex items-center gap-1.5">
                           {serverTypeIcon(server.server_type)}
                           {server.name}
                         </span>
-                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <span className="text-[10px] py-px px-1.5 rounded bg-secondary text-green-500">{server.server_type}</span>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <span className="text-[11px] py-px px-1.5 rounded bg-secondary text-green-500">{server.server_type}</span>
                           {server.command && ` · ${server.command}`}
                           {server.url && ` · ${server.url}`}
                         </span>
@@ -303,11 +303,11 @@ export function MCPModal() {
 
             {/* Add Custom */}
             <div>
-              <div className="flex justify-between items-center text-[13px] font-semibold text-muted-foreground mb-2 pb-1.5 border-b border-border">
+              <div className="flex justify-between items-center text-sm font-semibold text-muted-foreground mb-2 pb-1.5 border-b border-border">
                 <span>添加自定义 MCP 服务</span>
                 <Button
                   size="sm"
-                  className="gap-1 text-[12px]"
+                  className="gap-1 text-[13px]"
                   onClick={() => setShowForm(!showForm)}
                   disabled={saving}
                 >
@@ -332,7 +332,7 @@ export function MCPModal() {
                       <div className="flex flex-col gap-3 pt-1">
                         {/* 服务名称 */}
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[13px] text-muted-foreground">服务名称</label>
+                          <label className="text-sm text-muted-foreground">服务名称</label>
                           <Input
                             placeholder="mcp-server"
                             value={formData.name}
@@ -344,9 +344,9 @@ export function MCPModal() {
                         <div className="flex flex-col gap-1.5">
                           {/* JSON 标题栏 */}
                           <div className="flex items-center justify-between">
-                            <span className="text-[13px] text-muted-foreground">JSON 配置</span>
+                            <span className="text-sm text-muted-foreground">JSON 配置</span>
                             <button
-                              className="text-[13px] text-primary hover:text-primary/80 cursor-pointer bg-transparent border-none p-0"
+                              className="text-sm text-primary hover:text-primary/80 cursor-pointer bg-transparent border-none p-0"
                               onClick={() => setWizardView(true)}
                             >
                               配置导向
@@ -355,7 +355,7 @@ export function MCPModal() {
 
                           {/* JSON 配置 */}
                           <textarea
-                            className="w-full min-h-[200px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-[13px] font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                            className="w-full min-h-[200px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             placeholder={`{
   "type": "stdio",
   "command": "uvx",
@@ -392,26 +392,26 @@ export function MCPModal() {
                     {/* 向导头部 */}
                     <div className="flex items-center gap-2 mb-3">
                       <button
-                        className="flex items-center gap-1 text-[12px] text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-none p-0"
+                        className="flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-none p-0"
                         onClick={() => setWizardView(false)}
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         返回
                       </button>
-                      <span className="text-[13px] font-semibold text-foreground">配置导向</span>
+                      <span className="text-sm font-semibold text-foreground">配置导向</span>
                     </div>
 
-                    <p className="text-[12px] text-muted-foreground mb-4">快速配置 MCP 服务器，自动生成 JSON 配置</p>
+                    <p className="text-[13px] text-muted-foreground mb-4">快速配置 MCP 服务器，自动生成 JSON 配置</p>
 
                     <div className="flex flex-col gap-3">
                       {/* 类型选择 */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] text-muted-foreground">类型</label>
+                        <label className="text-sm text-muted-foreground">类型</label>
                         <div className="flex gap-2">
                           {(["stdio", "streamable-http"] as const).map((t) => (
                             <button
                               key={t}
-                              className={`px-3 py-1.5 rounded-lg text-[13px] border transition-colors cursor-pointer ${
+                              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors cursor-pointer ${
                                 formData.server_type === t
                                   ? "bg-primary text-primary-foreground border-primary"
                                   : "bg-card text-foreground border-border hover:border-primary/50"
@@ -426,7 +426,7 @@ export function MCPModal() {
 
                       {/* MCP 标题 */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[13px] text-muted-foreground">MCP 标题</label>
+                        <label className="text-sm text-muted-foreground">MCP 标题</label>
                         <Input
                           placeholder="mcp-server-fetch"
                           value={formData.name}
@@ -438,7 +438,7 @@ export function MCPModal() {
                       {formData.server_type === "stdio" && (
                         <>
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] text-muted-foreground">命令</label>
+                            <label className="text-sm text-muted-foreground">命令</label>
                             <Input
                               placeholder="npx / uvx"
                               value={formData.command}
@@ -448,9 +448,9 @@ export function MCPModal() {
 
                           {/* 参数 */}
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] text-muted-foreground">参数</label>
+                            <label className="text-sm text-muted-foreground">参数</label>
                             <textarea
-                              className="w-full min-h-[70px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              className="w-full min-h-[70px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                               placeholder={"arg1\narg2"}
                               value={formData.args}
                               onChange={(e) => setFormData({ ...formData, args: e.target.value })}
@@ -459,9 +459,9 @@ export function MCPModal() {
 
                           {/* 环境变量 */}
                           <div className="flex flex-col gap-1.5">
-                            <label className="text-[13px] text-muted-foreground">环境变量</label>
+                            <label className="text-sm text-muted-foreground">环境变量</label>
                             <textarea
-                              className="w-full min-h-[70px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                              className="w-full min-h-[70px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                               placeholder={"KEY1=value1\nKEY2=value2"}
                               value={formData.env_vars}
                               onChange={(e) => setFormData({ ...formData, env_vars: e.target.value })}
@@ -473,7 +473,7 @@ export function MCPModal() {
                       {/* URL — 仅 streamable-http */}
                       {formData.server_type === "streamable-http" && (
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[13px] text-muted-foreground">URL</label>
+                          <label className="text-sm text-muted-foreground">URL</label>
                           <Input
                             placeholder=""
                             value={formData.url}

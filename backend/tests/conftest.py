@@ -8,11 +8,16 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from src.config import settings
 from src.database.models import Base
 from src.main import app
 
 # 内存数据库，每个测试隔离
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+# 让 _resolve_username 也走 :memory: 回退分支（用 str(user_id) 命名目录），
+# 避免 unit test 的目录命名受真实 SQLite 文件里 user 数据影响。
+settings.database_url = TEST_DATABASE_URL
 
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

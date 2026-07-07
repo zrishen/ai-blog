@@ -3,6 +3,14 @@
 import pytest
 from httpx import AsyncClient
 
+from src.config import settings
+
+
+@pytest.fixture(autouse=True)
+def isolated_blog_dir(tmp_path, monkeypatch):
+    """注册会触发 _seed_intro_article 写种子文章，必须隔离避免污染真实 data 目录。"""
+    monkeypatch.setattr(settings, "blog_content_dir", str(tmp_path / "blog"))
+
 
 @pytest.mark.asyncio
 async def test_register(client: AsyncClient):

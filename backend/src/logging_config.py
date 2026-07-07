@@ -98,8 +98,3 @@ def setup_logging(level: str = "INFO") -> None:
     access_logger.addHandler(console)
 
     logging.getLogger(__name__).info("日志系统已初始化 → %s (level=%s)", LOG_FILE, level)
-
-
-def struct(**kwargs) -> str:
-    """将结构化字段编码为日志行，方便 grep/解析。"""
-    return " | ".join(f"{k}={v}" for k, v in kwargs.items())

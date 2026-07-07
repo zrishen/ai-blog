@@ -62,7 +62,9 @@ function findJsonPayload(content: string): unknown | null {
     try {
       const parsed = JSON.parse(candidate);
       if (parsed && typeof parsed === "object" && "choices" in parsed) return parsed;
-    } catch {}
+    } catch {
+      /* ignore malformed candidate JSON */
+    }
   }
 
   return null;

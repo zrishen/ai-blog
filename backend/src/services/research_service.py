@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -451,6 +451,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                            stage: str, instruction: str) -> bool:
     """返回 False 仅在 agent 抛异常/超时，或全程零工具调用且零产出；零产出但有过工具调用视为 completed。"""
     from src.services.chat_service import _chat_model_kwargs, _create_llm
+    from src.services.llm_settings_service import get_user_llm_settings
     from src.tools.research_tools import RESEARCH_TOOLS
 
     topic = await db.get(ResearchTopic, topic_id)
@@ -459,7 +460,8 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
 
     prompt = _build_research_prompt(topic)
 
-    model_kwargs = _chat_model_kwargs("normal")
+    user_llm_settings = await get_user_llm_settings(db, user_id)
+    model_kwargs = _chat_model_kwargs("normal", user_llm_settings)
     llm = _create_llm(model_kwargs, "normal")
     agent = create_react_agent(llm, list(RESEARCH_TOOLS), prompt=prompt)
 
@@ -483,7 +485,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                     tool_input = event.get("data", {}).get("input", {})
                     logger.info("Research stage %s tool start: %s", stage, tool_name)
                     action = _TOOL_ACTION_MAP.get(tool_name, tool_name)
-                    _tool_start_times[event["run_id"]] = datetime.utcnow()
+                    _tool_start_times[event["run_id"]] = datetime.now(timezone.utc).replace(tzinfo=None)
                     tool_call_count += 1
                     detail_parts = []
                     if isinstance(tool_input, dict):
@@ -497,7 +499,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                             detail_parts.append(f"{key}={text}")
                     detail = " | ".join(detail_parts) if detail_parts else ""
                     entry = {
-                        "ts": datetime.utcnow().isoformat(timespec="seconds"),
+                        "ts": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
                         "type": "tool",
                         "tool": tool_name,
                         "action": action,
@@ -516,7 +518,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                     status = "error" if output.startswith("错误") or output.startswith("警告") else "ok"
                     start_time = _tool_start_times.pop(event["run_id"], None)
                     entry = {
-                        "ts": datetime.utcnow().isoformat(timespec="seconds"),
+                        "ts": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
                         "type": "tool",
                         "tool": tool_name,
                         "action": action,
@@ -524,7 +526,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                         "status": status,
                     }
                     if start_time:
-                        entry["duration"] = round((datetime.utcnow() - start_time).total_seconds(), 1)
+                        entry["duration"] = round((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds(), 1)
                     await _append_stage_log(db, run_id, stage, entry)
                     await db.commit()
 
@@ -534,7 +536,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                     logger.info("Research stage %s tool error: %s error=%s", stage, tool_name, error_msg)
                     start_time = _tool_start_times.pop(event["run_id"], None)
                     entry = {
-                        "ts": datetime.utcnow().isoformat(timespec="seconds"),
+                        "ts": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
                         "type": "tool",
                         "tool": tool_name,
                         "action": _TOOL_ACTION_MAP.get(tool_name, tool_name),
@@ -542,7 +544,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                         "status": "error",
                     }
                     if start_time:
-                        entry["duration"] = round((datetime.utcnow() - start_time).total_seconds(), 1)
+                        entry["duration"] = round((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds(), 1)
                     await _append_stage_log(db, run_id, stage, entry)
                     await db.commit()
 
@@ -552,7 +554,7 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                         content_preview = _truncate_detail(str(ai_msg.content), 80)
                         if content_preview:
                             entry = {
-                                "ts": datetime.utcnow().isoformat(timespec="seconds"),
+                                "ts": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
                                 "type": "thinking",
                                 "tool": "",
                                 "action": "思考",
@@ -625,16 +627,16 @@ async def _execute_research_run(run_id: int, topic_id: int, user_id: int):
                 if run:
                     run.status = "failed"
                     run.error_message = "研究阶段执行异常或无任何工具调用与产出"
-                    run.finished_at = datetime.utcnow()
+                    run.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
             else:
                 await _update_run_progress(db, run_id, "await_review", "completed")
                 if run:
                     run.status = "completed"
-                    run.finished_at = datetime.utcnow()
+                    run.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 topic = await db.get(ResearchTopic, topic_id)
                 if topic:
                     topic.status = "reviewing"
-                    topic.last_checked_at = datetime.utcnow()
+                    topic.last_checked_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.commit()
 
         except Exception as e:
@@ -644,7 +646,7 @@ async def _execute_research_run(run_id: int, topic_id: int, user_id: int):
                 if run:
                     run.status = "failed"
                     run.error_message = str(e)[:1000]
-                    run.finished_at = datetime.utcnow()
+                    run.finished_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 await fail_db.commit()
 
 
@@ -672,10 +674,10 @@ async def create_research_run(
             logger.info("研究 run 幂等复用 topic_id=%s run_id=%s", topic_id, run.id)
             return run
         # 非 running 状态（failed/completed）的 run 腾出 idempotency_key 以允许同 key 重试
-        run.idempotency_key = f"{key}__{run.id}_{int(datetime.utcnow().timestamp())}"
+        run.idempotency_key = f"{key}__{run.id}_{int(datetime.now(timezone.utc).replace(tzinfo=None).timestamp())}"
         await db.flush()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     run = ResearchRun(
         topic_id=topic_id,
         user_id=user_id,
@@ -1179,7 +1181,7 @@ async def _apply_conflict_resolution(
         "resolution": "accepted_rejected",
         "accepted_claim_id": accepted_claim.id,
         "rejected_claim_id": rejected_claim.id,
-        "resolved_at": datetime.utcnow().isoformat(),
+        "resolved_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "resolved_by": user_id,
     }
     await db.commit()
@@ -1327,7 +1329,7 @@ async def _build_post_snapshot(db: AsyncSession, topic: ResearchTopic, user_id: 
 
     return {
         "version": 1,
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         "topic": {
             "id": topic.id,
             "title": topic.title,
@@ -1502,9 +1504,9 @@ async def update_proposal(db: AsyncSession, proposal_id: int, data: dict[str, An
     if new_status and new_status in ("approved", "rejected", "applied", "pending"):
         proposal.status = new_status
         if new_status in ("approved", "rejected"):
-            proposal.reviewed_at = datetime.utcnow()
+            proposal.reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
         if new_status == "applied":
-            proposal.applied_at = datetime.utcnow()
+            proposal.applied_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     await db.commit()
     await db.refresh(proposal)
@@ -1632,7 +1634,7 @@ async def _execute_proposal_payload(db: AsyncSession, proposal: ResearchProposal
                 resolution = payload.get("resolution", "reject")
                 rel = await db.get(ResearchRelation, int(relation_id))
                 if rel and rel.user_id == user_id:
-                    rel.metadata_json = {**(rel.metadata_json or {}), "resolution": resolution, "resolved_at": datetime.utcnow().isoformat()}
+                    rel.metadata_json = {**(rel.metadata_json or {}), "resolution": resolution, "resolved_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}
 
         elif ptype == "update_summary":
             summary = payload.get("summary")

@@ -16,6 +16,7 @@ async def init_db():
     await _migrate_kb_categories_parent()
     await _migrate_kb_document_category()
     await _migrate_kb_document_user_id()
+    await _migrate_llm_settings()
     await _migrate_conversation_user_id()
     await _migrate_blog_file_path()
     await _migrate_blog_user_id()
@@ -25,6 +26,7 @@ async def init_db():
     await _migrate_research_graph()
     await _migrate_research_entity_enhancements()
     await _migrate_blog_file_storage()
+    await _migrate_user_dirs_to_username()
 
 
 async def _table_exists(conn, table_name: str) -> bool:
@@ -227,6 +229,28 @@ async def _migrate_kb_document_user_id():
         columns = await _columns(conn, "kb_documents")
         if "user_id" not in columns:
             await conn.execute(text("ALTER TABLE kb_documents ADD COLUMN user_id TEXT NOT NULL DEFAULT 'default_user'"))
+            await conn.commit()
+
+
+async def _migrate_llm_settings():
+    from sqlalchemy import text
+
+    async with engine.connect() as conn:
+        if not await _table_exists(conn, "llm_settings"):
+            await conn.execute(text("""
+                CREATE TABLE llm_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    protocol TEXT NOT NULL DEFAULT 'openai',
+                    base_url TEXT,
+                    api_key TEXT,
+                    model_name TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT uq_llm_settings_user_id UNIQUE (user_id)
+                )
+            """))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_llm_settings_user_id ON llm_settings(user_id)"))
             await conn.commit()
 
 
@@ -713,3 +737,90 @@ async def _migrate_blog_file_storage():
             )
         await conn.commit()
     logger.info("文件存储迁移: %d 个文件 → content/blog/1/", len(flat_files))
+
+
+async def _migrate_user_dirs_to_username():
+    """把 content/blog/<user_id>/ 与 content/uploads/<user_id>/ 改名为 <username>。
+
+    同时更新 blog_posts.file_path 中的目录段。幂等：若目标已是 username 命名则跳过。
+    """
+    from pathlib import Path
+    from shutil import move as shutil_move
+    from sqlalchemy import text
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    async with engine.connect() as conn:
+        rows = await conn.execute(text("SELECT id, username FROM users ORDER BY id"))
+        users = rows.fetchall()
+
+    if not users:
+        return
+
+    blog_dir = Path(settings.blog_content_dir)
+    upload_dir = Path(settings.upload_dir)
+
+    renamed_blog = 0
+    renamed_upload = 0
+    updated_paths = 0
+
+    for uid, username in users:
+        uid_str = str(uid)
+        if uid_str == username:
+            continue  # 极少数情况，无需改名
+
+        for base in (blog_dir, upload_dir):
+            if not base.exists():
+                continue
+            src = base / uid_str
+            dst = base / username
+            if src.exists() and src.is_dir():
+                dst.mkdir(parents=True, exist_ok=True)
+                for entry in src.iterdir():
+                    target = dst / entry.name
+                    if not target.exists():
+                        shutil_move(str(entry), str(target))
+                try:
+                    src.rmdir()
+                except OSError:
+                    pass
+                if base == blog_dir:
+                    renamed_blog += 1
+                else:
+                    renamed_upload += 1
+
+        # 同步 blog_posts.file_path 中的目录段（兼容正反斜杠）
+        async with engine.begin() as conn:
+            for sep in ("\\", "/"):
+                old_seg = f"blog{sep}{uid_str}{sep}"
+                new_seg = f"blog{sep}{username}{sep}"
+                result = await conn.execute(
+                    text(
+                        "UPDATE blog_posts "
+                        "SET file_path = REPLACE(file_path, :old, :new) "
+                        "WHERE user_id = :uid AND file_path LIKE :pattern"
+                    ),
+                    {
+                        "old": old_seg,
+                        "new": new_seg,
+                        "uid": uid,
+                        "pattern": f"%blog{sep}{uid_str}{sep}%",
+                    },
+                )
+                if result.rowcount:
+                    updated_paths += result.rowcount
+
+    logger.info(
+        "目录 username 迁移: blog=%d uploads=%d file_path 更新行=%d",
+        renamed_blog,
+        renamed_upload,
+        updated_paths,
+    )
+
+    # 让 _resolve_username 缓存失效，确保后续路径生成用最新 username
+    try:
+        from src.utils.user_dir import invalidate_username_cache
+        invalidate_username_cache()
+    except Exception:
+        pass

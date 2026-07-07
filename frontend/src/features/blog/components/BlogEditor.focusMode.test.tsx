@@ -1,0 +1,133 @@
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import "@testing-library/jest-dom/vitest";
+
+class MockResizeObserver {
+  observe = () => {};
+  disconnect = () => {};
+}
+
+vi.stubGlobal("ResizeObserver", MockResizeObserver);
+
+vi.mock("vditor", () => ({
+  default: class MockVditor {
+    vditor = {
+      toolbar: { elements: {} },
+      currentMode: "wysiwyg",
+    };
+
+    constructor(el: string | HTMLElement, opts?: { after?: () => void }) {
+      const container = typeof el === "string" ? document.getElementById(el) : el;
+      if (container) {
+        container.innerHTML = '<div class="vditor"><div class="vditor-toolbar"><button class="vditor-toolbar__item" data-type="edit-mode">edit-mode</button></div><div class="vditor-content"></div></div>';
+      }
+      queueMicrotask(() => opts?.after?.());
+    }
+    getValue = () => "";
+    setValue = (_v: string) => {};
+    destroy = () => {};
+    getHTML = () => "";
+    insertValue = (_v: string, _pos?: boolean) => {};
+    setTheme = (_theme: string, _contentTheme?: string, _codeTheme?: string) => {};
+  },
+}));
+
+vi.mock("vditor/dist/index.css", () => ({}));
+vi.mock("vditor/dist/js/i18n/zh_CN", () => ({}));
+
+vi.mock("../../../api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../api/client")>();
+  return {
+    ...actual,
+    createBlogPost: vi.fn(() => Promise.resolve({ id: 1 })),
+    updateBlogPost: vi.fn(() => Promise.resolve({ id: 1 })),
+    getBlogPost: vi.fn(() => Promise.resolve(null)),
+    listBlogPosts: vi.fn(() => Promise.resolve([])),
+    generateBlogCover: vi.fn(() => Promise.resolve("")),
+    uploadFile: vi.fn(() => Promise.resolve("")),
+    suggestBlogTags: vi.fn(() => Promise.resolve([])),
+    getBlogResearchSummary: vi.fn(() => Promise.resolve(null)),
+    getResearchTopic: vi.fn(() => Promise.resolve(null)),
+  };
+});
+
+describe("BlogEditor 工具区折叠/展开", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("默认折叠态：紧凑行可见，大卡片内容隐藏", async () => {
+    const { BlogEditor } = await import("./BlogEditor");
+    const result = render(
+      <MemoryRouter>
+        <BlogEditor />
+      </MemoryRouter>,
+    );
+
+    expect(await result.findByPlaceholderText("输入文章标题...", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(result.queryByText("保存草稿")).toBeInTheDocument();
+    expect(result.queryByText("发布文章")).toBeInTheDocument();
+    expect(result.queryByText("文章封面")).toBeNull();
+
+    result.unmount();
+  });
+
+  it("工具栏 toggle 按钮在折叠态显示 Maximize 图标且提示展开", async () => {
+    const { BlogEditor } = await import("./BlogEditor");
+    const result = render(
+      <MemoryRouter>
+        <BlogEditor />
+      </MemoryRouter>,
+    );
+
+    const toggleBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 2000 });
+    expect(toggleBtn).toBeInTheDocument();
+
+    result.unmount();
+  });
+
+  it("点击 toggle 后展开顶部完整卡片，再次点击收缩回去", async () => {
+    const { BlogEditor } = await import("./BlogEditor");
+    const result = render(
+      <MemoryRouter>
+        <BlogEditor />
+      </MemoryRouter>,
+    );
+
+    const toggleBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 2000 });
+    fireEvent.click(toggleBtn);
+
+    expect(await result.findByText("文章封面", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(result.queryByLabelText("展开文章设置")).toBeNull();
+    const collapseBtn = await result.findByLabelText("收缩文章设置", {}, { timeout: 2000 });
+    expect(collapseBtn).toBeInTheDocument();
+
+    fireEvent.click(collapseBtn);
+    expect(await result.findByLabelText("展开文章设置", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(result.queryByText("文章封面")).toBeNull();
+
+    result.unmount();
+  });
+
+  it("toggle 支持折叠↔展开多次往返切换", async () => {
+    const { BlogEditor } = await import("./BlogEditor");
+    const result = render(
+      <MemoryRouter>
+        <BlogEditor />
+      </MemoryRouter>,
+    );
+
+    for (let i = 0; i < 3; i++) {
+      const expandBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 2000 });
+      fireEvent.click(expandBtn);
+      expect(await result.findByText("文章封面", {}, { timeout: 2000 })).toBeInTheDocument();
+
+      const collapseBtn = await result.findByLabelText("收缩文章设置", {}, { timeout: 2000 });
+      fireEvent.click(collapseBtn);
+      expect(result.queryByText("文章封面")).toBeNull();
+    }
+
+    result.unmount();
+  });
+});

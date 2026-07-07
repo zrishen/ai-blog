@@ -1,7 +1,12 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase
+
+
+def _utcnow() -> datetime:
+    """Naive UTC datetime, replaces deprecated datetime.utcnow()."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Base(DeclarativeBase):
@@ -14,8 +19,8 @@ class Conversation(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(200), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class Message(Base):
@@ -30,7 +35,7 @@ class Message(Base):
     token_count = Column(Integer, default=0)
     tool_calls = Column(JSON, nullable=True)
     tool_call_id = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 class KBDocument(Base):
@@ -44,7 +49,7 @@ class KBDocument(Base):
     chunk_content = Column(Text, nullable=False)
     meta = Column("metadata", Text, nullable=True)
     category_id = Column(Integer, ForeignKey("kb_categories.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 # ---- MCP ----
@@ -63,8 +68,24 @@ class MCPServer(Base):
     env_vars = Column(Text, nullable=True)
     url = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+# ---- User LLM settings ----
+
+class LLMSettings(Base):
+    __tablename__ = "llm_settings"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_llm_settings_user_id"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    protocol = Column(String(20), nullable=False, default="openai")
+    base_url = Column(Text, nullable=True)
+    api_key = Column(Text, nullable=True)
+    model_name = Column(String(200), nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 # ---- Blog ----
@@ -81,8 +102,8 @@ class BlogCategory(Base):
     name = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class BlogPost(Base):
@@ -100,8 +121,8 @@ class BlogPost(Base):
     tags = Column(String(500), nullable=True)
     author = Column(String(100), nullable=True)
     view_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
     published_at = Column(DateTime, nullable=True)
     file_path = Column(String(500), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
@@ -122,8 +143,8 @@ class ResearchTopic(Base):
     status = Column(String(30), nullable=False, default="draft")
     summary = Column(Text, nullable=True)
     last_checked_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class ResearchSource(Base):
@@ -147,8 +168,8 @@ class ResearchSource(Base):
     status = Column(String(30), nullable=False, default="pending")
     raw_excerpt = Column(Text, nullable=True)
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class ResearchEvidence(Base):
@@ -165,7 +186,7 @@ class ResearchEvidence(Base):
     location = Column(String(300), nullable=True)
     kind = Column(String(50), nullable=False, default="manual")
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 class ResearchClaim(Base):
@@ -184,8 +205,8 @@ class ResearchClaim(Base):
     claim_type = Column(String(50), nullable=True)
     adopted = Column(Boolean, nullable=False, default=False)
     reasoning = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class ResearchEntity(Base):
@@ -204,8 +225,8 @@ class ResearchEntity(Base):
     aliases_json = Column(JSON, nullable=True)
     confidence = Column(Integer, nullable=False, default=0)
     status = Column(String(30), nullable=False, default="active")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class ResearchClaimEntityLink(Base):
@@ -223,7 +244,7 @@ class ResearchClaimEntityLink(Base):
     topic_id = Column(Integer, ForeignKey("research_topics.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     role = Column(String(50), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 class ResearchRelation(Base):
@@ -243,7 +264,7 @@ class ResearchRelation(Base):
     to_id = Column(Integer, nullable=False)
     relation_type = Column(String(50), nullable=False)
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 class ResearchProposal(Base):
@@ -260,7 +281,7 @@ class ResearchProposal(Base):
     description = Column(Text, nullable=True)
     payload_json = Column(JSON, nullable=True)
     status = Column(String(30), nullable=False, default="pending")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
     reviewed_at = Column(DateTime, nullable=True)
     applied_at = Column(DateTime, nullable=True)
 
@@ -281,8 +302,8 @@ class ResearchRun(Base):
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class BlogPostResearchLink(Base):
@@ -297,7 +318,7 @@ class BlogPostResearchLink(Base):
     topic_id = Column(Integer, ForeignKey("research_topics.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     snapshot_json = Column(JSON, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 class BlogPostClaimLink(Base):
@@ -313,7 +334,7 @@ class BlogPostClaimLink(Base):
     topic_id = Column(Integer, ForeignKey("research_topics.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     usage_note = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 # ---- Knowledge Base Categories ----
@@ -331,7 +352,7 @@ class KBCategory(Base):
     slug = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     parent_id = Column(Integer, ForeignKey("kb_categories.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)
 
 
 # ---- Auth ----
@@ -342,4 +363,4 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(200), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_utcnow)

@@ -1,40 +1,17 @@
 """官方介绍内容服务 —— 从受保护模板读取，供注册 seed 和启动同步共用。"""
 
-import json
 import re
 from pathlib import Path
 
 import yaml
 
+from src.config import DATA_DIR
+
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
-_TEMPLATE_PATH = None
-_COUNTER_PATH = None
 
-
-def _get_template_path():
-    global _TEMPLATE_PATH
-    if _TEMPLATE_PATH is None:
-        _TEMPLATE_PATH = Path(__file__).parent.parent / "templates" / "ai-blog-intro.md"
-    return _TEMPLATE_PATH
-
-
-def _get_counter_path():
-    global _COUNTER_PATH
-    if _COUNTER_PATH is None:
-        _COUNTER_PATH = Path(__file__).parent.parent / "data" / "intro_view_count.json"
-    return _COUNTER_PATH
-
-
-def get_intro_view_count() -> int:
-    """获取旧文件计数器的值（首次迁移用）。"""
-    p = _get_counter_path()
-    if p.exists():
-        try:
-            return json.loads(p.read_text(encoding="utf-8")).get("count", 0)
-        except Exception:
-            return 0
-    return 0
+def _get_template_path() -> Path:
+    return DATA_DIR / "templates" / "ai-blog-intro.md"
 
 
 def _parse_frontmatter(text: str):
@@ -46,10 +23,6 @@ def _parse_frontmatter(text: str):
     except yaml.YAMLError:
         meta = {}
     return meta, text[m.end():]
-
-
-def get_official_intro_document() -> dict:
-    return build_intro_post_payload()
 
 
 def build_intro_post_payload() -> dict:

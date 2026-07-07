@@ -181,3 +181,169 @@ body {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
 }
+
+/* ============================================================
+   代码块高亮(highlight.js token 配色)
+   详情页(rehype-highlight)与编辑页浮层共用此配色
+   ============================================================ */
+
+.hljs {
+  color: hsl(var(--foreground)) !important;
+  background: transparent;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-section,
+.hljs-link,
+.hljs-type {
+  color: #7c3aed;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition,
+.hljs-regexp,
+.hljs-template-tag,
+.hljs-template-variable {
+  color: #047857;
+}
+
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-name,
+.hljs-variable,
+.hljs-title,
+.hljs-title.function_,
+.hljs-title.class_ {
+  color: #c2410c;
+}
+
+.hljs-attribute {
+  color: #b45309;
+}
+
+.hljs-meta,
+.hljs-tag {
+  color: #6b7280;
+}
+
+.hljs-deletion {
+  color: #dc2626;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
+
+/* 暗色主题下提亮 token,保证对比度 */
+[data-theme="dark"] .hljs-keyword,
+[data-theme="dark"] .hljs-selector-tag,
+[data-theme="dark"] .hljs-literal,
+[data-theme="dark"] .hljs-section,
+[data-theme="dark"] .hljs-link,
+[data-theme="dark"] .hljs-type {
+  color: #a78bfa;
+}
+
+[data-theme="dark"] .hljs-string,
+[data-theme="dark"] .hljs-attr,
+[data-theme="dark"] .hljs-symbol,
+[data-theme="dark"] .hljs-bullet,
+[data-theme="dark"] .hljs-addition,
+[data-theme="dark"] .hljs-regexp,
+[data-theme="dark"] .hljs-template-tag,
+[data-theme="dark"] .hljs-template-variable {
+  color: #34d399;
+}
+
+[data-theme="dark"] .hljs-number,
+[data-theme="dark"] .hljs-built_in,
+[data-theme="dark"] .hljs-builtin-name,
+[data-theme="dark"] .hljs-name,
+[data-theme="dark"] .hljs-variable,
+[data-theme="dark"] .hljs-title,
+[data-theme="dark"] .hljs-title.function_,
+[data-theme="dark"] .hljs-title.class_ {
+  color: #fb923c;
+}
+
+[data-theme="dark"] .hljs-attribute {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .hljs-meta,
+[data-theme="dark"] .hljs-tag {
+  color: #9ca3af;
+}
+
+[data-theme="dark"] .hljs-deletion {
+  color: #f87171;
+}
+
+/* ------------------------------------------------------------
+   详情页代码块容器(语言标签 + 代码体)
+   ------------------------------------------------------------ */
+
+.blog-post-code-block {
+  margin: 1.25em 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 1rem;
+  background: hsl(var(--muted) / 0.86);
+  overflow: hidden;
+}
+
+.blog-post-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0.4rem 0.9rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--background) / 0.5);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: hsl(var(--muted-foreground));
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.blog-post-code-block pre {
+  margin: 0 !important;
+  padding: 1rem 1.15rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  overflow-x: auto;
+}
+
+.blog-post-code-block pre code {
+  display: block;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  /* 强制覆盖 prose 的 --tw-prose-(invert-)code,避免代码文字继承成浅色不可见 */
+  color: hsl(var(--foreground)) !important;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.blog-post-code-block pre code::before,
+.blog-post-code-block pre code::after {
+  content: none !important;
+}

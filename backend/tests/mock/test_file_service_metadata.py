@@ -9,7 +9,7 @@ from src.services.file_service import vectorize_and_store
 async def test_vectorize_and_store_writes_rich_metadata():
     captured = {}
 
-    async def fake_add_documents(collection_name, documents, metadata_list=None):
+    async def fake_add_documents(collection_name, documents, metadata_list=None, embeddings=None):
         captured["collection_name"] = collection_name
         captured["documents"] = documents
         captured["metadata_list"] = metadata_list
@@ -45,7 +45,7 @@ async def test_vectorize_and_store_writes_rich_metadata():
 async def test_vectorize_and_store_omits_empty_category_metadata():
     captured = {}
 
-    async def fake_add_documents(collection_name, documents, metadata_list=None):
+    async def fake_add_documents(collection_name, documents, metadata_list=None, embeddings=None):
         captured["metadata_list"] = metadata_list
 
     with patch("src.utils.file_parser.parse_file", AsyncMock(return_value="测试内容")), \
@@ -63,7 +63,7 @@ async def test_vectorize_and_store_omits_empty_category_metadata():
 async def test_vectorize_and_store_metadata_matches_multiple_chunks():
     captured = {}
 
-    async def fake_add_documents(collection_name, documents, metadata_list=None):
+    async def fake_add_documents(collection_name, documents, metadata_list=None, embeddings=None):
         captured["documents"] = documents
         captured["metadata_list"] = metadata_list
 

@@ -22,8 +22,6 @@ class Settings(BaseSettings):
     embedding_dim: int = 384
     rag_top_k: int = 3
     rag_distance_threshold: float = 0.7
-    router_model_name: str = "ds/deepseek-v4-flash"
-    router_enabled: bool = True
     jwt_secret: str = "dev-secret-key-change-in-production-env"
     jwt_expire_seconds: int = 7 * 24 * 3600
     blog_content_dir: str = str(DATA_DIR / "content" / "blog")

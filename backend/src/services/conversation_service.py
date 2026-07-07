@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from sqlalchemy import desc, select
@@ -83,7 +83,7 @@ async def add_message_pair(
     session: AsyncSession | None = None,
 ) -> tuple[int, Message]:
     async with _get_session(session) as s:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if not conversation_id:
             conv = Conversation(title="New Chat", user_id=user_id, created_at=now, updated_at=now)
@@ -131,7 +131,7 @@ async def update_conversation_title(conversation_id: int, user_id: int, title: s
         if conv and conv.user_id == user_id:
             short = title.replace("\n", " ").strip()[:50] or "New Chat"
             conv.title = short
-            conv.updated_at = datetime.utcnow()
+            conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             if session is None:
                 await s.commit()
 
@@ -144,7 +144,7 @@ async def save_agent_messages(
 ) -> None:
     """保存 agent 执行过程中的完整消息序列（含 tool_calls / tool results）。"""
     async with _get_session(session) as s:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         conv = await s.get(Conversation, conversation_id)
         if conv:

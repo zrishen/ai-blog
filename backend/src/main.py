@@ -32,17 +32,11 @@ async def startup():
     from src.services.user_service import ensure_system_user
     from src.services.official_intro_service import build_intro_post_payload
     from src.services.blog_service import ensure_intro_post
-    from src.services.markdown_blog_service import sync_all_files_to_db, sync_db_posts_to_files
 
     async with async_session() as session:
         user = await ensure_system_user(session)
         intro_payload = build_intro_post_payload()
         await ensure_intro_post(session, intro_payload, user.id)
-
-        synced = await sync_all_files_to_db(session)
-        migrated = await sync_db_posts_to_files(session)
-        logger.info("Markdown → DB 全量同步完成: %d", synced)
-        logger.info("DB-only → Markdown 迁移完成: %d", migrated)
 
 
 @app.get("/health")

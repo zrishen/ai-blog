@@ -5,6 +5,7 @@ from fastapi import UploadFile
 
 from src.config import settings
 from src.utils import file_parser
+from src.utils.user_dir import resolve_username as _resolve_username
 
 import logging
 
@@ -16,7 +17,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_user_upload_dir(user_id: int | str) -> Path:
     """Return the per-user upload directory, creating it if needed."""
-    user_dir = UPLOAD_DIR / str(user_id)
+    user_dir = UPLOAD_DIR / _resolve_username(user_id)
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 

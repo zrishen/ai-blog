@@ -34,6 +34,27 @@ async def upload_file(file: UploadFile = File(...), user: User = Depends(get_cur
     )
 
 
+@router.get("/public/uploads/{username}/{filename}")
+async def get_public_uploaded_image(username: str, filename: str):
+    """Serve a user-uploaded blog image without auth."""
+    suffix = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+        raise HTTPException(status_code=403, detail="Only images can be public")
+
+    user_dir = get_user_upload_dir(username)
+    file_path = user_dir / filename
+    resolved = file_path.resolve()
+    if not str(resolved).startswith(str(user_dir.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        str(file_path),
+        filename=file_path.name,
+        media_type=MEDIA_TYPES.get(file_path.suffix.lower(), "application/octet-stream"),
+    )
+
+
 @router.get("/uploads/{filename}")
 async def get_uploaded_file(filename: str, user: User = Depends(get_current_user)):
     """Serve an uploaded file (requires authentication)."""

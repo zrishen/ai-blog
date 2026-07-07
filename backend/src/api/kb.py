@@ -1,6 +1,6 @@
 """知识库路由（文档 + 分类管理）。"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import logging
 
@@ -230,7 +230,7 @@ async def upload_to_kb(
             chunk_content=f"{len(chunks)} chunks",
             meta="",
             category_id=category_id,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         db.add(doc)
         await db.commit()

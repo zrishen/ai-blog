@@ -1,7 +1,7 @@
 """博客文章 CRUD 服务。"""
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import desc, func, or_, select
@@ -152,7 +152,7 @@ async def create_post(db: AsyncSession, data: dict, user_id: int) -> BlogPostMod
     status = data.get("status") or "draft"
     base_slug = data.get("slug") or slug_from_title(data.get("title", ""))
     slug = await ensure_unique_slug(base_slug, db, user_id=user_id)
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     if not data.get("author"):
         user_result = await db.execute(select(User).where(User.id == user_id))
@@ -212,7 +212,7 @@ async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) 
         meta["tags"] = data["tags"]
 
     status = meta.get("status") or "draft"
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     meta["slug"] = slug
     meta["updated_at"] = now
     if status == "published" and not meta.get("published_at"):
@@ -248,7 +248,7 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
     _check_ownership(post, user_id)
 
     meta, body = await _load_post_document(db, post)
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
     meta["slug"] = meta.get("slug") or post.slug
     meta["title"] = meta.get("title") or post.title
     meta["status"] = "published" if publish else "draft"
@@ -278,13 +278,7 @@ async def ensure_intro_post(db: AsyncSession, data: dict, user_id: int):
     result = await db.execute(stmt)
     post = result.scalar_one_or_none()
     if post is None:
-        from src.services.official_intro_service import get_intro_view_count
-
-        existing_count = get_intro_view_count()
         post = await create_post(db, data, user_id)
-        if existing_count > 0:
-            post.view_count = existing_count
-            await db.commit()
     else:
         post.title = data["title"]
         post.tags = data["tags"]

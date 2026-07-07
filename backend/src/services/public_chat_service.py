@@ -5,12 +5,13 @@ import logging
 from datetime import datetime
 from typing import AsyncGenerator
 
-from langchain_openai import ChatOpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.models import BlogPost, User
+from src.services.chat_service import _create_llm
+from src.services.llm_settings_service import build_llm_model_kwargs, get_user_llm_settings
 from src.services.official_intro_service import build_intro_post_payload
 
 logger = logging.getLogger(__name__)
@@ -114,13 +115,15 @@ async def public_stream_chat(
     else:
         context = await _landing_context(db)
 
-    llm = ChatOpenAI(
-        api_key=settings.openai_api_key,
-        base_url=settings.base_url,
-        model=settings.model_name,
-        temperature=0.7,
-        max_tokens=settings.public_chat_max_output_tokens,
-    )
+    owner = None
+    if username:
+        owner_result = await db.execute(select(User).where(User.username == username))
+        owner = owner_result.scalar_one_or_none()
+    user_llm_settings = await get_user_llm_settings(db, owner.id) if owner else None
+    model_kwargs = build_llm_model_kwargs("normal", user_llm_settings)
+    model_kwargs["temperature"] = 0.7
+    model_kwargs["max_tokens"] = settings.public_chat_max_output_tokens
+    llm = _create_llm(model_kwargs, "normal")
     messages = [
         {"role": "system", "content": _system_prompt(context)},
         {"role": "user", "content": content},

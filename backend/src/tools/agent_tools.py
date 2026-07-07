@@ -4,7 +4,7 @@ import asyncio
 import contextvars
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from langchain_core.tools import tool
 from sqlalchemy import select
@@ -202,9 +202,9 @@ async def blog_create_post(title: str, content: str, tags: str = "", status: str
             "status": status.strip() or "draft",
             "author": author_name,
             "excerpt": excerpt.strip() or None,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
-            "published_at": datetime.utcnow().isoformat() if status == "published" else None,
+            "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "published_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat() if status == "published" else None,
         }
 
         write_post(slug, meta, content, user_id)
@@ -263,7 +263,7 @@ async def blog_update_post(post_id: int, title: str = "", content: str = "", tag
         if excerpt.strip():
             meta["excerpt"] = excerpt.strip()
 
-        meta["updated_at"] = datetime.utcnow().isoformat()
+        meta["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         slug = meta.get("slug", post.slug)
 
         write_post(slug, meta, body, user_id)
@@ -308,7 +308,7 @@ async def blog_patch_post(post_id: int, target_text: str, replacement_text: str)
         new_body = body.replace(target_text, replacement_text, 1)
 
         meta = data["meta"] if data else {}
-        meta["updated_at"] = datetime.utcnow().isoformat()
+        meta["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         slug = meta.get("slug", post.slug)
 
         write_post(slug, meta, new_body, user_id)

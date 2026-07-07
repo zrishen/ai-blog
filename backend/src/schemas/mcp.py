@@ -18,7 +18,6 @@ class MCPServerResponse(BaseModel):
     tools_detail: list[dict] | None = None
     command: str | None = None
     args: list[str] | None = None
-    env_vars: dict[str, str] | None = None
     url: str | None = None
     is_active: bool
     created_at: str | None = None

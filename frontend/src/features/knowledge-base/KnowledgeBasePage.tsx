@@ -198,12 +198,12 @@ export function KnowledgeBasePage() {
           <div className="absolute right-24 top-4 h-24 w-24 rounded-full bg-cyan-400/10 blur-2xl" />
           <div className="relative flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[13px] font-semibold text-primary">
                 <Database className="w-3.5 h-3.5" />
                 {selectedCategoryName || "全部文件"}
               </div>
               <h1 className="text-3xl font-black tracking-[-0.04em] text-foreground">知识库</h1>
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
+              <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
                 上传论文、文档和表格，把资料整理成可检索、可对话的知识资产。
               </p>
             </div>
@@ -328,10 +328,10 @@ export function KnowledgeBasePage() {
                     {getDocumentIcon(doc.original_name)}
                   </div>
                   <div className="min-w-0 text-left">
-                    <div className="line-clamp-2 break-all text-sm font-semibold leading-snug text-foreground">
+                    <div className="line-clamp-2 break-all text-[15px] font-semibold leading-snug text-foreground">
                       {doc.original_name}
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 text-[13px] text-muted-foreground">
                       {doc.chunk_count} 个片段 · {formatDate(doc.created_at)}
                     </div>
                   </div>
@@ -350,7 +350,7 @@ export function KnowledgeBasePage() {
                     </Badge>
                   ) : (
                     <select
-                      className="max-w-[150px] cursor-pointer rounded-full border border-border bg-secondary/70 px-3 py-1 text-xs text-muted-foreground outline-none transition-colors hover:border-primary focus:border-primary"
+                      className="max-w-[150px] cursor-pointer rounded-full border border-border bg-secondary/70 px-3 py-1 text-[13px] text-muted-foreground outline-none transition-colors hover:border-primary focus:border-primary"
                       value=""
                       onChange={(e) => {
                         const v = e.target.value;

@@ -9,17 +9,18 @@ async def test_public_chat_does_not_send_invalid_reasoning_effort(monkeypatch):
 
     captured = {}
 
-    class FakeChatOpenAI:
-        def __init__(self, **kwargs):
-            captured["kwargs"] = kwargs
-
+    class FakeLLM:
         async def astream(self, messages):
             yield type("Chunk", (), {"content": "公开回复"})()
+
+    def fake_create_llm(model_kwargs, thinking_mode):
+        captured["kwargs"] = model_kwargs
+        return FakeLLM()
 
     async def fake_landing_context(db):
         return "公开上下文"
 
-    monkeypatch.setattr(public_chat_service, "ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr(public_chat_service, "_create_llm", fake_create_llm)
     monkeypatch.setattr(public_chat_service, "_landing_context", fake_landing_context)
 
     chunks = [chunk async for chunk in public_chat_service.public_stream_chat(object(), "你好")]
@@ -32,20 +33,20 @@ async def test_public_chat_does_not_send_invalid_reasoning_effort(monkeypatch):
 async def test_public_chat_strips_protocol_reasoning_markers(monkeypatch):
     from src.services import public_chat_service
 
-    class FakeChatOpenAI:
-        def __init__(self, **kwargs):
-            pass
-
+    class FakeLLM:
         async def astream(self, messages):
             yield type("Chunk", (), {"content": "公开"})()
             yield type("Chunk", (), {"content": '\x00REASONING\x00{"reasoning_delta":"内部思考"}'})()
             yield type("Chunk", (), {"content": '�REASONING�{"reasoning_delta":"残留思考"}'})()
             yield type("Chunk", (), {"content": "回复"})()
 
+    def fake_create_llm(model_kwargs, thinking_mode):
+        return FakeLLM()
+
     async def fake_landing_context(db):
         return "公开上下文"
 
-    monkeypatch.setattr(public_chat_service, "ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr(public_chat_service, "_create_llm", fake_create_llm)
     monkeypatch.setattr(public_chat_service, "_landing_context", fake_landing_context)
 
     chunks = [chunk async for chunk in public_chat_service.public_stream_chat(object(), "你好")]

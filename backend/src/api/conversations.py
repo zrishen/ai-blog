@@ -1,6 +1,6 @@
 """对话管理路由。"""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,8 +72,8 @@ async def create_conversation(
     conv = Conversation(
         title=data.title,
         user_id=user.id,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
     )
     db.add(conv)
     await db.commit()

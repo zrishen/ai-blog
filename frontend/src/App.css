@@ -22,7 +22,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: hsl(var(--muted) / 0.55);
+  background: hsl(var(--card) / 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }
 
 /* === Chat Messages === */

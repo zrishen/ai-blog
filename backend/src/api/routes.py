@@ -16,6 +16,7 @@ from src.api.research import router as research_router
 from src.api.preview import router as preview_router
 from src.api.auth import router as auth_router
 from src.api.public_chat import router as public_chat_router
+from src.api.settings import router as settings_router
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ router.include_router(status_router)
 
 # 用户认证
 router.include_router(auth_router)
+router.include_router(settings_router)
 
 # 对话管理
 router.include_router(conversations_router)

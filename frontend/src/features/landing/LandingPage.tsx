@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, Calendar, Eye, Tags, AlertCircle } from "lucide-react";
-import { splitBlogTags, getBlogTagStyle } from "../blog/blogTags";
+import { splitBlogTags, getBlogTagStyle } from "../blog/utils/blogTags";
 
 export function LandingPage() {
   const { dispatch } = useChat();
@@ -31,14 +31,15 @@ export function LandingPage() {
   }, [dispatch]);
 
   const tags = useMemo(() => splitBlogTags(post?.tags), [post?.tags]);
+  const createdAt = post?.created_at;
   const date = useMemo(() => {
-    if (!post?.created_at) return "";
-    return new Date(post.created_at).toLocaleDateString("zh-CN", {
+    if (!createdAt) return "";
+    return new Date(createdAt).toLocaleDateString("zh-CN", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
-  }, [post?.created_at]);
+  }, [createdAt]);
 
   if (error) {
     return (

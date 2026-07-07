@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
 import type { MCPServerConfig, ResearchTopicDetail, ResearchTopicSummary } from "../api/client";
 import type { TrustChoiceOption } from "../features/ai-chat/trustPrompts";

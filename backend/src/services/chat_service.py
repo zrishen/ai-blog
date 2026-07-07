@@ -11,6 +11,13 @@ from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
 try:
+    from langchain_anthropic import ChatAnthropic
+    _HAS_ANTHROPIC = True
+except ImportError:
+    ChatAnthropic = None
+    _HAS_ANTHROPIC = False
+
+try:
     from langchain_deepseek import ChatDeepSeek
     _HAS_DEEPSEEK = True
 except ImportError:
@@ -25,6 +32,7 @@ from src.database.engine import (
     update_conversation_title,
 )
 from src.services.conversation_service import save_agent_messages
+from src.services.llm_settings_service import build_llm_model_kwargs, get_user_llm_settings
 from src.tools.agent_tools import BLOG_TOOLS, search_knowledge_base, current_user_id_cv
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
 from src.tools.mcp_tools import build_mcp_call_tool, format_mcp_capabilities, normalize_mcp_capabilities
@@ -141,38 +149,39 @@ def _extra_body_for_mode(thinking_mode: str) -> dict[str, Any] | None:
     return extra_body
 
 
-def _chat_model_kwargs(thinking_mode: str) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {
-        "api_key": settings.openai_api_key,
-        "base_url": settings.base_url,
-        "model": settings.model_name,
-        "temperature": settings.model_temperature,
-    }
-    if settings.model_max_output_tokens:
-        kwargs["max_tokens"] = settings.model_max_output_tokens
-    if _is_deep_thinking(thinking_mode):
-        kwargs["model"] = settings.deep_thinking_model_name or settings.model_name
-        kwargs["temperature"] = settings.deep_thinking_temperature
-        kwargs["max_tokens"] = settings.deep_thinking_max_output_tokens
+def _chat_model_kwargs(thinking_mode: str, llm_settings=None) -> dict[str, Any]:
+    kwargs = build_llm_model_kwargs(thinking_mode, llm_settings)
     extra_body = _extra_body_for_mode(thinking_mode)
-    if extra_body:
+    if extra_body and kwargs.get("protocol") == "openai":
         kwargs["extra_body"] = extra_body
     return kwargs
 
 
-def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str) -> ChatOpenAI:
+def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
     """根据模型名选择 ChatDeepSeek 或 ChatOpenAI。
 
     DeepSeek 模型无论深度/普通模式都使用 ChatDeepSeek，
     以正确捕获 reasoning_content 推理链。
     """
-    model_name = model_kwargs.get("model", "")
+    protocol = model_kwargs.get("protocol", "openai")
+    llm_kwargs = {k: v for k, v in model_kwargs.items() if k != "protocol"}
+    if protocol == "anthropic":
+        if not _HAS_ANTHROPIC or ChatAnthropic is None:
+            raise RuntimeError("Anthropic protocol requires langchain-anthropic")
+        anthropic_kwargs = {k: v for k, v in llm_kwargs.items() if k not in ("api_key", "base_url")}
+        if llm_kwargs.get("api_key"):
+            anthropic_kwargs["anthropic_api_key"] = llm_kwargs["api_key"]
+        if llm_kwargs.get("base_url"):
+            anthropic_kwargs["anthropic_api_url"] = llm_kwargs["base_url"]
+        return ChatAnthropic(**anthropic_kwargs)
+
+    model_name = llm_kwargs.get("model", "")
     if _HAS_DEEPSEEK and "deepseek" in model_name.lower():
-        ds_kwargs = {**model_kwargs}
+        ds_kwargs = {**llm_kwargs}
         if "base_url" in ds_kwargs:
             ds_kwargs["api_base"] = ds_kwargs.pop("base_url")
         return ChatDeepSeek(**ds_kwargs)
-    return ChatOpenAI(**model_kwargs)
+    return ChatOpenAI(**llm_kwargs)
 
 
 # ── Reference extraction ──
@@ -497,8 +506,10 @@ async def stream_chat(
     from src.database.models import MCPServer
 
     mcp_servers = []
+    user_llm_settings = None
     try:
         async with async_session() as db:
+            user_llm_settings = await get_user_llm_settings(db, user_id)
             result = await db.execute(
                 select(MCPServer).where(MCPServer.user_id == user_id, MCPServer.is_active)
             )
@@ -554,7 +565,7 @@ async def stream_chat(
         agent_tools.extend(RESEARCH_TOOLS)
 
     t0 = time.time()
-    model_kwargs = _chat_model_kwargs(thinking_mode)
+    model_kwargs = _chat_model_kwargs(thinking_mode, user_llm_settings)
     logger.info(
         ">>> LLM calling: '%s' → model=%s, thinking_mode=%s, extra_body=%s, max_tokens=%s",
         user_message[:100].replace("\n", " "),
