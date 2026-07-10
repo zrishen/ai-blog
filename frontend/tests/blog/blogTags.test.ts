@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getBlogTagStyle, splitBlogTags } from "../src/features/blog/utils/blogTags";
+import { getBlogTagStyle, splitBlogTags } from "../../src/features/blog/utils/blogTags";
 
 describe("splitBlogTags", () => {
   it("按英文逗号分割并 trim", () => {

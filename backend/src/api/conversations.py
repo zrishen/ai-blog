@@ -27,7 +27,7 @@ def _display_content_for_message(role: str, content: str) -> str:
     if role != "user":
         return content
     stripped = content.lstrip()
-    prefixes = ("[检索到的参考内容]", "[知识库检索结果]")
+    prefixes = ("[检索到的参考内容]", "[文件库检索结果]")
     if not stripped.startswith(prefixes):
         return content
     marker = "[用户问题]"
@@ -39,7 +39,8 @@ def _display_content_for_message(role: str, content: str) -> str:
 def _is_displayable_history_message(message: Message) -> bool:
     if message.role not in {"user", "assistant"}:
         return False
-    if message.role == "assistant" and not (message.content or "").strip() and message.tool_calls:
+    # 中间轮 AIMessage（有 tool_calls 且无思考元数据）不显示，只用于上下文重建
+    if message.role == "assistant" and message.tool_calls and not message.thinking_duration_ms:
         return False
     return True
 
@@ -111,6 +112,12 @@ async def get_conversation_messages(
             file_url=m.file_url,
             token_count=m.token_count,
             created_at=m.created_at,
+            reasoningContent=m.reasoning_content,
+            thinkingContent=m.thinking_content,
+            toolEvents=m.tool_events,
+            loopSteps=m.loop_steps,
+            thinkingDurationMs=m.thinking_duration_ms,
+            thinkingMode=m.thinking_mode,
         )
         for m in msgs
         if _is_displayable_history_message(m)

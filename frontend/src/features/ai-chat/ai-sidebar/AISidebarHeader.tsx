@@ -2,11 +2,10 @@ import {
   ChevronRight,
   ChevronLeft,
   Plus,
-  MessageSquare,
-  Database,
-  WandSparkles,
-  Brain,
   Search,
+  Zap,
+  Scale,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,29 +13,38 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { listResearchTopics } from "../../../api/client";
 import { useChat } from "../../../stores/chatStore";
-import { nextAiSidebarMode } from "./constants";
+import { thinkingModeLabels } from "./constants";
+import type { ThinkingMode } from "../../../api/chat";
 
 interface AISidebarHeaderProps {
   isPrivate: boolean;
   sidebarView: "list" | "chat";
-  currentModeLabel: string;
   onCollapse: () => void;
   onBackToList: () => void;
   onNewChat: () => void;
 }
 
+const THINKING_MODE_OPTIONS: { mode: ThinkingMode; label: string; icon: React.ReactNode; desc: string }[] = [
+  { mode: "fast", label: "快速", icon: <Zap className="h-4 w-4" />, desc: "快速响应，适合简单问题" },
+  { mode: "balanced", label: "平衡", icon: <Scale className="h-4 w-4" />, desc: "兼顾速度与质量（推荐）" },
+  { mode: "smart", label: "智能", icon: <Sparkles className="h-4 w-4" />, desc: "深度思考，适合复杂任务" },
+];
+
 export function AISidebarHeader({
   isPrivate,
   sidebarView,
-  currentModeLabel,
   onCollapse,
   onBackToList,
   onNewChat,
 }: AISidebarHeaderProps) {
   const { state, dispatch } = useChat();
+  const supportsThinking = state.llmSupportsThinking;
 
   return (
     <div className="relative flex flex-shrink-0 items-center justify-between gap-2 border-b border-border/70 bg-card/78 px-3 py-3 backdrop-blur-xl">
@@ -59,51 +67,55 @@ export function AISidebarHeader({
                 size="sm"
                 className="h-7 gap-1.5 rounded-full px-2.5 text-xs font-medium border-primary/25 bg-primary/8 text-primary hover:bg-primary/15 hover:border-primary/40 shadow-sm"
               >
-                {state.aiSidebarMode === "normal" ? (
-                  <MessageSquare className="h-3 w-3" />
-                ) : state.aiSidebarMode === "knowledge" ? (
-                  <Database className="h-3 w-3" />
+                {state.aiSidebarThinkingMode === "smart" ? (
+                  <Sparkles className="h-3 w-3" />
+                ) : state.aiSidebarThinkingMode === "balanced" ? (
+                  <Scale className="h-3 w-3" />
                 ) : (
-                  <WandSparkles className="h-3 w-3" />
+                  <Zap className="h-3 w-3" />
                 )}
-                {currentModeLabel}
-                {state.aiSidebarThinkingMode === "deep" && (
+                {thinkingModeLabels[state.aiSidebarThinkingMode]}
+                {state.aiSidebarThinkingMode !== "fast" && (
                   <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="end" className="w-48">
-              <DropdownMenuItem
-                onClick={() =>
-                  dispatch({
-                    type: "SET_AI_SIDEBAR_MODE",
-                    payload: nextAiSidebarMode[state.aiSidebarMode],
-                  })
-                }
-              >
-                {state.aiSidebarMode === "normal" ? (
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                ) : state.aiSidebarMode === "knowledge" ? (
-                  <Database className="mr-2 h-4 w-4" />
+            <DropdownMenuContent side="top" align="end" className="w-52">
+              <DropdownMenuLabel className="text-[11px] text-muted-foreground">思考模式</DropdownMenuLabel>
+              {THINKING_MODE_OPTIONS.map((opt) => {
+                const disabled = !supportsThinking && opt.mode !== "fast";
+                const menuItem = (
+                  <DropdownMenuItem
+                    key={opt.mode}
+                    disabled={disabled}
+                    onClick={() =>
+                      dispatch({
+                        type: "SET_AI_SIDEBAR_THINKING_MODE",
+                        payload: opt.mode,
+                      })
+                    }
+                  >
+                    {opt.icon}
+                    <span className="ml-2">{opt.label}</span>
+                    {state.aiSidebarThinkingMode === opt.mode && (
+                      <span className="ml-auto text-primary">✓</span>
+                    )}
+                  </DropdownMenuItem>
+                );
+                return disabled ? (
+                  <TooltipProvider key={opt.mode} delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>{menuItem}</div>
+                      </TooltipTrigger>
+                      <TooltipContent>该模型不支持深度思考</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ) : (
-                  <WandSparkles className="mr-2 h-4 w-4" />
-                )}
-                {currentModeLabel}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() =>
-                  dispatch({
-                    type: "SET_AI_SIDEBAR_THINKING_MODE",
-                    payload: state.aiSidebarThinkingMode === "deep" ? "normal" : "deep",
-                  })
-                }
-              >
-                <Brain className="mr-2 h-4 w-4" />
-                深度思考
-                {state.aiSidebarThinkingMode === "deep" && (
-                  <span className="ml-auto text-primary">✓</span>
-                )}
-              </DropdownMenuItem>
+                  menuItem
+                );
+              })}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={async () => {
                   const next = !state.trustWritingEnabled;

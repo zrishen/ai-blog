@@ -1,4 +1,4 @@
-from src.tools.agent_tools import _filter_and_dedupe_rag_results, _format_rag_context
+from src.tools.file import _filter_and_dedupe_rag_results, _format_rag_context
 from src.services.vector_store import SearchResult
 
 
@@ -18,7 +18,7 @@ def test_rag_filter_dedupe_and_format():
     assert filtered[0][0] == "doc_d"
     assert "[检索到的参考内容]" in context
     assert "[来源 1]" in context
-    assert "知识库：doc_d" in context
+    assert "文件库：doc_d" in context
     assert "来源：d.pdf" in context
     assert context.count(duplicate) == 1
     assert "无关内容" not in context
@@ -27,5 +27,5 @@ def test_rag_filter_dedupe_and_format():
 def test_rag_empty_context_prevents_fabrication():
     context = _format_rag_context([])
 
-    assert "没有找到与用户问题相关的知识库内容" in context
+    assert "没有找到与用户问题相关的文件库内容" in context
     assert "不要编造" in context

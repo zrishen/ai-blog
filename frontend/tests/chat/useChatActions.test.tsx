@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { ChatProvider, useChat } from "../src/stores/chatStore";
+import { ChatProvider, useChat } from "../../src/stores/chatStore";
 
 // 让 mock 暴露可控的 fetch 结果
 let conversationsResult: { conversations: any[] } = { conversations: [] };
 let messagesResult: any[] = [];
 let createdConversation: any = null;
 
-vi.mock("../src/api/client", () => ({
+vi.mock("../../src/api/client", () => ({
   fetchConversations: vi.fn(async () => conversationsResult),
   createConversation: vi.fn(async () => createdConversation),
   deleteConversation: vi.fn(async () => {}),
@@ -15,7 +15,7 @@ vi.mock("../src/api/client", () => ({
   sendChat: vi.fn(),
 }));
 
-import { useChatHooks } from "../src/hooks/useChat";
+import { useChatHooks } from "../../src/hooks/useChat";
 
 beforeEach(() => {
   conversationsResult = { conversations: [] };
@@ -59,7 +59,7 @@ describe("useChatHooks 其他动作", () => {
   });
 
   it("loadConversations 失败时不抛错，仅切回 isLoading=false", async () => {
-    const { fetchConversations } = await import("../src/api/client");
+    const { fetchConversations } = await import("../../src/api/client");
     (fetchConversations as any).mockRejectedValueOnce(new Error("net"));
     const { result } = renderChatHook();
 

@@ -34,7 +34,6 @@ export { API_BASE, apiFetch, readErrorDetail };
 export * from "./auth";
 export * from "./conversations";
 export * from "./chat";
-export * from "./knowledge";
 export * from "./mcp";
 export * from "./research";
 export * from "./blog";

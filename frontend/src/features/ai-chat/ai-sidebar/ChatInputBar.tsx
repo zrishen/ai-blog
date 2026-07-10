@@ -24,7 +24,7 @@ interface ChatInputBarProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onSend: () => void;
   onStop: () => void;
-  onPickKnowledge: () => void;
+  onPickFiles: () => void;
   onPickResearch: () => void;
   onOpenMcp: () => void;
 }
@@ -38,7 +38,7 @@ export function ChatInputBar({
   onKeyDown,
   onSend,
   onStop,
-  onPickKnowledge,
+  onPickFiles,
   onPickResearch,
   onOpenMcp,
 }: ChatInputBarProps) {
@@ -57,9 +57,9 @@ export function ChatInputBar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-44">
-            <DropdownMenuItem onClick={onPickKnowledge}>
+            <DropdownMenuItem onClick={onPickFiles}>
               <Library className="mr-2 h-4 w-4" />
-              知识库
+              文件库
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onPickResearch}>
               <GitBranch className="mr-2 h-4 w-4" />

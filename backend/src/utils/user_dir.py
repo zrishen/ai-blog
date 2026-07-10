@@ -26,7 +26,7 @@ def _sqlite_db_path() -> str | None:
 def resolve_username(user_id: int | str) -> str:
     """user_id → username，找不到回退到 str(user_id)。"""
     if isinstance(user_id, str):
-        # 已经是字符串（如 KBDocument.user_id），可能是历史 username 直接传入
+        # 已经是字符串（如 FileDocument.user_id），可能是历史 username 直接传入
         return user_id
 
     db_path = _sqlite_db_path()

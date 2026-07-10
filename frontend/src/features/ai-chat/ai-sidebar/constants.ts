@@ -1,4 +1,4 @@
-import type { AISidebarMode } from "../../../stores/chatStore";
+import type { ThinkingMode } from "../../../api/chat";
 
 export interface AISidebarProps {
   mode: "shared" | "private";
@@ -11,21 +11,15 @@ export interface AISidebarProps {
 
 export const blogToolOperations = new Set([
   "create_post",
-  "update_post",
-  "patch_post",
+  "write_post",
+  "edit_post",
   "delete_post",
 ]);
 
-export const aiModeLabels: Record<AISidebarMode, string> = {
-  normal: "知识库：关闭",
-  knowledge: "知识库：打开",
-  auto: "知识库：自动",
-};
-
-export const nextAiSidebarMode: Record<AISidebarMode, AISidebarMode> = {
-  auto: "knowledge",
-  knowledge: "normal",
-  normal: "auto",
+export const thinkingModeLabels: Record<ThinkingMode, string> = {
+  fast: "快速",
+  balanced: "平衡",
+  smart: "智能",
 };
 
 export const RESEARCH_TOOL_NAMES = new Set([

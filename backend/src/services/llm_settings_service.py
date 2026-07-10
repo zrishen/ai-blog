@@ -10,6 +10,17 @@ from src.database.models import LLMSettings
 
 SUPPORTED_LLM_PROTOCOLS = ("openai", "anthropic")
 
+# 支持深度思考的模型名关键词（不区分大小写）
+_THINKING_CAPABLE_KEYWORDS = ("deepseek", "qwq", "o1", "o3", "o4", "claude", "reasoning", "think", "qwen3")
+
+
+def model_supports_thinking(model_name: str | None) -> bool:
+    """根据模型名判断是否支持深度思考。"""
+    if not model_name:
+        return False
+    name_lower = model_name.lower()
+    return any(kw in name_lower for kw in _THINKING_CAPABLE_KEYWORDS)
+
 
 def normalize_llm_protocol(protocol: str | None) -> str:
     value = (protocol or "openai").strip().lower()
@@ -24,26 +35,59 @@ async def get_user_llm_settings(db: AsyncSession, user_id: int) -> LLMSettings |
 def build_llm_model_kwargs(
     thinking_mode: str,
     llm_settings: LLMSettings | None = None,
+    *,
+    allow_official_fallback: bool = False,
 ) -> dict[str, Any]:
+    """构造 LLM 调用参数。
+
+    - allow_official_fallback=True：DB 无记录或缺字段时回退到 .env 官方配置，
+      用于访客公共聊天等"平台买单"场景。
+    - allow_official_fallback=False（默认）：要求 llm_settings 必须提供 api_key，
+      缺则 kwargs.api_key=None，由上层判断并拒绝调用。用于登录用户自有 key 场景。
+    """
     protocol = normalize_llm_protocol(llm_settings.protocol if llm_settings else None)
     has_custom_model = bool(llm_settings and llm_settings.model_name)
 
+    user_api_key = llm_settings.api_key if llm_settings and llm_settings.api_key else None
+    user_base_url = llm_settings.base_url if llm_settings and llm_settings.base_url else None
+
+    if allow_official_fallback:
+        api_key = user_api_key or settings.openai_api_key
+        base_url = user_base_url or settings.base_url
+        model = llm_settings.model_name if has_custom_model else settings.model_name
+    else:
+        api_key = user_api_key
+        base_url = user_base_url
+        model = llm_settings.model_name if has_custom_model else None
+
     kwargs: dict[str, Any] = {
         "protocol": protocol,
-        "api_key": (llm_settings.api_key if llm_settings and llm_settings.api_key else settings.openai_api_key),
-        "base_url": (llm_settings.base_url if llm_settings and llm_settings.base_url else settings.base_url),
-        "model": (llm_settings.model_name if has_custom_model else settings.model_name),
-        "temperature": settings.model_temperature,
+        "api_key": api_key,
+        "base_url": base_url,
+        "model": model,
+        "temperature": settings.balanced_temperature,
     }
 
-    if settings.model_max_output_tokens:
-        kwargs["max_tokens"] = settings.model_max_output_tokens
+    if settings.balanced_max_output_tokens:
+        kwargs["max_tokens"] = settings.balanced_max_output_tokens
 
-    is_deep = thinking_mode == "deep"
-    if is_deep:
-        if not has_custom_model:
-            kwargs["model"] = settings.deep_thinking_model_name or settings.model_name
-        kwargs["temperature"] = settings.deep_thinking_temperature
-        kwargs["max_tokens"] = settings.deep_thinking_max_output_tokens
+    # 三档模式参数覆盖
+    if thinking_mode == "fast":
+        kwargs["temperature"] = settings.fast_temperature
+        kwargs["max_tokens"] = settings.fast_max_output_tokens
+    elif thinking_mode == "smart":
+        if allow_official_fallback and not has_custom_model:
+            kwargs["model"] = settings.smart_thinking_model_name or settings.model_name
+        kwargs["temperature"] = settings.smart_temperature
+        kwargs["max_tokens"] = settings.smart_max_output_tokens
+    # balanced 使用默认值（已在上方设置）
 
     return kwargs
+
+
+def has_usable_api_key(model_kwargs: dict[str, Any]) -> bool:
+    """判断 build_llm_model_kwargs 产出的 kwargs 是否带可用 api_key。
+
+    用于 allow_official_fallback=False 路径下,登录用户没自填 key 时拒绝调用。
+    """
+    return bool(model_kwargs.get("api_key"))

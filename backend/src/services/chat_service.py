@@ -1,5 +1,6 @@
 """Chat service — LangGraph ReAct Agent + MCP tools + RAG."""
 
+import asyncio
 import json
 import logging
 import re
@@ -32,11 +33,37 @@ from src.database.engine import (
     update_conversation_title,
 )
 from src.services.conversation_service import save_agent_messages
-from src.services.llm_settings_service import build_llm_model_kwargs, get_user_llm_settings
-from src.tools.agent_tools import BLOG_TOOLS, search_knowledge_base, current_user_id_cv
-from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
-from src.tools.mcp_tools import build_mcp_call_tool, format_mcp_capabilities, normalize_mcp_capabilities
-from src.tools.research_tools import RESEARCH_TOOLS
+from src.services.llm_settings_service import (
+    build_llm_model_kwargs,
+    get_user_llm_settings,
+    has_usable_api_key,
+)
+from src.tools.blog import BLOG_TOOLS, current_user_id_cv
+from src.tools.file import base_search_file
+from langchain_core.messages import AIMessage, ToolMessage
+from src.tools.mcp import build_mcp_call_tool, format_mcp_capabilities, normalize_mcp_capabilities
+from src.tools.research import RESEARCH_TOOLS
+from src.prompts import (
+    SYSTEM_BASE,
+    SYSTEM_DATE,
+    SYSTEM_SMART_THINKING,
+    SYSTEM_TOOL_RULES,
+    RAG_AUTO,
+    MCP_CAPABILITIES,
+    CTX_POST,
+    CTX_FILES,
+    CTX_HOME,
+    CTX_ABOUT,
+    CTX_RESEARCH,
+    CTX_RESEARCH_TOPIC,
+    CTX_SELECTED_TEXT,
+    CTX_SELECTED_TEXT_LABEL,
+    CTX_SELECTED_SECTION,
+    CTX_RESEARCH_TOPIC_ID,
+    CTX_TRUST_WRITING,
+    RESEARCH_TOOL_RULES,
+    TRUST_CHOICE_PROTOCOL,
+)
 
 logger = logging.getLogger(__name__)
 _DONE_MARKER = chr(0)
@@ -44,24 +71,13 @@ _BLOGDELTA_MARKER = f"{_DONE_MARKER}BLOGDELTA{_DONE_MARKER}"
 _REASONING_MARKER = f"{_DONE_MARKER}REASONING{_DONE_MARKER}"
 _PATCHSTART_MARKER = f"{_DONE_MARKER}PATCHSTART{_DONE_MARKER}"
 _PATCHDELTA_MARKER = f"{_DONE_MARKER}PATCHDELTA{_DONE_MARKER}"
+_LOOPSTEP_MARKER = f"{_DONE_MARKER}LOOPSTEP{_DONE_MARKER}"
 
-_TRUST_CHOICE_PROTOCOL = """
-研究写作选择协议：
-当需要给用户下一步建议时，可以在回复末尾输出一个结构化 JSON payload，格式为 TrustChoicePayload：
-{
-  "message": "给用户看的简短建议正文",
-  "choices": [
-    {"label": "去图谱审核", "kind": "action", "action": "open_research_graph"},
-    {"label": "研究反方观点", "kind": "reply", "prompt": "请继续研究这个主题的反方观点，并优先寻找权威来源和原文证据。"}
-  ]
-}
-choices 最多 1-4 个；同一个 choices 数组里允许 action 和 reply 混合。
-action 只能使用以下白名单：start_research、continue_research、open_research_graph、open_conflicts、explain_conflicts、write_from_confirmed_facts。
-reply 只表示用户确认后的下一句话，不代表你可以自动执行前端动作、删除、发布或跳转。
-label 只用于按钮展示，不能作为动作判断依据。
-不要求返回“不选择”，该选项由前端固定追加。
-不要求返回“请选择下一步：”，该标题由前端固定渲染。
-""".strip()
+_MISSING_API_KEY_MESSAGE = "请先在「设置」页填写你自己的 API 密钥后再发起对话。"
+
+
+class _MissingApiKeyError(RuntimeError):
+    """登录用户未填写自有 API 密钥时抛出，由 stream_chat 主流程捕获并返回提示。"""
 
 
 # ── Token estimation ──
@@ -77,65 +93,33 @@ def estimate_tokens(text: str | list) -> int:
 
 def _system_prompt(
     tool_names: list[str],
-    thinking_mode: str = "normal",
-    rag_policy: str = "normal",
+    thinking_mode: str = "balanced",
     mcp_capabilities_text: str = "",
 ) -> str:
     today = datetime.now().strftime("%Y年%m月%d日")
-    base = (
-        "你是一个智能、友好、专业的AI助手，你的名字叫光饼。用简洁清晰的语言回答问题，"
-        "必要时使用Markdown格式组织内容。如果不确定，坦诚说明。\n"
-        f"当前日期：{today}。撰写文章时请基于当前日期判断时间线，不要把过去的日期当作未来。"
-    )
-    if _is_deep_thinking(thinking_mode):
-        base += (
-            "\n\n当前处于深度分析模式。回答前要先充分理解用户目标、上下文和约束；"
-            "复杂任务要分步骤分析，给出依据、取舍、风险和结论；"
-            "如果使用工具或知识库，必须结合实际结果再回答。"
-            "不要暴露隐藏推理链；需要说明推理时，只输出简洁的分析要点。"
-        )
+    base = SYSTEM_BASE + SYSTEM_DATE.format(today=today)
+    if _is_smart_thinking(thinking_mode):
+        base += SYSTEM_SMART_THINKING
     if tool_names:
         names = "、".join(tool_names)
-        base += (
-            f"\n\n你拥有以下工具：{names}。"
-            "严格遵循以下规则：\n"
-            "1. 收到工具返回后，用自然语言将结果告诉用户。\n"
-            "2. 只调用与用户问题匹配的工具，不要用不相关的工具。\n"
-            "3. 博客操作：用户要求创建、编辑、删除、查看博客文章时，必须使用对应的博客工具；创建或更新文章时，title 参数用于标题，content 参数只写正文，不要以 '# 标题' 重复开头。如需章节标题，从 '##' 开始。\n"
-            "4. 小范围修改（改某一段、润色、调整措辞）优先使用 blog_patch_post 精准替换；大幅重写全文才使用 blog_update_post。\n"
-            '5. 当用户描述性要求修改某章节（如「改第三章」、「把开头改简洁点」）时，先用 blog_get_post 读取文章完整内容，找到对应段落后使用 blog_patch_post 精准替换。\n'
-            "6. 对同一工具不要连续调用超过 3 次来验证或重试同一操作。如果结果不理想，向用户说明情况并建议下一步操作，而不是反复重试。"
-        )
-    if rag_policy == "normal":
-        base += "\n\n当前未启用知识库工具；不要声称已经读取或检索了用户上传文档。"
-    elif rag_policy == "knowledge":
-        base += "\n\n当前是知识库模式。回答用户问题前必须先调用 search_knowledge_base；如果检索结果为空，要明确说明知识库未找到相关资料，不要编造。"
-    elif rag_policy == "auto":
-        base += "\n\n当前是自动知识库模式。当用户提到知识库、上传文件、文档、资料、根据文档等私有资料线索时，应调用 search_knowledge_base；普通闲聊不必调用。"
+        base += SYSTEM_TOOL_RULES.format(names=names)
+    base += RAG_AUTO
     if mcp_capabilities_text:
-        base += (
-            "\n\n当前用户已配置以下外部 MCP 能力：\n"
-            f"{mcp_capabilities_text}\n"
-            "如果用户问题需要这些能力、实时信息、网页或第三方系统数据，不要猜测，调用 mcp_call_tool。"
-            "调用时 tool_ref 必须严格使用清单中的 server_name/tool_name，arguments 必须符合对应 schema。"
-            "如果 mcp_call_tool 返回超时或失败，向用户说明当前 MCP 服务不可用，而不是编造结果。"
-            "不要声称没有某项能力，除非当前清单中确实没有相关工具。"
-        )
+        base += MCP_CAPABILITIES.format(cap_text=mcp_capabilities_text)
     return base
 
 
-def _is_deep_thinking(thinking_mode: str) -> bool:
-    return thinking_mode == "deep"
-
-
-def _resolve_rag_policy(rag_mode: str | None, use_rag: bool) -> str:
-    if rag_mode in ("normal", "knowledge", "auto"):
-        return rag_mode
-    return "knowledge" if use_rag else "normal"
+def _is_smart_thinking(thinking_mode: str) -> bool:
+    return thinking_mode == "smart"
 
 
 def _extra_body_for_mode(thinking_mode: str) -> dict[str, Any] | None:
-    raw = settings.deep_thinking_extra_body if _is_deep_thinking(thinking_mode) else settings.fast_answer_extra_body
+    raw_map = {
+        "fast": settings.fast_extra_body,
+        "balanced": settings.balanced_extra_body,
+        "smart": settings.smart_extra_body,
+    }
+    raw = raw_map.get(thinking_mode)
     if not raw:
         return None
     try:
@@ -162,9 +146,13 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
 
     DeepSeek 模型无论深度/普通模式都使用 ChatDeepSeek，
     以正确捕获 reasoning_content 推理链。
+
+    所有协议统一注入 stream_chunk_timeout（从 settings 读），调大到思考模型够用；
+    避免触发 langchain 内部 watchdog 后被 astream_events 吞异常导致 stream 挂死。
     """
     protocol = model_kwargs.get("protocol", "openai")
     llm_kwargs = {k: v for k, v in model_kwargs.items() if k != "protocol"}
+    sct = settings.langchain_stream_chunk_timeout
     if protocol == "anthropic":
         if not _HAS_ANTHROPIC or ChatAnthropic is None:
             raise RuntimeError("Anthropic protocol requires langchain-anthropic")
@@ -180,8 +168,41 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
         ds_kwargs = {**llm_kwargs}
         if "base_url" in ds_kwargs:
             ds_kwargs["api_base"] = ds_kwargs.pop("base_url")
+        if sct is not None:
+            ds_kwargs["stream_chunk_timeout"] = sct
         return ChatDeepSeek(**ds_kwargs)
-    return ChatOpenAI(**llm_kwargs)
+    oai_kwargs = {**llm_kwargs}
+    if sct is not None:
+        oai_kwargs["stream_chunk_timeout"] = sct
+    return ChatOpenAI(**oai_kwargs)
+
+
+async def _astream_events_with_heartbeat(
+    events_gen: AsyncGenerator[dict[str, Any], None],
+    idle_timeout: float,
+) -> AsyncGenerator[dict[str, Any], None]:
+    """给 astream_events 加间隔超时兜底。
+
+    langchain 内部 stream_chunk_timeout 触发后,StreamChunkTimeoutError 在某些路径
+    下被 astream_events 静默吞掉,外层 async for 永远等不到下一个 event。本 helper
+    在 __anext__ 上额外加 asyncio.wait_for,idle_timeout 秒无 event 主动 raise
+    TimeoutError,让上层 except 正常捕获并派发 DONE marker / 入库消息。
+    """
+    it = events_gen.__aiter__()
+    try:
+        while True:
+            try:
+                event = await asyncio.wait_for(it.__anext__(), timeout=idle_timeout)
+            except StopAsyncIteration:
+                return
+            yield event
+    finally:
+        aclose = getattr(it, "aclose", None)
+        if aclose is not None:
+            try:
+                await asyncio.wait_for(aclose(), timeout=5)
+            except Exception:
+                logger.debug("astream_events aclose timed out or failed", exc_info=True)
 
 
 # ── Reference extraction ──
@@ -189,10 +210,10 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
 def _extract_references(tool_name: str, result_text: str, tool_input: dict | None = None) -> list[dict[str, Any]]:
     """从工具返回结果中提取引用信息（RAG 来源 / MCP 服务）。"""
     refs: list[dict[str, Any]] = []
-    if tool_name == "search_knowledge_base":
+    if tool_name == "base_search_file":
         for m in re.finditer(r"来源[：:]\s*(\S+)", result_text):
             source = m.group(1).rstrip("，。")
-            collection_m = re.search(r"知识库[：:]\s*(\S+)", result_text[m.start():m.start() + 200])
+            collection_m = re.search(r"文件库[：:]\s*(\S+)", result_text[m.start():m.start() + 200])
             distance_m = re.search(r"相关距离[：:]\s*([\d.]+|unknown)", result_text[m.start():m.start() + 200])
             ref: dict[str, Any] = {"type": "rag", "source": source}
             if collection_m:
@@ -215,8 +236,8 @@ def _extract_references(tool_name: str, result_text: str, tool_input: dict | Non
 
 _BLOG_META_PATTERNS: dict[str, tuple[str, ...]] = {
     "blog_create_post": ("id", "slug", "title", "status"),
-    "blog_update_post": ("id", "slug", "title", "status"),
-    "blog_patch_post": ("id", "slug",),
+    "blog_write_post": ("id", "slug", "title", "status"),
+    "blog_edit_post": ("id", "slug",),
     "blog_delete_post": ("id", "slug", "title"),
 }
 
@@ -310,48 +331,26 @@ def _extract_partial_content(args_json: str) -> str | None:
 
 
 def _extract_partial_target(args_json: str) -> str | None:
-    """从 partial JSON args 中提取 target_text 字段的值（已生成部分）。"""
     match = re.search(r'"target_text"\s*:\s*"', args_json)
     if not match:
         return None
-    start = match.end()
-    i = start
-    result: list[str] = []
-    while i < len(args_json):
-        ch = args_json[i]
-        if ch == "\\" and i + 1 < len(args_json):
-            next_ch = args_json[i + 1]
-            if next_ch == '"':
-                result.append('"')
-            elif next_ch == "\\":
-                result.append("\\")
-            elif next_ch == "n":
-                result.append("\n")
-            elif next_ch == "t":
-                result.append("\t")
-            else:
-                result.append(next_ch)
-            i += 2
-        elif ch == '"':
-            return "".join(result)
-        else:
-            result.append(ch)
-            i += 1
-    return "".join(result)
+    return _extract_partial_json_string(args_json, match.end())
 
 
 def _extract_partial_replacement(args_json: str) -> str | None:
-    """从 partial JSON args 中提取 replacement_text 字段的值（已生成部分）。"""
     match = re.search(r'"replacement_text"\s*:\s*"', args_json)
     if not match:
         return None
-    start = match.end()
+    return _extract_partial_json_string(args_json, match.end())
+
+
+def _extract_partial_json_string(value: str, start: int) -> str:
     i = start
     result: list[str] = []
-    while i < len(args_json):
-        ch = args_json[i]
-        if ch == "\\" and i + 1 < len(args_json):
-            next_ch = args_json[i + 1]
+    while i < len(value):
+        ch = value[i]
+        if ch == "\\" and i + 1 < len(value):
+            next_ch = value[i + 1]
             if next_ch == '"':
                 result.append('"')
             elif next_ch == "\\":
@@ -489,9 +488,7 @@ async def stream_chat(
     user_id: int,
     user_image_url: str | None = None,
     user_file_url: str | None = None,
-    use_rag: bool = False,
-    rag_mode: str | None = None,
-    thinking_mode: str = "normal",
+    thinking_mode: str = "balanced",
     context: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat response via LangGraph ReAct Agent."""
@@ -528,12 +525,10 @@ async def stream_chat(
     except Exception as e:
         logger.warning("Failed to load MCP servers from DB: %s", e)
 
-    rag_policy = _resolve_rag_policy(rag_mode, use_rag)
     mcp_capabilities = normalize_mcp_capabilities(mcp_servers)
     mcp_capabilities_text = format_mcp_capabilities(mcp_capabilities)
     logger.info(
-        "Direct ReAct setup: rag_policy=%s, mcp_servers=%d, mcp_capabilities=%d",
-        rag_policy,
+        "Direct ReAct setup: mcp_servers=%d, mcp_capabilities=%d",
         len(mcp_servers),
         len(mcp_capabilities),
     )
@@ -553,8 +548,7 @@ async def stream_chat(
 
     # 3. Build agent
     agent_tools = list(BLOG_TOOLS)
-    if rag_policy in ("knowledge", "auto"):
-        agent_tools.append(search_knowledge_base)
+    agent_tools.append(base_search_file)
     if mcp_capabilities:
         agent_tools.append(build_mcp_call_tool(mcp_servers, mcp_capabilities))
 
@@ -578,12 +572,16 @@ async def stream_chat(
     # 6. Stream agent execution
     full_content = ""
     reasoning_debug_parts: list[str] = []
+    tool_events_for_history: list[dict[str, Any]] = []
+    loop_steps_for_history: list[str] = []
     _pending_blog_tool: dict[int, str] = {}
     _pending_blog_args: dict[int, str] = {}
     _pending_blog_content_yielded: dict[int, str] = {}
     _pending_patch_started: dict[int, bool] = {}
     _pending_patch_yielded: dict[int, str] = {}
     _last_tool_input: dict[str, Any] | None = None
+    # 当前 LLM 轮次的文本（用于区分最终轮 vs 中间轮）
+    _current_round_text: list[str] = []
     # 收集 agent 内部消息（用于保存完整 tool_calls 历史）
     _collected_agent_msgs: list[AIMessage | ToolMessage] = []
     _last_ai_tool_calls: list[dict] = []
@@ -591,74 +589,58 @@ async def stream_chat(
     try:
         token = current_user_id_cv.set(user_id)
         try:
-            if rag_policy == "knowledge":
-                knowledge_result = await search_knowledge_base.ainvoke({"query": user_message})
-                api_messages.insert(-1, {
-                    "role": "system",
-                    "content": f"本轮知识库强制检索结果：\n{knowledge_result}",
-                })
-
+            if not has_usable_api_key(model_kwargs):
+                raise _MissingApiKeyError()
             # 页面上下文注入
             if context:
                 parts: list[str] = []
                 page_context_parts: list[str] = []
                 page_type = context.get("page_type", "other")
                 if page_type == "post":
-                    post_id = context.get("post_id")
-                    post_title = context.get("post_title", "")
-                    page_info = f"用户当前正在查看文章「{post_title}」(ID={post_id})。"
+                    page_info = CTX_POST.format(
+                        title=context.get("post_title", ""), post_id=context.get("post_id")
+                    )
                     parts.append(page_info)
                     page_context_parts.append(page_info)
-                elif page_type == "kb":
-                    kb_info = "用户当前在知识库页面。"
-                    parts.append(kb_info)
-                    page_context_parts.append(kb_info)
+                elif page_type == "files":
+                    parts.append(CTX_FILES)
+                    page_context_parts.append(CTX_FILES)
                 elif page_type == "home":
-                    home_info = "用户当前在博客主页。"
-                    parts.append(home_info)
-                    page_context_parts.append(home_info)
+                    parts.append(CTX_HOME)
+                    page_context_parts.append(CTX_HOME)
                 elif page_type == "about":
-                    about_info = "用户当前在关于页面。"
-                    parts.append(about_info)
-                    page_context_parts.append(about_info)
+                    parts.append(CTX_ABOUT)
+                    page_context_parts.append(CTX_ABOUT)
                 elif page_type == "research":
                     topic_title = context.get("research_topic_title", "")
-                    research_info = "用户当前在研究图谱页面。"
                     if topic_title:
-                        research_info += f" 当前研究主题：「{topic_title}」(ID={research_topic_id})。"
+                        research_info = CTX_RESEARCH_TOPIC.format(title=topic_title, topic_id=research_topic_id)
+                    else:
+                        research_info = CTX_RESEARCH
                     parts.append(research_info)
                     page_context_parts.append(research_info)
 
                 # 可信写作模式上下文
+                if trust_writing or research_topic_id:
+                    parts.append(RESEARCH_TOOL_RULES)
                 if trust_writing:
-                    trust_info = (
-                        "当前处于可信写作模式。写作前必须先收集来源、抽取证据、建立事实声明（Claim），"
-                        "再基于已确认或高可信事实生成文章。遵循以下硬性规则：\n"
-                        "1. 搜索摘要只能作为线索（source_type=search_summary），不能保存为最终 Evidence。\n"
-                        "2. AI 自己总结的内容不能作为 Evidence 支撑事实。\n"
-                        "3. 没有有效 Evidence（kind=web|knowledge_base|mcp_tool|manual 且有 quote）的 Claim 不能进入 supported。\n"
-                        "4. 低可信来源（trust_level=low）不能自动 adopted。\n"
-                        "5. 冲突 Claim 不能写成确定事实，必须在文章中说明分歧。\n"
-                        "6. Agent 写入的 Claim 默认 pending，需用户审核后才可 adopted。\n\n"
-                        f"{_TRUST_CHOICE_PROTOCOL}"
-                    )
-                    parts.append(trust_info)
+                    parts.append(CTX_TRUST_WRITING.format(protocol=TRUST_CHOICE_PROTOCOL))
                 if research_topic_id:
-                    parts.append(
-                        f"当前研究主题 ID={research_topic_id}。"
-                        "请使用 research_get_topic 查看当前主题的已有来源、证据和事实。"
-                        "如需添加新来源、证据或事实，请使用对应的 research_add_* 工具。"
-                    )
+                    parts.append(CTX_RESEARCH_TOPIC_ID.format(topic_id=research_topic_id))
 
                 selected = context.get("selected_text")
                 if selected:
                     if page_type != "post" and context.get("post_id"):
-                        parts.append(f"用户当前正在查看文章「{context.get('post_title', '')}」(ID={context['post_id']})。")
-                    parts.append(
-                        "用户选中了文章中的一部分内容要求修改。请使用 blog_patch_post 精准替换，"
-                        "将选中的原文作为 target_text，生成的新文本作为 replacement_text。不要重写全文。"
-                    )
-                    page_context_parts.append(f"选中的内容：\n「{selected}」")
+                        parts.append(
+                            CTX_POST.format(
+                                title=context.get("post_title", ""), post_id=context["post_id"]
+                            )
+                        )
+                    parts.append(CTX_SELECTED_TEXT)
+                    section_index = context.get("section_index") or 0
+                    if section_index > 0:
+                        parts.append(CTX_SELECTED_SECTION.format(section_index=section_index))
+                    page_context_parts.append(CTX_SELECTED_TEXT_LABEL.format(selected=selected))
 
                 # 将页面上下文追加到用户消息（最高优先级）
                 if page_context_parts:
@@ -682,13 +664,16 @@ async def stream_chat(
             agent = create_react_agent(
                 llm,
                 agent_tools,
-                prompt=_system_prompt(all_tool_names, thinking_mode, rag_policy, mcp_capabilities_text),
+                prompt=_system_prompt(all_tool_names, thinking_mode, mcp_capabilities_text),
             )
             logger.info("ReAct agent created; streaming events")
-            async for event in agent.astream_events(
-                {"messages": api_messages},
-                version="v2",
-                config={"recursion_limit": 50},
+            async for event in _astream_events_with_heartbeat(
+                agent.astream_events(
+                    {"messages": api_messages},
+                    version="v2",
+                    config={"recursion_limit": 50},
+                ),
+                idle_timeout=settings.agent_stream_idle_timeout,
             ):
                 kind = event.get("event", "")
 
@@ -702,6 +687,7 @@ async def stream_chat(
                     _pending_blog_content_yielded.clear()
                     _pending_patch_started.clear()
                     _pending_patch_yielded.clear()
+                    tool_events_for_history.append({"type": "start", "toolName": tool_name})
                     yield f"\n\n{_DONE_MARKER}TOOLDONE{_DONE_MARKER}\n"
                     yield json.dumps({"status": "start", "tool_name": tool_name, "result": "调用中..."})
 
@@ -720,7 +706,7 @@ async def stream_chat(
                         blog_meta = _extract_blog_meta(tool_name, result_text)
                         if blog_meta:
                             payload["blog_meta"] = blog_meta
-                            if tool_name in {"blog_create_post", "blog_update_post"}:
+                            if tool_name in {"blog_create_post", "blog_write_post"}:
                                 research_link = await _auto_link_research_context_to_blog_post(
                                     blog_meta,
                                     research_topic_id,
@@ -732,26 +718,36 @@ async def stream_chat(
                     refs = _extract_references(tool_name, result_text, _last_tool_input)
                     if refs:
                         payload["references"] = refs
+                    history_event: dict[str, Any] = {"type": "end", "toolName": tool_name, "result": result_text}
+                    if refs:
+                        history_event["references"] = refs
+                    tool_events_for_history.append(history_event)
                     yield f"\n\n{_DONE_MARKER}TOOLDONE{_DONE_MARKER}\n"
                     yield json.dumps(payload)
 
                 elif kind == "on_chat_model_stream":
                     chunk = event.get("data", {}).get("chunk")
 
-                    # 1) 原有逻辑：文本 token
+                    # 1) 文本 token — 累积当前轮次文本（中间轮不直接 yield，等 on_chat_model_end 判定）
                     if chunk and hasattr(chunk, "content") and chunk.content:
                         delta = chunk.content
                         if isinstance(delta, str):
-                            full_content += delta
-                            yield delta
+                            _current_round_text.append(delta)
 
-                    # 1.5) 模型推理内容（reasoning_content）
+                    # 1.5) 模型推理内容（多字段兼容）
                     if chunk and hasattr(chunk, "additional_kwargs"):
                         rc = getattr(chunk.additional_kwargs, "get", None)
+                        reasoning = None
                         if callable(rc):
-                            reasoning = rc("reasoning_content")
+                            for field in ("reasoning_content", "reasoning", "thinking"):
+                                reasoning = rc(field)
+                                if reasoning:
+                                    break
                         else:
-                            reasoning = (chunk.additional_kwargs or {}).get("reasoning_content")
+                            for field in ("reasoning_content", "reasoning", "thinking"):
+                                reasoning = (chunk.additional_kwargs or {}).get(field)
+                                if reasoning:
+                                    break
                         if reasoning:
                             reasoning_debug_parts.append(str(reasoning))
                             yield f"{_REASONING_MARKER}{{\"reasoning_delta\":{json.dumps(reasoning)}}}"
@@ -773,15 +769,13 @@ async def stream_chat(
 
                                 tool_name = _pending_blog_tool.get(idx, "")
 
-                                if tool_name == "blog_patch_post":
-                                    # 1) PATCHSTART：当 replacement_text key 出现时，target_text 已完整
+                                if tool_name == "blog_edit_post":
                                     if not _pending_patch_started.get(idx) and '"replacement_text"' in _pending_blog_args[idx]:
                                         target = _extract_partial_target(_pending_blog_args[idx])
                                         if target is not None:
                                             _pending_patch_started[idx] = True
                                             yield f"{_PATCHSTART_MARKER}{json.dumps({'target_text': target})}"
 
-                                    # 2) PATCHDELTA：流式推送替换内容
                                     if _pending_patch_started.get(idx):
                                         replacement_so_far = _extract_partial_replacement(_pending_blog_args[idx])
                                         if replacement_so_far is not None:
@@ -789,9 +783,9 @@ async def stream_chat(
                                             new_part = replacement_so_far[len(prev):]
                                             if new_part:
                                                 _pending_patch_yielded[idx] = replacement_so_far
-                                                yield f"{_PATCHDELTA_MARKER}{{\"replacement_delta\":{json.dumps(new_part)}}}"
+                                                yield f"{_PATCHDELTA_MARKER}{json.dumps({'replacement_delta': new_part})}"
 
-                                elif tool_name in ("blog_create_post", "blog_update_post"):
+                                elif tool_name in ("blog_create_post", "blog_write_post"):
                                     content_so_far = _extract_partial_content(_pending_blog_args[idx])
                                     if content_so_far is not None:
                                         prev = _pending_blog_content_yielded.get(idx, "")
@@ -805,21 +799,46 @@ async def stream_chat(
                     ai_msg = event.get("data", {}).get("output")
                     if isinstance(ai_msg, AIMessage):
                         _collected_agent_msgs.append(ai_msg)
+                        round_text = "".join(_current_round_text).strip()
                         if ai_msg.tool_calls:
+                            # 中间轮：把文本作为 loop step 推送给前端思考面板
                             _last_ai_tool_calls = list(ai_msg.tool_calls)
                             _tool_call_idx = 0
+                            if round_text:
+                                loop_steps_for_history.append(round_text)
+                                yield f"{_LOOPSTEP_MARKER}{json.dumps({'text': round_text})}"
+                        else:
+                            # 最终轮（无工具调用）：流式推送最终回答
+                            full_content = round_text
+                            yield round_text
+                        # 重置当前轮次缓冲，准备下一轮
+                        _current_round_text = []
         finally:
             current_user_id_cv.reset(token)
 
     except Exception as e:
         logger.error("Agent execution failed: %s", e, exc_info=True)
+        # 异常时清空推理内容，避免错误消息带着推理链
+        reasoning_debug_parts.clear()
+        loop_steps_for_history.clear()
         # 对 tool_calls 格式错误给出友好提示
         err_msg = str(e)
-        if "tool_calls" in err_msg and ("must be followed" in err_msg or "400" in err_msg):
+        if isinstance(e, _MissingApiKeyError):
+            full_content = _MISSING_API_KEY_MESSAGE
+        elif isinstance(e, (asyncio.TimeoutError, TimeoutError)):
+            full_content = (
+                f"抱歉，模型响应超时（{settings.agent_stream_idle_timeout:.0f}s 内无新内容），"
+                "请稍后重试或切换思考模式。"
+            )
+        elif "tool_calls" in err_msg and ("must be followed" in err_msg or "400" in err_msg):
             full_content = "抱歉，对话历史中存在不完整的工具调用记录，已自动清理。请重新发送您的消息。"
         else:
             full_content = f"抱歉，处理您的请求时出错：{e}"
         yield full_content
+
+    # 兜底：若未捕获到最终轮（如异常中断），用所有累积文本
+    if not full_content and _current_round_text:
+        full_content = "".join(_current_round_text)
 
     if reasoning_debug_parts:
         reasoning_debug_text = "".join(reasoning_debug_parts)
@@ -830,15 +849,16 @@ async def stream_chat(
         )
 
     elapsed = time.time() - t0
+    thinking_duration_ms = int(elapsed * 1000)
+    reasoning_content = "".join(reasoning_debug_parts) or None
     logger.info("<<< LLM result: took %.1fs, %d chars, preview='%s'", elapsed, len(full_content), full_content[:200])
 
     # 6.5 保存完整的 agent 消息历史（含 tool_calls），供下次重建上下文
+    # 注意：只存 AIMessage + ToolMessage（中间轮），不存 HumanMessage（user 消息由 add_message_pair 负责）
     if _collected_agent_msgs:
         try:
-            all_msgs: list[AIMessage | ToolMessage | HumanMessage] = [HumanMessage(content=user_message)]
-            all_msgs.extend(_collected_agent_msgs)
-            await save_agent_messages(conversation_id, user_id, all_msgs)
-            logger.info("Saved %d agent messages (with tool_calls) for conv=%s", len(all_msgs), conversation_id)
+            await save_agent_messages(conversation_id, user_id, _collected_agent_msgs)
+            logger.info("Saved %d agent messages (with tool_calls) for conv=%s", len(_collected_agent_msgs), conversation_id)
         except Exception as e:
             logger.warning("Failed to save agent messages with tool_calls: %s", e)
 
@@ -855,6 +875,11 @@ async def stream_chat(
             assistant_token_count,
             user_image_url,
             user_file_url,
+            assistant_reasoning_content=reasoning_content,
+            assistant_tool_events=tool_events_for_history or None,
+            assistant_loop_steps=loop_steps_for_history or None,
+            assistant_thinking_duration_ms=thinking_duration_ms,
+            assistant_thinking_mode=thinking_mode,
         )
         message_id = new_message.id
         if not conversation_id:

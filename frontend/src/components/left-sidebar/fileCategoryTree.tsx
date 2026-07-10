@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import type { KBCategory } from "../../stores/chatStore";
+import type { FileCategory } from "../../stores/chatStore";
 import {
   Folder,
   ChevronRight,
@@ -17,7 +17,7 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
-import type { EditingState } from "./kbCategoryUtils";
+import type { EditingState } from "./fileCategoryUtils";
 
 export function CategoryTree({
   categories,
@@ -41,7 +41,7 @@ export function CategoryTree({
   onDropTargetChange,
   depth = 0,
 }: {
-  categories: KBCategory[];
+  categories: FileCategory[];
   selectedId: number | null;
   expandedIds: Set<number>;
   onSelect: (id: number) => void;

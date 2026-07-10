@@ -103,7 +103,6 @@ function BlogTocEdit({ title }: { title?: string }) {
   const { state } = useChat();
   const [liveHeadings, setLiveHeadings] = useState<TocItem[]>([]);
   const [editExpandedSlugs, setEditExpandedSlugs] = useState<Set<string>>(new Set());
-  const [titleCollapsed, setTitleCollapsed] = useState(false);
 
   useEffect(() => {
     if (state.currentPage !== "blog" || state.blogCurrentView !== "edit") return;
@@ -160,20 +159,12 @@ function BlogTocEdit({ title }: { title?: string }) {
   return (
     <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
       <div className="p-4 flex flex-col gap-3">
-        <button
-          type="button"
-          onClick={() => setTitleCollapsed((v) => !v)}
-          aria-expanded={!titleCollapsed}
-          aria-label="切换文章标题显隐"
-          className="text-[13px] text-muted-foreground leading-relaxed pb-2 w-full text-left cursor-pointer hover:text-foreground transition-colors"
-        >
+        <div className="text-[13px] text-muted-foreground leading-relaxed pb-2">
           编辑中
-          {!titleCollapsed && (
-            <strong className="block text-[15px] text-foreground mt-1 truncate">
-              {title || "新文章"}
-            </strong>
-          )}
-        </button>
+          <strong className="block text-[15px] text-foreground mt-1 truncate">
+            {title || "新文章"}
+          </strong>
+        </div>
         {liveHeadings.length > 0 && (
           <nav className="flex flex-col gap-0 mt-1">
             <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground/70 font-semibold px-1">目录</span>

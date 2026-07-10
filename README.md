@@ -106,7 +106,7 @@ MODEL_NAME=gpt-4o-mini
 
 ```bash
 cd backend
-uv run uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
+uv run uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir src
 ```
 
 或双击 `start_backend.bat`。后端运行在 http://127.0.0.1:8000，健康检查 `GET /api/health`。

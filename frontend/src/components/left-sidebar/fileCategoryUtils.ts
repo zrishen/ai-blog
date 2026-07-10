@@ -1,4 +1,4 @@
-import type { KBCategory } from "../../stores/chatStore";
+import type { FileCategory } from "../../stores/chatStore";
 
 export interface EditingState {
   type: "rename" | "newSub";
@@ -6,7 +6,7 @@ export interface EditingState {
   value: string;
 }
 
-export function isDescOf(targetId: number, ancestorId: number, tree: KBCategory[]): boolean {
+export function isDescOf(targetId: number, ancestorId: number, tree: FileCategory[]): boolean {
   for (const cat of tree) {
     if (cat.id === ancestorId) {
       return containsId(targetId, cat.children ?? []);
@@ -16,7 +16,7 @@ export function isDescOf(targetId: number, ancestorId: number, tree: KBCategory[
   return false;
 }
 
-export function containsId(id: number, tree: KBCategory[]): boolean {
+export function containsId(id: number, tree: FileCategory[]): boolean {
   for (const cat of tree) {
     if (cat.id === id) return true;
     if (containsId(id, cat.children ?? [])) return true;
@@ -24,7 +24,7 @@ export function containsId(id: number, tree: KBCategory[]): boolean {
   return false;
 }
 
-export function findCategoryById(id: number, tree: KBCategory[]): KBCategory | null {
+export function findCategoryById(id: number, tree: FileCategory[]): FileCategory | null {
   for (const cat of tree) {
     if (cat.id === id) return cat;
     const child = findCategoryById(id, cat.children ?? []);

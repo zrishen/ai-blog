@@ -1,4 +1,4 @@
-"""Knowledge base schemas."""
+"""File library schemas."""
 
 from datetime import datetime
 from typing import Optional
@@ -6,19 +6,19 @@ from typing import Optional
 from pydantic import BaseModel
 
 
-class KBCategoryCreate(BaseModel):
+class FileCategoryCreate(BaseModel):
     name: str
     description: Optional[str] = None
     parent_id: Optional[int] = None
 
 
-class KBCategoryUpdate(BaseModel):
+class FileCategoryUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[int] = None
 
 
-class KBCategoryResponse(BaseModel):
+class FileCategoryResponse(BaseModel):
     id: int
     name: str
     slug: str
@@ -29,19 +29,19 @@ class KBCategoryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class KBCategoryTreeResponse(BaseModel):
+class FileCategoryTreeResponse(BaseModel):
     id: int
     name: str
     slug: str
     description: Optional[str] = None
     parent_id: Optional[int] = None
     created_at: datetime
-    children: list["KBCategoryTreeResponse"] = []
+    children: list["FileCategoryTreeResponse"] = []
 
     model_config = {"from_attributes": True}
 
 
-class KBDocumentResponse(BaseModel):
+class FileDocumentResponse(BaseModel):
     id: int
     collection_name: str
     original_name: str
@@ -53,15 +53,15 @@ class KBDocumentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class KBDocumentListResponse(BaseModel):
-    documents: list[KBDocumentResponse]
+class FileDocumentListResponse(BaseModel):
+    documents: list[FileDocumentResponse]
 
 
 class SetCategoryRequest(BaseModel):
     category_id: int | None
 
 
-class KBDocumentUploadResponse(BaseModel):
+class FileDocumentUploadResponse(BaseModel):
     id: int
     collection_name: str
     original_name: str
@@ -70,6 +70,6 @@ class KBDocumentUploadResponse(BaseModel):
     created_at: datetime
 
 
-class KBCollectionResponse(BaseModel):
+class FileCollectionResponse(BaseModel):
     name: str
     document_count: int

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateExcerpt } from "../src/features/blog/utils/blogExcerpt";
+import { generateExcerpt } from "../../src/features/blog/utils/blogExcerpt";
 
 describe("generateExcerpt", () => {
   it("空字符串返回空串", () => {

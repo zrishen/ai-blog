@@ -14,7 +14,28 @@ const _BLOGDELTA_MARKER = "\x00BLOGDELTA\x00";
 const _REASONING_MARKER = "\x00REASONING\x00";
 const _PATCHSTART_MARKER = "\x00PATCHSTART\x00";
 const _PATCHDELTA_MARKER = "\x00PATCHDELTA\x00";
-const _PROTOCOL_MARKER_NAMES = ["REASONING", "TOOLDONE", "BLOGDELTA", "PATCHSTART", "PATCHDELTA", "DONE"] as const;
+const _LOOPSTEP_MARKER = "\x00LOOPSTEP\x00";
+const _PROTOCOL_MARKERS = [
+  ["REASONING", _REASONING_MARKER],
+  ["TOOLDONE", _TOOL_MARKER],
+  ["BLOGDELTA", _BLOGDELTA_MARKER],
+  ["PATCHSTART", _PATCHSTART_MARKER],
+  ["PATCHDELTA", _PATCHDELTA_MARKER],
+  ["LOOPSTEP", _LOOPSTEP_MARKER],
+  ["DONE", _DONE_MARKER],
+] as const;
+const _PROTOCOL_MARKER_NAMES = _PROTOCOL_MARKERS.map(([name]) => name);
+
+type ProtocolMarkerName = typeof _PROTOCOL_MARKERS[number][0];
+
+function _findNextProtocolMarker(text: string): { name: ProtocolMarkerName; index: number } | null {
+  let next: { name: ProtocolMarkerName; index: number } | null = null;
+  for (const [name, marker] of _PROTOCOL_MARKERS) {
+    const index = text.indexOf(marker);
+    if (index !== -1 && (!next || index < next.index)) next = { name, index };
+  }
+  return next;
+}
 
 function _findCompleteJson(str: string, start: number): { endIndex: number } | null {
   let depth = 0;
@@ -121,8 +142,7 @@ function _hasUnresolvedProtocolMarker(text: string): boolean {
   return /[\0�]/.test(text) && !hasCompleteMarker;
 }
 
-export type RagMode = "normal" | "knowledge" | "auto";
-export type ThinkingMode = "normal" | "deep";
+export type ThinkingMode = "fast" | "balanced" | "smart";
 
 export interface StreamReference {
   type: "rag" | "mcp";
@@ -143,9 +163,9 @@ export async function sendChat(
   onToolCall?: (toolName: string) => void,
   onToolResult?: (toolName: string, result: string, blogMeta?: BlogToolMeta, references?: StreamReference[]) => void,
   onBlogDelta?: (contentDelta: string) => void,
-  ragMode?: RagMode,
   thinkingMode?: ThinkingMode,
   onReasoning?: (text: string) => void,
+  onLoopStep?: (text: string) => void,
   onPatchStart?: (targetText: string) => void,
   onPatchDelta?: (delta: string) => void,
   context?: Record<string, unknown>,
@@ -159,9 +179,7 @@ export async function sendChat(
       conversation_id: conversationId,
       image_url: imageUrl || null,
       file_url: fileUrl || null,
-      rag_mode: ragMode ?? null,
-      use_rag: ragMode === "knowledge",
-      thinking_mode: thinkingMode ?? "normal",
+      thinking_mode: thinkingMode ?? "balanced",
       context: context ?? null,
     }),
     signal,
@@ -200,8 +218,10 @@ export async function sendChat(
         }
       }
 
-      // --- BLOGDELTA marker（优先于 TOOL marker 检测）---
-      const bdIdx = accumulated.indexOf(_BLOGDELTA_MARKER);
+      const nextMarker = _findNextProtocolMarker(accumulated);
+
+      // --- BLOGDELTA marker ---
+      const bdIdx = nextMarker?.name === "BLOGDELTA" ? nextMarker.index : -1;
       if (bdIdx !== -1) {
         if (bdIdx > 0) {
           onChunk(accumulated.substring(0, bdIdx));
@@ -225,7 +245,7 @@ export async function sendChat(
       }
 
       // --- PATCHSTART marker ---
-      const psIdx = accumulated.indexOf(_PATCHSTART_MARKER);
+      const psIdx = nextMarker?.name === "PATCHSTART" ? nextMarker.index : -1;
       if (psIdx !== -1) {
         if (psIdx > 0) {
           onChunk(accumulated.substring(0, psIdx));
@@ -235,7 +255,7 @@ export async function sendChat(
         if (jsonResult) {
           try {
             const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-            if (payload.target_text && onPatchStart) {
+            if (typeof payload.target_text === "string" && payload.target_text && onPatchStart) {
               onPatchStart(payload.target_text);
             }
           } catch { /* ignore parse errors */ }
@@ -249,7 +269,7 @@ export async function sendChat(
       }
 
       // --- PATCHDELTA marker ---
-      const pdIdx = accumulated.indexOf(_PATCHDELTA_MARKER);
+      const pdIdx = nextMarker?.name === "PATCHDELTA" ? nextMarker.index : -1;
       if (pdIdx !== -1) {
         if (pdIdx > 0) {
           onChunk(accumulated.substring(0, pdIdx));
@@ -259,7 +279,7 @@ export async function sendChat(
         if (jsonResult) {
           try {
             const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-            if (payload.replacement_delta && onPatchDelta) {
+            if (typeof payload.replacement_delta === "string" && payload.replacement_delta && onPatchDelta) {
               onPatchDelta(payload.replacement_delta);
             }
           } catch { /* ignore parse errors */ }
@@ -272,7 +292,7 @@ export async function sendChat(
         continue;
       }
 
-      const toolIdx = accumulated.indexOf(_TOOL_MARKER);
+      const toolIdx = nextMarker?.name === "TOOLDONE" ? nextMarker.index : -1;
       if (toolIdx !== -1) {
         // Emit any text before the marker
         if (toolIdx > 0) {
@@ -316,7 +336,7 @@ export async function sendChat(
       }
 
       // --- REASONING marker ---
-      const rsIdx = accumulated.indexOf(_REASONING_MARKER);
+      const rsIdx = nextMarker?.name === "REASONING" ? nextMarker.index : -1;
       if (rsIdx !== -1) {
         if (rsIdx > 0) {
           onChunk(accumulated.substring(0, rsIdx));
@@ -339,7 +359,31 @@ export async function sendChat(
         continue;
       }
 
-      const doneIdx = accumulated.indexOf(_DONE_MARKER);
+      // --- LOOPSTEP marker (中间轮 LLM 输出) ---
+      const lsIdx = nextMarker?.name === "LOOPSTEP" ? nextMarker.index : -1;
+      if (lsIdx !== -1) {
+        if (lsIdx > 0) {
+          onChunk(accumulated.substring(0, lsIdx));
+        }
+        const afterMarker = accumulated.substring(lsIdx + _LOOPSTEP_MARKER.length);
+        const jsonResult = _findCompleteJson(afterMarker, 0);
+        if (jsonResult) {
+          try {
+            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+            if (payload.text && onLoopStep) {
+              onLoopStep(payload.text);
+            }
+          } catch { /* ignore parse errors */ }
+          accumulated = afterMarker.substring(jsonResult.endIndex);
+        } else {
+          accumulated = _LOOPSTEP_MARKER + afterMarker;
+          continue;
+        }
+        processed = false;
+        continue;
+      }
+
+      const doneIdx = nextMarker?.name === "DONE" ? nextMarker.index : -1;
       if (doneIdx !== -1) {
         // Emit text before DONE if it's not pure JSON
         const textBefore = accumulated.substring(0, doneIdx).trim();

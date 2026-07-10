@@ -1,20 +1,33 @@
 """Mock 测试 fixtures — 屏蔽外部服务。"""
 
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+
+
+async def _fake_get_user_llm_settings(db, user_id):
+    """模拟登录用户已配置自有 API 密钥，避免 chat/research service 触发无 key 拒绝。"""
+    return SimpleNamespace(
+        protocol="openai",
+        base_url="https://example.com/v1",
+        api_key="test-key",
+        model_name="test-model",
+    )
 
 
 @pytest.fixture(autouse=True)
 def mock_external_services():
     """自动 mock 所有外部服务。"""
     with patch("src.api.chat.stream_chat", side_effect=mock_stream_chat), \
-         patch("src.api.kb.vectorize_and_store", return_value=[]), \
-         patch("src.api.kb.list_collections", return_value=[]), \
-         patch("src.api.kb.get_collection_count", return_value=0), \
-         patch("src.api.kb.delete_document_chunks", return_value=True), \
-         patch("src.api.kb.delete_collection", return_value=True), \
+         patch("src.services.llm_settings_service.get_user_llm_settings", new=_fake_get_user_llm_settings), \
+         patch("src.services.chat_service.get_user_llm_settings", new=_fake_get_user_llm_settings), \
+         patch("src.api.files.vectorize_and_store", return_value=[]), \
+         patch("src.api.files.list_collections", return_value=[]), \
+         patch("src.api.files.get_collection_count", return_value=0), \
+         patch("src.api.files.delete_document_chunks", return_value=True), \
+         patch("src.api.files.delete_collection", return_value=True), \
          patch("src.utils.file_parser.parse_file", return_value="mocked content"), \
          patch("src.services.vector_store.list_collections", return_value=[]), \
          patch("src.services.vector_store.get_collection_count", return_value=0), \
@@ -31,8 +44,6 @@ async def mock_stream_chat(
     user_id=None,
     image_url=None,
     file_url=None,
-    use_rag=False,
-    rag_mode=None,
     thinking_mode="normal",
     context=None,
 ):

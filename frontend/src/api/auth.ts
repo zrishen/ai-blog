@@ -42,7 +42,9 @@ export interface LLMSettings {
   protocol: LLMProtocol;
   base_url: string | null;
   model: string | null;
+  api_key: string | null;
   has_api_key: boolean;
+  supports_thinking?: boolean;
 }
 
 export interface LLMSettingsUpdate {

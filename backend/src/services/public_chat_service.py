@@ -1,4 +1,4 @@
-"""受限公开 AI 聊天服务：不绑定工具、不访问私有知识库、不保存工作台会话。"""
+"""受限公开 AI 聊天服务：不绑定工具、不访问私有文件库、不保存工作台会话。"""
 
 import json
 import logging
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogPost, User
 from src.services.chat_service import _create_llm
-from src.services.llm_settings_service import build_llm_model_kwargs, get_user_llm_settings
+from src.services.llm_settings_service import build_llm_model_kwargs
 from src.services.official_intro_service import build_intro_post_payload
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ def _system_prompt(context: str) -> str:
     return (
         f"当前日期：{today}。\n\n"
         "你是 AI Blog 的公开访客助手，只能进行普通聊天。"
-        "你不能创建、编辑、删除或发布博客，不能访问私有知识库，不能调用 MCP 或任何工具。"
+        "你不能创建、编辑、删除或发布博客，不能访问私有文件库，不能调用 MCP 或任何工具。"
         "如果用户要求执行管理操作，请说明需要登录为站点主人并使用完整助手。"
         "你可以基于以下公开上下文和通用知识回答：\n\n"
         f"{context}"
@@ -115,15 +115,10 @@ async def public_stream_chat(
     else:
         context = await _landing_context(db)
 
-    owner = None
-    if username:
-        owner_result = await db.execute(select(User).where(User.username == username))
-        owner = owner_result.scalar_one_or_none()
-    user_llm_settings = await get_user_llm_settings(db, owner.id) if owner else None
-    model_kwargs = build_llm_model_kwargs("normal", user_llm_settings)
+    model_kwargs = build_llm_model_kwargs("fast", None, allow_official_fallback=True)
     model_kwargs["temperature"] = 0.7
     model_kwargs["max_tokens"] = settings.public_chat_max_output_tokens
-    llm = _create_llm(model_kwargs, "normal")
+    llm = _create_llm(model_kwargs, "fast")
     messages = [
         {"role": "system", "content": _system_prompt(context)},
         {"role": "user", "content": content},

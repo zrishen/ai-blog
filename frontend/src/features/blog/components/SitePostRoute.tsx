@@ -1,5 +1,5 @@
 import { useEffect, useReducer } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { getSitePost, getSiteUser } from "../../../api/client";
 import { useAuth } from "../../../stores/authStore";
 import { useChat } from "../../../stores/chatStore";
@@ -28,6 +28,7 @@ function reducer(_state: State, action: Action): State {
 
 export function SitePostRoute() {
   const { username, slug } = useParams<{ username: string; slug: string }>();
+  const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
   const { state, dispatch } = useChat();
   const [local, localDispatch] = useReducer(reducer, initialState);
@@ -42,7 +43,8 @@ export function SitePostRoute() {
         if (!alive) return;
         localDispatch({ type: "loaded", isOwner: Boolean(siteUser.is_owner) });
         dispatch({ type: "SET_PAGE", payload: "blog" });
-        dispatch({ type: "SET_BLOG_VIEW", payload: "view" });
+        // URL 带 ?edit 时刷新后仍留在编辑页
+        dispatch({ type: "SET_BLOG_VIEW", payload: searchParams.get("edit") !== null ? "edit" : "view" });
         dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: post.id });
         dispatch({
           type: "SET_BLOG_POSTS",
@@ -57,7 +59,7 @@ export function SitePostRoute() {
     return () => {
       alive = false;
     };
-  }, [username, slug, isAuthenticated, user?.username, dispatch]);
+  }, [username, slug, isAuthenticated, user?.username, dispatch, searchParams]);
 
   const { loading, error, isOwner } = local;
 

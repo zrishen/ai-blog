@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useChat } from "../../stores/chatStore";
-import type { KBCategory } from "../../stores/chatStore";
+import type { FileCategory } from "../../stores/chatStore";
 import { useAuth } from "../../stores/authStore";
 import { useChatHooks } from "../../hooks/useChat";
-import { uploadToKB, createKBCategory, deleteKBDocument, setDocumentCategory, listKBCategories } from "../../api/client";
+import { uploadToFileLibrary, createFileCategory, deleteFileDocument, setDocumentCategory, listFileCategories } from "../../api/client";
 import { FilePreview } from "../../components/FilePreview";
 import { motion } from "motion/react";
 import { ArrowLeft, Upload, FolderPlus, X, Trash2, AlertCircle, FileText, FileSpreadsheet, File, Database, Sparkles, FolderOpen } from "lucide-react";
@@ -21,8 +21,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-function flattenCategories(cats: KBCategory[], depth = 0): (KBCategory & { _depth: number })[] {
-  const result: (KBCategory & { _depth: number })[] = [];
+function flattenCategories(cats: FileCategory[], depth = 0): (FileCategory & { _depth: number })[] {
+  const result: (FileCategory & { _depth: number })[] = [];
   for (const cat of cats) {
     result.push({ ...cat, _depth: depth });
     if (cat.children?.length) {
@@ -44,10 +44,10 @@ function getDocumentIcon(fileName: string, className = "w-8 h-8") {
   return <File className={`${className} text-muted-foreground`} />;
 }
 
-export function KnowledgeBasePage() {
+export function FileLibraryPage() {
   const { state, dispatch } = useChat();
   const { isAuthenticated } = useAuth();
-  const { loadKBDocuments } = useChatHooks();
+  const { loadFileDocuments } = useChatHooks();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,23 +57,23 @@ export function KnowledgeBasePage() {
   const [newCatParentId, setNewCatParentId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; name: string } | null>(null);
 
-  const flatCategories = useMemo(() => flattenCategories(state.kbCategories), [state.kbCategories]);
+  const flatCategories = useMemo(() => flattenCategories(state.fileCategories), [state.fileCategories]);
   const categoryMap = useMemo(() => new Map(flatCategories.map((c) => [c.id, c.name])), [flatCategories]);
-  const selectedCategoryName = state.kbSelectedCategoryId ? categoryMap.get(state.kbSelectedCategoryId) : "全部文件";
+  const selectedCategoryName = state.fileSelectedCategoryId ? categoryMap.get(state.fileSelectedCategoryId) : "全部文件";
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    if (state.kbCategories.length === 0) {
-      listKBCategories().then(cats => dispatch({ type: "SET_KB_CATEGORIES", payload: cats })).catch(() => {});
+    if (state.fileCategories.length === 0) {
+      listFileCategories().then(cats => dispatch({ type: "SET_FILE_CATEGORIES", payload: cats })).catch(() => {});
     }
-  }, [dispatch, isAuthenticated, state.kbCategories.length]);
+  }, [dispatch, isAuthenticated, state.fileCategories.length]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    loadKBDocuments(state.kbSelectedCategoryId ?? undefined).catch((err) => {
-      setError(err instanceof Error ? err.message : "知识库文件加载失败");
+    loadFileDocuments(state.fileSelectedCategoryId ?? undefined).catch((err) => {
+      setError(err instanceof Error ? err.message : "文件库加载失败");
     });
-  }, [isAuthenticated, state.kbSelectedCategoryId, loadKBDocuments]);
+  }, [isAuthenticated, state.fileSelectedCategoryId, loadFileDocuments]);
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -81,21 +81,21 @@ export function KnowledgeBasePage() {
     setUploading(true);
     setError(null);
     try {
-      await uploadToKB(file, state.kbSelectedCategoryId ?? undefined);
-      await loadKBDocuments(state.kbSelectedCategoryId ?? undefined);
+      await uploadToFileLibrary(file, state.fileSelectedCategoryId ?? undefined);
+      await loadFileDocuments(state.fileSelectedCategoryId ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "上传失败");
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [state.kbSelectedCategoryId, loadKBDocuments]);
+  }, [state.fileSelectedCategoryId, loadFileDocuments]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
     try {
-      await deleteKBDocument(deleteTarget.id);
-      dispatch({ type: "REMOVE_KB_DOCUMENT", payload: deleteTarget.id });
+      await deleteFileDocument(deleteTarget.id);
+      dispatch({ type: "REMOVE_FILE_DOCUMENT", payload: deleteTarget.id });
       setDeleteTarget(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除失败");
@@ -106,26 +106,26 @@ export function KnowledgeBasePage() {
     try {
       await setDocumentCategory(docId, categoryId);
       dispatch({
-        type: "SET_KB_DOCUMENTS",
-        payload: state.kbDocuments.map(d => d.id === docId ? { ...d, category_id: categoryId } : d),
+        type: "SET_FILE_DOCUMENTS",
+        payload: state.fileDocuments.map(d => d.id === docId ? { ...d, category_id: categoryId } : d),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "设置分类失败");
     }
-  }, [state.kbDocuments, dispatch]);
+  }, [state.fileDocuments, dispatch]);
 
   const handleCreateCategory = useCallback(async () => {
     if (!newCatName.trim()) return;
     try {
-      const cat = await createKBCategory({ name: newCatName.trim(), parent_id: newCatParentId });
-      dispatch({ type: "SET_KB_CATEGORIES", payload: [...state.kbCategories, cat] });
+      const cat = await createFileCategory({ name: newCatName.trim(), parent_id: newCatParentId });
+      dispatch({ type: "SET_FILE_CATEGORIES", payload: [...state.fileCategories, cat] });
       setNewCatName("");
       setNewCatParentId(null);
       setShowNewCategory(false);
     } catch {
       setError("创建分类失败");
     }
-  }, [newCatName, newCatParentId, state.kbCategories, dispatch]);
+  }, [newCatName, newCatParentId, state.fileCategories, dispatch]);
 
   if (!isAuthenticated) {
     return (
@@ -137,11 +137,11 @@ export function KnowledgeBasePage() {
               <Database className="w-7 h-7" />
             </div>
             <div className="relative mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-primary/80">
-              Knowledge Base
+              File Library
             </div>
-            <h1 className="relative text-3xl font-black tracking-[-0.04em] text-foreground">登录后查看知识库</h1>
+            <h1 className="relative text-3xl font-black tracking-[-0.04em] text-foreground">登录后查看文件库</h1>
             <p className="relative mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-              登录后可查看和管理你的个人知识库，上传文档并用于写作与对话检索。
+              登录后可查看和管理你的个人文件库，上传文档并用于写作与对话检索。
             </p>
             <Button className="relative mt-6 rounded-full shadow-lg shadow-primary/20" onClick={() => setLoginDialogOpen(true)}>
               登录到 AI Blog
@@ -153,7 +153,7 @@ export function KnowledgeBasePage() {
     );
   }
 
-  if (state.kbSelectedFile) {
+  if (state.fileSelectedFile) {
     return (
       <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden bg-background px-2 py-2">
         <div className="mx-auto flex w-full max-w-[1040px] flex-1 min-h-0 flex-col">
@@ -161,7 +161,7 @@ export function KnowledgeBasePage() {
             <Button
               variant="ghost"
               className="gap-1.5 rounded-full"
-              onClick={() => dispatch({ type: "SET_KB_SELECTED_FILE", payload: null })}
+              onClick={() => dispatch({ type: "SET_FILE_SELECTED_FILE", payload: null })}
             >
               <ArrowLeft className="w-4 h-4" />
               返回文件列表
@@ -183,7 +183,7 @@ export function KnowledgeBasePage() {
             </Button>
           </div>
           <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/90 p-2 shadow-xl shadow-foreground/5">
-            <FilePreview filename={state.kbSelectedFile} />
+            <FilePreview filename={state.fileSelectedFile} />
           </div>
         </div>
       </div>
@@ -202,7 +202,7 @@ export function KnowledgeBasePage() {
                 <Database className="w-3.5 h-3.5" />
                 {selectedCategoryName || "全部文件"}
               </div>
-              <h1 className="text-3xl font-black tracking-[-0.04em] text-foreground">知识库</h1>
+              <h1 className="text-3xl font-black tracking-[-0.04em] text-foreground">文件库</h1>
               <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
                 上传论文、文档和表格，把资料整理成可检索、可对话的知识资产。
               </p>
@@ -255,7 +255,7 @@ export function KnowledgeBasePage() {
                 <option value="">无父分类</option>
                 {flatCategories.map(c => (
                   <option key={c.id} value={c.id}>
-                    {"  ".repeat(c._depth)}{c.name}
+                    {"  ".repeat(c._depth)}{c.name}
                   </option>
                 ))}
               </select>
@@ -280,7 +280,7 @@ export function KnowledgeBasePage() {
           </div>
         )}
 
-        {state.kbDocuments.length === 0 ? (
+        {state.fileDocuments.length === 0 ? (
           <div className="flex min-h-[42vh] flex-col items-center justify-center rounded-[2rem] border border-dashed border-border bg-card/70 p-10 text-center shadow-sm">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-primary/10 text-primary ring-1 ring-primary/15">
               <Sparkles className="w-7 h-7" />
@@ -302,11 +302,11 @@ export function KnowledgeBasePage() {
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-2">
-            {state.kbDocuments.map((doc) => (
+            {state.fileDocuments.map((doc) => (
               <motion.div
                 key={doc.id}
                 className="group relative overflow-hidden rounded-[1.35rem] border border-border/70 bg-card/88 p-4 shadow-sm transition-all duration-200 hover:border-primary/25 hover:shadow-xl hover:shadow-foreground/5"
-                onClick={() => dispatch({ type: "SET_KB_SELECTED_FILE", payload: doc.file_path })}
+                onClick={() => dispatch({ type: "SET_FILE_SELECTED_FILE", payload: doc.file_path })}
                 whileHover={{ y: -4 }}
               >
                 <div className="absolute inset-x-0 top-0 h-1 bg-primary/70 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -360,7 +360,7 @@ export function KnowledgeBasePage() {
                       <option value="">设置分类</option>
                       {flatCategories.map(c => (
                         <option key={c.id} value={c.id}>
-                          {"  ".repeat(c._depth)}{c.name}
+                          {"  ".repeat(c._depth)}{c.name}
                         </option>
                       ))}
                     </select>
@@ -377,7 +377,7 @@ export function KnowledgeBasePage() {
           <DialogHeader>
             <DialogTitle>确认删除文件</DialogTitle>
             <DialogDescription>
-              确定要删除「{deleteTarget?.name}」吗？这个操作会从知识库中移除该文件。
+              确定要删除「{deleteTarget?.name}」吗？这个操作会从文件库中移除该文件。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

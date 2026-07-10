@@ -316,8 +316,23 @@
   box-shadow: inset 0 1px 0 hsl(var(--background) / 0.5);
 }
 
-.blog-editor-body .vditor-wysiwyg div.vditor-wysiwyg__block[data-type="code-block"]::before {
-  display: none;
+.blog-editor-body .vditor-wysiwyg div.vditor-wysiwyg__block::before {
+  display: none !important;
+}
+
+/* 隐藏 Vditor 原生块标签标记(H1/H2/.../H6 等),避免标题行左上角显示白点;
+   代码块/__block 已由上一条规则覆盖,此处补全标题及其它块类型 */
+.blog-editor-body .vditor-wysiwyg > .vditor-reset > h1::before,
+.blog-editor-body .vditor-wysiwyg > .vditor-reset > h2::before,
+.blog-editor-body .vditor-wysiwyg > .vditor-reset > h3::before,
+.blog-editor-body .vditor-wysiwyg > .vditor-reset > h4::before,
+.blog-editor-body .vditor-wysiwyg > .vditor-reset > h5::before,
+.blog-editor-body .vditor-wysiwyg > .vditor-reset > h6::before,
+.blog-editor-body .vditor-wysiwyg div.vditor-wysiwyg__block::before,
+.blog-editor-body .vditor-wysiwyg div[data-type="link-ref-defs-block"]::before,
+.blog-editor-body .vditor-wysiwyg div[data-type="footnotes-block"]::before,
+.blog-editor-body .vditor-wysiwyg .vditor-toc::before {
+  content: none !important;
 }
 
 .blog-editor-body .vditor-wysiwyg div.vditor-wysiwyg__block[data-type="code-block"] pre {
@@ -492,10 +507,61 @@
   padding-left: 1.55rem;
 }
 
+.blog-editor-body .vditor-wysiwyg ol,
+.blog-editor-body .vditor-ir ol,
+.blog-editor-body .vditor-sv__preview ol {
+  list-style-type: decimal;
+}
+
+.blog-editor-body .vditor-wysiwyg ul,
+.blog-editor-body .vditor-ir ul,
+.blog-editor-body .vditor-sv__preview ul {
+  list-style-type: disc;
+}
+
+.blog-editor-body .vditor-wysiwyg ul ul,
+.blog-editor-body .vditor-ir ul ul,
+.blog-editor-body .vditor-sv__preview ul ul {
+  list-style-type: circle;
+}
+
+.blog-editor-body .vditor-wysiwyg ul ul ul,
+.blog-editor-body .vditor-ir ul ul ul,
+.blog-editor-body .vditor-sv__preview ul ul ul {
+  list-style-type: square;
+}
+
 .blog-editor-body .vditor-wysiwyg li,
 .blog-editor-body .vditor-ir li,
 .blog-editor-body .vditor-sv__preview li {
   margin-bottom: 0.28em;
+}
+
+/* 任务列表:Vditor 在 li 上加 .vditor-task,父 ul 也按普通列表渲染
+   Vditor 自带 .vditor-task { list-style: none !important } 与 input 负 margin 定位
+   这里把任务列表父 ul 的 padding-left 恢复到 2em,使 checkbox 负 margin 正好落到 marker 位置 */
+.blog-editor-body .vditor-wysiwyg ul:has(> li.vditor-task),
+.blog-editor-body .vditor-ir ul:has(> li.vditor-task),
+.blog-editor-body .vditor-sv__preview ul:has(> li.vditor-task) {
+  padding-left: 2em;
+  list-style: none;
+}
+
+.blog-editor-body .vditor-wysiwyg li.vditor-task,
+.blog-editor-body .vditor-ir li.vditor-task,
+.blog-editor-body .vditor-sv__preview li.vditor-task {
+  list-style: none !important;
+  padding-left: 0;
+}
+
+.blog-editor-body .vditor-wysiwyg li.vditor-task input[type="checkbox"],
+.blog-editor-body .vditor-ir li.vditor-task input[type="checkbox"],
+.blog-editor-body .vditor-sv__preview li.vditor-task input[type="checkbox"] {
+  margin: 0 0.4em 0.25em -1.4em;
+  width: 14px;
+  height: 14px;
+  vertical-align: middle;
+  accent-color: hsl(var(--primary));
 }
 
 .blog-editor-body .vditor-wysiwyg hr,
@@ -753,6 +819,13 @@
   display: flex !important;
 }
 
+/* customWysiwygToolbar 已把 popover 内容清空,但 Vditor 的 setPopoverPosition 仍会
+   inline 设 display:block 并定位到块左上角;空 popover 被渲染成接近白色的小圆角盒,
+   视觉上像白点。空内容时整体隐藏,不影响 selectPopover(含评论按钮,永远非空)。 */
+.blog-editor-body .vditor-wysiwyg .vditor-panel--none:empty {
+  display: none !important;
+}
+
 .blog-editor-body .vditor-wysiwyg .vditor-panel--none .vditor-icon {
   display: inline-flex;
   width: 1.85rem;
@@ -920,4 +993,33 @@
 .blog-editor-body .vditor-sv__preview,
 .blog-editor-body .vditor-preview > .vditor-reset {
   padding-top: var(--blog-editor-content-padding-top) !important;
+}
+
+/* AI 修改流式预览(文档流原位块,样式对齐详情页 patch 区) */
+.blog-editor-body .vditor-reset .ai-patch-inline {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid hsl(var(--primary) / 0.3);
+  border-radius: 0.5rem;
+  background: hsl(var(--primary) / 0.05);
+  user-select: none;
+}
+.blog-editor-body .vditor-reset .ai-patch-inline__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 10px;
+  font-weight: 500;
+  color: hsl(var(--primary));
+  animation: ai-patch-pulse 1.5s ease-in-out infinite;
+}
+.blog-editor-body .vditor-reset .ai-patch-inline__text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.75;
+  color: hsl(var(--foreground));
+}
+@keyframes ai-patch-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }

@@ -6,9 +6,9 @@ import {
   deleteConversation,
   getMessages,
   sendChat,
-  uploadToKB,
-  listKBDocuments,
-  deleteKBDocument,
+  uploadToFileLibrary,
+  listFileDocuments,
+  deleteFileDocument,
   listMCPServers,
   deleteMCPServer,
 } from "../api/client";
@@ -75,41 +75,41 @@ export function useChatHooks() {
     [state.conversations, state.currentConversationId, dispatch],
   );
 
-  const loadKBDocuments = useCallback(async (categoryId?: number) => {
+  const loadFileDocuments = useCallback(async (categoryId?: number) => {
     try {
-      const data = await listKBDocuments(categoryId);
-      dispatch({ type: "SET_KB_DOCUMENTS", payload: data.documents });
+      const data = await listFileDocuments(categoryId);
+      dispatch({ type: "SET_FILE_DOCUMENTS", payload: data.documents });
     } catch (error) {
-      console.error("Failed to load KB documents:", error);
+      console.error("Failed to load file library documents:", error);
       throw error;
     }
   }, [dispatch]);
 
-  const uploadToKnowledgeBase = useCallback(
+  const uploadToFileLibraryHook = useCallback(
     async (file: File, categoryId?: number) => {
       dispatch({ type: "SET_LOADING", payload: true });
-      const targetCategoryId = categoryId ?? state.kbSelectedCategoryId ?? undefined;
+      const targetCategoryId = categoryId ?? state.fileSelectedCategoryId ?? undefined;
       try {
-        const doc = await uploadToKB(file, targetCategoryId);
-        await loadKBDocuments(targetCategoryId);
+        const doc = await uploadToFileLibrary(file, targetCategoryId);
+        await loadFileDocuments(targetCategoryId);
         return doc;
       } catch (error) {
-        console.error("KB upload failed:", error);
+        console.error("File library upload failed:", error);
         throw error;
       } finally {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [state.kbSelectedCategoryId, loadKBDocuments, dispatch],
+    [state.fileSelectedCategoryId, loadFileDocuments, dispatch],
   );
 
-  const removeKBDocument = useCallback(
+  const removeFileDocument = useCallback(
     async (id: number) => {
-      await deleteKBDocument(id);
-      dispatch({ type: "REMOVE_KB_DOCUMENT", payload: id });
-      await loadKBDocuments();
+      await deleteFileDocument(id);
+      dispatch({ type: "REMOVE_FILE_DOCUMENT", payload: id });
+      await loadFileDocuments();
     },
-    [loadKBDocuments, dispatch],
+    [loadFileDocuments, dispatch],
   );
 
   const sendMessage = useCallback(
@@ -246,9 +246,9 @@ export function useChatHooks() {
     selectConversation,
     removeConversation,
     sendMessage,
-    loadKBDocuments,
-    uploadToKnowledgeBase,
-    removeKBDocument,
+    loadFileDocuments,
+    uploadToFileLibrary: uploadToFileLibraryHook,
+    removeFileDocument,
     loadMCPServers,
     addMCPServer,
     removeMCPServer,

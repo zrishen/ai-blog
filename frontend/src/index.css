@@ -311,14 +311,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  padding: 0.4rem 0.9rem;
-  border-bottom: 1px solid hsl(var(--border) / 0.7);
-  background: hsl(var(--background) / 0.5);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: hsl(var(--muted-foreground));
-  text-transform: uppercase;
+  /* 与编辑页浮标一致:无分割线、无背景,纯文字贴在代码块左上角内侧 */
+  padding: 0.6rem 1.15rem 0.1rem;
+  border-bottom: 0;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.2;
+  color: hsl(var(--muted-foreground) / 0.72);
   user-select: none;
 }
 
@@ -346,4 +346,31 @@ body {
 .blog-post-code-block pre code::before,
 .blog-post-code-block pre code::after {
   content: none !important;
+}
+
+/* GFM 任务列表:prose 默认给 ul 加 disc 圆点,会让任务项前出现多余圆点 */
+.prose ul.contains-task-list,
+.prose ul:has(li > input[type="checkbox"]) {
+  list-style: none !important;
+  padding-left: 1.4rem;
+}
+
+.prose ul.contains-task-list > li,
+.prose li.task-list-item,
+.prose li:has(> input[type="checkbox"]) {
+  list-style: none !important;
+  padding-left: 0;
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.prose ul.contains-task-list input[type="checkbox"],
+.prose li.task-list-item input[type="checkbox"] {
+  margin: 0;
+  flex: none;
+  margin-top: 0.32em;
+  accent-color: hsl(var(--primary));
 }

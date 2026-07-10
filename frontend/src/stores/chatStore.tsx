@@ -31,7 +31,9 @@ interface Message {
   thinkingContent?: string;
   toolEvents?: ToolEvent[];
   reasoningContent?: string;
+  loopSteps?: string[];
   thinkingMode?: ThinkingMode;
+  thinkingDurationMs?: number;
   trustChoicePrompt?: string | null;
   trustChoiceOptions?: TrustChoiceOption[];
   token_count: number;
@@ -51,7 +53,7 @@ interface Conversation {
   updated_at: string;
 }
 
-interface KBDocument {
+interface FileDocument {
   id: number;
   collection_name: string;
   original_name: string;
@@ -79,22 +81,27 @@ interface BlogPost {
   published_at?: string;
 }
 
-interface KBCategory {
+interface FileCategory {
   id: number;
   name: string;
   slug: string;
   description?: string;
   parent_id: number | null;
-  children?: KBCategory[];
+  children?: FileCategory[];
   created_at: string;
 }
 
 type Theme = "dark" | "light";
-type Panel = "conversations" | "knowledge" | "mcp";
-type Page = "blog" | "knowledge" | "research";
+type Panel = "conversations" | "files" | "mcp";
+type Page = "blog" | "files" | "research";
 type BlogView = "list" | "view" | "edit";
-type AISidebarMode = "normal" | "knowledge" | "auto";
-type ThinkingMode = "normal" | "deep";
+type ThinkingMode = "fast" | "balanced" | "smart";
+type AISidebarConversationKey = `server:${number}` | `temp:${string}`;
+
+interface AISidebarHistoryState {
+  loading: boolean;
+  error: string | null;
+}
 
 interface ChatState {
   conversations: Conversation[];
@@ -103,7 +110,7 @@ interface ChatState {
   isLoading: boolean;
   isStreaming: boolean;
   theme: Theme;
-  kbDocuments: KBDocument[];
+  fileDocuments: FileDocument[];
   mcpServers: MCPServerConfig[];
   activePanel: Panel;
 
@@ -115,9 +122,15 @@ interface ChatState {
   // AI Sidebar
   aiSidebarOpen: boolean;
   aiSidebarConversationId: number | null;
+  aiSidebarSelectedKey: AISidebarConversationKey | null;
   aiSidebarMessages: Message[];
-  aiSidebarMode: AISidebarMode;
+  aiSidebarMessagesByKey: Record<AISidebarConversationKey, Message[]>;
+  aiSidebarStreamingByKey: Record<AISidebarConversationKey, boolean>;
+  aiSidebarInputsByKey: Record<AISidebarConversationKey, string>;
+  aiSidebarErrorsByKey: Record<AISidebarConversationKey, string | null>;
+  aiSidebarHistoryByKey: Record<AISidebarConversationKey, AISidebarHistoryState>;
   aiSidebarThinkingMode: ThinkingMode;
+  llmSupportsThinking: boolean;
 
   // Blog
   blogPosts: BlogPost[];
@@ -127,15 +140,15 @@ interface ChatState {
   blogStreamingContent: string | null;
 
   // AI Selection Context (right-click menu)
-  aiSelectionContext: { postId: number; selectedText: string } | null;
+  aiSelectionContext: { postId: number; selectedText: string; sectionIndex: number } | null;
 
   // Blog Patch Streaming (in-place replacement)
   blogPatchStreaming: { targetText: string; replacementDelta: string } | null;
 
-  // KB
-  kbCategories: KBCategory[];
-  kbSelectedCategoryId: number | null;
-  kbSelectedFile: string | null;
+  // File Library
+  fileCategories: FileCategory[];
+  fileSelectedCategoryId: number | null;
+  fileSelectedFile: string | null;
 
   // Research Graph
   researchTopics: ResearchTopicSummary[];
@@ -157,8 +170,8 @@ type ChatAction =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_STREAMING"; payload: boolean }
   | { type: "SET_THEME"; payload: Theme }
-  | { type: "SET_KB_DOCUMENTS"; payload: KBDocument[] }
-  | { type: "REMOVE_KB_DOCUMENT"; payload: number }
+  | { type: "SET_FILE_DOCUMENTS"; payload: FileDocument[] }
+  | { type: "REMOVE_FILE_DOCUMENT"; payload: number }
   | { type: "SET_MCP_SERVERS"; payload: MCPServerConfig[] }
   | { type: "REMOVE_MCP_SERVER"; payload: number }
   | { type: "SET_ACTIVE_PANEL"; payload: Panel }
@@ -169,12 +182,23 @@ type ChatAction =
   // AI Sidebar
   | { type: "SET_AI_SIDEBAR_OPEN"; payload: boolean }
   | { type: "SET_AI_SIDEBAR_CONV_ID"; payload: number | null }
+  | { type: "SET_AI_SIDEBAR_SELECTED_KEY"; payload: AISidebarConversationKey | null }
   | { type: "SET_AI_SIDEBAR_MSGS"; payload: Message[] }
+  | { type: "SET_AI_SIDEBAR_MSGS_FOR_KEY"; payload: { key: AISidebarConversationKey; messages: Message[] } }
   | { type: "ADD_AI_SIDEBAR_MSG"; payload: Message }
-  | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; thinkingMode?: ThinkingMode; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
+  | { type: "ADD_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; message: Message } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; thinkingContent?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
   | { type: "REORGANIZE_AI_MSG"; payload: { id: number; splitPosition: number } }
-  | { type: "SET_AI_SIDEBAR_MODE"; payload: AISidebarMode }
+  | { type: "REORGANIZE_AI_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; splitPosition: number } }
+  | { type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY"; payload: { key: AISidebarConversationKey; streaming: boolean } }
+  | { type: "SET_AI_SIDEBAR_INPUT_FOR_KEY"; payload: { key: AISidebarConversationKey; input: string } }
+  | { type: "SET_AI_SIDEBAR_ERROR_FOR_KEY"; payload: { key: AISidebarConversationKey; error: string | null } }
+  | { type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY"; payload: { key: AISidebarConversationKey; history: AISidebarHistoryState } }
+  | { type: "MIGRATE_AI_SIDEBAR_TEMP_KEY"; payload: { fromKey: AISidebarConversationKey; toKey: AISidebarConversationKey; conversationId: number } }
+  | { type: "REMOVE_AI_SIDEBAR_THREAD"; payload: { key: AISidebarConversationKey } }
   | { type: "SET_AI_SIDEBAR_THINKING_MODE"; payload: ThinkingMode }
+  | { type: "SET_LLM_SUPPORTS_THINKING"; payload: boolean }
   // Blog
   | { type: "SET_BLOG_POSTS"; payload: BlogPost[] }
   | { type: "SET_BLOG_VIEW"; payload: BlogView }
@@ -184,16 +208,16 @@ type ChatAction =
   | { type: "APPEND_BLOG_STREAMING"; payload: string }
   | { type: "CLEAR_BLOG_STREAMING" }
   // AI Selection Context
-  | { type: "SET_AI_SELECTION_CONTEXT"; payload: { postId: number; selectedText: string } }
+  | { type: "SET_AI_SELECTION_CONTEXT"; payload: { postId: number; selectedText: string; sectionIndex: number } }
   | { type: "CLEAR_AI_SELECTION_CONTEXT" }
   // Blog Patch Streaming
   | { type: "START_BLOG_PATCH_STREAMING"; payload: { targetText: string } }
   | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: string }
   | { type: "CLEAR_BLOG_PATCH_STREAMING" }
-  // KB
-  | { type: "SET_KB_CATEGORIES"; payload: KBCategory[] }
-  | { type: "SET_KB_SELECTED_CATEGORY_ID"; payload: number | null }
-  | { type: "SET_KB_SELECTED_FILE"; payload: string | null }
+  // File Library
+  | { type: "SET_FILE_CATEGORIES"; payload: FileCategory[] }
+  | { type: "SET_FILE_SELECTED_CATEGORY_ID"; payload: number | null }
+  | { type: "SET_FILE_SELECTED_FILE"; payload: string | null }
   // Research Graph
   | { type: "SET_RESEARCH_TOPICS"; payload: ResearchTopicSummary[] }
   | { type: "SET_RESEARCH_CURRENT_TOPIC_ID"; payload: number | null }
@@ -207,6 +231,30 @@ type ChatAction =
   | { type: "RESET_TO_BLOG_HOME" }
   // Auth
   | { type: "LOGOUT" };
+
+function updateMessageWithPayload(
+  message: Message,
+  payload: { content?: string; thinkingContent?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] },
+): Message {
+  return {
+    ...message,
+    ...(payload.content !== undefined ? { content: payload.content } : {}),
+    ...(payload.thinkingContent !== undefined ? { thinkingContent: payload.thinkingContent } : {}),
+    ...(payload.toolEvents !== undefined ? { toolEvents: payload.toolEvents } : {}),
+    ...(payload.reasoningContent !== undefined ? { reasoningContent: payload.reasoningContent } : {}),
+    ...(payload.loopSteps !== undefined ? { loopSteps: payload.loopSteps } : {}),
+    ...(payload.thinkingMode !== undefined ? { thinkingMode: payload.thinkingMode } : {}),
+    ...(payload.thinkingDurationMs !== undefined ? { thinkingDurationMs: payload.thinkingDurationMs } : {}),
+    ...(payload.trustChoicePrompt !== undefined ? { trustChoicePrompt: payload.trustChoicePrompt } : {}),
+    ...(payload.trustChoiceOptions !== undefined ? { trustChoiceOptions: payload.trustChoiceOptions } : {}),
+  };
+}
+
+function reorganizeMessage(message: Message, splitPosition: number): Message {
+  const thinkingContent = message.content.slice(0, splitPosition).trim();
+  const finalContent = message.content.slice(splitPosition).trim();
+  return finalContent || thinkingContent ? { ...message, content: finalContent, thinkingContent } : message;
+}
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
@@ -235,12 +283,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       localStorage.setItem("theme", newTheme);
       return { ...state, theme: newTheme };
     }
-    case "SET_KB_DOCUMENTS":
-      return { ...state, kbDocuments: action.payload };
-    case "REMOVE_KB_DOCUMENT":
+    case "SET_FILE_DOCUMENTS":
+      return { ...state, fileDocuments: action.payload };
+    case "REMOVE_FILE_DOCUMENT":
       return {
         ...state,
-        kbDocuments: state.kbDocuments.filter((d) => d.id !== action.payload),
+        fileDocuments: state.fileDocuments.filter((d) => d.id !== action.payload),
       };
     case "SET_MCP_SERVERS":
       return { ...state, mcpServers: action.payload };
@@ -263,49 +311,161 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, aiSidebarOpen: action.payload };
     case "SET_AI_SIDEBAR_CONV_ID":
       return { ...state, aiSidebarConversationId: action.payload };
+    case "SET_AI_SIDEBAR_SELECTED_KEY":
+      return {
+        ...state,
+        aiSidebarSelectedKey: action.payload,
+        aiSidebarConversationId: action.payload?.startsWith("server:") ? Number(action.payload.slice(7)) : null,
+        aiSidebarMessages: action.payload ? state.aiSidebarMessagesByKey[action.payload] ?? [] : [],
+      };
     case "SET_AI_SIDEBAR_MSGS":
       return { ...state, aiSidebarMessages: action.payload.filter(isDisplayableMessage) };
+    case "SET_AI_SIDEBAR_MSGS_FOR_KEY": {
+      const messages = action.payload.messages.filter(isDisplayableMessage);
+      return {
+        ...state,
+        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
+        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
+      };
+    }
     case "ADD_AI_SIDEBAR_MSG":
       if (!isDisplayableMessage(action.payload)) return state;
       return { ...state, aiSidebarMessages: [...state.aiSidebarMessages, action.payload] };
+    case "ADD_AI_SIDEBAR_MSG_FOR_KEY": {
+      if (!isDisplayableMessage(action.payload.message)) return state;
+      const current = state.aiSidebarMessagesByKey[action.payload.key] ?? [];
+      const messages = [...current, action.payload.message];
+      return {
+        ...state,
+        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
+        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
+      };
+    }
     case "UPDATE_AI_SIDEBAR_MSG":
       return {
         ...state,
         aiSidebarMessages: state.aiSidebarMessages.map((m) =>
-          m.id === action.payload.id ? {
-            ...m,
-            ...(action.payload.content !== undefined ? { content: action.payload.content } : {}),
-            ...(action.payload.thinkingContent !== undefined ? { thinkingContent: action.payload.thinkingContent } : {}),
-            ...(action.payload.toolEvents !== undefined ? { toolEvents: action.payload.toolEvents } : {}),
-            ...(action.payload.reasoningContent !== undefined ? { reasoningContent: action.payload.reasoningContent } : {}),
-            ...(action.payload.thinkingMode !== undefined ? { thinkingMode: action.payload.thinkingMode } : {}),
-            ...(action.payload.trustChoicePrompt !== undefined ? { trustChoicePrompt: action.payload.trustChoicePrompt } : {}),
-            ...(action.payload.trustChoiceOptions !== undefined ? { trustChoiceOptions: action.payload.trustChoiceOptions } : {}),
-          } : m
+          m.id === action.payload.id ? updateMessageWithPayload(m, action.payload) : m
         ),
       };
+    case "UPDATE_AI_SIDEBAR_MSG_FOR_KEY": {
+      const current = state.aiSidebarMessagesByKey[action.payload.key] ?? [];
+      const messages = current.map((m) =>
+        m.id === action.payload.id ? updateMessageWithPayload(m, action.payload) : m
+      );
+      return {
+        ...state,
+        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
+        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
+      };
+    }
     case "REORGANIZE_AI_MSG": {
       const { id: msgId, splitPosition } = action.payload;
       const msg = state.aiSidebarMessages.find((m) => m.id === msgId);
       if (!msg || !msg.toolEvents?.length) return state;
       const lastEndEvent = [...(msg.toolEvents || [])].reverse().find((e) => e.type === "end");
       if (!lastEndEvent) return state;
-      const thinkingContent = msg.content.slice(0, splitPosition).trim();
-      const finalContent = msg.content.slice(splitPosition).trim();
-      if (!finalContent && !thinkingContent) return state;
       return {
         ...state,
         aiSidebarMessages: state.aiSidebarMessages.map((m) =>
-          m.id === msgId
-            ? { ...m, content: finalContent, thinkingContent }
-            : m
+          m.id === msgId ? reorganizeMessage(m, splitPosition) : m
         ),
       };
     }
-    case "SET_AI_SIDEBAR_MODE":
-      return { ...state, aiSidebarMode: action.payload };
+    case "REORGANIZE_AI_MSG_FOR_KEY": {
+      const { key, id: msgId, splitPosition } = action.payload;
+      const current = state.aiSidebarMessagesByKey[key] ?? [];
+      const msg = current.find((m) => m.id === msgId);
+      if (!msg) return state;
+      const hasToolEvents = !!msg.toolEvents?.length;
+      const hasReasoning = !!msg.reasoningContent && msg.reasoningContent.trim().length > 3;
+      // 既无工具调用也无推理内容，不需要重组
+      if (!hasToolEvents && !hasReasoning) return state;
+      // 有工具调用时才切分 content（splitPosition 来自 lastToolEndPos）
+      // 只有推理无工具时，content 本身就是最终回答，不需要切分
+      if (splitPosition <= 0 && hasToolEvents) return state;
+      const lastEndEvent = [...(msg.toolEvents || [])].reverse().find((e) => e.type === "end");
+      if (hasToolEvents && !lastEndEvent) return state;
+      const messages = current.map((m) => (m.id === msgId ? reorganizeMessage(m, splitPosition) : m));
+      return {
+        ...state,
+        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [key]: messages },
+        aiSidebarMessages: state.aiSidebarSelectedKey === key ? messages : state.aiSidebarMessages,
+      };
+    }
+    case "SET_AI_SIDEBAR_STREAMING_FOR_KEY":
+      return {
+        ...state,
+        aiSidebarStreamingByKey: { ...state.aiSidebarStreamingByKey, [action.payload.key]: action.payload.streaming },
+      };
+    case "SET_AI_SIDEBAR_INPUT_FOR_KEY":
+      return {
+        ...state,
+        aiSidebarInputsByKey: { ...state.aiSidebarInputsByKey, [action.payload.key]: action.payload.input },
+      };
+    case "SET_AI_SIDEBAR_ERROR_FOR_KEY":
+      return {
+        ...state,
+        aiSidebarErrorsByKey: { ...state.aiSidebarErrorsByKey, [action.payload.key]: action.payload.error },
+      };
+    case "SET_AI_SIDEBAR_HISTORY_FOR_KEY":
+      return {
+        ...state,
+        aiSidebarHistoryByKey: { ...state.aiSidebarHistoryByKey, [action.payload.key]: action.payload.history },
+      };
+    case "MIGRATE_AI_SIDEBAR_TEMP_KEY": {
+      const { fromKey, toKey, conversationId } = action.payload;
+      const fromMessages = state.aiSidebarMessagesByKey[fromKey] ?? [];
+      const toMessages = fromMessages.map((m) => ({ ...m, conversation_id: conversationId }));
+      const {
+        [fromKey]: _removedMessages,
+        ...messagesByKey
+      } = state.aiSidebarMessagesByKey;
+      const { [fromKey]: removedStreaming, ...streamingByKey } = state.aiSidebarStreamingByKey;
+      const { [fromKey]: removedInput, ...inputsByKey } = state.aiSidebarInputsByKey;
+      const { [fromKey]: removedError, ...errorsByKey } = state.aiSidebarErrorsByKey;
+      const { [fromKey]: removedHistory, ...historyByKey } = state.aiSidebarHistoryByKey;
+      void _removedMessages;
+      return {
+        ...state,
+        aiSidebarSelectedKey: state.aiSidebarSelectedKey === fromKey ? toKey : state.aiSidebarSelectedKey,
+        aiSidebarConversationId: state.aiSidebarSelectedKey === fromKey ? conversationId : state.aiSidebarConversationId,
+        aiSidebarMessages: state.aiSidebarSelectedKey === fromKey ? toMessages : state.aiSidebarMessages,
+        aiSidebarMessagesByKey: { ...messagesByKey, [toKey]: toMessages },
+        aiSidebarStreamingByKey: { ...streamingByKey, [toKey]: removedStreaming ?? false },
+        aiSidebarInputsByKey: { ...inputsByKey, [toKey]: removedInput ?? "" },
+        aiSidebarErrorsByKey: { ...errorsByKey, [toKey]: removedError ?? null },
+        aiSidebarHistoryByKey: { ...historyByKey, [toKey]: removedHistory ?? { loading: false, error: null } },
+      };
+    }
+    case "REMOVE_AI_SIDEBAR_THREAD": {
+      const { key } = action.payload;
+      const { [key]: removedMessages, ...messagesByKey } = state.aiSidebarMessagesByKey;
+      const { [key]: removedStreaming, ...streamingByKey } = state.aiSidebarStreamingByKey;
+      const { [key]: removedInput, ...inputsByKey } = state.aiSidebarInputsByKey;
+      const { [key]: removedError, ...errorsByKey } = state.aiSidebarErrorsByKey;
+      const { [key]: removedHistory, ...historyByKey } = state.aiSidebarHistoryByKey;
+      void removedMessages;
+      void removedStreaming;
+      void removedInput;
+      void removedError;
+      void removedHistory;
+      return {
+        ...state,
+        aiSidebarSelectedKey: state.aiSidebarSelectedKey === key ? null : state.aiSidebarSelectedKey,
+        aiSidebarConversationId: state.aiSidebarSelectedKey === key ? null : state.aiSidebarConversationId,
+        aiSidebarMessages: state.aiSidebarSelectedKey === key ? [] : state.aiSidebarMessages,
+        aiSidebarMessagesByKey: messagesByKey,
+        aiSidebarStreamingByKey: streamingByKey,
+        aiSidebarInputsByKey: inputsByKey,
+        aiSidebarErrorsByKey: errorsByKey,
+        aiSidebarHistoryByKey: historyByKey,
+      };
+    }
     case "SET_AI_SIDEBAR_THINKING_MODE":
       return { ...state, aiSidebarThinkingMode: action.payload };
+    case "SET_LLM_SUPPORTS_THINKING":
+      return { ...state, llmSupportsThinking: action.payload };
     // Blog
     case "SET_BLOG_POSTS":
       return { ...state, blogPosts: action.payload };
@@ -352,13 +512,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case "CLEAR_BLOG_PATCH_STREAMING":
       return { ...state, blogPatchStreaming: null };
-    // KB
-    case "SET_KB_CATEGORIES":
-      return { ...state, kbCategories: action.payload };
-    case "SET_KB_SELECTED_CATEGORY_ID":
-      return { ...state, kbSelectedCategoryId: action.payload };
-    case "SET_KB_SELECTED_FILE":
-      return { ...state, kbSelectedFile: action.payload };
+    // File Library
+    case "SET_FILE_CATEGORIES":
+      return { ...state, fileCategories: action.payload };
+    case "SET_FILE_SELECTED_CATEGORY_ID":
+      return { ...state, fileSelectedCategoryId: action.payload };
+    case "SET_FILE_SELECTED_FILE":
+      return { ...state, fileSelectedFile: action.payload };
     // Research Graph
     case "SET_RESEARCH_TOPICS":
       return { ...state, researchTopics: action.payload };
@@ -393,7 +553,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentConversationId: null,
         messages: [],
         aiSidebarConversationId: null,
+        aiSidebarSelectedKey: null,
         aiSidebarMessages: [],
+        aiSidebarMessagesByKey: {},
+        aiSidebarStreamingByKey: {},
+        aiSidebarInputsByKey: {},
+        aiSidebarErrorsByKey: {},
+        aiSidebarHistoryByKey: {},
         blogPosts: [],
         blogCurrentView: "list",
         blogCurrentPostId: null,
@@ -401,10 +567,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         blogStreamingContent: null,
         aiSelectionContext: null,
         blogPatchStreaming: null,
-        kbCategories: [],
-        kbDocuments: [],
-        kbSelectedCategoryId: null,
-        kbSelectedFile: null,
+        fileCategories: [],
+        fileDocuments: [],
+        fileSelectedCategoryId: null,
+        fileSelectedFile: null,
         researchTopics: [],
         researchCurrentTopicId: null,
         researchCurrentTopic: null,
@@ -424,7 +590,7 @@ const savedTheme = (localStorage.getItem("theme") as Theme) || "light";
 
 function getInitialPage(): Page {
   const path = window.location.pathname;
-  if (path.startsWith("/knowledge")) return "knowledge";
+  if (path.startsWith("/files")) return "files";
   if (path.startsWith("/research")) return "research";
   return "blog";
 }
@@ -436,7 +602,7 @@ const initialState: ChatState = {
   isLoading: false,
   isStreaming: false,
   theme: savedTheme,
-  kbDocuments: [],
+  fileDocuments: [],
   mcpServers: [],
   activePanel: "conversations",
 
@@ -448,9 +614,15 @@ const initialState: ChatState = {
   // AI Sidebar — default open, no conversation yet
   aiSidebarOpen: true,
   aiSidebarConversationId: null,
+  aiSidebarSelectedKey: null,
   aiSidebarMessages: [],
-  aiSidebarMode: "auto",
-  aiSidebarThinkingMode: "normal",
+  aiSidebarMessagesByKey: {},
+  aiSidebarStreamingByKey: {},
+  aiSidebarInputsByKey: {},
+  aiSidebarErrorsByKey: {},
+  aiSidebarHistoryByKey: {},
+  aiSidebarThinkingMode: "balanced",
+  llmSupportsThinking: true,
 
   // Blog
   blogPosts: [],
@@ -461,10 +633,10 @@ const initialState: ChatState = {
   aiSelectionContext: null,
   blogPatchStreaming: null,
 
-  // KB
-  kbCategories: [],
-  kbSelectedCategoryId: null,
-  kbSelectedFile: null,
+  // File Library
+  fileCategories: [],
+  fileSelectedCategoryId: null,
+  fileSelectedFile: null,
 
   // Research Graph
   researchTopics: [],
@@ -508,4 +680,4 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   dispatch({ type: "SET_THEME", payload: next });
 }
 
-export type { Message, Conversation, KBDocument, BlogPost, KBCategory, ChatState, ChatAction, Theme, Panel, Page, BlogView, AISidebarMode, ThinkingMode, ToolEvent, Reference, ResearchTopicDetail, ResearchTopicSummary };
+export type { Message, Conversation, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, Theme, Panel, Page, BlogView, ThinkingMode, AISidebarConversationKey, AISidebarHistoryState, ToolEvent, Reference, ResearchTopicDetail, ResearchTopicSummary };

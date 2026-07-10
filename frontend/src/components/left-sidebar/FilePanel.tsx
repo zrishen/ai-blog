@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "../../stores/chatStore";
 import { useAuth } from "../../stores/authStore";
 import {
-  listKBCategories,
-  listKBDocuments,
-  createKBCategory,
-  deleteKBCategory,
-  updateKBCategory,
-  uploadToKB,
+  listFileCategories,
+  listFileDocuments,
+  createFileCategory,
+  deleteFileCategory,
+  updateFileCategory,
+  uploadToFileLibrary,
 } from "../../api/client";
 import { FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,10 +25,10 @@ import {
   isDescOf,
   findCategoryById,
   type EditingState,
-} from "./kbCategoryUtils";
-import { CategoryTree } from "./kbCategoryTree";
+} from "./fileCategoryUtils";
+import { CategoryTree } from "./fileCategoryTree";
 
-export function KnowledgePanel() {
+export function FilePanel() {
   const { state, dispatch } = useChat();
   const { isAuthenticated } = useAuth();
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<
@@ -49,49 +49,49 @@ export function KnowledgePanel() {
 
   const [dragCategoryId, setDragCategoryId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
-  const [kbActionError, setKbActionError] = useState<string | null>(null);
+  const [fileActionError, setFileActionError] = useState<string | null>(null);
 
-  const loadKBCats = useCallback(async () => {
+  const loadFileCats = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const cats = await listKBCategories();
-      dispatch({ type: "SET_KB_CATEGORIES", payload: cats });
+      const cats = await listFileCategories();
+      dispatch({ type: "SET_FILE_CATEGORIES", payload: cats });
     } catch (e) {
-      console.error("Failed to load KB categories:", e);
+      console.error("Failed to load file categories:", e);
     }
   }, [dispatch, isAuthenticated]);
 
   useEffect(() => {
-    if (state.currentPage === "knowledge" && isAuthenticated) {
-      loadKBCats();
+    if (state.currentPage === "files" && isAuthenticated) {
+      loadFileCats();
     }
-  }, [isAuthenticated, state.currentPage, loadKBCats]);
+  }, [isAuthenticated, state.currentPage, loadFileCats]);
 
-  const loadKBDocs = useCallback(
+  const loadFileDocs = useCallback(
     async (categoryId: number | null) => {
       if (!isAuthenticated) return;
       try {
-        const data = await listKBDocuments(categoryId ?? undefined);
-        dispatch({ type: "SET_KB_DOCUMENTS", payload: data.documents });
+        const data = await listFileDocuments(categoryId ?? undefined);
+        dispatch({ type: "SET_FILE_DOCUMENTS", payload: data.documents });
       } catch (e) {
-        console.error("Failed to load KB documents:", e);
-        setKbActionError(e instanceof Error ? e.message : "知识库文件加载失败");
+        console.error("Failed to load file documents:", e);
+        setFileActionError(e instanceof Error ? e.message : "文件库加载失败");
       }
     },
     [dispatch, isAuthenticated]
   );
 
   useEffect(() => {
-    if (state.currentPage === "knowledge" && isAuthenticated) {
-      // 异步加载知识库文档；rule 无法识别 useCallback 内的同步 setState 是异步链入口
+    if (state.currentPage === "files" && isAuthenticated) {
+      // 异步加载文件库；rule 无法识别 useCallback 内的同步 setState 是异步链入口
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadKBDocs(state.kbSelectedCategoryId);
+      loadFileDocs(state.fileSelectedCategoryId);
     }
-  }, [isAuthenticated, state.currentPage, state.kbSelectedCategoryId, loadKBDocs]);
+  }, [isAuthenticated, state.currentPage, state.fileSelectedCategoryId, loadFileDocs]);
 
   const handleCategorySelect = (id: number | null) => {
-    dispatch({ type: "SET_KB_SELECTED_CATEGORY_ID", payload: id });
-    dispatch({ type: "SET_KB_SELECTED_FILE", payload: null });
+    dispatch({ type: "SET_FILE_SELECTED_CATEGORY_ID", payload: id });
+    dispatch({ type: "SET_FILE_SELECTED_FILE", payload: null });
   };
 
   const handleCategoryToggle = (id: number) => {
@@ -107,7 +107,7 @@ export function KnowledgePanel() {
   };
 
   const handleFileSelect = (fileName: string) => {
-    dispatch({ type: "SET_KB_SELECTED_FILE", payload: fileName });
+    dispatch({ type: "SET_FILE_SELECTED_FILE", payload: fileName });
   };
 
   const handleConfirmDelete = async () => {
@@ -115,13 +115,13 @@ export function KnowledgePanel() {
     const { id } = deleteTarget;
     setDeleteTarget(null);
     try {
-      await deleteKBCategory(id);
-      if (state.kbSelectedCategoryId === id) {
-        dispatch({ type: "SET_KB_SELECTED_CATEGORY_ID", payload: null });
+      await deleteFileCategory(id);
+      if (state.fileSelectedCategoryId === id) {
+        dispatch({ type: "SET_FILE_SELECTED_CATEGORY_ID", payload: null });
       }
-      await loadKBCats();
-      await loadKBDocs(
-        state.kbSelectedCategoryId === id ? null : state.kbSelectedCategoryId
+      await loadFileCats();
+      await loadFileDocs(
+        state.fileSelectedCategoryId === id ? null : state.fileSelectedCategoryId
       );
     } catch (e) {
       console.error("Failed to delete category:", e);
@@ -153,11 +153,11 @@ export function KnowledgePanel() {
     setEditingState(null);
     try {
       if (type === "rename") {
-        await updateKBCategory(categoryId, { name: trimmed });
+        await updateFileCategory(categoryId, { name: trimmed });
       } else {
-        await createKBCategory({ name: trimmed, parent_id: categoryId });
+        await createFileCategory({ name: trimmed, parent_id: categoryId });
       }
-      await loadKBCats();
+      await loadFileCats();
       if (type === "newSub") {
         setExpandedCategoryIds((prev) => {
           const next = new Set(prev);
@@ -178,24 +178,24 @@ export function KnowledgePanel() {
     async (sourceId: number, targetId: number) => {
       setDropTargetId(null);
       if (sourceId === targetId) return;
-      if (isDescOf(targetId, sourceId, state.kbCategories)) return;
-      const source = findCategoryById(sourceId, state.kbCategories);
+      if (isDescOf(targetId, sourceId, state.fileCategories)) return;
+      const source = findCategoryById(sourceId, state.fileCategories);
       if (!source) return;
       try {
-        await updateKBCategory(sourceId, { name: source.name, parent_id: targetId });
+        await updateFileCategory(sourceId, { name: source.name, parent_id: targetId });
         setExpandedCategoryIds((prev) => {
           const next = new Set(prev);
           next.add(targetId);
           return next;
         });
-        await loadKBCats();
+        await loadFileCats();
       } catch (e) {
         console.error("Failed to move category:", e);
       } finally {
         setDragCategoryId(null);
       }
     },
-    [state.kbCategories, loadKBCats]
+    [state.fileCategories, loadFileCats]
   );
 
   const handleDropOnRoot = useCallback(
@@ -203,16 +203,16 @@ export function KnowledgePanel() {
       e.preventDefault();
       const sourceId = Number(e.dataTransfer.getData("text/plain"));
       if (!sourceId) return;
-      const source = findCategoryById(sourceId, state.kbCategories);
+      const source = findCategoryById(sourceId, state.fileCategories);
       if (!source) return;
       try {
-        await updateKBCategory(sourceId, { name: source.name, parent_id: null });
-        await loadKBCats();
+        await updateFileCategory(sourceId, { name: source.name, parent_id: null });
+        await loadFileCats();
       } catch (err) {
         console.error("Failed to move category to root:", err);
       }
     },
-    [loadKBCats, state.kbCategories]
+    [loadFileCats, state.fileCategories]
   );
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -220,15 +220,15 @@ export function KnowledgePanel() {
     if (!file) return;
     const categoryId = pendingUploadCategoryRef.current;
     try {
-      setKbActionError(null);
-      await uploadToKB(file, categoryId ?? undefined);
-      if (categoryId !== state.kbSelectedCategoryId) {
-        dispatch({ type: "SET_KB_SELECTED_CATEGORY_ID", payload: categoryId });
+      setFileActionError(null);
+      await uploadToFileLibrary(file, categoryId ?? undefined);
+      if (categoryId !== state.fileSelectedCategoryId) {
+        dispatch({ type: "SET_FILE_SELECTED_CATEGORY_ID", payload: categoryId });
       }
-      await loadKBDocs(categoryId);
+      await loadFileDocs(categoryId);
     } catch (err) {
       console.error("Failed to upload file:", err);
-      setKbActionError(err instanceof Error ? err.message : "知识库上传失败");
+      setFileActionError(err instanceof Error ? err.message : "文件库上传失败");
     } finally {
       pendingUploadCategoryRef.current = null;
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -244,17 +244,17 @@ export function KnowledgePanel() {
   return (
     <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
       <div className="p-4 flex flex-col gap-3">
-        {kbActionError && (
+        {fileActionError && (
           <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-[13px] leading-relaxed text-destructive">
-            {kbActionError}
+            {fileActionError}
           </div>
         )}
         <Button
           variant={
-            state.kbSelectedCategoryId === null ? "secondary" : "ghost"
+            state.fileSelectedCategoryId === null ? "secondary" : "ghost"
           }
           className={`justify-start text-[13px] px-3 py-2.5 rounded-xl h-auto font-semibold gap-2 transition-all hover:translate-x-0.5 ${
-            state.kbSelectedCategoryId === null ? "bg-primary/10 text-primary shadow-sm" : ""
+            state.fileSelectedCategoryId === null ? "bg-primary/10 text-primary shadow-sm" : ""
           } ${dropTargetId === -1 ? "ring-2 ring-primary/60 bg-primary/12 shadow-md shadow-primary/10" : ""}`}
           onClick={() => handleCategorySelect(null)}
           onDragOver={(e) => {
@@ -275,14 +275,14 @@ export function KnowledgePanel() {
           <FolderOpen className="w-4 h-4 flex-shrink-0" />
           全部分类
         </Button>
-        {state.kbCategories.length === 0 && (
+        {state.fileCategories.length === 0 && (
           <div className="rounded-2xl border border-dashed border-border/80 bg-secondary/50 px-3 py-4 text-[13px] text-muted-foreground">
             暂无分类，右键或在主界面新建
           </div>
         )}
         <CategoryTree
-          categories={state.kbCategories}
-          selectedId={state.kbSelectedCategoryId}
+          categories={state.fileCategories}
+          selectedId={state.fileSelectedCategoryId}
           expandedIds={expandedCategoryIds}
           onSelect={(id) => handleCategorySelect(id)}
           onToggle={handleCategoryToggle}
@@ -327,18 +327,18 @@ export function KnowledgePanel() {
             文件
           </div>
           <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
-            {state.kbDocuments.length}
+            {state.fileDocuments.length}
           </span>
         </div>
         <div className="flex flex-col gap-2">
-          {state.kbDocuments.length === 0 ? (
+          {state.fileDocuments.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/80 bg-secondary/50 px-3 py-4 text-center text-[13px] text-muted-foreground">暂无文件</div>
           ) : (
-            state.kbDocuments.map((doc) => (
+            state.fileDocuments.map((doc) => (
               <Button
                 key={doc.id}
                 variant={
-                  state.kbSelectedFile === doc.file_path
+                  state.fileSelectedFile === doc.file_path
                     ? "secondary"
                     : "ghost"
                 }

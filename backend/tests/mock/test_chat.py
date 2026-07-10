@@ -1,6 +1,7 @@
 """聊天测试。"""
 
 import inspect
+import json
 import logging
 from types import SimpleNamespace
 
@@ -82,7 +83,7 @@ async def test_build_messages_has_no_rag_context_parameter(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_knowledge_mode_prefetches_knowledge_before_agent(monkeypatch):
+async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
     from src.services import chat_service
 
     captured = {}
@@ -105,18 +106,11 @@ async def test_knowledge_mode_prefetches_knowledge_before_agent(monkeypatch):
         async def execute(self, stmt):
             return FakeResult()
 
-    class FakeKnowledgeTool:
-        name = "search_knowledge_base"
-
-        async def ainvoke(self, args):
-            captured["knowledge_args"] = args
-            return "[检索到的参考内容]\nMDCN 论文片段"
-
     class FakeBlogTool:
-        name = "blog_list_posts"
+        name = "blog_search_posts"
 
     class FakeChunk:
-        content = "已基于知识库回答"
+        content = "已回复"
         tool_call_chunks = []
         additional_kwargs = {}
 
@@ -131,12 +125,10 @@ async def test_knowledge_mode_prefetches_knowledge_before_agent(monkeypatch):
         return FakeAgent()
 
     async def fake_add_message_pair(*args, **kwargs):
-        captured["saved_user_content"] = args[2]
         return 7, SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
-    monkeypatch.setattr(chat_service, "search_knowledge_base", FakeKnowledgeTool())
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", fake_create_react_agent)
     monkeypatch.setattr(chat_service, "add_message_pair", fake_add_message_pair)
@@ -144,22 +136,88 @@ async def test_knowledge_mode_prefetches_knowledge_before_agent(monkeypatch):
 
     chunks = [
         chunk async for chunk in chat_service.stream_chat(
-            "根据MDCN论文重写这个博客",
+            "根据文件库中的资料总结一下",
             conversation_id=None,
             user_id=1,
-            rag_mode="knowledge",
         )
     ]
 
     assert "DONE" in "".join(chunks)
-    assert captured["knowledge_args"] == {"query": "根据MDCN论文重写这个博客"}
-    assert "search_knowledge_base" in captured["tool_names"]
-    assert captured["agent_messages"][-1] == {"role": "user", "content": "根据MDCN论文重写这个博客"}
-    assert any(
-        message["role"] == "system" and "[检索到的参考内容]" in message["content"]
-        for message in captured["agent_messages"]
-    )
-    assert captured["saved_user_content"] == "根据MDCN论文重写这个博客"
+    assert "base_search_file" in captured["tool_names"]
+    assert captured["agent_messages"][-1] == {"role": "user", "content": "根据文件库中的资料总结一下"}
+    prompt_text = captured["prompt"]
+    assert "base_search_file" in prompt_text
+    assert "文件库" in prompt_text
+    assert not any("[检索到的参考内容]" in m["content"] for m in captured["agent_messages"])
+
+
+@pytest.mark.asyncio
+async def test_normal_chat_context_excludes_research_tool_rules(monkeypatch):
+    from src.services import chat_service
+
+    captured = {}
+
+    class FakeScalars:
+        def all(self):
+            return []
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return FakeResult()
+
+    class FakeBlogTool:
+        name = "blog_search_posts"
+
+    class FakeChunk:
+        content = "普通回复"
+        tool_call_chunks = []
+        additional_kwargs = {}
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            captured["agent_messages"] = payload["messages"]
+            yield {"event": "on_chat_model_stream", "data": {"chunk": FakeChunk()}}
+
+    def fake_create_react_agent(llm, tools, prompt):
+        captured["tool_names"] = [tool.name for tool in tools]
+        return FakeAgent()
+
+    async def fake_add_message_pair(*args, **kwargs):
+        return 7, SimpleNamespace(id=8)
+
+    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", fake_create_react_agent)
+    monkeypatch.setattr(chat_service, "add_message_pair", fake_add_message_pair)
+    monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
+
+    chunks = [
+        chunk async for chunk in chat_service.stream_chat(
+            "随便聊聊",
+            conversation_id=None,
+            user_id=1,
+            context={"page_type": "home"},
+        )
+    ]
+
+    system_messages = [message["content"] for message in captured["agent_messages"] if message["role"] == "system"]
+    normal_context = "\n".join(system_messages)
+
+    assert "DONE" in "".join(chunks)
+    assert captured["tool_names"] == ["blog_search_posts", "base_search_file"]
+    assert "研究工具使用规则" not in normal_context
+    assert not any(name.startswith("research_") for name in captured["tool_names"])
 
 
 @pytest.mark.asyncio
@@ -187,7 +245,7 @@ async def test_trust_writing_context_includes_choice_protocol(monkeypatch):
             return FakeResult()
 
     class FakeBlogTool:
-        name = "blog_list_posts"
+        name = "blog_search_posts"
 
     class FakeResearchTool:
         name = "research_get_topic"
@@ -231,6 +289,10 @@ async def test_trust_writing_context_includes_choice_protocol(monkeypatch):
 
     assert "DONE" in "".join(chunks)
     assert "research_get_topic" in captured["tool_names"]
+    assert "研究工具使用规则" in trust_context
+    assert "research_add_source 记录来源" in trust_context
+    assert "research_add_evidence 保存可追溯原文证据片段" in trust_context
+    assert "research_add_claim 抽取事实声明" in trust_context
     assert "TrustChoicePayload" in trust_context
     assert "最多 1-4 个" in trust_context
     assert "同一个 choices 数组里允许 action 和 reply 混合" in trust_context
@@ -300,3 +362,126 @@ async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
     assert "reasoning_delta" in "".join(chunks)
     reasoning_logs = [record.getMessage() for record in caplog.records if "reasoning_content" in record.getMessage()]
     assert reasoning_logs == ["reasoning_content total: len=6, preview=用户问题分析"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("tool_input", "expected_start", "expected_delta"),
+    [
+        (
+            {
+                "post_id": 1,
+                "target_text": "旧\"文本\n第二行",
+                "replacement_text": "新文本\n第二行",
+            },
+            True,
+            True,
+        ),
+        ({"post_id": 1, "target_text": "待删除文本", "replacement_text": ""}, True, False),
+        ({"post_id": 1, "target_text": "旧文本"}, False, False),
+    ],
+)
+async def test_blog_edit_patch_streams_from_model_tool_arguments(
+    monkeypatch,
+    tool_input,
+    expected_start,
+    expected_delta,
+):
+    from src.services import chat_service
+
+    class FakeScalars:
+        def all(self):
+            return []
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return FakeResult()
+
+    class FakeBlogTool:
+        name = "blog_edit_post"
+
+    class FakeChunk:
+        content = ""
+        additional_kwargs = {}
+
+        def __init__(self, tool_call_chunks):
+            self.tool_call_chunks = tool_call_chunks
+
+    args_text = json.dumps(tool_input, ensure_ascii=False)
+    split_at = max(1, len(args_text) // 2)
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {
+                    "chunk": FakeChunk([
+                        {"index": 0, "name": "blog_edit_post", "args": args_text[:split_at]},
+                    ]),
+                },
+            }
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {
+                    "chunk": FakeChunk([
+                        {"index": 0, "name": None, "args": args_text[split_at:]},
+                    ]),
+                },
+            }
+            yield {
+                "event": "on_tool_start",
+                "name": "blog_edit_post",
+                "data": {"input": tool_input},
+            }
+            yield {
+                "event": "on_tool_end",
+                "name": "blog_edit_post",
+                "data": {"output": "文章修改完成"},
+            }
+
+    async def fake_add_message_pair(*args, **kwargs):
+        return 7, SimpleNamespace(id=8)
+
+    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
+    monkeypatch.setattr(chat_service, "add_message_pair", fake_add_message_pair)
+    monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
+
+    output = "".join([
+        chunk async for chunk in chat_service.stream_chat(
+            "修改文章",
+            conversation_id=None,
+            user_id=1,
+        )
+    ])
+
+    tool_start_index = output.index('"status": "start"')
+    tool_end_index = output.index('"status": "end"')
+    assert tool_start_index < tool_end_index
+    assert '"blog_patch"' not in output
+
+    if expected_start:
+        patch_start_index = output.index("PATCHSTART")
+        assert patch_start_index < tool_start_index
+        assert json.dumps({"target_text": tool_input["target_text"]}) in output
+    else:
+        assert "PATCHSTART" not in output
+
+    if expected_delta:
+        patch_delta_index = output.index("PATCHDELTA")
+        assert patch_delta_index < tool_start_index
+        assert json.dumps({"replacement_delta": tool_input["replacement_text"]}) in output
+    else:
+        assert "PATCHDELTA" not in output

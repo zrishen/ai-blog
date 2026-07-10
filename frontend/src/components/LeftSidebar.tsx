@@ -1,6 +1,6 @@
 import { useChat } from "../stores/chatStore";
 import { BlogTocPanel } from "./left-sidebar/BlogTocPanel";
-import { KnowledgePanel } from "./left-sidebar/KnowledgePanel";
+import { FilePanel } from "./left-sidebar/FilePanel";
 import { ResearchPanel } from "./left-sidebar/ResearchPanel";
 import { BlogOverviewPanel } from "./left-sidebar/BlogOverviewPanel";
 
@@ -15,8 +15,8 @@ export function LeftSidebar() {
     return <BlogTocPanel mode="edit" />;
   }
 
-  if (state.currentPage === "knowledge") {
-    return <KnowledgePanel />;
+  if (state.currentPage === "files") {
+    return <FilePanel />;
   }
 
   if (state.currentPage === "research") {

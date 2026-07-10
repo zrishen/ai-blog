@@ -36,8 +36,8 @@ vi.mock("vditor", () => ({
 vi.mock("vditor/dist/index.css", () => ({}));
 vi.mock("vditor/dist/js/i18n/zh_CN", () => ({}));
 
-vi.mock("../../../api/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../api/client")>();
+vi.mock("../../src/api/client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/api/client")>();
   return {
     ...actual,
     createBlogPost: vi.fn(() => Promise.resolve({ id: 1 })),
@@ -58,7 +58,7 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("默认折叠态：紧凑行可见，大卡片内容隐藏", async () => {
-    const { BlogEditor } = await import("./BlogEditor");
+    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <BlogEditor />
@@ -74,7 +74,7 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("工具栏 toggle 按钮在折叠态显示 Maximize 图标且提示展开", async () => {
-    const { BlogEditor } = await import("./BlogEditor");
+    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <BlogEditor />
@@ -88,7 +88,7 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("点击 toggle 后展开顶部完整卡片，再次点击收缩回去", async () => {
-    const { BlogEditor } = await import("./BlogEditor");
+    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <BlogEditor />
@@ -111,7 +111,7 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("toggle 支持折叠↔展开多次往返切换", async () => {
-    const { BlogEditor } = await import("./BlogEditor");
+    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <BlogEditor />

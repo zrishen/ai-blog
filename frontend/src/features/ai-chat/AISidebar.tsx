@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, useCallback, useLayoutEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../stores/authStore";
 import type { AuthUser } from "../../stores/authStore";
 import { isDisplayableMessage, useChat } from "../../stores/chatStore";
-import type { Conversation, Message, Reference, ToolEvent } from "../../stores/chatStore";
+import type { AISidebarConversationKey, Conversation, Message, Reference, ToolEvent } from "../../stores/chatStore";
 import {
   sendChat,
   sendSharedLandingChat,
@@ -44,109 +44,194 @@ import {
 } from "@/components/ui/dialog";
 import { LoginDialog } from "@/features/auth/LoginDialog";
 import { AISidebarHeader } from "./ai-sidebar/AISidebarHeader";
-import { ConversationListView } from "./ai-sidebar/ConversationListView";
+import { ConversationListView, type ConversationListItem } from "./ai-sidebar/ConversationListView";
 import { ChatInputBar } from "./ai-sidebar/ChatInputBar";
 import { MessageList } from "./ai-sidebar/MessageList";
 import {
-  aiModeLabels,
   blogToolOperations,
   RESEARCH_TOOL_NAMES,
   type AISidebarProps,
 } from "./ai-sidebar/constants";
 
+const SHARED_CONVERSATION_KEY: AISidebarConversationKey = "temp:shared";
+const AI_SIDEBAR_VIEW_STORAGE_KEY = "ai-sidebar-view";
+const AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY = "ai-sidebar-selected-key";
+
+interface RunState {
+  content: string;
+  reasoningContent: string;
+  loopSteps: string[];
+  toolEvents: ToolEvent[];
+  lastToolEndPos: number;
+  assistantStartedAt: number;
+  assistantMessageId: number;
+  conversationId: number | null;
+}
+
+function makeServerKey(conversationId: number): AISidebarConversationKey {
+  return `server:${conversationId}`;
+}
+
+function makeTempKey(): AISidebarConversationKey {
+  return `temp:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function getConversationIdFromKey(key: AISidebarConversationKey | null): number | null {
+  return key?.startsWith("server:") ? Number(key.slice(7)) : null;
+}
+
+function buildMessageGroups(messages: Message[]) {
+  return messages.filter(isDisplayableMessage).reduce<Array<{ role: Message["role"]; messages: Message[] }>>((groups, msg) => {
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup?.role === "assistant" && msg.role === "assistant") {
+      lastGroup.messages.push(msg);
+      return groups;
+    }
+    groups.push({ role: msg.role, messages: [msg] });
+    return groups;
+  }, []);
+}
+
 export function AISidebar({ mode, contextText = "", siteUsername, postSlug, pageType = "other", postTitle }: AISidebarProps) {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [input, setInput] = useState("");
-  const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [topicCreateMode, setTopicCreateMode] = useState(false);
   const [topicCreateMessageId, setTopicCreateMessageId] = useState<number | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [sidebarView, setSidebarView] = useState<"list" | "chat">(mode === "private" ? "list" : "chat");
+  const [deleteTarget, setDeleteTarget] = useState<{ key: AISidebarConversationKey; id: number | null } | null>(null);
+  const [sidebarView, setSidebarView] = useState<"list" | "chat">(() => {
+    if (mode !== "private") return "chat";
+    const storedView = localStorage.getItem(AI_SIDEBAR_VIEW_STORAGE_KEY);
+    const storedKey = localStorage.getItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY);
+    return storedView === "chat" && storedKey?.startsWith("server:") ? "chat" : "list";
+  });
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const msgsEndRef = useRef<HTMLDivElement>(null);
-  const lastToolEndPosRef = useRef(0);
-  const latestConversationIdRef = useRef<number | null>(null);
-  const skipNextInitialMessagesLoadRef = useRef<number | null>(null);
-  const nextMessagesScrollBehaviorRef = useRef<ScrollBehavior>("smooth");
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesViewportRef = useRef<HTMLDivElement>(null);
+  const abortControllersRef = useRef(new Map<AISidebarConversationKey, AbortController>());
+  const runRefs = useRef(new Map<AISidebarConversationKey, RunState>());
+  const historyRequestSeqRef = useRef(new Map<AISidebarConversationKey, number>());
+  const streamingByKeyRef = useRef(state.aiSidebarStreamingByKey);
+  const skipNextHistoryLoadRef = useRef(new Set<number>());
+  const loadConvsSeqRef = useRef(0);
+  const blogStreamOwnerRef = useRef<AISidebarConversationKey | null>(null);
+  const selectedKeyRef = useRef<AISidebarConversationKey | null>(null);
+  const scrollFrameRef = useRef<number | null>(null);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [loginRedirectTarget, setLoginRedirectTarget] = useState<"knowledge" | "research" | null>(null);
+  const [loginRedirectTarget, setLoginRedirectTarget] = useState<"files" | "research" | null>(null);
 
   const isPrivate = mode === "private";
-  const currentModeLabel = aiModeLabels[state.aiSidebarMode];
-  const visibleAiSidebarMessages = state.aiSidebarMessages.filter(isDisplayableMessage);
-  const aiSidebarMessageGroups = useMemo(
-    () => visibleAiSidebarMessages.reduce<Array<{ role: Message["role"]; messages: Message[] }>>((groups, msg) => {
-      const lastGroup = groups[groups.length - 1];
-      if (lastGroup?.role === "assistant" && msg.role === "assistant") {
-        lastGroup.messages.push(msg);
-        return groups;
-      }
-      groups.push({ role: msg.role, messages: [msg] });
-      return groups;
-    }, []),
-    [visibleAiSidebarMessages],
+  const selectedKey = isPrivate ? state.aiSidebarSelectedKey : SHARED_CONVERSATION_KEY;
+  const selectedMessages = useMemo(
+    () => (selectedKey ? state.aiSidebarMessagesByKey[selectedKey] ?? [] : []),
+    [selectedKey, state.aiSidebarMessagesByKey],
   );
+  const selectedStreaming = selectedKey ? !!state.aiSidebarStreamingByKey[selectedKey] : false;
+  const selectedInput = selectedKey ? state.aiSidebarInputsByKey[selectedKey] ?? "" : "";
+  const selectedError = selectedKey ? state.aiSidebarErrorsByKey[selectedKey] ?? null : null;
+  const selectedHistory = selectedKey ? state.aiSidebarHistoryByKey[selectedKey] ?? { loading: false, error: null } : { loading: false, error: null };
+  const aiSidebarMessageGroups = useMemo(() => buildMessageGroups(selectedMessages), [selectedMessages]);
 
   useEffect(() => {
-    latestConversationIdRef.current = state.aiSidebarConversationId;
-  }, [state.aiSidebarConversationId]);
+    if (!isPrivate || state.aiSidebarSelectedKey) return;
+    const storedView = localStorage.getItem(AI_SIDEBAR_VIEW_STORAGE_KEY);
+    const storedKey = localStorage.getItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY) as AISidebarConversationKey | null;
+    if (storedView === "chat" && storedKey?.startsWith("server:")) {
+      queueMicrotask(() => {
+        dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: storedKey });
+        setSidebarView("chat");
+      });
+    }
+  }, [dispatch, isPrivate, state.aiSidebarSelectedKey]);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
+  const getActiveKey = useCallback((): AISidebarConversationKey => {
+    if (!isPrivate) return SHARED_CONVERSATION_KEY;
+    if (state.aiSidebarSelectedKey) return state.aiSidebarSelectedKey;
+    const key = makeTempKey();
+    dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: key });
+    dispatch({ type: "SET_AI_SIDEBAR_MSGS_FOR_KEY", payload: { key, messages: [] } });
+    dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key, history: { loading: false, error: null } } });
+    return key;
+  }, [dispatch, isPrivate, state.aiSidebarSelectedKey]);
+
+  const setInputForKey = useCallback((key: AISidebarConversationKey, input: string) => {
+    dispatch({ type: "SET_AI_SIDEBAR_INPUT_FOR_KEY", payload: { key, input } });
+  }, [dispatch]);
+
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const viewport = messagesViewportRef.current;
+    if (viewport) {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+      return;
+    }
+    msgsEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  }, []);
+
+  const scrollToLatestAfterRender = useCallback((key: AISidebarConversationKey, behavior: ScrollBehavior = "auto") => {
+    if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        scrollFrameRef.current = null;
+        if (selectedKeyRef.current === key) scrollToLatest(behavior);
+      });
+    });
+  }, [scrollToLatest]);
+
+  useEffect(() => {
+    selectedKeyRef.current = selectedKey;
+  }, [selectedKey]);
+
+  useEffect(() => () => {
+    if (scrollFrameRef.current !== null) window.cancelAnimationFrame(scrollFrameRef.current);
+  }, []);
+
+  useEffect(() => {
+    streamingByKeyRef.current = state.aiSidebarStreamingByKey;
+  }, [state.aiSidebarStreamingByKey]);
+
   useEffect(() => {
     if (!isPrivate) {
-      // 切到非私有模式时整体重置侧栏状态
-      setSidebarView("chat");
-      setConversations([]);
-      dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: null });
+      queueMicrotask(() => {
+        setSidebarView("chat");
+        setConversations([]);
+        dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: SHARED_CONVERSATION_KEY });
+        dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: null });
+      });
     }
   }, [dispatch, isPrivate]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
-  useLayoutEffect(() => {
-    if (historyLoading) return;
-    const behavior = nextMessagesScrollBehaviorRef.current;
-    msgsEndRef.current?.scrollIntoView({ behavior, block: "end" });
-    nextMessagesScrollBehaviorRef.current = "smooth";
-  }, [state.aiSidebarMessages, historyLoading]);
-
-  useLayoutEffect(() => {
-    if (!state.aiSidebarOpen || sidebarView !== "chat") return;
-    msgsEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-  }, [state.aiSidebarOpen, sidebarView, state.aiSidebarConversationId]);
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 88) + "px";
     }
-  }, [input]);
+  }, [selectedInput]);
 
   const showTrustChoicePayload = useCallback((payload: TrustChoicePayload) => {
+    const key = getActiveKey();
     const assistantId = Date.now();
     dispatch({ type: "SET_TRUST_WRITING_ENABLED", payload: true });
     dispatch({
-      type: "ADD_AI_SIDEBAR_MSG",
+      type: "ADD_AI_SIDEBAR_MSG_FOR_KEY",
       payload: {
-        id: assistantId,
-        role: "assistant",
-        content: payload.message,
-        conversation_id: isPrivate ? state.aiSidebarConversationId ?? 0 : 0,
-        trustChoicePrompt: payload.message,
-        trustChoiceOptions: payload.choices,
-        token_count: 0,
-        created_at: new Date().toISOString(),
+        key,
+        message: {
+          id: assistantId,
+          role: "assistant",
+          content: payload.message,
+          conversation_id: getConversationIdFromKey(key) ?? 0,
+          trustChoicePrompt: payload.message,
+          trustChoiceOptions: payload.choices,
+          token_count: 0,
+          created_at: new Date().toISOString(),
+        },
       },
     });
     setSidebarView("chat");
-  }, [dispatch, isPrivate, state.aiSidebarConversationId]);
+  }, [dispatch, getActiveKey]);
 
   useEffect(() => {
     const prompt = state.pendingResearchPrompt;
@@ -154,76 +239,69 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     const payload = prompt === "draft_research_choices"
       ? buildDraftChoices(state.researchCurrentTopic?.title)
       : buildOpenResearchChoices(state.researchCurrentTopic?.title);
-    // 触发信任选择 UI；rule 把 showTrustChoicePayload 内的 dispatch 视为同步 setState
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    showTrustChoicePayload(payload);
-    dispatch({ type: "SET_PENDING_RESEARCH_PROMPT", payload: null });
+    queueMicrotask(() => {
+      showTrustChoicePayload(payload);
+      dispatch({ type: "SET_PENDING_RESEARCH_PROMPT", payload: null });
+    });
   }, [dispatch, showTrustChoicePayload, state.pendingResearchPrompt, state.researchCurrentTopic?.title]);
 
   const loadConvs = useCallback(async () => {
     if (!isPrivate) return;
+    const seq = ++loadConvsSeqRef.current;
     try {
       const data = await fetchConversations();
-      setConversations(data.conversations || []);
+      if (seq === loadConvsSeqRef.current) setConversations(data.conversations || []);
     } catch { /* 加载会话列表失败静默；UI 显示空列表即可 */ }
   }, [isPrivate]);
 
   useEffect(() => {
-    if (isPrivate) {
-      // 异步加载会话；loadConvs 内部 setState 同步入口被 rule 拦截
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadConvs();
-    }
+    if (isPrivate) queueMicrotask(() => void loadConvs());
   }, [isPrivate, loadConvs]);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // 有选中上下文(AI 修改)时,自动切到 chat 视图(避免 list 视图下选中上下文丢失)
   useEffect(() => {
-    if (!isPrivate || !state.aiSidebarConversationId) {
-      // 无选中会话时清空历史加载状态
-      setHistoryLoading(false);
-      setHistoryLoadError(null);
+    if (state.aiSelectionContext && sidebarView !== "chat") {
+      setSidebarView("chat");
+    }
+  }, [state.aiSelectionContext, sidebarView]);
+
+  useEffect(() => {
+    if (!isPrivate || !selectedKey) return;
+    const conversationId = getConversationIdFromKey(selectedKey);
+    if (!conversationId) {
+      dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key: selectedKey, history: { loading: false, error: null } } });
+      return;
+    }
+    if (skipNextHistoryLoadRef.current.has(conversationId)) {
+      skipNextHistoryLoadRef.current.delete(conversationId);
+      dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key: selectedKey, history: { loading: false, error: null } } });
       return;
     }
 
-    const conversationId = state.aiSidebarConversationId;
-
-    if (skipNextInitialMessagesLoadRef.current === conversationId) {
-      skipNextInitialMessagesLoadRef.current = null;
-      setHistoryLoading(false);
-      setHistoryLoadError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setHistoryLoading(true);
-    setHistoryLoadError(null);
+    const seq = (historyRequestSeqRef.current.get(selectedKey) ?? 0) + 1;
+    historyRequestSeqRef.current.set(selectedKey, seq);
+    dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key: selectedKey, history: { loading: true, error: null } } });
 
     getMessages(conversationId)
       .then((msgs) => {
-        if (cancelled || latestConversationIdRef.current !== conversationId) return;
-        nextMessagesScrollBehaviorRef.current = "auto";
-        dispatch({ type: "SET_AI_SIDEBAR_MSGS", payload: msgs });
-        setHistoryLoadError(null);
+        if (historyRequestSeqRef.current.get(selectedKey) !== seq) return;
+        if (!streamingByKeyRef.current[selectedKey]) {
+          dispatch({ type: "SET_AI_SIDEBAR_MSGS_FOR_KEY", payload: { key: selectedKey, messages: msgs } });
+          scrollToLatestAfterRender(selectedKey);
+        }
+        dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key: selectedKey, history: { loading: false, error: null } } });
       })
       .catch(() => {
-        if (cancelled || latestConversationIdRef.current !== conversationId) return;
-        setHistoryLoadError("历史对话加载失败，请检查网络后重试");
-      })
-      .finally(() => {
-        if (cancelled || latestConversationIdRef.current !== conversationId) return;
-        setHistoryLoading(false);
+        if (historyRequestSeqRef.current.get(selectedKey) !== seq) return;
+        dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key: selectedKey, history: { loading: false, error: "历史对话加载失败，请检查网络后重试" } } });
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isPrivate, state.aiSidebarConversationId, historyReloadKey, dispatch]);
+  }, [dispatch, historyReloadKey, isPrivate, scrollToLatestAfterRender, selectedKey]);
 
   useEffect(() => {
     if (!state.trustWritingEnabled || !isPrivate) return;
     if (state.researchCurrentTopicId) return;
-    if (historyLoading) return;
-    const hasTrustChoice = state.aiSidebarMessages.some(
+    if (selectedHistory.loading) return;
+    const hasTrustChoice = selectedMessages.some(
       (m) => Boolean(m.trustChoiceOptions && m.trustChoiceOptions.length > 0)
     );
     if (hasTrustChoice) return;
@@ -237,35 +315,39 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         showTrustChoicePayload(buildOpenResearchChoices(state.researchCurrentTopic?.title));
       }
     })();
-  }, [state.trustWritingEnabled, isPrivate, state.researchCurrentTopicId, historyLoading, state.aiSidebarMessages, state.researchTopics, showTrustChoicePayload, state.researchCurrentTopic?.title]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [state.trustWritingEnabled, isPrivate, state.researchCurrentTopicId, selectedHistory.loading, selectedMessages, state.researchTopics, showTrustChoicePayload, state.researchCurrentTopic?.title]);
 
   const handleNewChat = useCallback(async () => {
-    dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: null });
-    dispatch({ type: "SET_AI_SIDEBAR_MSGS", payload: [] });
-    setHistoryLoading(false);
-    setHistoryLoadError(null);
+    const key = makeTempKey();
+    localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "chat");
+    localStorage.removeItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY);
+    dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: key });
+    dispatch({ type: "SET_AI_SIDEBAR_MSGS_FOR_KEY", payload: { key, messages: [] } });
+    dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key, history: { loading: false, error: null } } });
+    dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: null } });
     setSidebarView("chat");
-    setError(null);
     if (isPrivate) await loadConvs();
   }, [dispatch, isPrivate, loadConvs]);
 
-  const handleSelectConversation = useCallback((conv: Conversation) => {
+  const handleSelectConversation = useCallback((item: ConversationListItem) => {
     if (!isPrivate) return;
-    dispatch({ type: "SET_AI_SIDEBAR_MSGS", payload: [] });
-    setHistoryLoading(true);
-    setHistoryLoadError(null);
-    if (state.aiSidebarConversationId === conv.id) {
-      setHistoryReloadKey((key) => key + 1);
+    localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "chat");
+    if (item.key.startsWith("server:")) {
+      localStorage.setItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY, item.key);
     } else {
-      dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: conv.id });
+      localStorage.removeItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY);
     }
+    dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: item.key });
+    dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: item.key, error: null } });
+    if (item.id && state.aiSidebarSelectedKey === item.key) setHistoryReloadKey((key) => key + 1);
+    scrollToLatestAfterRender(item.key);
     setSidebarView("chat");
-    setError(null);
-  }, [dispatch, isPrivate, state.aiSidebarConversationId]);
+  }, [dispatch, isPrivate, scrollToLatestAfterRender, state.aiSidebarSelectedKey]);
 
   const handleBackToList = useCallback(() => {
-    if (isPrivate) setSidebarView("list");
+    if (!isPrivate) return;
+    localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "list");
+    setSidebarView("list");
   }, [isPrivate]);
 
   const handleGoResearchReview = useCallback(() => {
@@ -274,14 +356,14 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     navigate(topicId ? `/research/${topicId}` : "/research");
   }, [dispatch, navigate, state.researchCurrentTopicId]);
 
-  const handleKnowledge = () => {
+  const handleFiles = () => {
     if (!isAuthenticated) {
-      setLoginRedirectTarget("knowledge");
+      setLoginRedirectTarget("files");
       setLoginDialogOpen(true);
       return;
     }
-    dispatch({ type: "SET_PAGE", payload: "knowledge" });
-    navigate("/knowledge");
+    dispatch({ type: "SET_PAGE", payload: "files" });
+    navigate("/files");
   };
 
   const handleResearch = () => {
@@ -295,10 +377,10 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   };
 
   const handleLoginSuccess = (loggedInUser: AuthUser) => {
-    if (loginRedirectTarget === "knowledge") {
+    if (loginRedirectTarget === "files") {
       setLoginRedirectTarget(null);
-      dispatch({ type: "SET_PAGE", payload: "knowledge" });
-      navigate("/knowledge");
+      dispatch({ type: "SET_PAGE", payload: "files" });
+      navigate("/files");
       return;
     }
     if (loginRedirectTarget === "research") {
@@ -313,31 +395,33 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
   };
 
-  const handleDeleteConversation = useCallback((convId: number, e: React.MouseEvent) => {
+  const handleDeleteConversation = useCallback((item: ConversationListItem, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isPrivate) return;
-    setDeleteTarget(convId);
+    setDeleteTarget({ key: item.key, id: item.id ?? null });
   }, [isPrivate]);
 
   const confirmDeleteConversation = useCallback(async () => {
-    const convId = deleteTarget;
-    if (convId == null) return;
+    const target = deleteTarget;
+    if (!target) return;
     setDeleteTarget(null);
-    setError(null);
+    abortControllersRef.current.get(target.key)?.abort();
+    abortControllersRef.current.delete(target.key);
+    runRefs.current.delete(target.key);
+    dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: target.key, error: null } });
     try {
-      await deleteConversation(convId);
-      if (state.aiSidebarConversationId === convId) {
-        dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: null });
-        dispatch({ type: "SET_AI_SIDEBAR_MSGS", payload: [] });
-        setHistoryLoading(false);
-        setHistoryLoadError(null);
+      if (target.id != null) await deleteConversation(target.id);
+      dispatch({ type: "REMOVE_AI_SIDEBAR_THREAD", payload: { key: target.key } });
+      if (state.aiSidebarSelectedKey === target.key) {
+        localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "list");
+        localStorage.removeItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY);
         setSidebarView("list");
       }
       await loadConvs();
     } catch {
-      setError("删除对话失败，请稍后重试");
+      dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: target.key, error: "删除对话失败，请稍后重试" } });
     }
-  }, [deleteTarget, dispatch, loadConvs, state.aiSidebarConversationId]);
+  }, [deleteTarget, dispatch, loadConvs, state.aiSidebarSelectedKey]);
 
   const refreshOwnPosts = useCallback(async (blogMeta?: BlogToolMeta) => {
     if (!user?.username || !blogMeta?.operation || !blogToolOperations.has(blogMeta.operation)) return;
@@ -371,30 +455,31 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   }, [dispatch, state.researchCurrentTopicId]);
 
   const handleSend = useCallback(async (textOverride?: string) => {
-    const text = (textOverride ?? input).trim();
-    if (!text || streaming) return;
+    const convKey = getActiveKey();
+    const text = (textOverride ?? state.aiSidebarInputsByKey[convKey] ?? "").trim();
+    if (!text || state.aiSidebarStreamingByKey[convKey]) return;
 
+    const currentMessages = state.aiSidebarMessagesByKey[convKey] ?? [];
     if (state.trustWritingEnabled && !state.researchCurrentTopicId && isPrivate) {
-      const hasTrustChoice = state.aiSidebarMessages.some(
+      const hasTrustChoice = currentMessages.some(
         (m) => Boolean(m.trustChoiceOptions && m.trustChoiceOptions.length > 0)
       );
       if (!hasTrustChoice) {
         const topics = state.researchTopics.length > 0
           ? state.researchTopics
           : await listResearchTopics().catch(() => []);
-        if (topics.length > 0) {
-          showTrustChoicePayload(buildTopicSelectChoices(topics));
-        } else {
-          showTrustChoicePayload(buildOpenResearchChoices(state.researchCurrentTopic?.title));
-        }
+        showTrustChoicePayload(topics.length > 0
+          ? buildTopicSelectChoices(topics)
+          : buildOpenResearchChoices(state.researchCurrentTopic?.title)
+        );
         return;
       }
     }
 
     if (topicCreateMode) {
       setTopicCreateMode(false);
-      setInput("");
-      setError(null);
+      setInputForKey(convKey, "");
+      dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: convKey, error: null } });
       try {
         const created = await createResearchTopic({ title: text });
         const detail = await getResearchTopic(created.id);
@@ -404,62 +489,74 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         const payload = buildOpenResearchChoices(detail.title);
         if (topicCreateMessageId) {
           dispatch({
-            type: "UPDATE_AI_SIDEBAR_MSG",
-            payload: { id: topicCreateMessageId, content: payload.message, trustChoicePrompt: payload.message, trustChoiceOptions: payload.choices },
+            type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
+            payload: { key: convKey, id: topicCreateMessageId, content: payload.message, trustChoicePrompt: payload.message, trustChoiceOptions: payload.choices },
           });
           setTopicCreateMessageId(null);
         } else {
           showTrustChoicePayload(payload);
         }
       } catch {
-        setError("创建主题失败，请稍后重试");
+        dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: convKey, error: "创建主题失败，请稍后重试" } });
       }
       return;
     }
 
-    setInput("");
-    setError(null);
+    setInputForKey(convKey, "");
+    dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: convKey, error: null } });
+    dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: convKey, streaming: true } });
 
+    const initialConversationId = isPrivate ? getConversationIdFromKey(convKey) : null;
     const userMsg: Message = {
       id: Date.now(),
       role: "user",
       content: text,
-      conversation_id: isPrivate ? state.aiSidebarConversationId ?? 0 : 0,
+      conversation_id: initialConversationId ?? 0,
       token_count: 0,
       created_at: new Date().toISOString(),
     };
-    dispatch({ type: "ADD_AI_SIDEBAR_MSG", payload: userMsg });
+    dispatch({ type: "ADD_AI_SIDEBAR_MSG_FOR_KEY", payload: { key: convKey, message: userMsg } });
 
-    const assistantId = Date.now() + 1;
+    const assistantStartedAt = Date.now();
+    const assistantId = assistantStartedAt + 1;
     const assistantMsg: Message = {
       id: assistantId,
       role: "assistant",
       content: "",
-      conversation_id: isPrivate ? state.aiSidebarConversationId ?? 0 : 0,
+      conversation_id: initialConversationId ?? 0,
       thinkingMode: state.aiSidebarThinkingMode,
       token_count: 0,
-      created_at: new Date().toISOString(),
+      created_at: new Date(assistantStartedAt).toISOString(),
     };
-    dispatch({ type: "ADD_AI_SIDEBAR_MSG", payload: assistantMsg });
+    dispatch({ type: "ADD_AI_SIDEBAR_MSG_FOR_KEY", payload: { key: convKey, message: assistantMsg } });
+    scrollToLatestAfterRender(convKey);
 
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+    abortControllersRef.current.set(convKey, controller);
+    const runState: RunState = {
+      content: "",
+      reasoningContent: "",
+      loopSteps: [],
+      toolEvents: [],
+      lastToolEndPos: 0,
+      assistantStartedAt,
+      assistantMessageId: assistantId,
+      conversationId: initialConversationId,
+    };
+    runRefs.current.set(convKey, runState);
+    let activeKey = convKey;
 
-    setStreaming(true);
-    let convId = state.aiSidebarConversationId;
-    let content = "";
-    let reasoningContent = "";
-    let toolEvents: ToolEvent[] = [];
-    lastToolEndPosRef.current = 0;
+    const updateAssistant = (payload: Partial<Message>) => {
+      dispatch({ type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY", payload: { key: activeKey, id: assistantId, ...payload } });
+    };
 
     try {
       const appendChunk = (chunk: string) => {
-        content += chunk;
-        dispatch({ type: "UPDATE_AI_SIDEBAR_MSG", payload: { id: assistantId, content } });
+        runState.content += chunk;
+        updateAssistant({ content: runState.content });
       };
 
       if (isPrivate) {
-        // Build page context for every request.
         const pageContext: Record<string, unknown> = { page_type: pageType };
         if (state.blogCurrentPostId) {
           pageContext.post_id = state.blogCurrentPostId;
@@ -470,35 +567,42 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
           if (state.researchCurrentTopic?.title) pageContext.research_topic_title = state.researchCurrentTopic.title;
         }
         pageContext.trust_writing_enabled = state.trustWritingEnabled;
-        // Add selected text context when available.
         if (state.aiSelectionContext) {
           pageContext.post_id = state.aiSelectionContext.postId;
           pageContext.selected_text = state.aiSelectionContext.selectedText;
-        }
-        // Clear selected context after sending.
-        if (state.aiSelectionContext) {
+          if (state.aiSelectionContext.sectionIndex > 0) {
+            pageContext.section_index = state.aiSelectionContext.sectionIndex;
+          }
           dispatch({ type: "CLEAR_AI_SELECTION_CONTEXT" });
         }
 
         await sendChat(
           text,
-          convId,
+          initialConversationId,
           undefined,
           undefined,
           appendChunk,
           (metadata) => {
-            convId = metadata.conversation_id;
-            if (!latestConversationIdRef.current) {
-              skipNextInitialMessagesLoadRef.current = metadata.conversation_id;
-              dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: metadata.conversation_id });
+            runState.conversationId = metadata.conversation_id;
+            const serverKey = makeServerKey(metadata.conversation_id);
+            if (activeKey !== serverKey) {
+              abortControllersRef.current.delete(activeKey);
+              abortControllersRef.current.set(serverKey, controller);
+              runRefs.current.delete(activeKey);
+              runRefs.current.set(serverKey, runState);
+              dispatch({ type: "MIGRATE_AI_SIDEBAR_TEMP_KEY", payload: { fromKey: activeKey, toKey: serverKey, conversationId: metadata.conversation_id } });
+              localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "chat");
+              localStorage.setItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY, serverKey);
+              activeKey = serverKey;
             }
-            if (lastToolEndPosRef.current > 0) {
-              dispatch({ type: "REORGANIZE_AI_MSG", payload: { id: assistantId, splitPosition: lastToolEndPosRef.current } });
+            skipNextHistoryLoadRef.current.add(metadata.conversation_id);
+            if (runState.lastToolEndPos > 0) {
+              dispatch({ type: "REORGANIZE_AI_MSG_FOR_KEY", payload: { key: activeKey, id: assistantId, splitPosition: runState.lastToolEndPos } });
             }
           },
           (toolName) => {
-            toolEvents = [...toolEvents, { type: "start" as const, toolName }];
-            dispatch({ type: "UPDATE_AI_SIDEBAR_MSG", payload: { id: assistantId, toolEvents } });
+            runState.toolEvents = [...runState.toolEvents, { type: "start" as const, toolName }];
+            updateAssistant({ toolEvents: runState.toolEvents });
           },
           (toolName, result, blogMeta, references) => {
             const refs: Reference[] = (references || []).map((r: StreamReference) => ({
@@ -509,33 +613,48 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
               server: r.server,
               tool: r.tool,
             }));
-            toolEvents = [...toolEvents, { type: "end" as const, toolName, result: typeof result === "string" ? result : "", references: refs }];
-            dispatch({ type: "UPDATE_AI_SIDEBAR_MSG", payload: { id: assistantId, toolEvents } });
-            refreshOwnPosts(blogMeta);
-            if (toolName && RESEARCH_TOOL_NAMES.has(toolName)) hadResearchToolsRef.current = true;
-            if (toolName === "blog_patch_post") {
+            runState.toolEvents = [...runState.toolEvents, { type: "end" as const, toolName, result: typeof result === "string" ? result : "", references: refs }];
+            updateAssistant({ toolEvents: runState.toolEvents });
+            if (toolName === "blog_edit_post" && blogStreamOwnerRef.current === activeKey) {
+              if (blogMeta?.operation === "edit_post") {
+                void refreshOwnPosts(blogMeta);
+              }
               dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
+              blogStreamOwnerRef.current = null;
+            } else {
+              void refreshOwnPosts(blogMeta);
             }
-            lastToolEndPosRef.current = content.length;
+            if (toolName && RESEARCH_TOOL_NAMES.has(toolName)) hadResearchToolsRef.current = true;
+            runState.lastToolEndPos = runState.content.length;
           },
           (contentDelta) => {
-            dispatch({ type: "APPEND_BLOG_STREAMING", payload: contentDelta });
+            if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
+            if (blogStreamOwnerRef.current === activeKey) dispatch({ type: "APPEND_BLOG_STREAMING", payload: contentDelta });
           },
-          state.aiSidebarMode,
           state.aiSidebarThinkingMode,
           (reasoningDelta) => {
-            reasoningContent += reasoningDelta;
-            dispatch({ type: "UPDATE_AI_SIDEBAR_MSG", payload: { id: assistantId, reasoningContent } });
+            runState.reasoningContent += reasoningDelta;
+            updateAssistant({ reasoningContent: runState.reasoningContent });
+          },
+          (loopStepText) => {
+            runState.loopSteps = [...runState.loopSteps, loopStepText];
+            updateAssistant({ loopSteps: runState.loopSteps });
           },
           (targetText) => {
-            dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { targetText } });
+            if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
+            if (blogStreamOwnerRef.current === activeKey) {
+              dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { targetText } });
+            }
           },
-          (delta) => {
-            dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: delta });
+          (replacementDelta) => {
+            if (blogStreamOwnerRef.current === activeKey) {
+              dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: replacementDelta });
+            }
           },
           pageContext,
           controller.signal,
         );
+        if (blogStreamOwnerRef.current === activeKey) blogStreamOwnerRef.current = null;
         await loadConvs();
         await refreshResearchTopicIfNeeded();
       } else if (siteUsername) {
@@ -545,53 +664,47 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
       }
 
       if (isPrivate && state.trustWritingEnabled) {
-        const trustChoicePayload = parseTrustChoicePayload(content);
+        const trustChoicePayload = parseTrustChoicePayload(runState.content);
         if (trustChoicePayload) {
-          const visibleContent = stripTrustChoicePayload(content, trustChoicePayload.message);
-          dispatch({
-            type: "UPDATE_AI_SIDEBAR_MSG",
-            payload: {
-              id: assistantId,
-              content: visibleContent,
-              trustChoicePrompt: visibleContent,
-              trustChoiceOptions: trustChoicePayload.choices,
-            },
+          const visibleContent = stripTrustChoicePayload(runState.content, trustChoicePayload.message);
+          updateAssistant({
+            content: visibleContent,
+            trustChoicePrompt: visibleContent,
+            trustChoiceOptions: trustChoicePayload.choices,
           });
         }
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
-        if (!content.trim() && !reasoningContent.trim() && toolEvents.length === 0) {
-          dispatch({
-            type: "UPDATE_AI_SIDEBAR_MSG",
-            payload: { id: assistantId, content: "已停止" },
-          });
+        if (!runState.content.trim() && !runState.reasoningContent.trim() && runState.toolEvents.length === 0) {
+          updateAssistant({ content: "已停止" });
         }
       } else {
-        setError("无法获取回复，请稍后重试");
-        dispatch({
-          type: "UPDATE_AI_SIDEBAR_MSG",
-          payload: { id: assistantId, content: "**错误：无法获取回复**" },
-        });
+        dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: activeKey, error: "无法获取回复，请稍后重试" } });
+        updateAssistant({ content: "**错误：无法获取回复**" });
       }
     } finally {
-      abortControllerRef.current = null;
-      setStreaming(false);
+      updateAssistant({ thinkingDurationMs: Math.max(0, Date.now() - assistantStartedAt) });
+      abortControllersRef.current.delete(activeKey);
+      runRefs.current.delete(activeKey);
+      dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: activeKey, streaming: false } });
     }
-  }, [dispatch, input, isPrivate, loadConvs, postSlug, refreshOwnPosts, refreshResearchTopicIfNeeded, siteUsername, state.aiSidebarConversationId, state.aiSidebarMode, state.aiSidebarThinkingMode, streaming, pageType, postTitle, state.aiSelectionContext, state.blogCurrentPostId, state.researchCurrentTopicId, state.researchCurrentTopic, state.trustWritingEnabled, topicCreateMode, topicCreateMessageId, setTopicCreateMode, showTrustChoicePayload, state.researchTopics, state.aiSidebarMessages]);
+  }, [dispatch, getActiveKey, isPrivate, loadConvs, pageType, postSlug, postTitle, refreshOwnPosts, refreshResearchTopicIfNeeded, scrollToLatestAfterRender, setInputForKey, showTrustChoicePayload, siteUsername, state.aiSelectionContext, state.aiSidebarInputsByKey, state.aiSidebarMessagesByKey, state.aiSidebarStreamingByKey, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.researchCurrentTopic, state.researchCurrentTopicId, state.researchTopics, state.trustWritingEnabled, topicCreateMessageId, topicCreateMode]);
 
   const handleStop = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setStreaming(false);
-  }, []);
+    if (!selectedKey) return;
+    abortControllersRef.current.get(selectedKey)?.abort();
+    abortControllersRef.current.delete(selectedKey);
+    dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: selectedKey, streaming: false } });
+  }, [dispatch, selectedKey]);
 
   const handleTrustChoiceSelect = useCallback(async (messageId: number, option: TrustChoiceOption) => {
+    const key = getActiveKey();
     const isInlineUpdate = option.kind === "action" && option.action === "select_topic";
     if (!isInlineUpdate) {
       dispatch({
-        type: "UPDATE_AI_SIDEBAR_MSG",
-        payload: { id: messageId, trustChoicePrompt: null, trustChoiceOptions: [] },
+        type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
+        payload: { key, id: messageId, trustChoicePrompt: null, trustChoiceOptions: [] },
       });
     }
 
@@ -618,13 +731,13 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
       case "start_research":
       case "continue_research":
         if (topicId) {
-          setError(null);
+          dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: null } });
           try {
             await runResearchTopic(topicId, `sidebar-${topicId}-${Date.now()}`);
             const detail = await getResearchTopic(topicId);
             dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
           } catch {
-            setError("启动研究任务失败，请稍后重试");
+            dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: "启动研究任务失败，请稍后重试" } });
             return;
           }
         }
@@ -639,45 +752,102 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
       case "select_topic": {
         const tid = Number(option.id.replace("topic-select-", ""));
         if (!tid || isNaN(tid)) return;
-        setError(null);
+        dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: null } });
         try {
           const detail = await getResearchTopic(tid);
           dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC_ID", payload: tid });
           dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
           const payload = buildOpenResearchChoices(detail.title);
           dispatch({
-            type: "UPDATE_AI_SIDEBAR_MSG",
-            payload: { id: messageId, content: payload.message, trustChoicePrompt: payload.message, trustChoiceOptions: payload.choices },
+            type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
+            payload: { key, id: messageId, content: payload.message, trustChoicePrompt: payload.message, trustChoiceOptions: payload.choices },
           });
         } catch {
-          setError("加载主题失败，请稍后重试");
+          dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: "加载主题失败，请稍后重试" } });
         }
         return;
       }
       case "create_topic":
         setTopicCreateMessageId(messageId);
         setTopicCreateMode(true);
-        setInput("");
+        setInputForKey(key, "");
         dispatch({
-          type: "UPDATE_AI_SIDEBAR_MSG",
-          payload: { id: messageId, content: "请在下方输入框中输入新研究主题名称，按 Enter 创建，Esc 取消。", trustChoicePrompt: "请在下方输入框中输入新研究主题名称，按 Enter 创建，Esc 取消。" },
+          type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
+          payload: { key, id: messageId, content: "请在下方输入框中输入新研究主题名称，按 Enter 创建，Esc 取消。", trustChoicePrompt: "请在下方输入框中输入新研究主题名称，按 Enter 创建，Esc 取消。" },
         });
         setTimeout(() => textareaRef.current?.focus(), 50);
         return;
     }
-  }, [dispatch, handleGoResearchReview, handleSend, state.researchCurrentTopicId, state.researchCurrentTopic, setTopicCreateMode, setTopicCreateMessageId, textareaRef]);
+  }, [dispatch, getActiveKey, handleGoResearchReview, handleSend, setInputForKey, state.researchCurrentTopicId, state.researchCurrentTopic]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleInputChange = useCallback((value: string) => {
+    const key = getActiveKey();
+    setInputForKey(key, value);
+  }, [getActiveKey, setInputForKey]);
+
+  const handleSendClick = useCallback(() => {
+    void handleSend();
+  }, [handleSend]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      void handleSend();
     }
     if (e.key === "Escape" && topicCreateMode) {
+      const key = getActiveKey();
       setTopicCreateMode(false);
       setTopicCreateMessageId(null);
-      setInput("");
+      setInputForKey(key, "");
     }
-  };
+  }, [getActiveKey, handleSend, setInputForKey, topicCreateMode]);
+
+  const handleReloadHistory = useCallback(() => {
+    setHistoryReloadKey((key) => key + 1);
+  }, []);
+
+  const handleOpenMcp = useCallback(() => {
+    dispatch({ type: "TOGGLE_MCP_MODAL", payload: true });
+  }, [dispatch]);
+
+  const handleJumpToLatest = useCallback(() => {
+    scrollToLatest("smooth");
+  }, [scrollToLatest]);
+
+  const conversationItems = useMemo<ConversationListItem[]>(() => {
+    const remoteItems = conversations.map((conv) => {
+      const key = makeServerKey(conv.id);
+      return {
+        key,
+        id: conv.id,
+        title: conv.title,
+        created_at: conv.created_at,
+        selected: state.aiSidebarSelectedKey === key,
+        streaming: !!state.aiSidebarStreamingByKey[key],
+        error: state.aiSidebarErrorsByKey[key] ?? null,
+        isTemp: false,
+      };
+    });
+    const remoteKeys = new Set(remoteItems.map((item) => item.key));
+    const tempItems = Object.entries(state.aiSidebarMessagesByKey)
+      .filter(([key]) => key.startsWith("temp:") && key !== SHARED_CONVERSATION_KEY && !remoteKeys.has(key as AISidebarConversationKey))
+      .map(([key, messages]) => {
+        const typedKey = key as AISidebarConversationKey;
+        const firstUser = messages.find((m) => m.role === "user");
+        return {
+          key: typedKey,
+          id: null,
+          title: firstUser?.content?.slice(0, 50) || "新对话",
+          created_at: messages[0]?.created_at ?? new Date().toISOString(),
+          selected: state.aiSidebarSelectedKey === typedKey,
+          streaming: !!state.aiSidebarStreamingByKey[typedKey],
+          error: state.aiSidebarErrorsByKey[typedKey] ?? null,
+          isTemp: true,
+        };
+      })
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+    return [...tempItems, ...remoteItems];
+  }, [conversations, state.aiSidebarErrorsByKey, state.aiSidebarMessagesByKey, state.aiSidebarSelectedKey, state.aiSidebarStreamingByKey]);
 
   if (!state.aiSidebarOpen) {
     return (
@@ -700,7 +870,6 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
       <AISidebarHeader
         isPrivate={isPrivate}
         sidebarView={sidebarView}
-        currentModeLabel={currentModeLabel}
         onCollapse={() => dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: false })}
         onBackToList={handleBackToList}
         onNewChat={handleNewChat}
@@ -708,11 +877,15 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
 
       {isPrivate && sidebarView === "list" ? (
         <ConversationListView
-          conversations={conversations}
-          error={error}
+          conversations={conversationItems}
+          error={conversationItems.find((item) => item.error)?.error ?? null}
           onSelect={handleSelectConversation}
           onDeleteRequest={handleDeleteConversation}
-          onDismissError={() => setError(null)}
+          onDismissError={() => {
+            conversationItems.forEach((item) => {
+              if (item.error) dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: item.key, error: null } });
+            });
+          }}
         />
       ) : (
         <>
@@ -751,7 +924,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
           </AnimatePresence>
 
           <AnimatePresence>
-            {error && (
+            {selectedError && (
               <motion.div
                 initial={{ maxHeight: 0, opacity: 0 }}
                 animate={{ maxHeight: 80, opacity: 1 }}
@@ -759,34 +932,37 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
                 className="relative flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-destructive/15 bg-destructive/10 px-3 py-2 text-[13px] text-destructive"
               >
                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{error}</span>
+                <span className="min-w-0 flex-1 truncate">{selectedError}</span>
               </motion.div>
             )}
           </AnimatePresence>
 
           <MessageList
             groups={aiSidebarMessageGroups}
-            streaming={streaming}
+            streaming={selectedStreaming}
             msgsEndRef={msgsEndRef}
-            historyLoading={historyLoading}
-            historyLoadError={historyLoadError}
-            emptyHint={isPrivate ? "可以帮你写文章、总结知识库、润色段落或拆解思路。" : "可以围绕当前公开页面进行普通聊天和内容讨论。"}
-            onReloadHistory={() => setHistoryReloadKey((key) => key + 1)}
+            viewportRef={messagesViewportRef}
+            showJumpButton={selectedStreaming && selectedMessages.length > 0}
+            onJumpToLatest={handleJumpToLatest}
+            historyLoading={selectedHistory.loading}
+            historyLoadError={selectedHistory.error}
+            emptyHint={isPrivate ? "可以帮你写文章、总结文件库、润色段落或拆解思路。" : "可以围绕当前公开页面进行普通聊天和内容讨论。"}
+            onReloadHistory={handleReloadHistory}
             onTrustChoiceSelect={handleTrustChoiceSelect}
           />
 
           <ChatInputBar
-            streaming={streaming}
-            input={input}
+            streaming={selectedStreaming}
+            input={selectedInput}
             topicCreateMode={topicCreateMode}
             textareaRef={textareaRef}
-            onInputChange={setInput}
+            onInputChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            onSend={() => handleSend()}
+            onSend={handleSendClick}
             onStop={handleStop}
-            onPickKnowledge={handleKnowledge}
+            onPickFiles={handleFiles}
             onPickResearch={handleResearch}
-            onOpenMcp={() => dispatch({ type: "TOGGLE_MCP_MODAL", payload: true })}
+            onOpenMcp={handleOpenMcp}
           />
         </>
       )}

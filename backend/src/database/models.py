@@ -35,11 +35,17 @@ class Message(Base):
     token_count = Column(Integer, default=0)
     tool_calls = Column(JSON, nullable=True)
     tool_call_id = Column(String(100), nullable=True)
+    reasoning_content = Column(Text, nullable=True)
+    thinking_content = Column(Text, nullable=True)
+    tool_events = Column(JSON, nullable=True)
+    loop_steps = Column(JSON, nullable=True)
+    thinking_duration_ms = Column(Integer, nullable=True)
+    thinking_mode = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
 
-class KBDocument(Base):
-    __tablename__ = "kb_documents"
+class FileDocument(Base):
+    __tablename__ = "file_documents"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     collection_name = Column(String(200), nullable=False)
@@ -48,7 +54,7 @@ class KBDocument(Base):
     file_path = Column(String(500), nullable=False)
     chunk_content = Column(Text, nullable=False)
     meta = Column("metadata", Text, nullable=True)
-    category_id = Column(Integer, ForeignKey("kb_categories.id"), nullable=True)
+    category_id = Column(Integer, ForeignKey("file_categories.id"), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
 
@@ -126,6 +132,9 @@ class BlogPost(Base):
     published_at = Column(DateTime, nullable=True)
     file_path = Column(String(500), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
+    # AST 缓存(派生数据,可随时从 content 重建):文章正文的块结构数组,
+    # 供 AI 章节定位(大纲/读单节)使用,避免读全文消耗 token。
+    blocks_json = Column(JSON, nullable=True)
 
 
 # ---- Research Graph ----
@@ -337,13 +346,13 @@ class BlogPostClaimLink(Base):
     created_at = Column(DateTime, default=_utcnow)
 
 
-# ---- Knowledge Base Categories ----
+# ---- File Library Categories ----
 
-class KBCategory(Base):
-    __tablename__ = "kb_categories"
+class FileCategory(Base):
+    __tablename__ = "file_categories"
     __table_args__ = (
-        UniqueConstraint("user_id", "slug", name="uq_kb_categories_user_slug"),
-        UniqueConstraint("user_id", "name", name="uq_kb_categories_user_name"),
+        UniqueConstraint("user_id", "slug", name="uq_file_categories_user_slug"),
+        UniqueConstraint("user_id", "name", name="uq_file_categories_user_name"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -351,7 +360,7 @@ class KBCategory(Base):
     name = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
-    parent_id = Column(Integer, ForeignKey("kb_categories.id", ondelete="SET NULL"), nullable=True)
+    parent_id = Column(Integer, ForeignKey("file_categories.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
 

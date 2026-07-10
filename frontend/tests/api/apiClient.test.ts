@@ -5,7 +5,7 @@ import {
   createConversation,
   deleteConversation,
   getMessages,
-} from "../src/api/client";
+} from "../../src/api/client";
 
 // 构造一段可分块推送的 ReadableStream
 function makeChunkedStream(chunks: string[]): ReadableStream<Uint8Array> {
@@ -173,12 +173,116 @@ describe("sendChat SSE 解析", () => {
       undefined,
       undefined,
       undefined,
-      "normal",
-      "deep",
+      undefined,
       (t) => reasoning.push(t),
     );
 
     expect(reasoning.join("")).toBe("thinking...");
+  });
+
+  it("LOOPSTEP 跨 chunk 解析且不泄漏到正文", async () => {
+    const stream = makeChunkedStream([
+      "\x00LOOP",
+      'STEP\x00{"text":"先读取文章再修改"}',
+      '\n\n\x00TOOLDONE\x00{"status":"start","tool_name":"blog_edit_post"}',
+    ]);
+    fetchMock.mockResolvedValueOnce(makeResponse(stream));
+
+    const chunks: string[] = [];
+    const loopSteps: string[] = [];
+    const tools: string[] = [];
+    await sendChat(
+      "hi",
+      null,
+      undefined,
+      undefined,
+      (chunk) => chunks.push(chunk),
+      () => {},
+      (name) => tools.push(name),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (step) => loopSteps.push(step),
+    );
+
+    expect(loopSteps).toEqual(["先读取文章再修改"]);
+    expect(tools).toEqual(["blog_edit_post"]);
+    expect(chunks.join("").trim()).toBe("");
+  });
+
+  it("PATCH 控制帧跨 chunk 驱动补丁预览且不泄漏正文", async () => {
+    const stream = makeChunkedStream([
+      '\x00PATCH',
+      'START\x00{"target_text":"旧文本"}',
+      '\x00PATCHDELTA\x00{"replacement_delta":"新"}',
+      '\x00PATCHDELTA\x00{"replacement_delta":"文本"}',
+      '\x00TOOLDONE\x00{"status":"start","tool_name":"blog_edit_post"}',
+      '\x00TOOLDONE\x00{"status":"end","tool_name":"blog_edit_post","result":"完成"}',
+    ]);
+    fetchMock.mockResolvedValueOnce(makeResponse(stream));
+
+    const chunks: string[] = [];
+    const events: string[] = [];
+    await sendChat(
+      "hi",
+      null,
+      undefined,
+      undefined,
+      (chunk) => chunks.push(chunk),
+      () => {},
+      (name) => events.push(`start:${name}`),
+      (name) => events.push(`end:${name}`),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (target) => events.push(`patch-start:${target}`),
+      (delta) => events.push(`patch-delta:${delta}`),
+    );
+
+    expect(events).toEqual([
+      "patch-start:旧文本",
+      "patch-delta:新",
+      "patch-delta:文本",
+      "start:blog_edit_post",
+      "end:blog_edit_post",
+    ]);
+    expect(chunks.join("")).toBe("");
+  });
+
+  it("工具结束回调的异步工作不阻塞后续正文", async () => {
+    const stream = makeChunkedStream([
+      '\x00TOOLDONE\x00{"status":"end","tool_name":"blog_edit_post","result":"完成"}',
+      "最终回复",
+    ]);
+    fetchMock.mockResolvedValueOnce(makeResponse(stream));
+
+    let releaseRefresh!: () => void;
+    const refreshPromise = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    const chunks: string[] = [];
+    const chatPromise = sendChat(
+      "hi",
+      null,
+      undefined,
+      undefined,
+      (chunk) => chunks.push(chunk),
+      () => {},
+      undefined,
+      () => refreshPromise,
+    );
+
+    const outcome = await Promise.race([
+      chatPromise.then(() => "complete"),
+      new Promise<string>((resolve) => setTimeout(() => resolve("blocked"), 50)),
+    ]);
+    releaseRefresh();
+    await chatPromise;
+
+    expect(outcome).toBe("complete");
+    expect(chunks.join("")).toBe("最终回复");
   });
 
   it("HTTP 非 2xx 抛错", async () => {

@@ -9,11 +9,12 @@ import "vditor/dist/index.css";
 import "vditor/dist/js/i18n/zh_CN";
 import "./BlogEditor.css";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, Save, FileText, Tags, FolderOpen, Trash2, Archive, AlertCircle, Image as ImageIcon, Upload, Wand2, X, GitBranch, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Save, FileText, Tags, FolderOpen, Trash2, Archive, AlertCircle, Image as ImageIcon, Upload, Wand2, X, GitBranch, ShieldCheck, Copy, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { generateExcerpt } from "../utils/blogExcerpt";
+import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
 import {
   Dialog,
   DialogClose,
@@ -31,7 +32,8 @@ import {
   recordString,
   type DraftInfo,
 } from "../utils/blogEditorTypes";
-import { applyUnorderedListShortcut } from "../utils/vditorShortcuts";
+import { applyBackspaceShortcut, applyEnterShortcuts, applyUnorderedListShortcut } from "../utils/vditorShortcuts";
+import { expandBlankLines, preserveBlankLines } from "../utils/markdownBlankLines";
 import {
   getEditorI18n,
   installCodeLanguageMenu,
@@ -39,6 +41,12 @@ import {
   installControlledTableMenu,
   installTableCellMenu,
 } from "../utils/vditorMenus";
+
+function getWysiwygReset(vditor: Vditor): HTMLElement | null {
+  return (vditor as unknown as {
+    vditor?: { wysiwyg?: { element?: HTMLElement | null } };
+  }).vditor?.wysiwyg?.element?.querySelector(".vditor-reset") as HTMLElement | null | undefined ?? null;
+}
 
 export function BlogEditor() {
   const { state, dispatch } = useChat();
@@ -65,6 +73,8 @@ export function BlogEditor() {
   const [researchError, setResearchError] = useState<string | null>(null);
   const [toolbarExpanded, setToolbarExpanded] = useState(false);
   const [vditorToolbarReady, setVditorToolbarReady] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; selectedText: string; sectionIndex: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftBtnRef = useRef<HTMLDivElement>(null);
@@ -75,10 +85,14 @@ export function BlogEditor() {
   const cleanupTableMenuRef = useRef<(() => void) | null>(null);
   const cleanupCodeLanguageMenuRef = useRef<(() => void) | null>(null);
   const cleanupTableCellMenuRef = useRef<(() => void) | null>(null);
+  const cleanupEnterHandlerRef = useRef<(() => void) | null>(null);
   const containerId = useId();
   const isProgrammaticChange = useRef(false);
   const isDirtyRef = useRef(false);
   const skipDirtyOnceRef = useRef(false);
+  // AI 修改(patch 流式预览)相关
+  const patchApplyPendingRef = useRef(false);                 // 预览中,等待落地 setValue
+  const aiModifySavingRef = useRef(false);                    // 防止保存期间重复触发
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
@@ -135,7 +149,7 @@ export function BlogEditor() {
     const newContent = existingPost?.content || "";
     isProgrammaticChange.current = true;
     const safety = setTimeout(() => { isProgrammaticChange.current = false; }, 50);
-    vditorRef.current?.setValue(newContent);
+    vditorRef.current?.setValue(expandBlankLines(newContent));
     return () => clearTimeout(safety);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingPost?.id]);
@@ -149,14 +163,17 @@ export function BlogEditor() {
       mode: "wysiwyg",
       theme: state.theme === "dark" ? "dark" : "classic",
       i18n: getEditorI18n(),
-      value: content,
+      value: expandBlankLines(content),
       placeholder: "开始写文章...",
       minHeight: 0,
+      customWysiwygToolbar: (_type, element) => {
+        element.innerHTML = "";
+        element.style.display = "none";
+      },
       keydown(event) {
-        const editor = document.getElementById(containerId)?.querySelector<HTMLPreElement>(".vditor-reset");
-        if (editor && applyUnorderedListShortcut(editor, event)) {
-          return;
-        }
+        const editor = document.getElementById(containerId)?.querySelector<HTMLElement>('[contenteditable="true"]');
+        if (!editor) return;
+        if (applyUnorderedListShortcut(editor, event)) return;
       },
       toolbar: [
         "headings", "bold", "italic", "strike", "|",
@@ -182,10 +199,10 @@ export function BlogEditor() {
             original_name?: string;
             stored_name?: string;
           };
-          const authUser = JSON.parse(localStorage.getItem("auth_user") || "null") as { id?: number } | null;
+          const authUser = JSON.parse(localStorage.getItem("auth_user") || "null") as { id?: number; username?: string } | null;
           const filename = response.original_name || files[0]?.name || response.stored_name || "image";
-          const imageUrl = authUser?.id && response.stored_name
-            ? `/api/public/uploads/${authUser.id}/${encodeURIComponent(response.stored_name)}`
+          const imageUrl = authUser?.username && response.stored_name
+            ? `/api/public/uploads/${encodeURIComponent(authUser.username)}/${encodeURIComponent(response.stored_name)}`
             : response.download_url;
           return JSON.stringify({
             code: 0,
@@ -214,6 +231,21 @@ export function BlogEditor() {
         cleanupTableMenuRef.current = installControlledTableMenu(vd);
         cleanupCodeLanguageMenuRef.current = installCodeLanguageMenu(vd);
         cleanupTableCellMenuRef.current = installTableCellMenu(vd, setContent);
+        const editorContainer = document.getElementById(containerId);
+        if (editorContainer) {
+          const enterHandler = (event: KeyboardEvent) => {
+            const editor = editorContainer.querySelector<HTMLElement>('[contenteditable="true"]');
+            if (!editor) return;
+            const handled = applyEnterShortcuts(editor, event) || applyBackspaceShortcut(editor, event);
+            if (handled) {
+              event.stopImmediatePropagation();
+            }
+          };
+          editorContainer.addEventListener("keydown", enterHandler, true);
+          cleanupEnterHandlerRef.current = () => {
+            editorContainer.removeEventListener("keydown", enterHandler, true);
+          };
+        }
         setVditorToolbarReady((value) => value + 1);
       },
     });
@@ -228,6 +260,8 @@ export function BlogEditor() {
       cleanupCodeLanguageMenuRef.current = null;
       cleanupTableCellMenuRef.current?.();
       cleanupTableCellMenuRef.current = null;
+      cleanupEnterHandlerRef.current?.();
+      cleanupEnterHandlerRef.current = null;
       try {
         vditorRef.current?.destroy();
       } catch { /* ignore vditor destroy errors on unmount */ }
@@ -286,6 +320,12 @@ export function BlogEditor() {
     };
   }, [title, content, tags, coverImage, draftKey]);
 
+  // 退出编辑器:切回详情页/列表,同时清除 URL 的 ?edit(避免刷新跑回编辑页)
+  const exitEditor = useCallback(() => {
+    dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
+    if (window.location.search) navigate(window.location.pathname, { replace: true });
+  }, [dispatch, existingPost, navigate]);
+
   const handleSave = useCallback(async (targetStatus: "draft" | "published") => {
     if (!title.trim()) {
       setError("请输入文章标题");
@@ -294,7 +334,8 @@ export function BlogEditor() {
     setSaving(true);
     setError(null);
     try {
-      const currentContent = vditorRef.current?.getValue?.() ?? content;
+      const rawContent = vditorRef.current?.getValue?.() ?? content;
+      const currentContent = vditorRef.current ? preserveBlankLines(getWysiwygReset(vditorRef.current), rawContent) : rawContent;
       const data = {
         title: title.trim(),
         content: currentContent,
@@ -313,7 +354,7 @@ export function BlogEditor() {
         dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: created.id });
       }
       localStorage.removeItem(draftKey);
-      dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
+      exitEditor();
     } catch {
       setError("保存失败，请稍后重试");
     } finally {
@@ -321,14 +362,216 @@ export function BlogEditor() {
     }
   }, [title, content, tags, coverImage, existingPost, state.blogPosts, dispatch, draftKey]);
 
+  // ── AI 修改:确保有 postId(新建则静默 create,不切页)──────────────
+  const ensurePostId = useCallback(async (): Promise<number | null> => {
+    if (existingPost) return existingPost.id;
+    if (!title.trim()) { setError("请输入文章标题"); return null; }
+    setSaving(true);
+    setError(null);
+    try {
+      const rawC = vditorRef.current?.getValue?.() ?? content;
+      const c = vditorRef.current ? preserveBlankLines(getWysiwygReset(vditorRef.current), rawC) : rawC;
+      const created = await createBlogPost({
+        title: title.trim(),
+        content: c,
+        excerpt: generateExcerpt(c),
+        tags: tags.trim() || undefined,
+        status: "draft",
+        cover_image: coverImage || null,
+      });
+      dispatch({ type: "SET_BLOG_POSTS", payload: [created, ...state.blogPosts] });
+      dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: created.id });
+      localStorage.removeItem(draftKey);
+      return created.id;
+    } catch {
+      setError("保存失败，无法进入 AI 修改");
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }, [existingPost, title, content, tags, coverImage, state.blogPosts, dispatch, draftKey]);
+
+  // ── 右键菜单 handler ──────────────────────────────────────────────
+  const getEditorElement = useCallback((): HTMLElement | null => {
+    const vditorElement = vditorRef.current?.vditor?.element as HTMLElement | undefined;
+    const internalEditor = vditorRef.current?.vditor?.wysiwyg?.element as HTMLElement | undefined;
+    const container = document.getElementById(containerId);
+    return (
+      internalEditor
+      ?? vditorElement?.querySelector<HTMLElement>(".vditor-wysiwyg, .vditor-ir, .vditor-sv, .vditor-reset")
+      ?? container?.querySelector<HTMLElement>(".vditor-wysiwyg, .vditor-ir, .vditor-sv, .vditor-reset")
+      ?? null
+    );
+  }, [containerId]);
+
+  const isSelectionInsideEditor = useCallback((selection: Selection | null, editorEl: HTMLElement | null) => {
+    if (!selection || !editorEl || selection.rangeCount === 0) return false;
+    const anchor = selection.anchorNode;
+    const focus = selection.focusNode;
+    const range = selection.getRangeAt(0);
+    return (
+      (!!anchor && editorEl.contains(anchor))
+      || (!!focus && editorEl.contains(focus))
+      || editorEl.contains(range.commonAncestorContainer)
+    );
+  }, []);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const handleEditorContextMenu = useCallback((e: React.MouseEvent) => {
+    const editorEl = getEditorElement();
+    const sel = window.getSelection();
+    // 校验选区落在编辑器内(避免标题/标签等输入框误触)
+    if (!isSelectionInsideEditor(sel, editorEl)) {
+      setContextMenu(null);
+      return;
+    }
+    const selection = sel?.toString().trim() || "";
+    if (selection.length >= 5) {
+      e.preventDefault();
+      const sectionIndex = getSectionIndexFromSelection(editorEl);
+      setContextMenu({ x: e.clientX, y: e.clientY, selectedText: selection, sectionIndex });
+    } else {
+      setContextMenu(null);
+    }
+  }, [getEditorElement, isSelectionInsideEditor]);
+
+  const handleEditorTouchStart = useCallback(() => {
+    longPressTimerRef.current = setTimeout(() => {
+      const editorEl = getEditorElement();
+      const sel = window.getSelection();
+      if (!isSelectionInsideEditor(sel, editorEl)) return;
+      const selection = sel?.toString().trim() || "";
+      if (selection.length >= 5) {
+        const range = sel!.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        const sectionIndex = getSectionIndexFromSelection(editorEl);
+        setContextMenu({ x: rect.left + rect.width / 2, y: rect.top + 50, selectedText: selection, sectionIndex });
+      }
+    }, 500);
+  }, [getEditorElement, isSelectionInsideEditor]);
+
+  const handleEditorTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handleCopySelection = useCallback(() => {
+    if (!contextMenu) return;
+    navigator.clipboard.writeText(contextMenu.selectedText).catch(() => {});
+    closeContextMenu();
+  }, [contextMenu, closeContextMenu]);
+
+  const handleEditorAIModify = useCallback(async () => {
+    if (!contextMenu || aiModifySavingRef.current) return;
+    aiModifySavingRef.current = true;
+    const { selectedText, sectionIndex } = contextMenu;
+    closeContextMenu();
+    try {
+      const postId = await ensurePostId();
+      if (postId == null) return;
+      dispatch({ type: "SET_AI_SELECTION_CONTEXT", payload: { postId, selectedText, sectionIndex } });
+      dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: true });
+    } finally {
+      aiModifySavingRef.current = false;
+    }
+  }, [contextMenu, closeContextMenu, dispatch, ensurePostId]);
+
+  // 点击菜单外关闭(用 mousedown + 捕获,避免被 Vditor 内部 click stopPropagation 拦截)
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handler = (e: MouseEvent) => {
+      // 点在菜单内不关闭(菜单自身有 stopPropagation,这里再加一层保险)
+      const target = e.target as HTMLElement;
+      if (target.closest(".fixed.z-50")) return;
+      closeContextMenu();
+    };
+    window.addEventListener("mousedown", handler, true);
+    return () => window.removeEventListener("mousedown", handler, true);
+  }, [contextMenu, closeContextMenu]);
+
+  // ── patch 流式预览:文档流原位替换 <p> 为预览块(不碰 Vditor input) ──
+  const patchStreaming = state.blogPatchStreaming;
+
+  useEffect(() => {
+    if (!patchStreaming) return;
+    const editorEl = getEditorElement();
+    if (!editorEl) return;
+
+    // 已有预览块(同一 patch 后续 delta)→ 更新内容
+    const existing = editorEl.querySelector(".ai-patch-inline__text");
+    if (existing instanceof HTMLElement) {
+      existing.textContent = patchStreaming.replacementDelta || "...";
+      return;
+    }
+
+    // 新 patch:用 targetText 找到选中文字所在的块元素并原位替换
+    // 注意:targetText 可能含 markdown 标记(反引号等),在 Vditor DOM 里被渲染成
+    // <code>/<strong> 等子元素,纯文本节点匹配不到。用"最长公共子串"做模糊匹配。
+    const target = patchStreaming.targetText;
+    // 取 targetText 中一段连续纯文本(去掉 markdown 标记字符)作为匹配特征
+    const cleanTarget = target.replace(/[`*_~#\[\]()>]/g, "").trim();
+    const matchKey = cleanTarget.length > 15 ? cleanTarget.substring(0, 15) : cleanTarget;
+    const blocks = Array.from(editorEl.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote"));
+    for (const block of blocks) {
+      const blockText = (block.textContent || "").replace(/[`*_~#\[\]()>]/g, "");
+      if (matchKey && blockText.includes(matchKey)) {
+        const div = document.createElement("div");
+        div.className = "ai-patch-inline";
+        div.setAttribute("data-block", "0");
+        div.setAttribute("contenteditable", "false");
+        const label = document.createElement("span");
+        label.className = "ai-patch-inline__label";
+        label.textContent = "AI 修改中...";
+        const text = document.createElement("div");
+        text.className = "ai-patch-inline__text";
+        text.textContent = patchStreaming.replacementDelta || "...";
+        div.appendChild(label);
+        div.appendChild(text);
+        block.replaceWith(div);
+        patchApplyPendingRef.current = true;
+        return;
+      }
+    }
+    // targetText 未匹配时静默(下次 patch 仍会重试),避免噪声日志
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patchStreaming]);
+
+  // ── patch 落地:content 变化后 setValue 重建 DOM,预览块自然消失 ───
+  useEffect(() => {
+    if (!patchApplyPendingRef.current) return;
+    if (!vditorReadyRef.current) return;
+    const newContent = existingPost?.content || "";
+    patchApplyPendingRef.current = false;
+    isProgrammaticChange.current = true;
+    const safety = setTimeout(() => { isProgrammaticChange.current = false; }, 50);
+    vditorRef.current?.setValue(expandBlankLines(newContent));
+    return () => clearTimeout(safety);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingPost?.content]);
+
+  // ── 超时兜底:30 秒未落地则 setValue 恢复 ─────────────────────────
+  useEffect(() => {
+    if (!patchApplyPendingRef.current) return;
+    const timer = setTimeout(() => {
+      patchApplyPendingRef.current = false;
+      vditorRef.current?.setValue(expandBlankLines(existingPost?.content || ""));
+      setError("AI 修改超时，请重试");
+    }, 30000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patchApplyPendingRef.current]);
+
   const handleCancel = useCallback(() => {
     if (isDirtyRef.current) {
       setShowCancelModal(true);
     } else {
       localStorage.removeItem(draftKey);
-      dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
+      exitEditor();
     }
-  }, [draftKey, existingPost, dispatch]);
+  }, [draftKey, exitEditor]);
 
   const handleSaveDraft = useCallback(() => {
     localStorage.setItem(draftKey, JSON.stringify({
@@ -336,14 +579,14 @@ export function BlogEditor() {
       _savedAt: new Date().toISOString(),
     }));
     setShowCancelModal(false);
-    dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
-  }, [title, content, tags, coverImage, draftKey, existingPost, dispatch]);
+    exitEditor();
+  }, [title, content, tags, coverImage, draftKey, exitEditor]);
 
   const handleDiscardDraft = useCallback(() => {
     localStorage.removeItem(draftKey);
     setShowCancelModal(false);
-    dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
-  }, [draftKey, existingPost, dispatch]);
+    exitEditor();
+  }, [draftKey, exitEditor]);
 
   const handleSuggestTags = useCallback(async () => {
     const currentContent = vditorRef.current?.getValue?.() ?? content;
@@ -426,7 +669,7 @@ export function BlogEditor() {
       if (vditorReadyRef.current) {
         isProgrammaticChange.current = true;
         setTimeout(() => { isProgrammaticChange.current = false; }, 50);
-        vditorRef.current?.setValue(post.content || "");
+        vditorRef.current?.setValue(expandBlankLines(post.content || ""));
       }
       setError(null);
       setShowDraftList(false);
@@ -917,7 +1160,12 @@ export function BlogEditor() {
         </div>
       )}
 
-      <div className="vditor-wrapper min-h-0 flex-1 overflow-hidden relative">
+      <div
+        className="vditor-wrapper min-h-0 flex-1 overflow-hidden relative"
+        onContextMenu={handleEditorContextMenu}
+        onTouchStart={handleEditorTouchStart}
+        onTouchEnd={handleEditorTouchEnd}
+      >
         <div id={containerId} className="h-full" />
       </div>
       </div>
@@ -939,6 +1187,31 @@ export function BlogEditor() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* 右键 / 长按菜单:用 Portal 渲染到 body,避免被祖先 backdrop-filter 破坏 fixed 定位 */}
+      {contextMenu && createPortal(
+        <div
+          className="fixed z-50 min-w-[160px] rounded-xl border border-border/70 bg-card/95 px-1.5 py-1 shadow-2xl backdrop-blur-xl"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-foreground hover:bg-accent/80 transition-colors"
+            onClick={handleCopySelection}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            复制
+          </button>
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-primary hover:bg-primary/10 transition-colors"
+            onClick={handleEditorAIModify}
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            AI 修改
+          </button>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

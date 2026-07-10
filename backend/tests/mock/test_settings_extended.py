@@ -113,6 +113,11 @@ async def test_settings_are_isolated_per_user(client: AsyncClient, db_session):
     assert rec_a.protocol == "anthropic"
     assert rec_b.protocol == "openai"
 
+    resp_a = await client.get("/api/settings/llm", headers=headers_a)
+    resp_b = await client.get("/api/settings/llm", headers=headers_b)
+    assert resp_a.json()["api_key"] == "key-a"
+    assert resp_b.json()["api_key"] == "key-b"
+
 
 @pytest.mark.asyncio
 async def test_get_settings_returns_default_for_new_user(client: AsyncClient):
@@ -126,7 +131,7 @@ async def test_get_settings_returns_default_for_new_user(client: AsyncClient):
     assert data["has_api_key"] is False
     assert data["base_url"] is None
     assert data["model"] is None
-    assert "api_key" not in data
+    assert data["api_key"] is None
 
 
 @pytest.mark.asyncio

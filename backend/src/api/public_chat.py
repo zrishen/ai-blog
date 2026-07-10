@@ -24,7 +24,7 @@ async def public_landing_chat_stream(
     data: PublicChatRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """落地页公开 AI：只聊天，不绑定工具、MCP 或知识库。"""
+    """落地页公开 AI：只聊天，不绑定工具、MCP 或文件库。"""
     logger.info("Public landing chat request: chars=%d", len(data.content))
     return StreamingResponse(
         public_stream_chat(db, data.content),

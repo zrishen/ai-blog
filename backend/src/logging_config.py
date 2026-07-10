@@ -88,7 +88,14 @@ def setup_logging(level: str = "INFO") -> None:
     root.addHandler(file_handler)
 
     # 压低第三方库日志噪音
-    for noisy in ("openai._base_client", "httpx", "aiosqlite", "asyncio", "watchfiles"):
+    for noisy in (
+        "openai._base_client",
+        "httpx",
+        "aiosqlite",
+        "asyncio",
+        "watchfiles",
+        "markdown_it",
+    ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     # HTTP 访问日志：控制台 INFO，文件 DEBUG（显式添加 handler，不依赖继承）

@@ -9,24 +9,20 @@ async def init_db():
     await _migrate_users()
     await _migrate_image_url()
     await _migrate_file_url()
-    await _migrate_kb_documents()
+    await _migrate_message_thinking_fields()
     await _migrate_mcp_servers()
     await _migrate_blog_tables()
-    await _migrate_kb_categories()
-    await _migrate_kb_categories_parent()
-    await _migrate_kb_document_category()
-    await _migrate_kb_document_user_id()
     await _migrate_llm_settings()
     await _migrate_conversation_user_id()
     await _migrate_blog_file_path()
     await _migrate_blog_user_id()
     await _migrate_blog_unique_scopes()
-    await _migrate_kb_category_user_scope()
     await _migrate_mcp_user_scope()
     await _migrate_research_graph()
     await _migrate_research_entity_enhancements()
     await _migrate_blog_file_storage()
     await _migrate_user_dirs_to_username()
+    await _migrate_blog_blocks_json()
 
 
 async def _table_exists(conn, table_name: str) -> bool:
@@ -92,6 +88,28 @@ async def _migrate_file_url():
             await conn.commit()
 
 
+async def _migrate_message_thinking_fields():
+    from sqlalchemy import text
+
+    async with engine.connect() as conn:
+        columns = await _columns(conn, "messages")
+        migrations = {
+            "reasoning_content": "ALTER TABLE messages ADD COLUMN reasoning_content TEXT",
+            "thinking_content": "ALTER TABLE messages ADD COLUMN thinking_content TEXT",
+            "tool_events": "ALTER TABLE messages ADD COLUMN tool_events JSON",
+            "loop_steps": "ALTER TABLE messages ADD COLUMN loop_steps JSON",
+            "thinking_duration_ms": "ALTER TABLE messages ADD COLUMN thinking_duration_ms INTEGER",
+            "thinking_mode": "ALTER TABLE messages ADD COLUMN thinking_mode TEXT",
+        }
+        changed = False
+        for column, statement in migrations.items():
+            if column not in columns:
+                await conn.execute(text(statement))
+                changed = True
+        if changed:
+            await conn.commit()
+
+
 async def _migrate_mcp_servers():
     from sqlalchemy import text
 
@@ -112,27 +130,6 @@ async def _migrate_mcp_servers():
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     CONSTRAINT uq_mcp_servers_user_name UNIQUE (user_id, name)
-                )
-            """))
-            await conn.commit()
-
-
-async def _migrate_kb_documents():
-    from sqlalchemy import text
-
-    async with engine.connect() as conn:
-        if not await _table_exists(conn, "kb_documents"):
-            await conn.execute(text("""
-                CREATE TABLE kb_documents (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    collection_name TEXT NOT NULL,
-                    user_id TEXT NOT NULL DEFAULT 'default_user',
-                    original_name TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
-                    chunk_content TEXT NOT NULL,
-                    metadata TEXT,
-                    category_id INTEGER REFERENCES kb_categories(id),
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             """))
             await conn.commit()
@@ -179,57 +176,6 @@ async def _migrate_blog_tables():
                 )
             """))
         await conn.commit()
-
-
-async def _migrate_kb_categories():
-    from sqlalchemy import text
-
-    async with engine.connect() as conn:
-        if not await _table_exists(conn, "kb_categories"):
-            await conn.execute(text("""
-                CREATE TABLE kb_categories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
-                    name TEXT NOT NULL,
-                    slug TEXT NOT NULL,
-                    description TEXT,
-                    parent_id INTEGER REFERENCES kb_categories(id) ON DELETE SET NULL,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    CONSTRAINT uq_kb_categories_user_slug UNIQUE (user_id, slug),
-                    CONSTRAINT uq_kb_categories_user_name UNIQUE (user_id, name)
-                )
-            """))
-            await conn.commit()
-
-
-async def _migrate_kb_categories_parent():
-    from sqlalchemy import text
-
-    async with engine.connect() as conn:
-        columns = await _columns(conn, "kb_categories")
-        if "parent_id" not in columns:
-            await conn.execute(text("ALTER TABLE kb_categories ADD COLUMN parent_id INTEGER REFERENCES kb_categories(id) ON DELETE SET NULL"))
-            await conn.commit()
-
-
-async def _migrate_kb_document_category():
-    from sqlalchemy import text
-
-    async with engine.connect() as conn:
-        columns = await _columns(conn, "kb_documents")
-        if "category_id" not in columns:
-            await conn.execute(text("ALTER TABLE kb_documents ADD COLUMN category_id INTEGER REFERENCES kb_categories(id)"))
-            await conn.commit()
-
-
-async def _migrate_kb_document_user_id():
-    from sqlalchemy import text
-
-    async with engine.connect() as conn:
-        columns = await _columns(conn, "kb_documents")
-        if "user_id" not in columns:
-            await conn.execute(text("ALTER TABLE kb_documents ADD COLUMN user_id TEXT NOT NULL DEFAULT 'default_user'"))
-            await conn.commit()
 
 
 async def _migrate_llm_settings():
@@ -378,48 +324,6 @@ async def _migrate_blog_unique_scopes():
             await conn.execute(text("DROP TABLE blog_posts"))
             await conn.execute(text("ALTER TABLE blog_posts_new RENAME TO blog_posts"))
 
-        await conn.execute(text("PRAGMA foreign_keys=ON"))
-        await conn.commit()
-
-
-async def _migrate_kb_category_user_scope():
-    from sqlalchemy import text
-
-    async with engine.connect() as conn:
-        columns = await _columns(conn, "kb_categories")
-        if "user_id" not in columns:
-            await conn.execute(text("ALTER TABLE kb_categories ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id)"))
-            await conn.commit()
-
-        need_rebuild = (
-            await _has_unique_index_on(conn, "kb_categories", ["name"])
-            or await _has_unique_index_on(conn, "kb_categories", ["slug"])
-            or not await _has_unique_index_on(conn, "kb_categories", ["user_id", "name"])
-        )
-        if not need_rebuild:
-            return
-
-        await conn.execute(text("PRAGMA foreign_keys=OFF"))
-        await conn.execute(text("""
-            CREATE TABLE kb_categories_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id),
-                name TEXT NOT NULL,
-                slug TEXT NOT NULL,
-                description TEXT,
-                parent_id INTEGER REFERENCES kb_categories(id) ON DELETE SET NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                CONSTRAINT uq_kb_categories_user_slug UNIQUE (user_id, slug),
-                CONSTRAINT uq_kb_categories_user_name UNIQUE (user_id, name)
-            )
-        """))
-        await conn.execute(text("""
-            INSERT INTO kb_categories_new (id, user_id, name, slug, description, parent_id, created_at)
-            SELECT id, COALESCE(user_id, 1), name, slug, description, parent_id, created_at
-            FROM kb_categories
-        """))
-        await conn.execute(text("DROP TABLE kb_categories"))
-        await conn.execute(text("ALTER TABLE kb_categories_new RENAME TO kb_categories"))
         await conn.execute(text("PRAGMA foreign_keys=ON"))
         await conn.commit()
 
@@ -824,3 +728,14 @@ async def _migrate_user_dirs_to_username():
         invalidate_username_cache()
     except Exception:
         pass
+
+
+async def _migrate_blog_blocks_json():
+    """为 blog_posts 添加 blocks_json 列(AST 缓存,可空,派生数据)。"""
+    from sqlalchemy import text
+
+    async with engine.connect() as conn:
+        columns = await _columns(conn, "blog_posts")
+        if "blocks_json" not in columns:
+            await conn.execute(text("ALTER TABLE blog_posts ADD COLUMN blocks_json JSON"))
+            await conn.commit()

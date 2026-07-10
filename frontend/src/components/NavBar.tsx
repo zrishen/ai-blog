@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useChat, toggleTheme } from "../stores/chatStore";
 import { useAuth } from "../stores/authStore";
@@ -11,6 +11,8 @@ import {
   LogOut,
   Home,
   Settings,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,7 +52,18 @@ export function NavBar() {
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmModel, setLlmModel] = useState("");
-  const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+
+  // 登录后自动获取模型能力信息
+  useEffect(() => {
+    if (!isAuthenticated) {
+      dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: true });
+      return;
+    }
+    getLLMSettings()
+      .then((data) => dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: !!data.supports_thinking }))
+      .catch(() => {});
+  }, [isAuthenticated, dispatch]);
 
   const resetBlogList = () => {
     dispatch({ type: "SET_PAGE", payload: "blog" });
@@ -100,12 +113,14 @@ export function NavBar() {
     setSettingsError(null);
     setSettingsSaved(false);
     setLlmApiKey("");
+    setShowApiKey(false);
     try {
       const data = await getLLMSettings();
       setLlmProtocol(data.protocol);
       setLlmBaseUrl(data.base_url ?? "");
+      setLlmApiKey(data.api_key ?? "");
       setLlmModel(data.model ?? "");
-      setHasSavedApiKey(data.has_api_key);
+      dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: !!data.supports_thinking });
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : "读取设置失败");
     } finally {
@@ -127,8 +142,9 @@ export function NavBar() {
       setLlmProtocol(data.protocol);
       setLlmBaseUrl(data.base_url ?? "");
       setLlmModel(data.model ?? "");
-      setHasSavedApiKey(data.has_api_key);
-      setLlmApiKey("");
+      setLlmApiKey(data.api_key ?? "");
+      setShowApiKey(false);
+      dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: !!data.supports_thinking });
       setSettingsSaved(true);
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : "保存设置失败");
@@ -276,19 +292,46 @@ export function NavBar() {
               />
             </label>
 
-            <label className="block space-y-1.5">
+            <div className="block space-y-1.5">
               <span className="text-sm font-medium text-foreground">API Key</span>
-              <Input
-                type="password"
-                value={llmApiKey}
-                onChange={(event) => setLlmApiKey(event.target.value)}
-                placeholder={hasSavedApiKey ? "已保存，留空则不修改" : "输入 API Key"}
-                disabled={settingsLoading || settingsSaving}
-              />
-            </label>
+              <div className="relative">
+                <Input
+                  type={showApiKey ? "text" : "password"}
+                  value={llmApiKey}
+                  onChange={(event) => setLlmApiKey(event.target.value)}
+                  placeholder="输入 API Key"
+                  disabled={settingsLoading || settingsSaving}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                  onClick={() => setShowApiKey((value) => !value)}
+                  disabled={settingsLoading || settingsSaving}
+                  title={showApiKey ? "隐藏 API Key" : "显示 API Key"}
+                  aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"}
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
 
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-foreground">Model</span>
+              <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+                Model
+                {(() => {
+                  const name = llmModel.trim().toLowerCase();
+                  const capable = name && (
+                    name.includes("deepseek") || name.includes("qwq") || name.includes("o1") ||
+                    name.includes("o3") || name.includes("o4") || name.includes("claude") ||
+                    name.includes("reasoning") || name.includes("think") || name.includes("qwen3")
+                  );
+                  if (!name) return null;
+                  return capable
+                    ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">支持思考</span>
+                    : <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">可能不支持深度思考</span>;
+                })()}
+              </span>
               <Input
                 value={llmModel}
                 onChange={(event) => setLlmModel(event.target.value)}

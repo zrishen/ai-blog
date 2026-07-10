@@ -12,6 +12,8 @@ import { ArrowLeft, Pencil, Trash2, Globe, EyeOff, Calendar, Eye, Tags, AlertCir
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
+import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
+import { expandBlankLines } from "../utils/markdownBlankLines";
 
 // 代码语言 class → 展示名(与编辑器语言选项保持一致)
 const CODE_LANGUAGE_LABELS: Record<string, string> = {
@@ -100,7 +102,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
   const patchAreaRef = useRef<HTMLDivElement>(null);
 
   // 右键菜单状态
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; selectedText: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; selectedText: string; sectionIndex: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -118,7 +120,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
   const streamingContent = state.blogStreamingContent;
   const postTitle = post?.title;
   const postContent = post?.content;
-  const displayContent = useMemo(() => {
+  const rawDisplayContent = useMemo(() => {
     // 流式内容优先（AI 正在编辑时）
     if (streamingContent !== null && streamingContent !== undefined) {
       return streamingContent;
@@ -132,6 +134,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
       return normalizedHeading === normalizedTitle ? "" : match;
     });
   }, [postTitle, postContent, streamingContent]);
+  const displayContent = useMemo(() => expandBlankLines(rawDisplayContent), [rawDisplayContent]);
 
   const tags = useMemo(() => splitBlogTags(post?.tags), [post?.tags]);
 
@@ -183,7 +186,9 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
   const handleEdit = useCallback(() => {
     if (!isOwner) return;
     dispatch({ type: "SET_BLOG_VIEW", payload: "edit" });
-  }, [dispatch, isOwner]);
+    // 带 ?edit 标记,刷新后仍留在编辑页
+    navigate(`?edit`, { replace: true });
+  }, [dispatch, isOwner, navigate]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!post || !isOwner) return;
@@ -222,11 +227,12 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
 
   // 右键菜单处理
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    if (!isOwner || !post) return;
-    const selection = window.getSelection()?.toString().trim() || "";
     e.preventDefault();
+    if (!isOwner || !post) { setContextMenu(null); return; }
+    const selection = window.getSelection()?.toString().trim() || "";
     if (selection.length >= 5) {
-      setContextMenu({ x: e.clientX, y: e.clientY, selectedText: selection });
+      const sectionIndex = getSectionIndexFromSelection(articleRef.current);
+      setContextMenu({ x: e.clientX, y: e.clientY, selectedText: selection, sectionIndex });
     } else {
       setContextMenu(null);
     }
@@ -239,7 +245,8 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
       const selection = window.getSelection()?.toString().trim() || "";
       if (selection.length >= 5 && articleRef.current) {
         const rect = articleRef.current.getBoundingClientRect();
-        setContextMenu({ x: rect.left + rect.width / 2, y: rect.top + 50, selectedText: selection });
+        const sectionIndex = getSectionIndexFromSelection(articleRef.current);
+        setContextMenu({ x: rect.left + rect.width / 2, y: rect.top + 50, selectedText: selection, sectionIndex });
       }
     }, 500);
   }, [isOwner, post]);
@@ -263,18 +270,22 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
     if (!contextMenu || !post) return;
     dispatch({
       type: "SET_AI_SELECTION_CONTEXT",
-      payload: { postId: post.id, selectedText: contextMenu.selectedText },
+      payload: { postId: post.id, selectedText: contextMenu.selectedText, sectionIndex: contextMenu.sectionIndex },
     });
     dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: true });
     closeContextMenu();
   }, [contextMenu, post, dispatch, closeContextMenu]);
 
-  // 点击菜单外关闭
+  // 点击菜单外关闭(用 mousedown + 捕获,确保在各种容器下都能关闭)
   useEffect(() => {
     if (!contextMenu) return;
-    const handler = () => closeContextMenu();
-    window.addEventListener("click", handler);
-    return () => window.removeEventListener("click", handler);
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest(".fixed.z-50")) return;
+      closeContextMenu();
+    };
+    window.addEventListener("mousedown", handler, true);
+    return () => window.removeEventListener("mousedown", handler, true);
   }, [contextMenu, closeContextMenu]);
 
   // 原地流式渲染 — patchStreaming 定位
@@ -333,6 +344,9 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
             "relative overflow-hidden",
             isStreaming && "border-l-2 border-l-primary/60 animate-pulse"
           )}
+          onContextMenu={handleContextMenu}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
         >
           {isStreaming && (
             <span className="absolute -left-1 -top-1 z-10 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -421,19 +435,16 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
           <div
             ref={articleRef}
             className="px-6 pb-10 sm:px-10"
-            onContextMenu={handleContextMenu}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
           >
-            <div className="prose prose-slate dark:prose-invert mt-2 max-w-none text-foreground prose-headings:tracking-[-0.035em] prose-headings:text-foreground prose-p:leading-8 prose-a:text-primary prose-strong:text-foreground prose-code:rounded-md prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none prose-pre:m-0 prose-pre:rounded-none prose-pre:border-0 prose-pre:bg-transparent prose-pre:p-0 prose-blockquote:rounded-r-2xl prose-blockquote:border-l-primary prose-blockquote:bg-primary/5 prose-blockquote:py-1 prose-img:rounded-2xl prose-img:shadow-lg prose-hr:border-border">
+            <div className="prose prose-slate dark:prose-invert mt-2 max-w-none text-foreground prose-headings:tracking-[-0.035em] prose-headings:text-foreground prose-p:mt-0 prose-p:mb-[0.92em] prose-p:leading-[1.86] prose-a:text-primary prose-strong:text-foreground prose-code:rounded-md prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none prose-pre:m-0 prose-pre:rounded-none prose-pre:border-0 prose-pre:bg-transparent prose-pre:p-0 prose-blockquote:rounded-r-2xl prose-blockquote:border-l-primary prose-blockquote:bg-primary/5 prose-blockquote:py-1 prose-img:rounded-2xl prose-img:shadow-lg prose-hr:border-border">
               {patchRenderInfo ? (
                 <>
-                  <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{patchRenderInfo.before}</Markdown>
+                  <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.before)}</Markdown>
                   <div ref={patchAreaRef} className="my-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
                     <span className="mb-1 block text-[10px] font-medium text-primary animate-pulse">AI 修改中...</span>
-                    <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{patchStreaming?.replacementDelta ?? ""}</Markdown>
+                    <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchStreaming?.replacementDelta ?? "")}</Markdown>
                   </div>
-                  <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{patchRenderInfo.after}</Markdown>
+                  <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.after)}</Markdown>
                 </>
               ) : (
                 <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{displayContent}</Markdown>

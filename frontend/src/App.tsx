@@ -8,7 +8,7 @@ import { AISidebar } from "./features/ai-chat/AISidebar";
 import { SiteBlogRoute } from "./features/blog/components/SiteBlogRoute";
 import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
-import { KnowledgeBasePage } from "./features/knowledge-base/KnowledgeBasePage";
+import { FileLibraryPage } from "./features/file/FileLibraryPage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
 import { MCPModal } from "./components/MCPModal";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
@@ -62,14 +62,14 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
-function KnowledgeRoute() {
+function FilesRoute() {
   const { dispatch } = useChat();
 
   useEffect(() => {
-    dispatch({ type: "SET_PAGE", payload: "knowledge" });
+    dispatch({ type: "SET_PAGE", payload: "files" });
   }, [dispatch]);
 
-  return <KnowledgeBasePage />;
+  return <FileLibraryPage />;
 }
 
 function ResearchRoute() {
@@ -86,7 +86,7 @@ function MainContent() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/knowledge" element={<KnowledgeRoute />} />
+      <Route path="/files" element={<FilesRoute />} />
       <Route path="/research" element={<ResearchRoute />} />
       <Route path="/research/:topicId" element={<ResearchRoute />} />
       <Route path="/u/:username" element={<SiteBlogRoute />} />
@@ -133,13 +133,13 @@ function useAISidebarRouteContext() {
       };
     }
 
-    if (location.pathname === "/knowledge") {
+    if (location.pathname === "/files") {
       return {
         mode: isAuthenticated ? "private" as const : "shared" as const,
-        contextText: "当前上下文：知识库",
+        contextText: "当前上下文：文件库",
         siteUsername: undefined,
         postSlug: undefined,
-        pageType: "kb" as const,
+        pageType: "files" as const,
         postTitle: undefined,
       };
     }

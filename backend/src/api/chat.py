@@ -20,11 +20,9 @@ logger = logging.getLogger(__name__)
 async def chat(data: MessageRequest, user: User = Depends(get_current_user)):
     """Non-streaming chat endpoint."""
     logger.info(
-        "Chat request: conv=%s, chars=%d, use_rag=%s, rag_mode=%s, thinking_mode=%s",
+        "Chat request: conv=%s, chars=%d, thinking_mode=%s",
         data.conversation_id,
         len(data.content),
-        data.use_rag,
-        data.rag_mode,
         data.thinking_mode,
     )
     content_chunks = []
@@ -35,8 +33,6 @@ async def chat(data: MessageRequest, user: User = Depends(get_current_user)):
         user.id,
         data.image_url,
         data.file_url,
-        data.use_rag,
-        data.rag_mode,
         data.thinking_mode,
         data.context,
     ):
@@ -60,11 +56,9 @@ async def chat(data: MessageRequest, user: User = Depends(get_current_user)):
 async def chat_stream(data: MessageRequest, user: User = Depends(get_current_user)):
     """Streaming chat endpoint."""
     logger.info(
-        "Chat request: conv=%s, chars=%d, use_rag=%s, rag_mode=%s, thinking_mode=%s",
+        "Chat request: conv=%s, chars=%d, thinking_mode=%s",
         data.conversation_id,
         len(data.content),
-        data.use_rag,
-        data.rag_mode,
         data.thinking_mode,
     )
     return StreamingResponse(
@@ -74,8 +68,6 @@ async def chat_stream(data: MessageRequest, user: User = Depends(get_current_use
             user.id,
             data.image_url,
             data.file_url,
-            data.use_rag,
-            data.rag_mode,
             data.thinking_mode,
             data.context,
         ),

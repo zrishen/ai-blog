@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { BlogPostCard } from "../src/features/blog/components/BlogPostCard";
-import { ChatProvider } from "../src/stores/chatStore";
-import type { BlogPost } from "../src/stores/chatStore";
+import { BlogPostCard } from "../../src/features/blog/components/BlogPostCard";
+import { ChatProvider } from "../../src/stores/chatStore";
+import type { BlogPost } from "../../src/stores/chatStore";
 
 const basePost: BlogPost = {
   id: 1,

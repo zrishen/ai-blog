@@ -7,7 +7,9 @@ class LLMSettingsResponse(BaseModel):
     protocol: str
     base_url: str | None = None
     model: str | None = None
+    api_key: str | None = None
     has_api_key: bool = False
+    supports_thinking: bool = False
 
 
 class LLMSettingsUpdate(BaseModel):

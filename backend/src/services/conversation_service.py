@@ -80,6 +80,12 @@ async def add_message_pair(
     assistant_tokens: int,
     user_image_url: str | None = None,
     user_file_url: str | None = None,
+    assistant_reasoning_content: str | None = None,
+    assistant_thinking_content: str | None = None,
+    assistant_tool_events: list[dict] | None = None,
+    assistant_loop_steps: list[str] | None = None,
+    assistant_thinking_duration_ms: int | None = None,
+    assistant_thinking_mode: str | None = None,
     session: AsyncSession | None = None,
 ) -> tuple[int, Message]:
     async with _get_session(session) as s:
@@ -116,6 +122,12 @@ async def add_message_pair(
             role="assistant",
             content=assistant_content,
             token_count=assistant_tokens,
+            reasoning_content=assistant_reasoning_content,
+            thinking_content=assistant_thinking_content,
+            tool_events=assistant_tool_events,
+            loop_steps=assistant_loop_steps,
+            thinking_duration_ms=assistant_thinking_duration_ms,
+            thinking_mode=assistant_thinking_mode,
             created_at=now,
         )
         s.add(assistant_msg)

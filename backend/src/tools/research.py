@@ -27,7 +27,7 @@ from src.database.models import (
     ResearchTopic,
 )
 from src.database.session import async_session
-from src.tools.agent_tools import current_user_id_cv
+from src.tools.blog import current_user_id_cv
 from src.services.research_service import (
     ENTITY_TYPES,
     SUPPORTED_EVIDENCE_KINDS,

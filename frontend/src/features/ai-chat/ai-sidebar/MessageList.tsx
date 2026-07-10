@@ -1,15 +1,14 @@
+import { memo, useEffect, useState } from "react";
 import { motion } from "motion/react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
-  ChevronDown,
-  Brain,
-  Search,
-  CheckCircle2,
+  ChevronRight,
   BookOpen,
   Link2,
   Sparkles,
   AlertCircle,
+  ArrowDown,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -28,23 +27,47 @@ interface MessageListProps {
   groups: MessageGroup[];
   streaming: boolean;
   msgsEndRef: React.RefObject<HTMLDivElement | null>;
+  viewportRef?: React.Ref<HTMLDivElement>;
+  showJumpButton?: boolean;
   historyLoading: boolean;
   historyLoadError: string | null;
   emptyHint: string;
   onReloadHistory: () => void;
+  onJumpToLatest?: () => void;
   onTrustChoiceSelect: (messageId: number, option: TrustChoiceOption) => void;
 }
 
-export function MessageList({
+function formatThinkingDuration(ms: number) {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const totalSeconds = Math.floor(ms / 1000);
+  if (totalSeconds < 1) return "< 1 秒";
+  if (totalSeconds < 60) return `${totalSeconds} 秒`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds > 0 ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分`;
+}
+
+function MessageListComponent({
   groups,
   streaming,
   msgsEndRef,
+  viewportRef,
+  showJumpButton,
   historyLoading,
   historyLoadError,
   emptyHint,
   onReloadHistory,
+  onJumpToLatest,
   onTrustChoiceSelect,
 }: MessageListProps) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!streaming) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [streaming]);
+
   if (historyLoading) {
     return (
       <ScrollArea className="relative min-h-0 flex-1">
@@ -108,7 +131,7 @@ export function MessageList({
   }
 
   return (
-    <ScrollArea className="relative min-h-0 flex-1">
+    <ScrollArea className="relative min-h-0 flex-1" viewportRef={viewportRef}>
       <div className="flex w-full flex-col gap-3 px-3 py-4">
         {groups.map((group, groupIndex) => {
           const isAssistantGroup = group.role === "assistant";
@@ -121,11 +144,10 @@ export function MessageList({
               transition={{ duration: 0.2 }}
             >
               <div
-                className={`min-w-0 text-base leading-relaxed ${
-                  isAssistantGroup
-                    ? "w-full max-w-none rounded-[1.35rem] border border-border/45 bg-muted/70 px-4 py-3 text-left text-foreground shadow-sm"
-                    : "max-w-[86%] rounded-[1.35rem] border border-blue-200/55 bg-blue-100/80 px-4 py-2 text-left text-foreground shadow-sm dark:border-blue-400/20 dark:bg-blue-400/15"
-                }`}
+                className={`min-w-0 text-base leading-relaxed ${isAssistantGroup
+                  ? "w-full max-w-none text-left text-foreground"
+                  : "max-w-[86%] rounded-[1.35rem] border border-border/45 bg-muted/70 px-4 py-2 text-left text-foreground shadow-sm"
+                  }`}
               >
                 {group.messages.map((msg, groupMsgIndex) => {
                   const isLast =
@@ -133,49 +155,39 @@ export function MessageList({
                     groupMsgIndex === group.messages.length - 1;
                   const isStreaming = isLast && streaming && msg.role === "assistant";
                   const isAssistant = msg.role === "assistant";
-                  const msgThinkingMode =
-                    msg.thinkingMode ?? (msg.reasoningContent || msg.thinkingContent ? "deep" : "normal");
-                  const isDeepMode = msgThinkingMode === "deep";
                   const messageContent = msg.trustChoicePrompt ?? msg.content;
                   const showTrustChoices = isAssistant && !isStreaming && !!msg.trustChoiceOptions?.length;
 
-                  const meaningfulReasoning =
-                    isDeepMode && !!msg.reasoningContent && msg.reasoningContent.trim().length > 3;
+                  const meaningfulReasoning = !!msg.reasoningContent && msg.reasoningContent.trim().length > 3;
+                  const meaningfulThinkingContent = !!msg.thinkingContent && msg.thinkingContent.trim().length > 3;
                   const hasToolEvents = !!(msg.toolEvents && msg.toolEvents.length > 0);
-                  const showThinkingPanel = isAssistant && (isDeepMode ? hasToolEvents || !!msg.thinkingContent || meaningfulReasoning : hasToolEvents);
+                  const hasLoopSteps = !!(msg.loopSteps && msg.loopSteps.length > 0);
+                  const hasThinkingDuration = msg.thinkingDurationMs !== undefined;
+                  const showThinkingPanel = isAssistant && (isStreaming || hasThinkingDuration || hasToolEvents || hasLoopSteps || meaningfulThinkingContent || meaningfulReasoning);
+                  const startedAt = Date.parse(msg.created_at);
+                  const streamingDurationMs = Number.isFinite(startedAt) ? Math.max(0, now - startedAt) : undefined;
                   const uniqueRefs = collectMessageReferences(msg.toolEvents);
 
                   return (
                     <div
                       key={msg.id}
-                      className={`${isAssistant && groupMsgIndex > 0 ? "mt-3 border-t border-border/60 pt-3" : ""} ${
-                        isStreaming && isAssistant ? "border-l-2 border-l-primary pl-3" : ""
-                      }`}
+                      className={isAssistant && groupMsgIndex > 0 ? "mt-3 border-t border-border/60 pt-3" : ""}
                     >
                       <ThinkingPanel
                         isStreaming={!!isStreaming}
-                        isDeepMode={isDeepMode}
                         show={!!showThinkingPanel}
                         meaningfulReasoning={!!meaningfulReasoning}
+                        meaningfulThinkingContent={!!meaningfulThinkingContent}
                         reasoningContent={msg.reasoningContent}
+                        thinkingContent={msg.thinkingContent}
+                        loopSteps={msg.loopSteps}
                         toolEvents={msg.toolEvents}
+                        durationMs={isStreaming ? streamingDurationMs : msg.thinkingDurationMs}
                       />
                       <MessageBody
                         messageContent={messageContent}
                         isAssistant={!!isAssistant}
-                        isStreaming={!!isStreaming}
-                        showThinkingPanel={!!showThinkingPanel}
-                        meaningfulReasoning={!!meaningfulReasoning}
-                        reasoningContent={msg.reasoningContent}
-                        toolEvents={msg.toolEvents}
                       />
-                      {isStreaming && isAssistant && (
-                        <div className="mt-1 flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:0.2s]" />
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:0.4s]" />
-                        </div>
-                      )}
                       {showTrustChoices && (
                         <TrustChoiceGroup
                           options={msg.trustChoiceOptions ?? []}
@@ -185,7 +197,7 @@ export function MessageList({
                       )}
                       {uniqueRefs.length > 0 && !isStreaming && (
                         <div className="mt-2.5 border-t border-border/40 pt-2">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-muted-foreground">
                             <span className="font-medium text-muted-foreground/70">引用来源</span>
                             {uniqueRefs.map((ref, ri) => (
                               <span key={ri} className="inline-flex items-center gap-0.5">
@@ -215,171 +227,292 @@ export function MessageList({
         <div className="h-5 flex-shrink-0" aria-hidden="true" />
         <div ref={msgsEndRef} />
       </div>
+      {showJumpButton && onJumpToLatest && (
+        <Button
+          type="button"
+          size="icon"
+          className="absolute bottom-4 left-1/2 z-20 h-9 w-9 -translate-x-1/2 rounded-full shadow-lg shadow-primary/20"
+          onClick={onJumpToLatest}
+          title="跳到最新回复"
+          aria-label="跳到最新回复"
+        >
+          <ArrowDown className="h-4 w-4" />
+        </Button>
+      )}
     </ScrollArea>
   );
 }
 
+export const MessageList = memo(MessageListComponent, (prev, next) =>
+  prev.groups === next.groups &&
+  prev.streaming === next.streaming &&
+  prev.showJumpButton === next.showJumpButton &&
+  prev.historyLoading === next.historyLoading &&
+  prev.historyLoadError === next.historyLoadError &&
+  prev.emptyHint === next.emptyHint
+);
+
 interface ThinkingPanelProps {
   isStreaming: boolean;
-  isDeepMode: boolean;
   show: boolean;
   meaningfulReasoning: boolean;
+  meaningfulThinkingContent: boolean;
   reasoningContent?: string;
+  thinkingContent?: string;
+  loopSteps?: string[];
   toolEvents?: Message["toolEvents"];
+  durationMs?: number;
 }
 
 function ThinkingPanel({
   isStreaming,
-  isDeepMode,
   show,
   meaningfulReasoning,
+  meaningfulThinkingContent,
   reasoningContent,
+  thinkingContent,
+  loopSteps,
   toolEvents,
+  durationMs,
 }: ThinkingPanelProps) {
   if (!show) return null;
 
+  const durationText = durationMs === undefined ? "" : formatThinkingDuration(durationMs);
+  const processContent = meaningfulThinkingContent ? thinkingContent : "";
+  const entries = buildThinkingEntries({
+    reasoningContent: meaningfulReasoning ? reasoningContent : undefined,
+    loopSteps,
+    toolEvents,
+    fallbackProcessContent: processContent,
+  });
+  const hasEntries = entries.length > 0;
+  const stepCount = countThinkingSteps(entries);
+  const summaryParts = [
+    stepCount > 0 ? `${stepCount} 步` : "",
+    durationText ? `耗时 ${durationText}` : "",
+  ].filter(Boolean);
+
+  // 流式阶段：过程内容直接显示在对话里，完成后再收进“思考过程”。
   if (isStreaming) {
     return (
-      <div className="mb-2.5 space-y-2 rounded-lg border border-border/40 bg-muted/25 p-2.5 text-[11px] text-muted-foreground">
-        {meaningfulReasoning && (
-          <div className="rounded-md bg-background/60 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
-            <div className="mb-1 flex items-center gap-1 text-primary">
-              <Brain className="h-3 w-3 animate-pulse" />
-              <span className="font-medium">推理中...</span>
-            </div>
-            {reasoningContent}
-          </div>
+      <div className="mb-2.5 text-base text-muted-foreground">
+        {hasEntries ? (
+          <ThinkingFlow entries={entries} />
+        ) : (
+          <div className="text-base leading-relaxed">正在生成回复</div>
         )}
-        {toolEvents?.map((evt, ei) => (
-          <ToolEventRow key={ei} evt={evt} streamingMode />
-        ))}
       </div>
     );
   }
 
+  if (!hasEntries) return null;
+
+  // 完成阶段：过程流整体折叠，最终回答保持在外部。
   return (
     <Collapsible defaultOpen={false} className="mb-2.5">
       <CollapsibleTrigger asChild>
-        <button className="flex w-full items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
-          <ChevronDown className="h-3 w-3 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
-          {isDeepMode ? <Brain className="h-3 w-3" /> : <Search className="h-3 w-3" />}
-          {isDeepMode ? "思考过程" : "工具执行过程"}
-          {toolEvents && toolEvents.filter((e) => e.type === "end").length > 0 && (
-            <span className="ml-0.5 text-primary">
-              ({toolEvents.filter((e) => e.type === "end").length} 步)
-            </span>
-          )}
+        <button className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 text-base font-medium text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
+          <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 [[data-state=open]>&]:rotate-90" aria-hidden="true" />
+          <span>思考过程{summaryParts.length > 0 ? `（${summaryParts.join("，")}）` : ""}</span>
         </button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1.5 space-y-2 rounded-lg border border-border/40 bg-muted/25 p-2.5 text-[11px] text-muted-foreground">
-        {meaningfulReasoning && (
-          <div className="rounded-md bg-background/60 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
-            <div className="mb-1 flex items-center gap-1 text-primary">
-              <Brain className="h-3 w-3" />
-              <span className="font-medium">推理链</span>
-            </div>
-            {reasoningContent}
-          </div>
-        )}
-        {toolEvents?.map((evt, ei) => (
-          <ToolEventRow key={ei} evt={evt} />
+      <CollapsibleContent className="mt-1.5 -ml-1.5">
+        <ThinkingFlow entries={entries} />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+type ToolPair = {
+  start?: NonNullable<Message["toolEvents"]>[number];
+  end?: NonNullable<Message["toolEvents"]>[number];
+};
+
+type ThinkingEntry =
+  | { type: "reasoning"; content: string }
+  | { type: "process"; content: string }
+  | { type: "action"; tools: ToolPair[] };
+
+function buildThinkingEntries({
+  reasoningContent,
+  loopSteps,
+  toolEvents,
+  fallbackProcessContent,
+}: {
+  reasoningContent?: string;
+  loopSteps?: string[];
+  toolEvents?: Message["toolEvents"];
+  fallbackProcessContent?: string;
+}): ThinkingEntry[] {
+  const entries: ThinkingEntry[] = [];
+  const reasoning = normalizeThinkingText(reasoningContent);
+  if (reasoning && reasoning.length > 3) entries.push({ type: "reasoning", content: reasoning });
+
+  const processes = (loopSteps && loopSteps.length > 0 ? loopSteps : fallbackProcessContent ? [fallbackProcessContent] : [])
+    .map(normalizeThinkingText)
+    .filter((step) => step.length > 3);
+  const toolPairs = buildToolPairs(toolEvents);
+  const toolGroups = groupToolPairsForProcesses(toolPairs, processes.length);
+  const maxLen = Math.max(processes.length, toolGroups.length);
+
+  for (let i = 0; i < maxLen; i += 1) {
+    if (processes[i]) entries.push({ type: "process", content: processes[i] });
+    if (toolGroups[i]?.length) entries.push({ type: "action", tools: toolGroups[i] });
+  }
+
+  return entries;
+}
+
+function normalizeThinkingText(text?: string) {
+  return (text ?? "")
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+    .join("\n")
+    .trim();
+}
+
+function buildToolPairs(toolEvents?: Message["toolEvents"]): ToolPair[] {
+  const toolPairs: ToolPair[] = [];
+  if (toolEvents) {
+    for (const evt of toolEvents) {
+      if (evt.type === "start") {
+        toolPairs.push({ start: evt });
+      } else if (evt.type === "end") {
+        const last = toolPairs[toolPairs.length - 1];
+        if (last && !last.end) {
+          last.end = evt;
+        } else {
+          toolPairs.push({ end: evt });
+        }
+      }
+    }
+  }
+  return toolPairs;
+}
+
+function groupToolPairsForProcesses(toolPairs: ToolPair[], processCount: number): ToolPair[][] {
+  if (toolPairs.length === 0) return [];
+  if (processCount <= 1) return [toolPairs];
+  const groups: ToolPair[][] = Array.from({ length: processCount }, () => []);
+  toolPairs.forEach((pair, index) => {
+    groups[Math.min(index, processCount - 1)].push(pair);
+  });
+  return groups.filter((group) => group.length > 0);
+}
+
+function countThinkingSteps(entries: ThinkingEntry[]) {
+  const actionCount = entries.filter((entry) => entry.type === "action").length;
+  const processCount = entries.filter((entry) => entry.type === "process").length;
+  return Math.max(actionCount, processCount);
+}
+
+function ThinkingFlow({ entries }: { entries: ThinkingEntry[] }) {
+  return (
+    <div className="space-y-1.2 text-base text-muted-foreground">
+      {entries.map((entry, index) => (
+        <TimelineNode key={`${entry.type}-${index}`}>
+          {entry.type === "reasoning" && <CollapsibleReasoningBlock content={entry.content} />}
+          {entry.type === "process" && <ProcessText content={entry.content} />}
+          {entry.type === "action" && <ActionNode tools={entry.tools} />}
+        </TimelineNode>
+      ))}
+    </div>
+  );
+}
+
+/** 第一行：模型内部推理内容，保持折叠。 */
+function CollapsibleReasoningBlock({ content }: { content: string }) {
+  const charCount = content.length;
+  return (
+    <Collapsible defaultOpen={false}>
+      <CollapsibleTrigger asChild>
+        <button className="flex w-full cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-base text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
+          <span className="font-medium">模型推理</span>
+          <span className="text-muted-foreground/60">({charCount} 字)</span>
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-1">
+        <div className="whitespace-pre-wrap px-5 break-words text-base leading-relaxed text-muted-foreground">
+          {content}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function ProcessText({ content }: { content: string }) {
+  return (
+    <div className="whitespace-pre-wrap break-words px-1.5 text-base leading-relaxed text-foreground">
+      {content}
+    </div>
+  );
+}
+
+function ActionNode({ tools }: { tools: ToolPair[] }) {
+  const completeCount = tools.filter((tool) => tool.end).length;
+  const allComplete = completeCount === tools.length;
+  const title = tools.length === 1
+    ? `${allComplete ? "已运行" : "正在运行"} ${formatToolName(tools[0])}`
+    : allComplete
+      ? `已运行 ${tools.length} 条命令`
+      : `正在运行 ${tools.length} 条命令`;
+
+  return (
+    <Collapsible defaultOpen={false}>
+      <CollapsibleTrigger asChild>
+        <button className="flex w-full cursor-pointer items-center rounded-md px-1.5 py-1 text-left text-base text-muted-foreground/70 transition-colors hover:bg-muted/65 hover:text-muted-foreground">
+          {title}
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-1 space-y-1.5 pl-3">
+        {tools.map((tool, index) => (
+          <ToolDetail key={`${formatToolName(tool)}-${index}`} tool={tool} />
         ))}
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
-interface MessageBodyProps {
-  messageContent: string;
-  isAssistant: boolean;
-  isStreaming: boolean;
-  showThinkingPanel: boolean;
-  meaningfulReasoning: boolean;
-  reasoningContent?: string;
-  toolEvents?: Message["toolEvents"];
-}
-
-function MessageBody({
-  messageContent,
-  isAssistant,
-  isStreaming,
-  showThinkingPanel,
-  meaningfulReasoning,
-  reasoningContent,
-  toolEvents,
-}: MessageBodyProps) {
-  if (messageContent) {
-    return (
-      <div
-        className={`prose max-w-none break-words text-base text-foreground [&_*]:text-foreground prose-p:my-1 prose-p:text-base prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-md prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-2 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert ${
-          isAssistant
-            ? "prose-p:leading-7 prose-li:leading-7 prose-strong:font-black"
-            : "prose-p:my-0 prose-ul:my-0 prose-ol:my-0"
-        }`}
-      >
-        <Markdown remarkPlugins={[remarkGfm]}>{messageContent}</Markdown>
-      </div>
-    );
-  }
-
-  if (isStreaming && showThinkingPanel) {
-    return (
-      <div className="space-y-2">
-        {meaningfulReasoning && (
-          <div className="rounded-md bg-background/60 p-2.5 text-[12px] leading-relaxed whitespace-pre-wrap text-foreground/80">
-            <div className="mb-1.5 flex items-center gap-1.5 text-primary">
-              <Brain className="h-3.5 w-3.5 animate-pulse" />
-              <span className="font-medium">推理中...</span>
-            </div>
-            {reasoningContent}
-          </div>
-        )}
-        {toolEvents?.map((evt, ei) => (
-          <div key={ei} className="flex items-start gap-1.5 text-[12px]">
-            {evt.type === "start" ? (
-              <Search className="mt-0.5 h-3 w-3 flex-shrink-0 animate-pulse text-muted-foreground/70" />
-            ) : (
-              <CheckCircle2 className="mt-0.5 h-3 w-3 flex-shrink-0 text-primary/70" />
-            )}
-            <span className={evt.type === "start" ? "text-muted-foreground" : "text-foreground"}>
-              {evt.toolName}
-              {evt.type === "start" ? "..." : ""}
-            </span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return null;
-}
-
-interface ToolEventRowProps {
-  evt: NonNullable<Message["toolEvents"]>[number];
-  streamingMode?: boolean;
-}
-
-function ToolEventRow({ evt, streamingMode }: ToolEventRowProps) {
+/** 时间线单个节点 */
+function TimelineNode({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-1.5">
-      {evt.type === "start" ? (
-        <Search className="mt-0.5 h-3 w-3 flex-shrink-0 animate-pulse text-muted-foreground/70" />
-      ) : (
-        <CheckCircle2 className="mt-0.5 h-3 w-3 flex-shrink-0 text-primary/70" />
+    <motion.div
+      initial={{ opacity: 0, x: -4 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.15 }}
+      className="pb-1"
+    >
+      <div className="min-w-0">{children}</div>
+    </motion.div>
+  );
+}
+
+function formatToolName(tool: ToolPair) {
+  return tool.end?.toolName || tool.start?.toolName || "操作";
+}
+
+function ToolDetail({ tool }: { tool: ToolPair }) {
+  const evt = tool.end || tool.start;
+  if (!evt) return null;
+  const result = tool.end?.result?.replace(/\n/g, " ").trim();
+  const references = tool.end?.references ?? [];
+
+  return (
+    <div className="text-base leading-relaxed text-muted-foreground/75">
+      <div className="font-medium text-muted-foreground">{formatToolName(tool)}</div>
+      {!tool.end && <div className="mt-0.5 text-muted-foreground/80">正在运行...</div>}
+      {result && (
+        <div className="mt-0.5 break-words text-muted-foreground/80">
+          {result.slice(0, 220)}
+          {result.length > 220 ? "..." : ""}
+        </div>
       )}
-      <div className="min-w-0 flex-1">
-        <span className={evt.type === "start" ? "text-muted-foreground" : "text-foreground"}>
-          {evt.toolName}
-          {evt.type === "start" && streamingMode ? "..." : ""}
-        </span>
-        {evt.type === "end" && evt.result && (
-          <div className="mt-0.5 truncate pl-2 text-[10px] text-muted-foreground/80">
-            {evt.result.replace(/\n/g, " ").slice(0, 120)}
-          </div>
-        )}
-        {evt.type === "end" &&
-          evt.references?.map((ref, ri) => (
-            <div key={ri} className="mt-0.5 flex items-center gap-1 pl-2 text-[10px]">
+      {references.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {references.map((ref, ri) => (
+            <div key={ri} className="flex items-center gap-1 text-base text-muted-foreground/80">
               {ref.type === "rag" ? (
                 <>
                   <BookOpen className="h-2.5 w-2.5" />
@@ -399,7 +532,33 @@ function ToolEventRow({ evt, streamingMode }: ToolEventRowProps) {
               )}
             </div>
           ))}
-      </div>
+        </div>
+      )}
     </div>
   );
+}
+
+interface MessageBodyProps {
+  messageContent: string;
+  isAssistant: boolean;
+}
+
+function MessageBody({
+  messageContent,
+  isAssistant,
+}: MessageBodyProps) {
+  if (messageContent) {
+    return (
+      <div
+        className={`prose max-w-none break-words text-base text-foreground [&_*]:text-foreground prose-p:my-1 prose-p:text-base prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-md prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-2 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert ${isAssistant
+          ? "prose-p:leading-7 prose-li:leading-7 prose-strong:font-black"
+          : "prose-p:my-0 prose-ul:my-0 prose-ol:my-0"
+          }`}
+      >
+        <Markdown remarkPlugins={[remarkGfm]}>{messageContent}</Markdown>
+      </div>
+    );
+  }
+
+  return null;
 }

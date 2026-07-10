@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import "@testing-library/jest-dom/vitest";
 
 // BlogPostView 用到 deleteBlogPost/publishBlogPost,右键菜单本身不触发它们,但组件挂载需要可调用
-vi.mock("../src/api/client", () => ({
+vi.mock("../../src/api/client", () => ({
   deleteBlogPost: vi.fn(() => Promise.resolve()),
   publishBlogPost: vi.fn(() =>
     Promise.resolve({ id: 1, status: "published", published_at: "2026-07-07T00:00:00Z" }),
@@ -13,8 +13,8 @@ vi.mock("../src/api/client", () => ({
   resolveMarkdownImageSrc: (src: string) => src,
 }));
 
-import { ChatProvider, useChat } from "../src/stores/chatStore";
-import { BlogPostView } from "../src/features/blog/components/BlogPostView";
+import { ChatProvider, useChat } from "../../src/stores/chatStore";
+import { BlogPostView } from "../../src/features/blog/components/BlogPostView";
 
 const POST = {
   id: 1,
@@ -67,6 +67,11 @@ function mockSelection(text: string) {
     removeAllRanges: () => {},
     addRange: () => {},
     rangeCount: text ? 1 : 0,
+    // getSectionIndexFromSelection 需要 range;jsdom 无真实实现,给一个返回 paragraph 起点的 stub
+    getRangeAt: () => ({
+      startContainer: document.querySelector("p") ?? document.body,
+      startOffset: 0,
+    }),
   };
   vi.spyOn(window, "getSelection").mockReturnValue(sel as unknown as Selection);
 }

@@ -8,6 +8,7 @@ from src.services.llm_settings_service import (
     normalize_llm_protocol,
 )
 from src.services.markdown_blog_service import normalize_post_body
+from src.tools.blog import BLOG_TOOLS
 from src.utils.slug import slugify
 
 
@@ -83,26 +84,16 @@ def test_normalize_llm_protocol_falls_back_for_unknown():
 
 # ---- build_llm_model_kwargs ----
 
-def test_build_llm_model_kwargs_uses_settings_defaults_when_no_record():
-    from src.config import settings
-
-    kwargs = build_llm_model_kwargs(thinking_mode="normal", llm_settings=None)
+def test_build_llm_model_kwargs_strict_mode_returns_none_api_key_without_record():
+    kwargs = build_llm_model_kwargs(thinking_mode="balanced", llm_settings=None)
     assert kwargs["protocol"] == "openai"
-    assert kwargs["api_key"] == settings.openai_api_key
-    assert kwargs["base_url"] == settings.base_url
-    assert kwargs["model"] == settings.model_name
-    assert kwargs["temperature"] == settings.model_temperature
+    assert kwargs["api_key"] is None
+    assert kwargs["base_url"] is None
+    assert kwargs["model"] is None
+    assert kwargs["temperature"] is not None
 
 
-def test_build_llm_model_kwargs_deep_mode_overrides_temperature_and_tokens():
-    from src.config import settings
-
-    kwargs = build_llm_model_kwargs(thinking_mode="deep", llm_settings=None)
-    assert kwargs["temperature"] == settings.deep_thinking_temperature
-    assert kwargs["max_tokens"] == settings.deep_thinking_max_output_tokens
-
-
-def test_build_llm_model_kwargs_custom_settings_override_defaults():
+def test_build_llm_model_kwargs_strict_mode_uses_user_record_api_key():
     from src.database.models import LLMSettings
 
     record = LLMSettings(
@@ -112,8 +103,46 @@ def test_build_llm_model_kwargs_custom_settings_override_defaults():
         api_key="key-xyz",
         model_name="custom-model",
     )
-    kwargs = build_llm_model_kwargs(thinking_mode="normal", llm_settings=record)
+    kwargs = build_llm_model_kwargs(thinking_mode="balanced", llm_settings=record)
     assert kwargs["protocol"] == "anthropic"
     assert kwargs["api_key"] == "key-xyz"
     assert kwargs["base_url"] == "https://example.com"
     assert kwargs["model"] == "custom-model"
+
+
+def test_build_llm_model_kwargs_official_fallback_uses_env_when_no_record():
+    from src.config import settings
+
+    kwargs = build_llm_model_kwargs(
+        thinking_mode="balanced", llm_settings=None, allow_official_fallback=True
+    )
+    assert kwargs["api_key"] == settings.openai_api_key
+    assert kwargs["base_url"] == settings.base_url
+    assert kwargs["model"] == settings.model_name
+
+
+def test_build_llm_model_kwargs_smart_mode_overrides_temperature_and_tokens():
+    from src.config import settings
+
+    kwargs = build_llm_model_kwargs(thinking_mode="smart", llm_settings=None)
+    assert kwargs["temperature"] == settings.smart_temperature
+    assert kwargs["max_tokens"] == settings.smart_max_output_tokens
+
+
+# ---- blog tools ----
+
+
+def test_blog_tools_expose_read_edit_write_tools():
+    names = [tool.name for tool in BLOG_TOOLS]
+
+    assert "blog_read_post" in names
+    assert "blog_write_post" in names
+    assert "blog_edit_post" in names
+    assert "blog_search_posts" in names
+    assert "blog_list_posts" not in names
+    assert "blog_get_post" not in names
+    assert "blog_get_post_outline" not in names
+    assert "blog_get_post_section" not in names
+    assert "blog_update_post" not in names
+    assert "blog_patch_post" not in names
+    assert len(names) == 6

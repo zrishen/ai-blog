@@ -26,9 +26,7 @@ class MessageRequest(BaseModel):
     conversation_id: Optional[int] = None
     image_url: Optional[str] = None
     file_url: Optional[str] = None
-    use_rag: bool = False
-    rag_mode: Literal["normal", "knowledge", "auto"] | None = None
-    thinking_mode: Literal["normal", "deep"] = "normal"
+    thinking_mode: Literal["fast", "balanced", "smart"] = "balanced"
     context: Optional[dict] = None
 
 
@@ -41,6 +39,12 @@ class MessageResponse(BaseModel):
     file_url: Optional[str] = None
     token_count: int
     created_at: datetime
+    reasoningContent: Optional[str] = None
+    thinkingContent: Optional[str] = None
+    toolEvents: Optional[list[dict]] = None
+    loopSteps: Optional[list[str]] = None
+    thinkingDurationMs: Optional[int] = None
+    thinkingMode: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

@@ -12,7 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.tools.agent_tools import current_user_id_cv
+from src.tools.blog import current_user_id_cv
 
 logger = logging.getLogger(__name__)
 
@@ -451,8 +451,8 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
                            stage: str, instruction: str) -> bool:
     """返回 False 仅在 agent 抛异常/超时，或全程零工具调用且零产出；零产出但有过工具调用视为 completed。"""
     from src.services.chat_service import _chat_model_kwargs, _create_llm
-    from src.services.llm_settings_service import get_user_llm_settings
-    from src.tools.research_tools import RESEARCH_TOOLS
+    from src.services.llm_settings_service import get_user_llm_settings, has_usable_api_key
+    from src.tools.research import RESEARCH_TOOLS
 
     topic = await db.get(ResearchTopic, topic_id)
     if not topic:
@@ -461,8 +461,10 @@ async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id
     prompt = _build_research_prompt(topic)
 
     user_llm_settings = await get_user_llm_settings(db, user_id)
-    model_kwargs = _chat_model_kwargs("normal", user_llm_settings)
-    llm = _create_llm(model_kwargs, "normal")
+    model_kwargs = _chat_model_kwargs("balanced", user_llm_settings)
+    if not has_usable_api_key(model_kwargs):
+        raise RuntimeError("未配置 API 密钥，请先在「设置」页填写你自己的 API 密钥再启动研究。")
+    llm = _create_llm(model_kwargs, "balanced")
     agent = create_react_agent(llm, list(RESEARCH_TOOLS), prompt=prompt)
 
     before_count = await _count_stage_output(db, stage, topic_id, user_id)

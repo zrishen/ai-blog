@@ -7,7 +7,6 @@ from fastapi import APIRouter
 
 from src.api.chat import router as chat_router
 from src.api.conversations import router as conversations_router
-from src.api.kb import router as kb_router
 from src.api.mcp import router as mcp_router
 from src.api.status import router as status_router
 from src.api.files import router as files_router
@@ -34,11 +33,8 @@ router.include_router(conversations_router)
 router.include_router(chat_router)
 router.include_router(public_chat_router)
 
-# 文件上传
+# 文件上传 + 文件库
 router.include_router(files_router)
-
-# 知识库
-router.include_router(kb_router)
 
 # MCP 服务配置
 router.include_router(mcp_router)

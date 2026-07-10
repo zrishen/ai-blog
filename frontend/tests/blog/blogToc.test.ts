@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractHeadings } from "../src/features/blog/utils/blogToc";
+import { extractHeadings } from "../../src/features/blog/utils/blogToc";
 
 describe("extractHeadings", () => {
   it("提取 h2/h3/h4 标题", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { ChatProvider, useChat } from "../src/stores/chatStore";
+import { ChatProvider, useChat } from "../../src/stores/chatStore";
 
 // 捕获 sendChat 调用时的回调；resolve 推迟到测试驱动 onDone
 let lastStreamCallbacks: {
@@ -9,7 +9,7 @@ let lastStreamCallbacks: {
   resolve: () => void;
 } | null = null;
 
-vi.mock("../src/api/client", () => ({
+vi.mock("../../src/api/client", () => ({
   sendChat: vi.fn(
     (
       _content: string,
@@ -29,7 +29,7 @@ vi.mock("../src/api/client", () => ({
   fetchMessages: vi.fn(async () => ({ messages: [] })),
 }));
 
-import { useChatHooks } from "../src/hooks/useChat";
+import { useChatHooks } from "../../src/hooks/useChat";
 
 beforeEach(() => {
   lastStreamCallbacks = null;

@@ -1,4 +1,5 @@
 import Vditor from "vditor";
+import { expandBlankLines, preserveBlankLines } from "./markdownBlankLines";
 
 type VditorOptions = NonNullable<ConstructorParameters<typeof Vditor>[1]>;
 type VditorI18n = NonNullable<VditorOptions["i18n"]>;
@@ -135,8 +136,26 @@ export function installControlledEditModeMenu(editor: Vditor) {
     const mode = target?.getAttribute("data-mode");
     if (!mode) return;
 
+    const currentMode = editor.getCurrentMode();
+    const currentMd = editor.getValue();
+    const wysiwygReset = (editor as unknown as {
+      vditor?: { wysiwyg?: { element?: HTMLElement | null } };
+    }).vditor?.wysiwyg?.element?.querySelector(".vditor-reset") as HTMLElement | null;
+    const preservedMd = currentMode === "wysiwyg"
+      ? preserveBlankLines(wysiwygReset, currentMd)
+      : currentMd;
+
     originalPanel.querySelector<HTMLButtonElement>(`button[data-mode="${mode}"]`)?.click();
     hideMenu();
+
+    if (preservedMd !== currentMd || /(\n){3,}/.test(preservedMd)) {
+      setTimeout(() => {
+        const targetMd = expandBlankLines(preservedMd);
+        if (editor.getValue() !== targetMd) {
+          editor.setValue(targetMd);
+        }
+      }, 0);
+    }
   };
 
   const handleDocumentClick = (event: MouseEvent) => {
@@ -751,14 +770,24 @@ export function installCodeLanguageMenu(editor: Vditor) {
   });
   mutationObserver.observe(editorElement, { childList: true, subtree: true });
 
-  // 初始化:等 hljs 加载完成后挂载所有块
+  // 初始化:等 hljs 加载完成后挂载所有块。
+  // Vditor 代码块是异步渲染的,且首次进入编辑页时序不确定
+  // (HMR/组件重建/Hljs 首次下载都可能让代码块晚于 initAll 出现)。
+  // 用轮询兜底:持续检查直到所有代码块都挂载了 UI,或达到最大轮询次数。
   const initAll = async () => {
     await loadHighlightJs();
-    syncAllBlocks();
-    // Vditor 代码块是异步渲染的,initAll 跑完时代码块可能还没就绪。
-    // 用延迟兜底 + MutationObserver 双保险确保代码块出现后被渲染。
-    setTimeout(syncAllBlocks, 800);
-    setTimeout(syncAllBlocks, 2000);
+    const maxAttempts = 20; // 约 4 秒(20 × 200ms)
+    let attempt = 0;
+    const poll = () => {
+      const blocks = editorElement.querySelectorAll<HTMLElement>('div.vditor-wysiwyg__block[data-type="code-block"]');
+      const allMounted = blocks.length > 0 && Array.from(blocks).every((b) => codeBlockUIs.has(b) && b.classList.contains("blog-editor-code-block--highlighted"));
+      syncAllBlocks();
+      attempt += 1;
+      if (!allMounted && attempt < maxAttempts) {
+        setTimeout(poll, 200);
+      }
+    };
+    poll();
   };
   void initAll();
 

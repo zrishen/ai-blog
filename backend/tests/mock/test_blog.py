@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogPost as BlogPostModel
 from src.services.markdown_blog_service import read_post_by_slug
+from src.tools.blog import blog_edit_post, blog_search_posts, current_user_id_cv
 
 TEST_USER_ID = 1
 
@@ -147,6 +148,228 @@ async def test_update_blog_post(client: AsyncClient, db_session: AsyncSession):
     assert meta["status"] == "published"
     assert meta["tags"] == "updated"
     assert body == "新内容"
+
+
+@pytest.mark.asyncio
+async def test_blog_edit_post_rejects_repeated_target_text(db_session: AsyncSession, monkeypatch):
+    content = "第一处重复文本\n\n第二处重复文本"
+    post = BlogPostModel(
+        title="重复片段",
+        slug="repeated-target",
+        content=content,
+        status="draft",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        result = await blog_edit_post.ainvoke({
+            "post_id": post.id,
+            "target_text": "重复文本",
+            "replacement_text": "替换文本",
+        })
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "出现 2 次" in result
+    assert "无法确定要修改哪一处" in result
+    assert post.content == content
+
+
+@pytest.mark.asyncio
+async def test_blog_edit_post_replaces_within_section_only(db_session: AsyncSession, monkeypatch, tmp_path):
+    """section_index 限定后，章节内重复片段可替换；其他章节的同名片段保持不变。"""
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "blog_content_dir", str(tmp_path / "blog"))
+    content = (
+        "## 背景\n\n这是重复文本第一次出现。\n\n"
+        "## 总结\n\n这是重复文本第二次出现。"
+    )
+    post = BlogPostModel(
+        title="按章节限定",
+        slug="section-scoped",
+        content=content,
+        status="draft",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        result = await blog_edit_post.ainvoke({
+            "post_id": post.id,
+            "target_text": "重复文本",
+            "replacement_text": "唯一替换",
+            "section_index": 2,
+        })
+        await db_session.refresh(post)
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "已精准修改" in result
+    assert "重复文本" in post.content  # 第 1 节保留
+    assert "唯一替换" in post.content  # 第 2 节被替换
+
+
+@pytest.mark.asyncio
+async def test_blog_edit_post_section_index_target_not_in_section(db_session: AsyncSession, monkeypatch):
+    """target_text 不在指定章节时给出明确错误。"""
+    content = "## 背景\n\n本节有原始文字。\n\n## 总结\n\n这里是总结。"
+    post = BlogPostModel(
+        title="章节限定未命中",
+        slug="section-miss",
+        content=content,
+        status="draft",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        result = await blog_edit_post.ainvoke({
+            "post_id": post.id,
+            "target_text": "总结",
+            "replacement_text": "结论",
+            "section_index": 1,
+        })
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "未找到目标文本" in result
+    assert "第 1 节" in result
+    assert post.content == content
+
+
+@pytest.mark.asyncio
+async def test_blog_search_posts_lists_posts_when_query_empty(db_session: AsyncSession, monkeypatch):
+    post = BlogPostModel(
+        title="全部文章测试",
+        slug="list-all-test",
+        content="正文内容",
+        status="draft",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        result = await blog_search_posts.ainvoke({})
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "博客文章列表" in result
+    assert "全部文章测试" in result
+
+
+@pytest.mark.asyncio
+async def test_blog_search_posts_finds_posts_by_title(db_session: AsyncSession, monkeypatch):
+    post = BlogPostModel(
+        title="AI 搜索测试",
+        slug="ai-search-test",
+        content="正文内容",
+        status="draft",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        result = await blog_search_posts.ainvoke({"query": "AI 搜索"})
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "博客搜索结果" in result
+    assert "AI 搜索测试" in result
+
+
+@pytest.mark.asyncio
+async def test_blog_search_posts_finds_text_inside_post(db_session: AsyncSession, monkeypatch):
+    content = "## 背景\n\n这里有目标词。\n\n## 总结\n\n这里也有目标词。"
+    post = BlogPostModel(
+        title="正文搜索测试",
+        slug="content-search-test",
+        content=content,
+        status="draft",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        result = await blog_search_posts.ainvoke({"query": "目标词", "post_id": post.id})
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "找到 2 处" in result
+    assert "第 1 节 ## 背景" in result
+    assert "第 2 节 ## 总结" in result
+    assert "上下文" in result
 
 
 @pytest.mark.asyncio
