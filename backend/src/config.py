@@ -28,14 +28,13 @@ class Settings(BaseSettings):
     public_chat_max_context_chars: int = 6000
     public_chat_max_history_messages: int = 10
     public_chat_max_output_tokens: int = 800
-    # 三档思考模式: fast(快速) / balanced(平衡) / smart(智能)
+    # 三档思考强度: fast(low) / balanced(medium) / smart(high)
     smart_thinking_model_name: str | None = None
-    fast_temperature: float = 0.9
-    fast_max_output_tokens: int = 2048
-    balanced_temperature: float = 0.7
-    balanced_max_output_tokens: int = 4096
-    smart_temperature: float = 0.2
-    smart_max_output_tokens: int = 8192
+    llm_temperature: float = 0.2
+    llm_max_output_tokens: int = 32768
+    fast_thinking_budget_tokens: int = 2048
+    balanced_thinking_budget_tokens: int = 8192
+    smart_thinking_budget_tokens: int = 16384
     fast_extra_body: str | None = None
     balanced_extra_body: str | None = None
     smart_extra_body: str | None = None

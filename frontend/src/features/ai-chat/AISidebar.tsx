@@ -47,6 +47,7 @@ import { AISidebarHeader } from "./ai-sidebar/AISidebarHeader";
 import { ConversationListView, type ConversationListItem } from "./ai-sidebar/ConversationListView";
 import { ChatInputBar } from "./ai-sidebar/ChatInputBar";
 import { MessageList } from "./ai-sidebar/MessageList";
+import { createPatchDeltaPlayer, type PatchDeltaPlayer } from "./ai-sidebar/patchDeltaPlayer";
 import {
   blogToolOperations,
   RESEARCH_TOOL_NAMES,
@@ -58,11 +59,11 @@ const AI_SIDEBAR_VIEW_STORAGE_KEY = "ai-sidebar-view";
 const AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY = "ai-sidebar-selected-key";
 
 interface RunState {
-  content: string;
+  finalContent: string;
   reasoningContent: string;
-  loopSteps: string[];
   toolEvents: ToolEvent[];
-  lastToolEndPos: number;
+  streamFinalized: boolean;
+  streamError: string | null;
   assistantStartedAt: number;
   assistantMessageId: number;
   conversationId: number | null;
@@ -121,6 +122,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   const scrollFrameRef = useRef<number | null>(null);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [loginRedirectTarget, setLoginRedirectTarget] = useState<"files" | "research" | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
   const isPrivate = mode === "private";
   const selectedKey = isPrivate ? state.aiSidebarSelectedKey : SHARED_CONVERSATION_KEY;
@@ -179,6 +181,20 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     });
   }, [scrollToLatest]);
 
+  // 跟踪 viewport 是否贴底:不贴底时才显示"跳到最新回复"按钮
+  useEffect(() => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport) return;
+    const update = () => {
+      const threshold = 32;
+      const distance = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      setIsAtBottom(distance < threshold);
+    };
+    update();
+    viewport.addEventListener("scroll", update, { passive: true });
+    return () => viewport.removeEventListener("scroll", update);
+  }, [selectedKey]);
+
   useEffect(() => {
     selectedKeyRef.current = selectedKey;
   }, [selectedKey]);
@@ -201,7 +217,6 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
       });
     }
   }, [dispatch, isPrivate]);
-
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -534,11 +549,11 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     const controller = new AbortController();
     abortControllersRef.current.set(convKey, controller);
     const runState: RunState = {
-      content: "",
+      finalContent: "",
       reasoningContent: "",
-      loopSteps: [],
       toolEvents: [],
-      lastToolEndPos: 0,
+      streamFinalized: false,
+      streamError: null,
       assistantStartedAt,
       assistantMessageId: assistantId,
       conversationId: initialConversationId,
@@ -549,11 +564,40 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     const updateAssistant = (payload: Partial<Message>) => {
       dispatch({ type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY", payload: { key: activeKey, id: assistantId, ...payload } });
     };
+    let patchPlayer: PatchDeltaPlayer | null = null;
+    let blogPlayer: PatchDeltaPlayer | null = null;
+    let blogStarted = false;
 
     try {
       const appendChunk = (chunk: string) => {
-        runState.content += chunk;
-        updateAssistant({ content: runState.content });
+        runState.finalContent += chunk;
+        updateAssistant({ content: runState.finalContent });
+      };
+
+      let uiChain: Promise<void> = Promise.resolve();
+      let patchStarted = false;
+      const enqueueUi = (fn: () => Promise<void> | void) => {
+        uiChain = uiChain.then(fn).catch((err) => {
+          if (err && err.name !== "AbortError") {
+            console.warn("UI queue step failed:", err);
+          }
+        });
+      };
+      const drainUiChain = () => uiChain;
+      const finishPatch = async () => {
+        const player = patchPlayer;
+        if (player) await player.finish();
+        patchPlayer = null;
+        patchStarted = false;
+      };
+      const finishBlog = async () => {
+        const player = blogPlayer;
+        if (player) await player.finish();
+        blogPlayer = null;
+        blogStarted = false;
+      };
+      const cancelPlayer = (p: PatchDeltaPlayer | null) => {
+        if (p) p.cancel();
       };
 
       if (isPrivate) {
@@ -576,85 +620,154 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
           dispatch({ type: "CLEAR_AI_SELECTION_CONTEXT" });
         }
 
-        await sendChat(
-          text,
-          initialConversationId,
-          undefined,
-          undefined,
-          appendChunk,
-          (metadata) => {
-            runState.conversationId = metadata.conversation_id;
-            const serverKey = makeServerKey(metadata.conversation_id);
-            if (activeKey !== serverKey) {
-              abortControllersRef.current.delete(activeKey);
-              abortControllersRef.current.set(serverKey, controller);
-              runRefs.current.delete(activeKey);
-              runRefs.current.set(serverKey, runState);
-              dispatch({ type: "MIGRATE_AI_SIDEBAR_TEMP_KEY", payload: { fromKey: activeKey, toKey: serverKey, conversationId: metadata.conversation_id } });
-              localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "chat");
-              localStorage.setItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY, serverKey);
-              activeKey = serverKey;
-            }
-            skipNextHistoryLoadRef.current.add(metadata.conversation_id);
-            if (runState.lastToolEndPos > 0) {
-              dispatch({ type: "REORGANIZE_AI_MSG_FOR_KEY", payload: { key: activeKey, id: assistantId, splitPosition: runState.lastToolEndPos } });
-            }
-          },
-          (toolName) => {
-            runState.toolEvents = [...runState.toolEvents, { type: "start" as const, toolName }];
-            updateAssistant({ toolEvents: runState.toolEvents });
-          },
-          (toolName, result, blogMeta, references) => {
-            const refs: Reference[] = (references || []).map((r: StreamReference) => ({
-              type: r.type,
-              source: r.source,
-              collection: r.collection,
-              distance: r.distance,
-              server: r.server,
-              tool: r.tool,
-            }));
-            runState.toolEvents = [...runState.toolEvents, { type: "end" as const, toolName, result: typeof result === "string" ? result : "", references: refs }];
-            updateAssistant({ toolEvents: runState.toolEvents });
-            if (toolName === "blog_edit_post" && blogStreamOwnerRef.current === activeKey) {
-              if (blogMeta?.operation === "edit_post") {
+        await sendChat(text, initialConversationId, {
+          thinkingMode: state.aiSidebarThinkingMode,
+          context: pageContext,
+          signal: controller.signal,
+          callbacks: {
+            onDone: (metadata) => {
+              runState.conversationId = metadata.conversation_id;
+              const serverKey = makeServerKey(metadata.conversation_id);
+              if (activeKey !== serverKey) {
+                abortControllersRef.current.delete(activeKey);
+                abortControllersRef.current.set(serverKey, controller);
+                runRefs.current.delete(activeKey);
+                runRefs.current.set(serverKey, runState);
+                dispatch({ type: "MIGRATE_AI_SIDEBAR_TEMP_KEY", payload: { fromKey: activeKey, toKey: serverKey, conversationId: metadata.conversation_id } });
+                localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "chat");
+                localStorage.setItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY, serverKey);
+                activeKey = serverKey;
+              }
+              skipNextHistoryLoadRef.current.add(metadata.conversation_id);
+            },
+            onRoundDelta: ({ delta }) => {
+              enqueueUi(() => {
+                dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "delta", delta } } });
+              });
+            },
+            onRoundEnd: (round) => {
+              enqueueUi(() => {
+                if (round.classification === "loop") {
+                  dispatch({
+                    type: "APPLY_AI_STREAM_EVENT_FOR_KEY",
+                    payload: {
+                      key: activeKey,
+                      id: assistantId,
+                      event: {
+                        type: "loop",
+                        content: round.text,
+                        roundId: round.round_id,
+                        loopStepIndex: round.loop_step_index ?? undefined,
+                      },
+                    },
+                  });
+                  return;
+                }
+                if (round.classification === "discard") {
+                  dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "discard" } } });
+                  return;
+                }
+                runState.finalContent = round.text;
+                runState.streamFinalized = true;
+                dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "final", content: round.text } } });
+              });
+            },
+            onStreamError: ({ message }) => {
+              runState.streamError = message;
+              enqueueUi(() => {
+                dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "error", message } } });
+              });
+            },
+            onToolCall: (toolName, meta) => {
+              runState.toolEvents = [...runState.toolEvents, {
+                type: "start" as const,
+                toolName,
+                callId: meta?.call_id,
+                roundId: meta?.round_id,
+                loopStepIndex: meta?.loop_step_index,
+              }];
+              updateAssistant({ toolEvents: runState.toolEvents });
+              if (toolName === "blog_edit_post" || toolName === "blog_create_post" || toolName === "blog_write_post") {
+                if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
+              }
+            },
+            onToolResult: (toolName, result, blogMeta, references, meta) => {
+              const refs: Reference[] = (references || []).map((r: StreamReference) => ({
+                type: r.type,
+                source: r.source,
+                collection: r.collection,
+                distance: r.distance,
+                server: r.server,
+                tool: r.tool,
+              }));
+              runState.toolEvents = [...runState.toolEvents, {
+                type: "end" as const,
+                toolName,
+                result: typeof result === "string" ? result : "",
+                references: refs,
+                callId: meta?.call_id,
+                roundId: meta?.round_id,
+                loopStepIndex: meta?.loop_step_index,
+              }];
+              updateAssistant({ toolEvents: runState.toolEvents });
+              const isPatchTool = toolName === "blog_edit_post";
+              const isBlogWriteTool = toolName === "blog_create_post" || toolName === "blog_write_post";
+              const ownsBlogStream = blogStreamOwnerRef.current === activeKey;
+              if (isPatchTool && ownsBlogStream) {
+                enqueueUi(async () => {
+                  await finishPatch();
+                  dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
+                  if (blogMeta?.operation === "edit_post") void refreshOwnPosts(blogMeta);
+                  blogStreamOwnerRef.current = null;
+                });
+              } else if (isBlogWriteTool && ownsBlogStream) {
+                enqueueUi(async () => {
+                  await finishBlog();
+                  dispatch({ type: "CLEAR_BLOG_STREAMING" });
+                  void refreshOwnPosts(blogMeta);
+                  blogStreamOwnerRef.current = null;
+                });
+              } else {
                 void refreshOwnPosts(blogMeta);
               }
-              dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
-              blogStreamOwnerRef.current = null;
-            } else {
-              void refreshOwnPosts(blogMeta);
-            }
-            if (toolName && RESEARCH_TOOL_NAMES.has(toolName)) hadResearchToolsRef.current = true;
-            runState.lastToolEndPos = runState.content.length;
-          },
-          (contentDelta) => {
-            if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
-            if (blogStreamOwnerRef.current === activeKey) dispatch({ type: "APPEND_BLOG_STREAMING", payload: contentDelta });
-          },
-          state.aiSidebarThinkingMode,
-          (reasoningDelta) => {
-            runState.reasoningContent += reasoningDelta;
-            updateAssistant({ reasoningContent: runState.reasoningContent });
-          },
-          (loopStepText) => {
-            runState.loopSteps = [...runState.loopSteps, loopStepText];
-            updateAssistant({ loopSteps: runState.loopSteps });
-          },
-          (targetText) => {
-            if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
-            if (blogStreamOwnerRef.current === activeKey) {
+              if (toolName && RESEARCH_TOOL_NAMES.has(toolName)) hadResearchToolsRef.current = true;
+            },
+            onPatchStart: (targetText) => {
+              if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
+              if (blogStreamOwnerRef.current !== activeKey || patchStarted) return;
+              patchStarted = true;
+              patchPlayer = createPatchDeltaPlayer((replacementDelta) => {
+                dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: { replacementDelta } });
+              });
               dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { targetText } });
-            }
+              patchPlayer.open();
+            },
+            onPatchDelta: (replacementDelta) => {
+              if (blogStreamOwnerRef.current === activeKey) {
+                patchPlayer?.push(replacementDelta);
+              }
+            },
+            onBlogDelta: (contentDelta) => {
+              if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
+              if (blogStreamOwnerRef.current !== activeKey) return;
+              if (!blogStarted) {
+                blogStarted = true;
+                blogPlayer = createPatchDeltaPlayer((delta) => {
+                  dispatch({ type: "APPEND_BLOG_STREAMING", payload: delta });
+                });
+                blogPlayer.open();
+              }
+              blogPlayer?.push(contentDelta);
+            },
+            onReasoning: (reasoningDelta) => {
+              runState.reasoningContent += reasoningDelta;
+              updateAssistant({ reasoningContent: runState.reasoningContent });
+            },
           },
-          (replacementDelta) => {
-            if (blogStreamOwnerRef.current === activeKey) {
-              dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: replacementDelta });
-            }
-          },
-          pageContext,
-          controller.signal,
-        );
+        });
+        await drainUiChain();
         if (blogStreamOwnerRef.current === activeKey) blogStreamOwnerRef.current = null;
+        if (runState.streamError) throw new Error(runState.streamError);
         await loadConvs();
         await refreshResearchTopicIfNeeded();
       } else if (siteUsername) {
@@ -663,10 +776,10 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         await sendSharedLandingChat(text, appendChunk, controller.signal);
       }
 
-      if (isPrivate && state.trustWritingEnabled) {
-        const trustChoicePayload = parseTrustChoicePayload(runState.content);
+      if (isPrivate && state.trustWritingEnabled && runState.streamFinalized) {
+        const trustChoicePayload = parseTrustChoicePayload(runState.finalContent);
         if (trustChoicePayload) {
-          const visibleContent = stripTrustChoicePayload(runState.content, trustChoicePayload.message);
+          const visibleContent = stripTrustChoicePayload(runState.finalContent, trustChoicePayload.message);
           updateAssistant({
             content: visibleContent,
             trustChoicePrompt: visibleContent,
@@ -675,13 +788,19 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         }
       }
     } catch (err) {
+      cancelPlayer(patchPlayer);
+      cancelPlayer(blogPlayer);
+      dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
+      dispatch({ type: "CLEAR_BLOG_STREAMING" });
       if (err instanceof Error && err.name === "AbortError") {
-        if (!runState.content.trim() && !runState.reasoningContent.trim() && runState.toolEvents.length === 0) {
-          updateAssistant({ content: "已停止" });
-        }
+        dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "discard" } } });
+        if (!runState.streamFinalized) updateAssistant({ content: "已停止" });
       } else {
-        dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: activeKey, error: "无法获取回复，请稍后重试" } });
-        updateAssistant({ content: "**错误：无法获取回复**" });
+        const message = runState.streamError ?? "无法获取回复，请稍后重试";
+        dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: activeKey, error: message } });
+        if (!runState.streamError) {
+          dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "error", message } } });
+        }
       }
     } finally {
       updateAssistant({ thinkingDurationMs: Math.max(0, Date.now() - assistantStartedAt) });
@@ -888,14 +1007,14 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
           }}
         />
       ) : (
-        <>
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <AnimatePresence>
             {(contextText || state.aiSelectionContext || state.trustWritingEnabled) && (
               <motion.div
                 initial={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
                 animate={{ maxHeight: 120, opacity: 1, paddingTop: 8, paddingBottom: 8 }}
                 exit={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-                className="relative flex flex-col flex-shrink-0 gap-1 overflow-hidden border-b border-primary/15 bg-primary/10 px-3 text-xs font-medium text-primary"
+                className="pointer-events-auto absolute left-0 right-0 top-0 z-30 flex flex-col gap-1 overflow-hidden border-b border-primary/15 bg-[rgb(232_240_253)]/85 px-3 text-xs font-medium text-primary shadow-sm backdrop-blur-sm dark:bg-[rgb(34_42_60)]/85"
               >
                 {contextText && (
                   <div className="flex items-center gap-2">
@@ -929,7 +1048,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
                 initial={{ maxHeight: 0, opacity: 0 }}
                 animate={{ maxHeight: 80, opacity: 1 }}
                 exit={{ maxHeight: 0, opacity: 0 }}
-                className="relative flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-destructive/15 bg-destructive/10 px-3 py-2 text-[13px] text-destructive"
+                className="relative z-20 flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-destructive/15 bg-destructive/10 px-3 py-2 text-[13px] text-destructive"
               >
                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
                 <span className="min-w-0 flex-1 truncate">{selectedError}</span>
@@ -942,7 +1061,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
             streaming={selectedStreaming}
             msgsEndRef={msgsEndRef}
             viewportRef={messagesViewportRef}
-            showJumpButton={selectedStreaming && selectedMessages.length > 0}
+            showJumpButton={selectedStreaming && selectedMessages.length > 0 && !isAtBottom}
             onJumpToLatest={handleJumpToLatest}
             historyLoading={selectedHistory.loading}
             historyLoadError={selectedHistory.error}
@@ -964,7 +1083,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
             onPickResearch={handleResearch}
             onOpenMcp={handleOpenMcp}
           />
-        </>
+        </div>
       )}
 
       <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} onSuccess={handleLoginSuccess} />

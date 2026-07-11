@@ -2,10 +2,21 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 
-// 捕获 sendChat 调用时的回调；resolve 推迟到测试驱动 onDone
+type RoundDelta = { round_id: number; delta: string };
+type RoundEnd = {
+  round_id: number;
+  classification: "loop" | "final" | "discard";
+  text: string;
+  loop_step_index?: number | null;
+};
+type DoneMeta = { conversation_id: number; message_id: number };
+type StreamErrorPayload = { message: string; round_id?: number };
+
 let lastStreamCallbacks: {
-  onChunk: (c: string) => void;
-  onDone: (m: { conversation_id: number; message_id: number }) => void;
+  onRoundDelta: (r: RoundDelta) => void;
+  onRoundEnd: (r: RoundEnd) => void;
+  onDone: (m: DoneMeta) => void;
+  onStreamError?: (e: StreamErrorPayload) => void;
   resolve: () => void;
 } | null = null;
 
@@ -14,13 +25,23 @@ vi.mock("../../src/api/client", () => ({
     (
       _content: string,
       _conversationId: number | null,
-      _imageUrl: string | undefined,
-      _fileUrl: string | undefined,
-      onChunk: (c: string) => void,
-      onDone: (m: { conversation_id: number; message_id: number }) => void,
+      options: {
+        callbacks: {
+          onRoundDelta?: (r: RoundDelta) => void;
+          onRoundEnd?: (r: RoundEnd) => void;
+          onDone?: (m: DoneMeta) => void;
+          onStreamError?: (e: StreamErrorPayload) => void;
+        };
+      },
     ) =>
       new Promise<void>((resolve) => {
-        lastStreamCallbacks = { onChunk, onDone, resolve: () => resolve() };
+        lastStreamCallbacks = {
+          onRoundDelta: options.callbacks.onRoundDelta!,
+          onRoundEnd: options.callbacks.onRoundEnd!,
+          onDone: options.callbacks.onDone!,
+          onStreamError: options.callbacks.onStreamError,
+          resolve: () => resolve(),
+        };
       }),
   ),
   fetchConversations: vi.fn(async () => ({ conversations: [] })),
@@ -69,13 +90,14 @@ describe("useChatHooks.sendMessage SSE 行为", () => {
     expect(msgs[1].content).toBe("");
 
     await act(async () => {
+      lastStreamCallbacks?.onRoundEnd({ round_id: 1, classification: "final", text: "hello" });
       lastStreamCallbacks?.onDone({ conversation_id: 1, message_id: 100 });
       lastStreamCallbacks?.resolve();
       await pending;
     });
   });
 
-  it("流式 chunk 累积更新助手消息内容", async () => {
+  it("ROUNDDELTA 累积到临时轮，ROUNDEND(final) 原子迁移为正文", async () => {
     const { result } = renderChatHook();
     let pending: Promise<unknown> = Promise.resolve();
     act(() => {
@@ -84,14 +106,55 @@ describe("useChatHooks.sendMessage SSE 行为", () => {
     await waitFor(() => expect(result.current.state.messages.length).toBe(2));
     const assistantId = result.current.state.messages[1].id;
 
-    act(() => lastStreamCallbacks?.onChunk("Hello"));
-    act(() => lastStreamCallbacks?.onChunk(" world"));
+    act(() => lastStreamCallbacks?.onRoundDelta({ round_id: 1, delta: "Hello" }));
+    act(() => lastStreamCallbacks?.onRoundDelta({ round_id: 1, delta: " world" }));
+
+    await waitFor(() => {
+      const m = result.current.state.messages.find((x) => x.id === assistantId);
+      expect(m?.streamingRound).toBe("Hello world");
+      expect(m?.content).toBe("");
+    });
+
+    act(() =>
+      lastStreamCallbacks?.onRoundEnd({ round_id: 1, classification: "final", text: "Hello world" }),
+    );
     await waitFor(() => {
       const m = result.current.state.messages.find((x) => x.id === assistantId);
       expect(m?.content).toBe("Hello world");
+      expect(m?.streamingRound).toBe("");
+      expect(m?.streamFinalized).toBe(true);
     });
 
     await act(async () => {
+      lastStreamCallbacks?.onDone({ conversation_id: 1, message_id: 100 });
+      lastStreamCallbacks?.resolve();
+      await pending;
+    });
+  });
+
+  it("ROUNDEND(loop) 固化为 loop step，不写入正文", async () => {
+    const { result } = renderChatHook();
+    let pending: Promise<unknown> = Promise.resolve();
+    act(() => {
+      pending = result.current.hook.sendMessage("q");
+    });
+    await waitFor(() => expect(result.current.state.messages.length).toBe(2));
+    const assistantId = result.current.state.messages[1].id;
+
+    act(() => lastStreamCallbacks?.onRoundDelta({ round_id: 1, delta: "调用工具" }));
+    act(() =>
+      lastStreamCallbacks?.onRoundEnd({ round_id: 1, classification: "loop", text: "调用工具", loop_step_index: 0 }),
+    );
+
+    await waitFor(() => {
+      const m = result.current.state.messages.find((x) => x.id === assistantId);
+      expect(m?.loopSteps).toEqual(["调用工具"]);
+      expect(m?.streamingRound).toBe("");
+      expect(m?.content).toBe("");
+    });
+
+    await act(async () => {
+      lastStreamCallbacks?.onRoundEnd({ round_id: 2, classification: "final", text: "完成" });
       lastStreamCallbacks?.onDone({ conversation_id: 1, message_id: 100 });
       lastStreamCallbacks?.resolve();
       await pending;
@@ -107,6 +170,7 @@ describe("useChatHooks.sendMessage SSE 行为", () => {
     await waitFor(() => expect(result.current.state.isStreaming).toBe(true));
 
     await act(async () => {
+      lastStreamCallbacks?.onRoundEnd({ round_id: 1, classification: "final", text: "ok" });
       lastStreamCallbacks?.onDone({ conversation_id: 42, message_id: 100 });
       lastStreamCallbacks?.resolve();
       await pending;
@@ -114,6 +178,33 @@ describe("useChatHooks.sendMessage SSE 行为", () => {
     await waitFor(() => {
       expect(result.current.state.currentConversationId).toBe(42);
       expect(result.current.state.isStreaming).toBe(false);
+    });
+  });
+
+  it("STREAMERROR 写入错误状态且不提升为 final", async () => {
+    const { result } = renderChatHook();
+    let pending: Promise<unknown> = Promise.resolve();
+    act(() => {
+      pending = result.current.hook.sendMessage("boom");
+    });
+    await waitFor(() => expect(result.current.state.messages.length).toBe(2));
+    const assistantId = result.current.state.messages[1].id;
+
+    await act(async () => {
+      lastStreamCallbacks?.onRoundDelta({ round_id: 1, delta: "半轮" });
+      lastStreamCallbacks?.onStreamError?.({ message: "服务异常" });
+    });
+
+    await waitFor(() => {
+      const m = result.current.state.messages.find((x) => x.id === assistantId);
+      expect(m?.streamError).toBe("服务异常");
+      expect(m?.content).toBe("");
+      expect(m?.streamFinalized).toBeUndefined();
+    });
+
+    await act(async () => {
+      lastStreamCallbacks?.resolve();
+      await pending;
     });
   });
 });

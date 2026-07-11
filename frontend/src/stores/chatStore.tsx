@@ -17,6 +17,9 @@ interface ToolEvent {
   toolName: string;
   result?: string;
   references?: Reference[];
+  callId?: string;
+  roundId?: number;
+  loopStepIndex?: number;
 }
 
 interface Message {
@@ -29,6 +32,9 @@ interface Message {
   tool_calls?: Array<{ id: string; name: string; arguments: string }>;
   tool_results?: string[];
   thinkingContent?: string;
+  streamingRound?: string;
+  streamFinalized?: boolean;
+  streamError?: string;
   toolEvents?: ToolEvent[];
   reasoningContent?: string;
   loopSteps?: string[];
@@ -103,6 +109,13 @@ interface AISidebarHistoryState {
   error: string | null;
 }
 
+type AIStreamEvent =
+  | { type: "delta"; delta: string }
+  | { type: "loop"; content: string; roundId?: number; loopStepIndex?: number }
+  | { type: "final"; content: string }
+  | { type: "discard" }
+  | { type: "error"; message: string };
+
 interface ChatState {
   conversations: Conversation[];
   currentConversationId: number | null;
@@ -142,7 +155,7 @@ interface ChatState {
   // AI Selection Context (right-click menu)
   aiSelectionContext: { postId: number; selectedText: string; sectionIndex: number } | null;
 
-  // Blog Patch Streaming (in-place replacement)
+  // Blog Patch Streaming (in-place replacement preview for blog_edit_post)
   blogPatchStreaming: { targetText: string; replacementDelta: string } | null;
 
   // File Library
@@ -167,6 +180,7 @@ type ChatAction =
   | { type: "SET_MESSAGES"; payload: Message[] }
   | { type: "ADD_MESSAGE"; payload: Message }
   | { type: "UPDATE_MESSAGE"; payload: { id: number; content?: string; image_url?: string; tool_calls?: Array<{ id: string; name: string; arguments: string }>; tool_results?: string[] } }
+  | { type: "APPLY_MESSAGE_STREAM_EVENT"; payload: { id: number; event: AIStreamEvent } }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_STREAMING"; payload: boolean }
   | { type: "SET_THEME"; payload: Theme }
@@ -187,10 +201,10 @@ type ChatAction =
   | { type: "SET_AI_SIDEBAR_MSGS_FOR_KEY"; payload: { key: AISidebarConversationKey; messages: Message[] } }
   | { type: "ADD_AI_SIDEBAR_MSG"; payload: Message }
   | { type: "ADD_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; message: Message } }
-  | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
-  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; thinkingContent?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
-  | { type: "REORGANIZE_AI_MSG"; payload: { id: number; splitPosition: number } }
-  | { type: "REORGANIZE_AI_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; splitPosition: number } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
+  | { type: "APPLY_AI_STREAM_EVENT"; payload: { id: number; event: AIStreamEvent } }
+  | { type: "APPLY_AI_STREAM_EVENT_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; event: AIStreamEvent } }
   | { type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY"; payload: { key: AISidebarConversationKey; streaming: boolean } }
   | { type: "SET_AI_SIDEBAR_INPUT_FOR_KEY"; payload: { key: AISidebarConversationKey; input: string } }
   | { type: "SET_AI_SIDEBAR_ERROR_FOR_KEY"; payload: { key: AISidebarConversationKey; error: string | null } }
@@ -212,7 +226,7 @@ type ChatAction =
   | { type: "CLEAR_AI_SELECTION_CONTEXT" }
   // Blog Patch Streaming
   | { type: "START_BLOG_PATCH_STREAMING"; payload: { targetText: string } }
-  | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: string }
+  | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: { replacementDelta: string } }
   | { type: "CLEAR_BLOG_PATCH_STREAMING" }
   // File Library
   | { type: "SET_FILE_CATEGORIES"; payload: FileCategory[] }
@@ -234,12 +248,15 @@ type ChatAction =
 
 function updateMessageWithPayload(
   message: Message,
-  payload: { content?: string; thinkingContent?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] },
+  payload: { content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] },
 ): Message {
   return {
     ...message,
     ...(payload.content !== undefined ? { content: payload.content } : {}),
     ...(payload.thinkingContent !== undefined ? { thinkingContent: payload.thinkingContent } : {}),
+    ...(payload.streamingRound !== undefined ? { streamingRound: payload.streamingRound } : {}),
+    ...(payload.streamFinalized !== undefined ? { streamFinalized: payload.streamFinalized } : {}),
+    ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
     ...(payload.toolEvents !== undefined ? { toolEvents: payload.toolEvents } : {}),
     ...(payload.reasoningContent !== undefined ? { reasoningContent: payload.reasoningContent } : {}),
     ...(payload.loopSteps !== undefined ? { loopSteps: payload.loopSteps } : {}),
@@ -250,10 +267,29 @@ function updateMessageWithPayload(
   };
 }
 
-function reorganizeMessage(message: Message, splitPosition: number): Message {
-  const thinkingContent = message.content.slice(0, splitPosition).trim();
-  const finalContent = message.content.slice(splitPosition).trim();
-  return finalContent || thinkingContent ? { ...message, content: finalContent, thinkingContent } : message;
+function applyStreamEvent(message: Message, event: AIStreamEvent): Message {
+  switch (event.type) {
+    case "delta":
+      return { ...message, streamingRound: (message.streamingRound ?? "") + event.delta };
+    case "loop":
+      return {
+        ...message,
+        streamingRound: "",
+        loopSteps: [...(message.loopSteps ?? []), event.content],
+      };
+    case "final":
+      return {
+        ...message,
+        content: event.content,
+        streamingRound: "",
+        streamFinalized: true,
+        streamError: undefined,
+      };
+    case "discard":
+      return { ...message, streamingRound: "" };
+    case "error":
+      return { ...message, streamingRound: "", streamError: event.message };
+  }
 }
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -271,6 +307,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         messages: state.messages.map((m) =>
           m.id === action.payload.id ? { ...m, ...action.payload } : m
+        ),
+      };
+    case "APPLY_MESSAGE_STREAM_EVENT":
+      return {
+        ...state,
+        messages: state.messages.map((m) =>
+          m.id === action.payload.id ? applyStreamEvent(m, action.payload.event) : m
         ),
       };
     case "SET_LOADING":
@@ -359,34 +402,17 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
       };
     }
-    case "REORGANIZE_AI_MSG": {
-      const { id: msgId, splitPosition } = action.payload;
-      const msg = state.aiSidebarMessages.find((m) => m.id === msgId);
-      if (!msg || !msg.toolEvents?.length) return state;
-      const lastEndEvent = [...(msg.toolEvents || [])].reverse().find((e) => e.type === "end");
-      if (!lastEndEvent) return state;
+    case "APPLY_AI_STREAM_EVENT":
       return {
         ...state,
         aiSidebarMessages: state.aiSidebarMessages.map((m) =>
-          m.id === msgId ? reorganizeMessage(m, splitPosition) : m
+          m.id === action.payload.id ? applyStreamEvent(m, action.payload.event) : m
         ),
       };
-    }
-    case "REORGANIZE_AI_MSG_FOR_KEY": {
-      const { key, id: msgId, splitPosition } = action.payload;
+    case "APPLY_AI_STREAM_EVENT_FOR_KEY": {
+      const { key, id, event } = action.payload;
       const current = state.aiSidebarMessagesByKey[key] ?? [];
-      const msg = current.find((m) => m.id === msgId);
-      if (!msg) return state;
-      const hasToolEvents = !!msg.toolEvents?.length;
-      const hasReasoning = !!msg.reasoningContent && msg.reasoningContent.trim().length > 3;
-      // 既无工具调用也无推理内容，不需要重组
-      if (!hasToolEvents && !hasReasoning) return state;
-      // 有工具调用时才切分 content（splitPosition 来自 lastToolEndPos）
-      // 只有推理无工具时，content 本身就是最终回答，不需要切分
-      if (splitPosition <= 0 && hasToolEvents) return state;
-      const lastEndEvent = [...(msg.toolEvents || [])].reverse().find((e) => e.type === "end");
-      if (hasToolEvents && !lastEndEvent) return state;
-      const messages = current.map((m) => (m.id === msgId ? reorganizeMessage(m, splitPosition) : m));
+      const messages = current.map((m) => (m.id === id ? applyStreamEvent(m, event) : m));
       return {
         ...state,
         aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [key]: messages },
@@ -499,15 +525,14 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         blogPatchStreaming: { targetText: action.payload.targetText, replacementDelta: "" },
-        blogStreamingContent: null, // 互斥：清除 BLOGDELTA
       };
     case "APPEND_BLOG_PATCH_STREAMING":
       if (!state.blogPatchStreaming) return state;
       return {
         ...state,
         blogPatchStreaming: {
-          ...state.blogPatchStreaming,
-          replacementDelta: state.blogPatchStreaming.replacementDelta + action.payload,
+          targetText: state.blogPatchStreaming.targetText,
+          replacementDelta: state.blogPatchStreaming.replacementDelta + action.payload.replacementDelta,
         },
       };
     case "CLEAR_BLOG_PATCH_STREAMING":
@@ -680,4 +705,4 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   dispatch({ type: "SET_THEME", payload: next });
 }
 
-export type { Message, Conversation, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, Theme, Panel, Page, BlogView, ThinkingMode, AISidebarConversationKey, AISidebarHistoryState, ToolEvent, Reference, ResearchTopicDetail, ResearchTopicSummary };
+export type { Message, Conversation, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, Theme, Panel, Page, BlogView, ThinkingMode, AISidebarConversationKey, AISidebarHistoryState, AIStreamEvent, ToolEvent, Reference, ResearchTopicDetail, ResearchTopicSummary };

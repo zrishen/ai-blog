@@ -10,8 +10,27 @@ from src.database.models import LLMSettings
 
 SUPPORTED_LLM_PROTOCOLS = ("openai", "anthropic")
 
-# 支持深度思考的模型名关键词（不区分大小写）
-_THINKING_CAPABLE_KEYWORDS = ("deepseek", "qwq", "o1", "o3", "o4", "claude", "reasoning", "think", "qwen3")
+# 支持可调节推理强度的模型名关键词（不区分大小写）
+_THINKING_CAPABLE_KEYWORDS = (
+    "deepseek",
+    "qwq",
+    "o1",
+    "o3",
+    "o4",
+    "gpt-5",
+    "claude",
+    "glm",
+    "kimi",
+    "reasoning",
+    "think",
+    "qwen3",
+)
+
+THINKING_EFFORT_BY_MODE = {
+    "fast": "low",
+    "balanced": "medium",
+    "smart": "high",
+}
 
 
 def model_supports_thinking(model_name: str | None) -> bool:
@@ -65,22 +84,17 @@ def build_llm_model_kwargs(
         "api_key": api_key,
         "base_url": base_url,
         "model": model,
-        "temperature": settings.balanced_temperature,
+        "temperature": settings.llm_temperature,
     }
 
-    if settings.balanced_max_output_tokens:
-        kwargs["max_tokens"] = settings.balanced_max_output_tokens
+    if settings.llm_max_output_tokens:
+        kwargs["max_tokens"] = settings.llm_max_output_tokens
 
-    # 三档模式参数覆盖
-    if thinking_mode == "fast":
-        kwargs["temperature"] = settings.fast_temperature
-        kwargs["max_tokens"] = settings.fast_max_output_tokens
-    elif thinking_mode == "smart":
-        if allow_official_fallback and not has_custom_model:
-            kwargs["model"] = settings.smart_thinking_model_name or settings.model_name
-        kwargs["temperature"] = settings.smart_temperature
-        kwargs["max_tokens"] = settings.smart_max_output_tokens
-    # balanced 使用默认值（已在上方设置）
+    if thinking_mode == "smart" and allow_official_fallback and not has_custom_model:
+        kwargs["model"] = settings.smart_thinking_model_name or settings.model_name
+
+    if model_supports_thinking(kwargs.get("model")):
+        kwargs["reasoning_effort"] = THINKING_EFFORT_BY_MODE.get(thinking_mode, "medium")
 
     return kwargs
 

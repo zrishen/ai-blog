@@ -121,12 +121,36 @@ def test_build_llm_model_kwargs_official_fallback_uses_env_when_no_record():
     assert kwargs["model"] == settings.model_name
 
 
-def test_build_llm_model_kwargs_smart_mode_overrides_temperature_and_tokens():
-    from src.config import settings
+def test_build_llm_model_kwargs_maps_thinking_mode_to_reasoning_effort():
+    # 默认 model_name 落在支持思考的关键词内（Qwen3），所以应注入 reasoning_effort
+    kwargs_fast = build_llm_model_kwargs(
+        thinking_mode="fast", llm_settings=None, allow_official_fallback=True
+    )
+    assert kwargs_fast["reasoning_effort"] == "low"
 
-    kwargs = build_llm_model_kwargs(thinking_mode="smart", llm_settings=None)
-    assert kwargs["temperature"] == settings.smart_temperature
-    assert kwargs["max_tokens"] == settings.smart_max_output_tokens
+    kwargs_balanced = build_llm_model_kwargs(
+        thinking_mode="balanced", llm_settings=None, allow_official_fallback=True
+    )
+    assert kwargs_balanced["reasoning_effort"] == "medium"
+
+    kwargs_smart = build_llm_model_kwargs(
+        thinking_mode="smart", llm_settings=None, allow_official_fallback=True
+    )
+    assert kwargs_smart["reasoning_effort"] == "high"
+
+
+def test_build_llm_model_kwargs_skips_reasoning_effort_for_non_thinking_model():
+    from src.database.models import LLMSettings
+
+    custom = LLMSettings(
+        user_id=1,
+        protocol="openai",
+        base_url="https://example.com",
+        api_key="key-xyz",
+        model_name="legacy-gpt-3.5",
+    )
+    kwargs = build_llm_model_kwargs(thinking_mode="smart", llm_settings=custom)
+    assert "reasoning_effort" not in kwargs
 
 
 # ---- blog tools ----

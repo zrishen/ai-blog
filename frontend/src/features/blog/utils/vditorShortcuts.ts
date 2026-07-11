@@ -46,7 +46,9 @@ export function applyUnorderedListShortcut(editor: HTMLPreElement, event: Keyboa
   const listElement = document.createElement("ul");
   listElement.setAttribute("data-block", "0");
   const itemElement = document.createElement("li");
-  itemElement.innerHTML = blockElement.innerHTML;
+  while (blockElement.firstChild) {
+    itemElement.appendChild(blockElement.firstChild);
+  }
   listElement.appendChild(itemElement);
   blockElement.replaceWith(listElement);
 

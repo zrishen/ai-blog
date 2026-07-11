@@ -148,52 +148,98 @@ async def update_conversation_title(conversation_id: int, user_id: int, title: s
                 await s.commit()
 
 
-async def save_agent_messages(
-    conversation_id: int,
+def _message_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return "" if content is None else str(content)
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict) and block.get("type") in {"text", "output_text"}:
+            text = block.get("text", block.get("content", ""))
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
+
+
+async def save_chat_turn(
+    conversation_id: int | None,
     user_id: int,
-    messages: list[AIMessage | ToolMessage | HumanMessage],
-    session: AsyncSession | None = None,
-) -> None:
-    """保存 agent 执行过程中的完整消息序列（含 tool_calls / tool results）。"""
-    async with _get_session(session) as s:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+    user_content: str,
+    user_tokens: int,
+    process_messages: list[AIMessage | ToolMessage],
+    final_content: str,
+    final_tokens: int,
+    user_image_url: str | None = None,
+    user_file_url: str | None = None,
+    final_reasoning_content: str | None = None,
+    final_tool_events: list[dict] | None = None,
+    final_loop_steps: list[str] | None = None,
+    final_thinking_duration_ms: int | None = None,
+    final_thinking_mode: str | None = None,
+) -> tuple[int, Message]:
+    async with async_session() as s:
+        async with s.begin():
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            conv = await s.get(Conversation, conversation_id) if conversation_id else None
+            if conv is None or conv.user_id != user_id:
+                conv = Conversation(title="New Chat", user_id=user_id, created_at=now, updated_at=now)
+                s.add(conv)
+                await s.flush()
+            else:
+                conv.updated_at = now
 
-        conv = await s.get(Conversation, conversation_id)
-        if conv:
-            conv.updated_at = now
+            s.add(Message(
+                conversation_id=conv.id,
+                role="user",
+                content=user_content,
+                image_url=user_image_url,
+                file_url=user_file_url,
+                token_count=user_tokens,
+                created_at=now,
+            ))
 
-        for msg in messages:
-            if isinstance(msg, HumanMessage):
-                s.add(Message(
-                    conversation_id=conversation_id,
-                    role="user",
-                    content=msg.content or "",
-                    created_at=now,
-                ))
-            elif isinstance(msg, AIMessage):
-                tool_calls_data = None
-                if msg.tool_calls:
+            for msg in process_messages:
+                if isinstance(msg, AIMessage):
                     tool_calls_data = [
                         {"id": tc["id"], "name": tc["name"], "args": tc["args"]}
-                        for tc in msg.tool_calls
-                    ]
-                s.add(Message(
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=msg.content or "",
-                    tool_calls=tool_calls_data,
-                    token_count=0,
-                    created_at=now,
-                ))
-            elif isinstance(msg, ToolMessage):
-                s.add(Message(
-                    conversation_id=conversation_id,
-                    role="tool",
-                    content=str(msg.content),
-                    tool_call_id=msg.tool_call_id,
-                    token_count=0,
-                    created_at=now,
-                ))
+                        for tc in (msg.tool_calls or [])
+                    ] or None
+                    s.add(Message(
+                        conversation_id=conv.id,
+                        role="assistant",
+                        content=_message_text(msg.content),
+                        tool_calls=tool_calls_data,
+                        token_count=0,
+                        created_at=now,
+                    ))
+                elif isinstance(msg, ToolMessage):
+                    s.add(Message(
+                        conversation_id=conv.id,
+                        role="tool",
+                        content=_message_text(msg.content),
+                        tool_call_id=msg.tool_call_id,
+                        token_count=0,
+                        created_at=now,
+                    ))
 
-        if session is None:
-            await s.commit()
+            final_message = Message(
+                conversation_id=conv.id,
+                role="assistant",
+                content=final_content,
+                token_count=final_tokens,
+                reasoning_content=final_reasoning_content,
+                tool_events=final_tool_events,
+                loop_steps=final_loop_steps,
+                thinking_duration_ms=final_thinking_duration_ms,
+                thinking_mode=final_thinking_mode,
+                created_at=now,
+            )
+            s.add(final_message)
+            await s.flush()
+            conversation_id = conv.id
+            message_id = final_message.id
+
+        return conversation_id, final_message

@@ -182,6 +182,38 @@ body {
   51%, 100% { opacity: 0; }
 }
 
+/* AI 等待首字节时的「正在思考」流动文字：渐变扫光从左到右循环 */
+@keyframes thinking-flow {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+.thinking-flow-text {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground) / 0.45) 0%,
+    hsl(var(--muted-foreground)) 30%,
+    hsl(var(--foreground)) 50%,
+    hsl(var(--muted-foreground)) 70%,
+    hsl(var(--muted-foreground) / 0.45) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-flow 1.8s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-flow-text {
+    animation: none;
+    background-image: none;
+    color: hsl(var(--muted-foreground));
+    -webkit-text-fill-color: hsl(var(--muted-foreground));
+  }
+}
+
 /* ============================================================
    代码块高亮(highlight.js token 配色)
    详情页(rehype-highlight)与编辑页浮层共用此配色

@@ -93,7 +93,14 @@ describe("applyUnorderedListShortcut", () => {
       const ul = editor.querySelector("ul");
       expect(ul).not.toBeNull();
       expect(ul!.getAttribute("data-block")).toBe("0");
-      expect(ul!.querySelector("li")).not.toBeNull();
+      const li = ul!.querySelector("li");
+      expect(li).not.toBeNull();
+      const caretAnchor = li!.querySelector("wbr");
+      expect(caretAnchor).not.toBeNull();
+      expect(caretAnchor!.isConnected).toBe(true);
+      const selection = window.getSelection()!;
+      expect(selection.anchorNode).toBe(li);
+      expect(selection.anchorOffset).toBe(Array.from(li!.childNodes).indexOf(caretAnchor!) + 1);
     }
   });
 

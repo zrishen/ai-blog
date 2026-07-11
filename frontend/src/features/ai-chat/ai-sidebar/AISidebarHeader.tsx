@@ -65,7 +65,7 @@ export function AISidebarHeader({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 gap-1.5 rounded-full px-2.5 text-xs font-medium border-primary/25 bg-primary/8 text-primary hover:bg-primary/15 hover:border-primary/40 shadow-sm"
+                className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium border-primary/25 bg-primary/8 text-primary hover:bg-primary/15 hover:border-primary/40 shadow-sm"
               >
                 {state.aiSidebarThinkingMode === "smart" ? (
                   <Sparkles className="h-3 w-3" />
@@ -75,9 +75,6 @@ export function AISidebarHeader({
                   <Zap className="h-3 w-3" />
                 )}
                 {thinkingModeLabels[state.aiSidebarThinkingMode]}
-                {state.aiSidebarThinkingMode !== "fast" && (
-                  <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="end" className="w-52">

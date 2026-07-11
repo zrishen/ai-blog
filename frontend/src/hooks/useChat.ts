@@ -143,56 +143,81 @@ export function useChatHooks() {
       dispatch({ type: "ADD_MESSAGE", payload: assistantMsg });
 
       let currentConvId = convId;
-      let assistantContent = "";
       const toolResults: string[] = [];
+      let streamError: string | null = null;
 
       try {
-        await sendChat(
-          content,
-          convId,
-          image_url,
-          file_url,
-          (chunk) => {
-            assistantContent += chunk;
-            dispatch({
-              type: "UPDATE_MESSAGE",
-              payload: { id: assistantMsgId, content: assistantContent },
-            });
-          },
-          (metadata) => {
-            currentConvId = metadata.conversation_id;
-            dispatch({ type: "SET_CURRENT_CONVERSATION", payload: metadata.conversation_id });
-          },
-          (toolName) => {
-            dispatch({
-              type: "UPDATE_MESSAGE",
-              payload: {
-                id: assistantMsgId,
-                tool_calls: [{ id: `tool-${Date.now()}`, name: toolName, arguments: "{}" }],
-              },
-            });
-          },
-          (toolName, result) => {
-            toolResults.push(`${toolName}: ${result}`);
-            dispatch({
-              type: "UPDATE_MESSAGE",
-              payload: {
-                id: assistantMsgId,
-                tool_calls: undefined,
-                tool_results: [...toolResults],
-              },
-            });
-          },
-        );
-      } catch (error) {
-        console.error("Chat error:", error);
-        dispatch({
-          type: "UPDATE_MESSAGE",
-          payload: {
-            id: assistantMsgId,
-            content: "**Error: Failed to get response**",
+        await sendChat(content, convId, {
+          imageUrl: image_url,
+          fileUrl: file_url,
+          callbacks: {
+            onDone: (metadata) => {
+              currentConvId = metadata.conversation_id;
+              dispatch({ type: "SET_CURRENT_CONVERSATION", payload: metadata.conversation_id });
+            },
+            onRoundDelta: ({ delta }) => {
+              dispatch({ type: "APPLY_MESSAGE_STREAM_EVENT", payload: { id: assistantMsgId, event: { type: "delta", delta } } });
+            },
+            onRoundEnd: (round) => {
+              if (round.classification === "loop") {
+                dispatch({
+                  type: "APPLY_MESSAGE_STREAM_EVENT",
+                  payload: {
+                    id: assistantMsgId,
+                    event: {
+                      type: "loop",
+                      content: round.text,
+                      roundId: round.round_id,
+                      loopStepIndex: round.loop_step_index ?? undefined,
+                    },
+                  },
+                });
+                return;
+              }
+              if (round.classification === "discard") {
+                dispatch({ type: "APPLY_MESSAGE_STREAM_EVENT", payload: { id: assistantMsgId, event: { type: "discard" } } });
+                return;
+              }
+              dispatch({
+                type: "APPLY_MESSAGE_STREAM_EVENT",
+                payload: { id: assistantMsgId, event: { type: "final", content: round.text } },
+              });
+            },
+            onStreamError: ({ message }) => {
+              streamError = message;
+              dispatch({ type: "APPLY_MESSAGE_STREAM_EVENT", payload: { id: assistantMsgId, event: { type: "error", message } } });
+            },
+            onToolCall: (toolName) => {
+              dispatch({
+                type: "UPDATE_MESSAGE",
+                payload: {
+                  id: assistantMsgId,
+                  tool_calls: [{ id: `tool-${Date.now()}`, name: toolName, arguments: "{}" }],
+                },
+              });
+            },
+            onToolResult: (toolName, result) => {
+              toolResults.push(`${toolName}: ${result}`);
+              dispatch({
+                type: "UPDATE_MESSAGE",
+                payload: {
+                  id: assistantMsgId,
+                  tool_calls: undefined,
+                  tool_results: [...toolResults],
+                },
+              });
+            },
           },
         });
+        if (streamError) throw new Error(streamError);
+      } catch (error) {
+        console.error("Chat error:", error);
+        if (!streamError) {
+          dispatch({
+            type: "APPLY_MESSAGE_STREAM_EVENT",
+            payload: { id: assistantMsgId, event: { type: "error", message: "无法获取回复，请稍后重试" } },
+          });
+        }
       } finally {
         dispatch({ type: "SET_STREAMING", payload: false });
         loadConversations();

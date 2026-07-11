@@ -96,10 +96,8 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isStreaming = state.blogStreamingContent !== null;
-  const patchStreaming = state.blogPatchStreaming;
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLDivElement>(null);
-  const patchAreaRef = useRef<HTMLDivElement>(null);
 
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; selectedText: string; sectionIndex: number } | null>(null);
@@ -110,12 +108,6 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [state.blogStreamingContent, isStreaming]);
-
-  useEffect(() => {
-    if (patchStreaming && patchAreaRef.current) {
-      patchAreaRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-  }, [patchStreaming]);
 
   const streamingContent = state.blogStreamingContent;
   const postTitle = post?.title;
@@ -135,6 +127,18 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
     });
   }, [postTitle, postContent, streamingContent]);
   const displayContent = useMemo(() => expandBlankLines(rawDisplayContent), [rawDisplayContent]);
+
+  const patchStreaming = state.blogPatchStreaming;
+  const patchRenderInfo = useMemo(() => {
+    if (!patchStreaming || !patchStreaming.targetText) return null;
+    if (!rawDisplayContent.includes(patchStreaming.targetText)) return null;
+    const idx = rawDisplayContent.indexOf(patchStreaming.targetText);
+    return {
+      before: rawDisplayContent.slice(0, idx),
+      target: patchStreaming.targetText,
+      replacement: patchStreaming.replacementDelta || "",
+    };
+  }, [patchStreaming, rawDisplayContent]);
 
   const tags = useMemo(() => splitBlogTags(post?.tags), [post?.tags]);
 
@@ -288,35 +292,6 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
     return () => window.removeEventListener("mousedown", handler, true);
   }, [contextMenu, closeContextMenu]);
 
-  // 原地流式渲染 — patchStreaming 定位
-  const articleContent = post?.content ?? null;
-  const patchRenderInfo = useMemo(() => {
-    if (!patchStreaming || !articleContent) return null;
-    let patchIndex = articleContent.indexOf(patchStreaming.targetText);
-    let matchedTargetText = "";
-
-    if (patchIndex !== -1) {
-      matchedTargetText = patchStreaming.targetText;
-    } else {
-      // 2. trim 容错匹配
-      const trimmedTarget = patchStreaming.targetText.trim();
-      for (let i = 0; i <= articleContent.length - trimmedTarget.length; i++) {
-        if (articleContent.slice(i, i + trimmedTarget.length).trim() === trimmedTarget) {
-          let end = i + trimmedTarget.length;
-          while (end < articleContent.length && articleContent.slice(i, end).trim().length < trimmedTarget.length) {
-            end++;
-          }
-          patchIndex = i;
-          matchedTargetText = articleContent.slice(i, end);
-          break;
-        }
-      }
-    }
-
-    if (patchIndex === -1) return null;
-    return { patchIndex, matchedTargetText, before: articleContent.slice(0, patchIndex), after: articleContent.slice(patchIndex + matchedTargetText.length) };
-  }, [patchStreaming, articleContent]);
-
   if (!post) {
     return (
       <div className="flex flex-1 items-center justify-center bg-background p-8">
@@ -440,11 +415,13 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
               {patchRenderInfo ? (
                 <>
                   <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.before)}</Markdown>
-                  <div ref={patchAreaRef} className="my-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-                    <span className="mb-1 block text-[10px] font-medium text-primary animate-pulse">AI 修改中...</span>
-                    <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchStreaming?.replacementDelta ?? "")}</Markdown>
+                  <div className="ai-patch-inline my-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 not-prose">
+                    <div className="ai-patch-inline__label mb-2 text-xs font-medium text-primary">AI 修改中...</div>
+                    <div className="ai-patch-inline__text text-foreground whitespace-pre-wrap">
+                      <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.replacement)}</Markdown>
+                    </div>
                   </div>
-                  <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.after)}</Markdown>
+                  <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(rawDisplayContent.slice(patchRenderInfo.before.length + patchRenderInfo.target.length))}</Markdown>
                 </>
               ) : (
                 <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{displayContent}</Markdown>

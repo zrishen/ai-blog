@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,6 +17,7 @@ import type { Message } from "../../../stores/chatStore";
 import { TrustChoiceGroup } from "../TrustChoiceGroup";
 import type { TrustChoiceOption } from "../trustPrompts";
 import { collectMessageReferences } from "./messageHelpers";
+import { maskStreamingMarkdown } from "./streamingMarkdown";
 
 interface MessageGroup {
   role: Message["role"];
@@ -132,12 +133,12 @@ function MessageListComponent({
 
   return (
     <ScrollArea className="relative min-h-0 flex-1" viewportRef={viewportRef}>
-      <div className="flex w-full flex-col gap-3 px-3 py-4">
+      <div className="flex w-full flex-col gap-3 px-3 pb-4 pt-14">
         {groups.map((group, groupIndex) => {
           const isAssistantGroup = group.role === "assistant";
           return (
             <motion.div
-              key={`${group.role}-${group.messages[0]?.id ?? groupIndex}`}
+              key={`${group.role}-${group.messages[0]?.created_at ?? groupIndex}`}
               className={`flex min-w-0 ${isAssistantGroup ? "justify-start" : "justify-end"}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -158,23 +159,41 @@ function MessageListComponent({
                   const messageContent = msg.trustChoicePrompt ?? msg.content;
                   const showTrustChoices = isAssistant && !isStreaming && !!msg.trustChoiceOptions?.length;
 
+                  const streamMessage = msg as Message & {
+                    streamingRound?: string;
+                    streamFinalized?: boolean;
+                    streamError?: string;
+                  };
                   const meaningfulReasoning = !!msg.reasoningContent && msg.reasoningContent.trim().length > 3;
                   const meaningfulThinkingContent = !!msg.thinkingContent && msg.thinkingContent.trim().length > 3;
                   const hasToolEvents = !!(msg.toolEvents && msg.toolEvents.length > 0);
                   const hasLoopSteps = !!(msg.loopSteps && msg.loopSteps.length > 0);
                   const hasThinkingDuration = msg.thinkingDurationMs !== undefined;
-                  const showThinkingPanel = isAssistant && (isStreaming || hasThinkingDuration || hasToolEvents || hasLoopSteps || meaningfulThinkingContent || meaningfulReasoning);
+                  const hasStreamingRound = !!streamMessage.streamingRound?.trim();
+                  const hasStreamError = !!streamMessage.streamError?.trim();
+                  const streamActive = isStreaming && !streamMessage.streamFinalized;
+                  const showThinkingPanel = isAssistant && (streamActive || hasThinkingDuration || hasToolEvents || hasLoopSteps || meaningfulThinkingContent || meaningfulReasoning || hasStreamingRound || hasStreamError);
+                  const showThinkingPlaceholder = streamActive
+                    && !hasStreamingRound
+                    && !messageContent
+                    && !meaningfulReasoning
+                    && !meaningfulThinkingContent
+                    && !hasToolEvents
+                    && !hasLoopSteps
+                    && !hasStreamError;
                   const startedAt = Date.parse(msg.created_at);
                   const streamingDurationMs = Number.isFinite(startedAt) ? Math.max(0, now - startedAt) : undefined;
                   const uniqueRefs = collectMessageReferences(msg.toolEvents);
 
                   return (
                     <div
-                      key={msg.id}
+                      key={`msg-${groupIndex}-${groupMsgIndex}-${msg.role}`}
                       className={isAssistant && groupMsgIndex > 0 ? "mt-3 border-t border-border/60 pt-3" : ""}
                     >
+                      {showThinkingPlaceholder && <ThinkingPlaceholder />}
                       <ThinkingPanel
-                        isStreaming={!!isStreaming}
+                        isStreaming={streamActive}
+                        isFinalized={!!streamMessage.streamFinalized || !isStreaming}
                         show={!!showThinkingPanel}
                         meaningfulReasoning={!!meaningfulReasoning}
                         meaningfulThinkingContent={!!meaningfulThinkingContent}
@@ -182,7 +201,9 @@ function MessageListComponent({
                         thinkingContent={msg.thinkingContent}
                         loopSteps={msg.loopSteps}
                         toolEvents={msg.toolEvents}
-                        durationMs={isStreaming ? streamingDurationMs : msg.thinkingDurationMs}
+                        streamingRound={streamMessage.streamingRound}
+                        streamError={streamMessage.streamError}
+                        durationMs={streamActive ? streamingDurationMs : msg.thinkingDurationMs}
                       />
                       <MessageBody
                         messageContent={messageContent}
@@ -230,13 +251,11 @@ function MessageListComponent({
       {showJumpButton && onJumpToLatest && (
         <Button
           type="button"
-          size="icon"
-          className="absolute bottom-4 left-1/2 z-20 h-9 w-9 -translate-x-1/2 rounded-full shadow-lg shadow-primary/20"
+          variant="secondary"
+          className="absolute bottom-3 left-1/2 z-20 h-7 w-7 -translate-x-1/2 rounded-full border border-border/50 bg-muted/70 p-0 text-muted-foreground shadow-sm backdrop-blur hover:bg-muted [&>svg]:size-3"
           onClick={onJumpToLatest}
-          title="跳到最新回复"
-          aria-label="跳到最新回复"
         >
-          <ArrowDown className="h-4 w-4" />
+          <ArrowDown />
         </Button>
       )}
     </ScrollArea>
@@ -254,6 +273,7 @@ export const MessageList = memo(MessageListComponent, (prev, next) =>
 
 interface ThinkingPanelProps {
   isStreaming: boolean;
+  isFinalized: boolean;
   show: boolean;
   meaningfulReasoning: boolean;
   meaningfulThinkingContent: boolean;
@@ -261,11 +281,14 @@ interface ThinkingPanelProps {
   thinkingContent?: string;
   loopSteps?: string[];
   toolEvents?: Message["toolEvents"];
+  streamingRound?: string;
+  streamError?: string;
   durationMs?: number;
 }
 
 function ThinkingPanel({
   isStreaming,
+  isFinalized,
   show,
   meaningfulReasoning,
   meaningfulThinkingContent,
@@ -273,8 +296,24 @@ function ThinkingPanel({
   thinkingContent,
   loopSteps,
   toolEvents,
+  streamingRound,
+  streamError,
   durationMs,
 }: ThinkingPanelProps) {
+  const [open, setOpen] = useState(false);
+  const userToggledRef = useRef(false);
+
+  const handleOpenChange = (next: boolean) => {
+    userToggledRef.current = true;
+    setOpen(next);
+  };
+
+  useEffect(() => {
+    if (isFinalized && !userToggledRef.current) {
+      setOpen(false);
+    }
+  }, [isFinalized]);
+
   if (!show) return null;
 
   const durationText = durationMs === undefined ? "" : formatThinkingDuration(durationMs);
@@ -284,40 +323,60 @@ function ThinkingPanel({
     loopSteps,
     toolEvents,
     fallbackProcessContent: processContent,
+    streamingRound,
+    streamError,
   });
   const hasEntries = entries.length > 0;
-  const stepCount = countThinkingSteps(entries);
-  const summaryParts = [
-    stepCount > 0 ? `${stepCount} 步` : "",
-    durationText ? `耗时 ${durationText}` : "",
-  ].filter(Boolean);
 
-  // 流式阶段：过程内容直接显示在对话里，完成后再收进“思考过程”。
-  if (isStreaming) {
+  if (isStreaming && !isFinalized) {
+    if (!hasEntries) return null;
     return (
-      <div className="mb-2.5 text-base text-muted-foreground">
-        {hasEntries ? (
+      <div className="mb-2.5" data-testid="thinking-panel" data-streaming="true">
+        <div data-testid="thinking-process" className="-ml-1.5 grid grid-rows-[1fr] opacity-100">
           <ThinkingFlow entries={entries} />
-        ) : (
-          <div className="text-base leading-relaxed">正在生成回复</div>
-        )}
+        </div>
       </div>
     );
   }
 
   if (!hasEntries) return null;
 
-  // 完成阶段：过程流整体折叠，最终回答保持在外部。
+  const stepCount = countThinkingSteps(entries);
+  const summaryParts = [
+    stepCount > 0 ? `${stepCount} 步` : "",
+    durationText ? `耗时 ${durationText}` : "",
+  ].filter(Boolean);
+  const title = `思考过程${summaryParts.length > 0 ? `（${summaryParts.join("，")}）` : ""}`;
+
   return (
-    <Collapsible defaultOpen={false} className="mb-2.5">
+    <Collapsible
+      open={open}
+      onOpenChange={handleOpenChange}
+      className="mb-2.5"
+      data-testid="thinking-panel"
+      data-streaming="false"
+    >
       <CollapsibleTrigger asChild>
         <button className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 text-base font-medium text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
-          <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 [[data-state=open]>&]:rotate-90" aria-hidden="true" />
-          <span>思考过程{summaryParts.length > 0 ? `（${summaryParts.join("，")}）` : ""}</span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 motion-reduce:transition-none [[data-state=open]>&]:rotate-90" aria-hidden="true" />
+          <span>{title}</span>
         </button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1.5 -ml-1.5">
-        <ThinkingFlow entries={entries} />
+      <CollapsibleContent forceMount asChild>
+        <div
+          className={`grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out motion-reduce:transition-none ${open
+            ? "mt-1.5 grid-rows-[1fr] opacity-100"
+            : "mt-0 grid-rows-[0fr] opacity-0"
+          }`}
+          data-testid="thinking-process"
+          aria-hidden={!open}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div className="-ml-1.5">
+              <ThinkingFlow entries={entries} />
+            </div>
+          </div>
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -329,24 +388,29 @@ type ToolPair = {
 };
 
 type ThinkingEntry =
-  | { type: "reasoning"; content: string }
-  | { type: "process"; content: string }
-  | { type: "action"; tools: ToolPair[] };
+  | { type: "reasoning"; key: string; content: string }
+  | { type: "process"; key: string; content: string }
+  | { type: "action"; key: string; tools: ToolPair[] }
+  | { type: "error"; key: string; content: string };
 
 function buildThinkingEntries({
   reasoningContent,
   loopSteps,
   toolEvents,
   fallbackProcessContent,
+  streamingRound,
+  streamError,
 }: {
   reasoningContent?: string;
   loopSteps?: string[];
   toolEvents?: Message["toolEvents"];
   fallbackProcessContent?: string;
+  streamingRound?: string;
+  streamError?: string;
 }): ThinkingEntry[] {
   const entries: ThinkingEntry[] = [];
   const reasoning = normalizeThinkingText(reasoningContent);
-  if (reasoning && reasoning.length > 3) entries.push({ type: "reasoning", content: reasoning });
+  if (reasoning && reasoning.length > 3) entries.push({ type: "reasoning", key: "reasoning", content: reasoning });
 
   const processes = (loopSteps && loopSteps.length > 0 ? loopSteps : fallbackProcessContent ? [fallbackProcessContent] : [])
     .map(normalizeThinkingText)
@@ -356,9 +420,16 @@ function buildThinkingEntries({
   const maxLen = Math.max(processes.length, toolGroups.length);
 
   for (let i = 0; i < maxLen; i += 1) {
-    if (processes[i]) entries.push({ type: "process", content: processes[i] });
-    if (toolGroups[i]?.length) entries.push({ type: "action", tools: toolGroups[i] });
+    if (processes[i]) entries.push({ type: "process", key: `round-${i}`, content: processes[i] });
+    if (toolGroups[i]?.length) entries.push({ type: "action", key: `tools-${i}`, tools: toolGroups[i] });
   }
+
+  const temporaryRound = normalizeThinkingText(streamingRound);
+  if (temporaryRound && !processes.includes(temporaryRound)) {
+    entries.push({ type: "process", key: "streaming-round-live", content: temporaryRound });
+  }
+  const error = normalizeThinkingText(streamError);
+  if (error) entries.push({ type: "error", key: "stream-error", content: error });
 
   return entries;
 }
@@ -375,17 +446,27 @@ function normalizeThinkingText(text?: string) {
 
 function buildToolPairs(toolEvents?: Message["toolEvents"]): ToolPair[] {
   const toolPairs: ToolPair[] = [];
-  if (toolEvents) {
-    for (const evt of toolEvents) {
-      if (evt.type === "start") {
-        toolPairs.push({ start: evt });
-      } else if (evt.type === "end") {
-        const last = toolPairs[toolPairs.length - 1];
-        if (last && !last.end) {
-          last.end = evt;
-        } else {
-          toolPairs.push({ end: evt });
-        }
+  if (!toolEvents) return toolPairs;
+
+  const pairByCallId = new Map<string, ToolPair>();
+  for (const evt of toolEvents) {
+    if (evt.callId) {
+      let pair = pairByCallId.get(evt.callId);
+      if (!pair) {
+        pair = {};
+        pairByCallId.set(evt.callId, pair);
+        toolPairs.push(pair);
+      }
+      if (evt.type === "start") pair.start = evt;
+      else pair.end = evt;
+    } else if (evt.type === "start") {
+      toolPairs.push({ start: evt });
+    } else {
+      const last = toolPairs[toolPairs.length - 1];
+      if (last && !last.end && (!last.start || !last.start.callId)) {
+        last.end = evt;
+      } else {
+        toolPairs.push({ end: evt });
       }
     }
   }
@@ -394,6 +475,22 @@ function buildToolPairs(toolEvents?: Message["toolEvents"]): ToolPair[] {
 
 function groupToolPairsForProcesses(toolPairs: ToolPair[], processCount: number): ToolPair[][] {
   if (toolPairs.length === 0) return [];
+
+  const hasLoopStepIndex = toolPairs.some((pair) =>
+    pair.start?.loopStepIndex !== undefined || pair.end?.loopStepIndex !== undefined);
+
+  if (hasLoopStepIndex) {
+    const groupMap = new Map<number, ToolPair[]>();
+    for (const pair of toolPairs) {
+      const idx = pair.start?.loopStepIndex ?? pair.end?.loopStepIndex ?? 0;
+      if (!groupMap.has(idx)) groupMap.set(idx, []);
+      groupMap.get(idx)!.push(pair);
+    }
+    return Array.from(groupMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([, group]) => group);
+  }
+
   if (processCount <= 1) return [toolPairs];
   const groups: ToolPair[][] = Array.from({ length: processCount }, () => []);
   toolPairs.forEach((pair, index) => {
@@ -411,11 +508,12 @@ function countThinkingSteps(entries: ThinkingEntry[]) {
 function ThinkingFlow({ entries }: { entries: ThinkingEntry[] }) {
   return (
     <div className="space-y-1.2 text-base text-muted-foreground">
-      {entries.map((entry, index) => (
-        <TimelineNode key={`${entry.type}-${index}`}>
+      {entries.map((entry) => (
+        <TimelineNode key={entry.key}>
           {entry.type === "reasoning" && <CollapsibleReasoningBlock content={entry.content} />}
           {entry.type === "process" && <ProcessText content={entry.content} />}
           {entry.type === "action" && <ActionNode tools={entry.tools} />}
+          {entry.type === "error" && <div className="px-1.5 text-base leading-relaxed text-destructive">{entry.content}</div>}
         </TimelineNode>
       ))}
     </div>
@@ -443,9 +541,11 @@ function CollapsibleReasoningBlock({ content }: { content: string }) {
 }
 
 function ProcessText({ content }: { content: string }) {
+  const masked = maskStreamingMarkdown(content);
+  if (!masked) return null;
   return (
-    <div className="whitespace-pre-wrap break-words px-1.5 text-base leading-relaxed text-foreground">
-      {content}
+    <div className="prose max-w-none break-words px-1.5 text-base leading-relaxed text-foreground [&_*]:text-foreground prose-p:my-0.5 prose-p:text-base prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-md prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-1 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-1 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert">
+      <Markdown remarkPlugins={[remarkGfm]}>{masked}</Markdown>
     </div>
   );
 }
@@ -561,4 +661,21 @@ function MessageBody({
   }
 
   return null;
+}
+
+function ThinkingPlaceholder() {
+  return (
+    <div
+      className="flex items-center gap-2 py-1 motion-reduce:items-center"
+      data-testid="thinking-placeholder"
+    >
+      <span
+        className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
+        aria-hidden="true"
+      />
+      <span className="thinking-flow-text text-base font-medium leading-7">
+        正在思考...
+      </span>
+    </div>
+  );
 }

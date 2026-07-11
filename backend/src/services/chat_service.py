@@ -26,13 +26,12 @@ except ImportError:
 
 from src.config import settings
 from src.database.engine import (
-    add_message_pair,
     async_session,
     get_conversation,
     get_messages,
     update_conversation_title,
 )
-from src.services.conversation_service import save_agent_messages
+from src.services.conversation_service import save_chat_turn
 from src.services.llm_settings_service import (
     build_llm_model_kwargs,
     get_user_llm_settings,
@@ -46,7 +45,6 @@ from src.tools.research import RESEARCH_TOOLS
 from src.prompts import (
     SYSTEM_BASE,
     SYSTEM_DATE,
-    SYSTEM_SMART_THINKING,
     SYSTEM_TOOL_RULES,
     RAG_AUTO,
     MCP_CAPABILITIES,
@@ -69,9 +67,12 @@ logger = logging.getLogger(__name__)
 _DONE_MARKER = chr(0)
 _BLOGDELTA_MARKER = f"{_DONE_MARKER}BLOGDELTA{_DONE_MARKER}"
 _REASONING_MARKER = f"{_DONE_MARKER}REASONING{_DONE_MARKER}"
+_LOOPSTEP_MARKER = f"{_DONE_MARKER}LOOPSTEP{_DONE_MARKER}"
+_ROUNDDELTA_MARKER = f"{_DONE_MARKER}ROUNDDELTA{_DONE_MARKER}"
+_ROUNDEND_MARKER = f"{_DONE_MARKER}ROUNDEND{_DONE_MARKER}"
+_STREAMERROR_MARKER = f"{_DONE_MARKER}STREAMERROR{_DONE_MARKER}"
 _PATCHSTART_MARKER = f"{_DONE_MARKER}PATCHSTART{_DONE_MARKER}"
 _PATCHDELTA_MARKER = f"{_DONE_MARKER}PATCHDELTA{_DONE_MARKER}"
-_LOOPSTEP_MARKER = f"{_DONE_MARKER}LOOPSTEP{_DONE_MARKER}"
 
 _MISSING_API_KEY_MESSAGE = "请先在「设置」页填写你自己的 API 密钥后再发起对话。"
 
@@ -82,9 +83,38 @@ class _MissingApiKeyError(RuntimeError):
 
 # ── Token estimation ──
 
+def _extract_text_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict) and block.get("type") in {"text", "output_text"}:
+            text = block.get("text", block.get("content", ""))
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
+
+
+def _extract_reasoning_content(content: Any) -> str:
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") not in {"thinking", "reasoning"}:
+            continue
+        text = block.get("thinking", block.get("text", block.get("content", "")))
+        if isinstance(text, str):
+            parts.append(text)
+    return "".join(parts)
+
+
 def estimate_tokens(text: str | list) -> int:
     if isinstance(text, list):
-        text = " ".join(p.get("text", "") for p in text if p.get("type") == "text")
+        text = _extract_text_content(text)
     cjk = sum(1 for c in text if "一" <= c <= "鿿")
     return max(1, (cjk // 2) + ((len(text) - cjk) // 4))
 
@@ -93,13 +123,10 @@ def estimate_tokens(text: str | list) -> int:
 
 def _system_prompt(
     tool_names: list[str],
-    thinking_mode: str = "balanced",
     mcp_capabilities_text: str = "",
 ) -> str:
     today = datetime.now().strftime("%Y年%m月%d日")
     base = SYSTEM_BASE + SYSTEM_DATE.format(today=today)
-    if _is_smart_thinking(thinking_mode):
-        base += SYSTEM_SMART_THINKING
     if tool_names:
         names = "、".join(tool_names)
         base += SYSTEM_TOOL_RULES.format(names=names)
@@ -107,10 +134,6 @@ def _system_prompt(
     if mcp_capabilities_text:
         base += MCP_CAPABILITIES.format(cap_text=mcp_capabilities_text)
     return base
-
-
-def _is_smart_thinking(thinking_mode: str) -> bool:
-    return thinking_mode == "smart"
 
 
 def _extra_body_for_mode(thinking_mode: str) -> dict[str, Any] | None:
@@ -137,7 +160,11 @@ def _chat_model_kwargs(thinking_mode: str, llm_settings=None) -> dict[str, Any]:
     kwargs = build_llm_model_kwargs(thinking_mode, llm_settings)
     extra_body = _extra_body_for_mode(thinking_mode)
     if extra_body and kwargs.get("protocol") == "openai":
-        kwargs["extra_body"] = extra_body
+        reasoning_effort = extra_body.pop("reasoning_effort", None)
+        if reasoning_effort:
+            kwargs["reasoning_effort"] = reasoning_effort
+        if extra_body:
+            kwargs["extra_body"] = extra_body
     return kwargs
 
 
@@ -156,7 +183,32 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
     if protocol == "anthropic":
         if not _HAS_ANTHROPIC or ChatAnthropic is None:
             raise RuntimeError("Anthropic protocol requires langchain-anthropic")
-        anthropic_kwargs = {k: v for k, v in llm_kwargs.items() if k not in ("api_key", "base_url")}
+        anthropic_kwargs = {
+            k: v
+            for k, v in llm_kwargs.items()
+            if k not in ("api_key", "base_url", "reasoning_effort", "extra_body")
+        }
+        reasoning_effort = llm_kwargs.get("reasoning_effort")
+        if reasoning_effort:
+            model_name = str(llm_kwargs.get("model", "")).lower()
+            if "claude" in model_name and any(version in model_name for version in ("4-7", "4.7")):
+                anthropic_kwargs["thinking"] = {"type": "adaptive", "display": "summarized"}
+                anthropic_kwargs["effort"] = reasoning_effort
+            else:
+                budget_map = {
+                    "fast": settings.fast_thinking_budget_tokens,
+                    "balanced": settings.balanced_thinking_budget_tokens,
+                    "smart": settings.smart_thinking_budget_tokens,
+                }
+                desired_budget = budget_map.get(thinking_mode, settings.balanced_thinking_budget_tokens)
+                # Anthropic 要求 max_tokens 严格大于 budget_tokens(max_tokens 是 thinking+最终回复的总上限)
+                # 否则部分兼容层会静默关闭 thinking。这里把 budget 限制为 max_tokens 的 70%,留出回复空间
+                max_tokens = anthropic_kwargs.get("max_tokens") or settings.llm_max_output_tokens
+                safe_budget = min(desired_budget, int(max_tokens * 0.7))
+                anthropic_kwargs["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": safe_budget,
+                }
         if llm_kwargs.get("api_key"):
             anthropic_kwargs["anthropic_api_key"] = llm_kwargs["api_key"]
         if llm_kwargs.get("base_url"):
@@ -330,27 +382,21 @@ def _extract_partial_content(args_json: str) -> str | None:
     return "".join(result)
 
 
-def _extract_partial_target(args_json: str) -> str | None:
-    match = re.search(r'"target_text"\s*:\s*"', args_json)
+def _extract_partial_json_string(args_json: str, field: str) -> str | None:
+    """从 partial JSON args 中提取指定字符串字段的值（已生成部分）。
+
+    与 _extract_partial_content 同样的转义处理，只是字段名可参数化。
+    """
+    match = re.search(rf'"{field}"\s*:\s*"', args_json)
     if not match:
         return None
-    return _extract_partial_json_string(args_json, match.end())
-
-
-def _extract_partial_replacement(args_json: str) -> str | None:
-    match = re.search(r'"replacement_text"\s*:\s*"', args_json)
-    if not match:
-        return None
-    return _extract_partial_json_string(args_json, match.end())
-
-
-def _extract_partial_json_string(value: str, start: int) -> str:
+    start = match.end()
     i = start
     result: list[str] = []
-    while i < len(value):
-        ch = value[i]
-        if ch == "\\" and i + 1 < len(value):
-            next_ch = value[i + 1]
+    while i < len(args_json):
+        ch = args_json[i]
+        if ch == "\\" and i + 1 < len(args_json):
+            next_ch = args_json[i + 1]
             if next_ch == '"':
                 result.append('"')
             elif next_ch == "\\":
@@ -370,6 +416,14 @@ def _extract_partial_json_string(value: str, start: int) -> str:
     return "".join(result)
 
 
+def _extract_partial_target(args_json: str) -> str | None:
+    return _extract_partial_json_string(args_json, "target_text")
+
+
+def _extract_partial_replacement(args_json: str) -> str | None:
+    return _extract_partial_json_string(args_json, "replacement_text")
+
+
 # ── Message building ──
 
 async def _build_messages(
@@ -386,7 +440,6 @@ async def _build_messages(
     """
 
     if conversation_id:
-        logger.info("Loading conversation history: conv=%s, user=%s", conversation_id, user_id)
         conv = await get_conversation(conversation_id, user_id)
         if not conv:
             logger.warning(
@@ -397,9 +450,8 @@ async def _build_messages(
             db_messages = []
         else:
             db_messages = await get_messages(conversation_id, user_id)
-            logger.info("Loaded %d history messages: conv=%s", len(db_messages), conversation_id)
     else:
-        logger.info("No conversation_id provided; using empty history")
+        db_messages = []
         db_messages = []
 
     full_user_message = user_message
@@ -492,11 +544,6 @@ async def stream_chat(
     context: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat response via LangGraph ReAct Agent."""
-    logger.info(
-        "Chat request: conv=%s, len=%d, thinking_mode=%s, preview='%s'",
-        conversation_id, len(user_message), thinking_mode, user_message[:200].replace("\n", " "),
-    )
-
     # 1. Load MCP metadata
     from src.database.session import async_session
     from sqlalchemy import select
@@ -527,19 +574,13 @@ async def stream_chat(
 
     mcp_capabilities = normalize_mcp_capabilities(mcp_servers)
     mcp_capabilities_text = format_mcp_capabilities(mcp_capabilities)
-    logger.info(
-        "Direct ReAct setup: mcp_servers=%d, mcp_capabilities=%d",
-        len(mcp_servers),
-        len(mcp_capabilities),
-    )
+    chat_t0 = time.time()
 
     # 2. Build messages
     try:
-        logger.info("Building chat messages: conv=%s, user=%s", conversation_id, user_id)
         api_messages, full_user_message, user_token_count = await _build_messages(
             user_message, conversation_id, user_id, user_image_url,
         )
-        logger.info("Built %d API messages", len(api_messages))
     except Exception as e:
         logger.error("Failed to build chat messages: %s", e, exc_info=True)
         api_messages = [{"role": "user", "content": user_message}]
@@ -558,19 +599,18 @@ async def stream_chat(
     if trust_writing or research_topic_id:
         agent_tools.extend(RESEARCH_TOOLS)
 
-    t0 = time.time()
     model_kwargs = _chat_model_kwargs(thinking_mode, user_llm_settings)
     logger.info(
-        ">>> LLM calling: '%s' → model=%s, thinking_mode=%s, extra_body=%s, max_tokens=%s",
+        ">>> Chat start: preview='%s', conv=%s, user=%s, msg=%d, mode=%s, model=%s, max_tokens=%s, tools=%d, api_msgs=%d, mcp=%d",
         user_message[:100].replace("\n", " "),
-        model_kwargs.get("model"),
-        thinking_mode,
-        "extra_body" in model_kwargs,
-        model_kwargs.get("max_tokens"),
+        conversation_id, user_id, len(user_message), thinking_mode,
+        model_kwargs.get("model"), model_kwargs.get("max_tokens"),
+        len(agent_tools), len(api_messages), len(mcp_servers),
     )
 
     # 6. Stream agent execution
     full_content = ""
+    final_confirmed = False
     reasoning_debug_parts: list[str] = []
     tool_events_for_history: list[dict[str, Any]] = []
     loop_steps_for_history: list[str] = []
@@ -578,14 +618,17 @@ async def stream_chat(
     _pending_blog_args: dict[int, str] = {}
     _pending_blog_content_yielded: dict[int, str] = {}
     _pending_patch_started: dict[int, bool] = {}
-    _pending_patch_yielded: dict[int, str] = {}
+    _pending_patch_target: dict[int, str] = {}
+    _pending_patch_replacement_yielded: dict[int, str] = {}
     _last_tool_input: dict[str, Any] | None = None
-    # 当前 LLM 轮次的文本（用于区分最终轮 vs 中间轮）
     _current_round_text: list[str] = []
-    # 收集 agent 内部消息（用于保存完整 tool_calls 历史）
+    _round_id = 1
+    _loop_step_index = 0
     _collected_agent_msgs: list[AIMessage | ToolMessage] = []
-    _last_ai_tool_calls: list[dict] = []
-    _tool_call_idx = 0
+    _tool_calls_by_id: dict[str, dict[str, Any]] = {}
+    _tool_call_ids_by_name: dict[str, list[str]] = {}
+    _tool_call_input_by_id: dict[str, dict[str, Any]] = {}
+    _event_run_to_call_id: dict[str, str] = {}
     try:
         token = current_user_id_cv.set(user_id)
         try:
@@ -655,18 +698,18 @@ async def stream_chat(
                                 break
 
                 if parts:
-                    api_messages.insert(-1, {"role": "system", "content": "\n".join(parts)})
+                    # Anthropic 协议要求 system 消息连续出现在最前;OpenAI 协议也支持放最前
+                    # 所以统一插入到列表头部,避免穿插导致 Anthropic 400
+                    api_messages.insert(0, {"role": "system", "content": "\n".join(parts)})
 
             llm = _create_llm(model_kwargs, thinking_mode)
 
             all_tool_names = [t.name for t in agent_tools]
-            logger.info("Creating ReAct agent with tools: %s", all_tool_names)
             agent = create_react_agent(
                 llm,
                 agent_tools,
-                prompt=_system_prompt(all_tool_names, thinking_mode, mcp_capabilities_text),
+                prompt=_system_prompt(all_tool_names, mcp_capabilities_text),
             )
-            logger.info("ReAct agent created; streaming events")
             async for event in _astream_events_with_heartbeat(
                 agent.astream_events(
                     {"messages": api_messages},
@@ -679,29 +722,79 @@ async def stream_chat(
 
                 if kind == "on_tool_start":
                     tool_name = event.get("name", "")
-                    tool_input = event.get("data", {}).get("input", {})
+                    event_data = event.get("data", {})
+                    tool_input = event_data.get("input", {})
                     logger.info("Tool start: %s args=%s", tool_name, str(tool_input)[:200])
                     _last_tool_input = tool_input if isinstance(tool_input, dict) else None
+                    event_run_id = str(event.get("run_id", ""))
+                    metadata = event.get("metadata", {}) or {}
+                    call_id = str(event_data.get("tool_call_id") or metadata.get("tool_call_id") or "")
+                    if not call_id:
+                        for candidate_id in _tool_call_ids_by_name.get(tool_name, []):
+                            candidate = _tool_calls_by_id[candidate_id]
+                            if candidate_id not in _tool_call_input_by_id and candidate.get("args") == tool_input:
+                                call_id = candidate_id
+                                break
+                    if not call_id:
+                        for candidate_id in _tool_call_ids_by_name.get(tool_name, []):
+                            if candidate_id not in _tool_call_input_by_id:
+                                call_id = candidate_id
+                                break
+                    if event_run_id and call_id:
+                        _event_run_to_call_id[event_run_id] = call_id
+                    if call_id and isinstance(tool_input, dict):
+                        _tool_call_input_by_id[call_id] = tool_input
+                    call_meta = _tool_calls_by_id.get(call_id, {})
+                    tool_round_id = int(call_meta.get("round_id", max(1, _round_id - 1)))
+                    loop_step_index = int(call_meta.get("loop_step_index", max(0, _loop_step_index - 1)))
                     _pending_blog_tool.clear()
                     _pending_blog_args.clear()
                     _pending_blog_content_yielded.clear()
                     _pending_patch_started.clear()
-                    _pending_patch_yielded.clear()
-                    tool_events_for_history.append({"type": "start", "toolName": tool_name})
+                    _pending_patch_target.clear()
+                    _pending_patch_replacement_yielded.clear()
+                    history_start = {
+                        "type": "start", "toolName": tool_name, "call_id": call_id,
+                        "round_id": tool_round_id, "loop_step_index": loop_step_index,
+                    }
+                    tool_events_for_history.append(history_start)
                     yield f"\n\n{_DONE_MARKER}TOOLDONE{_DONE_MARKER}\n"
-                    yield json.dumps({"status": "start", "tool_name": tool_name, "result": "调用中..."})
+                    yield json.dumps({
+                        "status": "start", "tool_name": tool_name, "result": "调用中...",
+                        "call_id": call_id, "round_id": tool_round_id,
+                        "loop_step_index": loop_step_index,
+                    })
 
                 elif kind == "on_tool_end":
                     tool_name = event.get("name", "")
-                    output = event.get("data", {}).get("output", "")
+                    event_data = event.get("data", {})
+                    output = event_data.get("output", "")
                     result_text = str(output)
                     logger.info("Tool end: %s result=%s", tool_name, result_text[:200])
-                    # 收集 ToolMessage（从最近的 AIMessage.tool_calls 中取 tool_call_id）
-                    if _last_ai_tool_calls and _tool_call_idx < len(_last_ai_tool_calls):
-                        tc_id = _last_ai_tool_calls[_tool_call_idx].get("id", "")
-                        _collected_agent_msgs.append(ToolMessage(content=result_text, tool_call_id=tc_id))
-                        _tool_call_idx += 1
-                    payload: dict[str, object] = {"status": "end", "tool_name": tool_name, "result": result_text}
+                    event_run_id = str(event.get("run_id", ""))
+                    metadata = event.get("metadata", {}) or {}
+                    call_id = str(
+                        event_data.get("tool_call_id")
+                        or metadata.get("tool_call_id")
+                        or _event_run_to_call_id.get(event_run_id, "")
+                    )
+                    if not call_id:
+                        matching_ids = [
+                            candidate_id for candidate_id in _tool_call_ids_by_name.get(tool_name, [])
+                            if candidate_id in _tool_call_input_by_id
+                        ]
+                        if len(matching_ids) == 1:
+                            call_id = matching_ids[0]
+                    call_meta = _tool_calls_by_id.get(call_id, {})
+                    tool_round_id = int(call_meta.get("round_id", max(1, _round_id - 1)))
+                    loop_step_index = int(call_meta.get("loop_step_index", max(0, _loop_step_index - 1)))
+                    if call_id:
+                        _collected_agent_msgs.append(ToolMessage(content=result_text, tool_call_id=call_id))
+                    payload: dict[str, object] = {
+                        "status": "end", "tool_name": tool_name, "result": result_text,
+                        "call_id": call_id, "round_id": tool_round_id,
+                        "loop_step_index": loop_step_index,
+                    }
                     if tool_name.startswith("blog_"):
                         blog_meta = _extract_blog_meta(tool_name, result_text)
                         if blog_meta:
@@ -715,10 +808,15 @@ async def stream_chat(
                                 )
                                 if research_link:
                                     payload["research_link"] = research_link
-                    refs = _extract_references(tool_name, result_text, _last_tool_input)
+                    tool_input_for_call = _tool_call_input_by_id.get(call_id, _last_tool_input)
+                    refs = _extract_references(tool_name, result_text, tool_input_for_call)
                     if refs:
                         payload["references"] = refs
-                    history_event: dict[str, Any] = {"type": "end", "toolName": tool_name, "result": result_text}
+                    history_event: dict[str, Any] = {
+                        "type": "end", "toolName": tool_name, "result": result_text,
+                        "call_id": call_id, "round_id": tool_round_id,
+                        "loop_step_index": loop_step_index,
+                    }
                     if refs:
                         history_event["references"] = refs
                     tool_events_for_history.append(history_event)
@@ -728,11 +826,17 @@ async def stream_chat(
                 elif kind == "on_chat_model_stream":
                     chunk = event.get("data", {}).get("chunk")
 
-                    # 1) 文本 token — 累积当前轮次文本（中间轮不直接 yield，等 on_chat_model_end 判定）
-                    if chunk and hasattr(chunk, "content") and chunk.content:
-                        delta = chunk.content
-                        if isinstance(delta, str):
+                    if chunk and hasattr(chunk, "content"):
+                        delta = _extract_text_content(chunk.content)
+                        if delta:
                             _current_round_text.append(delta)
+                            yield f"{_ROUNDDELTA_MARKER}{json.dumps({'round_id': _round_id, 'delta': delta})}"
+
+                        # Anthropic 协议把思考放在 content 数组的 thinking/reasoning block 里
+                        content_reasoning = _extract_reasoning_content(chunk.content)
+                        if content_reasoning:
+                            reasoning_debug_parts.append(content_reasoning)
+                            yield f"{_REASONING_MARKER}{{\"reasoning_delta\":{json.dumps(content_reasoning)}}}"
 
                     # 1.5) 模型推理内容（多字段兼容）
                     if chunk and hasattr(chunk, "additional_kwargs"):
@@ -762,30 +866,15 @@ async def stream_chat(
                                 _pending_blog_args[idx] = ""
                                 _pending_blog_content_yielded[idx] = ""
                                 _pending_patch_started[idx] = False
-                                _pending_patch_yielded[idx] = ""
+                                _pending_patch_target[idx] = ""
+                                _pending_patch_replacement_yielded[idx] = ""
 
                             if tc_chunk.get("args"):
                                 _pending_blog_args[idx] = (_pending_blog_args.get(idx, "") or "") + tc_chunk["args"]
 
                                 tool_name = _pending_blog_tool.get(idx, "")
 
-                                if tool_name == "blog_edit_post":
-                                    if not _pending_patch_started.get(idx) and '"replacement_text"' in _pending_blog_args[idx]:
-                                        target = _extract_partial_target(_pending_blog_args[idx])
-                                        if target is not None:
-                                            _pending_patch_started[idx] = True
-                                            yield f"{_PATCHSTART_MARKER}{json.dumps({'target_text': target})}"
-
-                                    if _pending_patch_started.get(idx):
-                                        replacement_so_far = _extract_partial_replacement(_pending_blog_args[idx])
-                                        if replacement_so_far is not None:
-                                            prev = _pending_patch_yielded.get(idx, "")
-                                            new_part = replacement_so_far[len(prev):]
-                                            if new_part:
-                                                _pending_patch_yielded[idx] = replacement_so_far
-                                                yield f"{_PATCHDELTA_MARKER}{json.dumps({'replacement_delta': new_part})}"
-
-                                elif tool_name in ("blog_create_post", "blog_write_post"):
+                                if tool_name in ("blog_create_post", "blog_write_post"):
                                     content_so_far = _extract_partial_content(_pending_blog_args[idx])
                                     if content_so_far is not None:
                                         prev = _pending_blog_content_yielded.get(idx, "")
@@ -794,107 +883,139 @@ async def stream_chat(
                                             _pending_blog_content_yielded[idx] = content_so_far
                                             yield f"{_BLOGDELTA_MARKER}{{\"content_delta\":{json.dumps(new_part)}}}"
 
+                                elif tool_name == "blog_edit_post":
+                                    args_so_far = _pending_blog_args[idx]
+                                    target_so_far = _extract_partial_target(args_so_far) or ""
+                                    if (
+                                        target_so_far
+                                        and '"replacement_text"' in args_so_far
+                                        and not _pending_patch_started.get(idx, False)
+                                    ):
+                                        _pending_patch_started[idx] = True
+                                        _pending_patch_target[idx] = target_so_far
+                                        _pending_patch_replacement_yielded[idx] = ""
+                                        yield f"{_PATCHSTART_MARKER}{{\"target_text\":{json.dumps(target_so_far, ensure_ascii=False)}}}"
+                                    if _pending_patch_started.get(idx, False):
+                                        replacement_so_far = _extract_partial_replacement(args_so_far)
+                                        if replacement_so_far is not None:
+                                            prev_repl = _pending_patch_replacement_yielded.get(idx, "")
+                                            new_repl = replacement_so_far[len(prev_repl):]
+                                            if new_repl:
+                                                _pending_patch_replacement_yielded[idx] = replacement_so_far
+                                                yield f"{_PATCHDELTA_MARKER}{{\"replacement_delta\":{json.dumps(new_repl, ensure_ascii=False)}}}"
+
                 elif kind == "on_chat_model_end":
-                    # 收集完整的 AIMessage（含 tool_calls）
                     ai_msg = event.get("data", {}).get("output")
                     if isinstance(ai_msg, AIMessage):
-                        _collected_agent_msgs.append(ai_msg)
-                        round_text = "".join(_current_round_text).strip()
+                        round_text = _extract_text_content(ai_msg.content)
+                        classification = "loop" if ai_msg.tool_calls else "final"
+                        round_payload = {
+                            "round_id": _round_id,
+                            "classification": classification,
+                            "text": round_text,
+                            "loop_step_index": _loop_step_index if classification == "loop" else None,
+                        }
+                        yield f"{_ROUNDEND_MARKER}{json.dumps(round_payload)}"
                         if ai_msg.tool_calls:
-                            # 中间轮：把文本作为 loop step 推送给前端思考面板
-                            _last_ai_tool_calls = list(ai_msg.tool_calls)
-                            _tool_call_idx = 0
-                            if round_text:
-                                loop_steps_for_history.append(round_text)
-                                yield f"{_LOOPSTEP_MARKER}{json.dumps({'text': round_text})}"
+                            _collected_agent_msgs.append(ai_msg)
+                            for tool_call in ai_msg.tool_calls:
+                                call_id = str(tool_call.get("id", ""))
+                                if not call_id:
+                                    continue
+                                call_meta = {
+                                    **tool_call,
+                                    "round_id": _round_id,
+                                    "loop_step_index": _loop_step_index,
+                                }
+                                _tool_calls_by_id[call_id] = call_meta
+                                _tool_call_ids_by_name.setdefault(str(tool_call.get("name", "")), []).append(call_id)
+                            loop_steps_for_history.append(round_text)
+                            _loop_step_index += 1
                         else:
-                            # 最终轮（无工具调用）：流式推送最终回答
                             full_content = round_text
-                            yield round_text
-                        # 重置当前轮次缓冲，准备下一轮
+                            final_confirmed = True
                         _current_round_text = []
+                        _round_id += 1
         finally:
             current_user_id_cv.reset(token)
 
     except Exception as e:
         logger.error("Agent execution failed: %s", e, exc_info=True)
-        # 异常时清空推理内容，避免错误消息带着推理链
-        reasoning_debug_parts.clear()
-        loop_steps_for_history.clear()
-        # 对 tool_calls 格式错误给出友好提示
+        if _current_round_text:
+            discard_payload = {
+                "round_id": _round_id,
+                "classification": "discard",
+                "text": "",
+                "loop_step_index": None,
+            }
+            yield f"{_ROUNDEND_MARKER}{json.dumps(discard_payload)}"
+            _current_round_text = []
         err_msg = str(e)
         if isinstance(e, _MissingApiKeyError):
-            full_content = _MISSING_API_KEY_MESSAGE
+            error_message = _MISSING_API_KEY_MESSAGE
         elif isinstance(e, (asyncio.TimeoutError, TimeoutError)):
-            full_content = (
+            error_message = (
                 f"抱歉，模型响应超时（{settings.agent_stream_idle_timeout:.0f}s 内无新内容），"
                 "请稍后重试或切换思考模式。"
             )
         elif "tool_calls" in err_msg and ("must be followed" in err_msg or "400" in err_msg):
-            full_content = "抱歉，对话历史中存在不完整的工具调用记录，已自动清理。请重新发送您的消息。"
+            error_message = "抱歉，对话历史中存在不完整的工具调用记录，已自动清理。请重新发送您的消息。"
         else:
-            full_content = f"抱歉，处理您的请求时出错：{e}"
-        yield full_content
-
-    # 兜底：若未捕获到最终轮（如异常中断），用所有累积文本
-    if not full_content and _current_round_text:
-        full_content = "".join(_current_round_text)
+            error_message = f"抱歉，处理您的请求时出错：{e}"
+        yield f"{_STREAMERROR_MARKER}{json.dumps({'round_id': _round_id, 'message': error_message})}"
 
     if reasoning_debug_parts:
         reasoning_debug_text = "".join(reasoning_debug_parts)
-        logger.debug(
-            "reasoning_content total: len=%d, preview=%s",
-            len(reasoning_debug_text),
+        logger.info(
+            "[THINKING] reasoning_content captured: preview=%s, len=%d",
             reasoning_debug_text[:500],
+            len(reasoning_debug_text),
         )
 
-    elapsed = time.time() - t0
+    elapsed = time.time() - chat_t0
     thinking_duration_ms = int(elapsed * 1000)
     reasoning_content = "".join(reasoning_debug_parts) or None
-    logger.info("<<< LLM result: took %.1fs, %d chars, preview='%s'", elapsed, len(full_content), full_content[:200])
 
-    # 6.5 保存完整的 agent 消息历史（含 tool_calls），供下次重建上下文
-    # 注意：只存 AIMessage + ToolMessage（中间轮），不存 HumanMessage（user 消息由 add_message_pair 负责）
-    if _collected_agent_msgs:
+    new_conv_id = conversation_id
+    message_id = 0
+    if final_confirmed:
         try:
-            await save_agent_messages(conversation_id, user_id, _collected_agent_msgs)
-            logger.info("Saved %d agent messages (with tool_calls) for conv=%s", len(_collected_agent_msgs), conversation_id)
+            assistant_token_count = estimate_tokens(full_content)
+            new_conv_id, new_message = await save_chat_turn(
+                conversation_id,
+                user_id,
+                user_message,
+                user_token_count,
+                _collected_agent_msgs,
+                full_content,
+                assistant_token_count,
+                user_image_url,
+                user_file_url,
+                final_reasoning_content=reasoning_content,
+                final_tool_events=tool_events_for_history or None,
+                final_loop_steps=loop_steps_for_history or None,
+                final_thinking_duration_ms=thinking_duration_ms,
+                final_thinking_mode=thinking_mode,
+            )
+            message_id = new_message.id
+            if not conversation_id:
+                try:
+                    await update_conversation_title(new_conv_id, user_id, user_message[:50])
+                except Exception:
+                    pass
         except Exception as e:
-            logger.warning("Failed to save agent messages with tool_calls: %s", e)
-
-    # 7. Save to DB
-    try:
-        logger.info("Saving chat result: conv=%s, user=%s", conversation_id, user_id)
-        assistant_token_count = estimate_tokens(full_content)
-        new_conv_id, new_message = await add_message_pair(
-            conversation_id,
-            user_id,
-            user_message,
-            user_token_count,
-            full_content,
-            assistant_token_count,
-            user_image_url,
-            user_file_url,
-            assistant_reasoning_content=reasoning_content,
-            assistant_tool_events=tool_events_for_history or None,
-            assistant_loop_steps=loop_steps_for_history or None,
-            assistant_thinking_duration_ms=thinking_duration_ms,
-            assistant_thinking_mode=thinking_mode,
-        )
-        message_id = new_message.id
-        if not conversation_id:
-            try:
-                await update_conversation_title(new_conv_id, user_id, user_message[:50])
-            except Exception:
-                pass
-        logger.info("Saved chat result: conv=%s, message=%s", new_conv_id, message_id)
-    except Exception as e:
-        logger.error("Failed to save chat result: %s", e, exc_info=True)
-        new_conv_id = conversation_id
-        message_id = 0
+            logger.error("Failed to save confirmed chat turn: %s", e, exc_info=True)
+            new_conv_id = conversation_id
+            message_id = 0
 
     yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps({
         "type": "done",
         "conversation_id": new_conv_id,
         "message_id": message_id,
     })
+    logger.info(
+        "<<< Chat end: preview='%s', conv=%s, msg=%s, took=%.1fs, chars=%d",
+        full_content[:200].replace("\n", " "),
+        new_conv_id, message_id, time.time() - chat_t0,
+        len(full_content),
+    )

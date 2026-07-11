@@ -48,7 +48,7 @@ backend/data/
 docs
 LOG.md
 PROMPT.md
-temp
+temps
 
 *.bat
 

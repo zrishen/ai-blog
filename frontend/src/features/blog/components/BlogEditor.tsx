@@ -89,9 +89,9 @@ export function BlogEditor() {
   const containerId = useId();
   const isProgrammaticChange = useRef(false);
   const isDirtyRef = useRef(false);
+  const patchApplyPendingRef = useRef(false);
   const skipDirtyOnceRef = useRef(false);
-  // AI 修改(patch 流式预览)相关
-  const patchApplyPendingRef = useRef(false);                 // 预览中,等待落地 setValue
+  // AI 修改相关
   const aiModifySavingRef = useRef(false);                    // 防止保存期间重复触发
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -152,7 +152,7 @@ export function BlogEditor() {
     vditorRef.current?.setValue(expandBlankLines(newContent));
     return () => clearTimeout(safety);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingPost?.id]);
+  }, [existingPost?.content]);
 
   useEffect(() => {
     const container = document.getElementById(containerId);
@@ -492,77 +492,61 @@ export function BlogEditor() {
     return () => window.removeEventListener("mousedown", handler, true);
   }, [contextMenu, closeContextMenu]);
 
-  // ── patch 流式预览:文档流原位替换 <p> 为预览块(不碰 Vditor input) ──
   const patchStreaming = state.blogPatchStreaming;
 
   useEffect(() => {
-    if (!patchStreaming) return;
     const editorEl = getEditorElement();
     if (!editorEl) return;
 
-    // 已有预览块(同一 patch 后续 delta)→ 更新内容
+    if (!patchStreaming) {
+      if (patchApplyPendingRef.current) {
+        patchApplyPendingRef.current = false;
+        isProgrammaticChange.current = true;
+        vditorRef.current?.setValue(expandBlankLines(existingPost?.content || ""));
+        window.setTimeout(() => { isProgrammaticChange.current = false; }, 50);
+      }
+      return;
+    }
+
     const existing = editorEl.querySelector(".ai-patch-inline__text");
     if (existing instanceof HTMLElement) {
       existing.textContent = patchStreaming.replacementDelta || "...";
       return;
     }
 
-    // 新 patch:用 targetText 找到选中文字所在的块元素并原位替换
-    // 注意:targetText 可能含 markdown 标记(反引号等),在 Vditor DOM 里被渲染成
-    // <code>/<strong> 等子元素,纯文本节点匹配不到。用"最长公共子串"做模糊匹配。
-    const target = patchStreaming.targetText;
-    // 取 targetText 中一段连续纯文本(去掉 markdown 标记字符)作为匹配特征
-    const cleanTarget = target.replace(/[`*_~#\[\]()>]/g, "").trim();
-    const matchKey = cleanTarget.length > 15 ? cleanTarget.substring(0, 15) : cleanTarget;
-    const blocks = Array.from(editorEl.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote"));
+    const cleanTarget = patchStreaming.targetText.replace(/[`*_~#\[\]()>]/g, "").trim();
+    const matchKey = cleanTarget.length > 15 ? cleanTarget.slice(0, 15) : cleanTarget;
+    const blocks = Array.from(
+      editorEl.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote"),
+    );
     for (const block of blocks) {
       const blockText = (block.textContent || "").replace(/[`*_~#\[\]()>]/g, "");
-      if (matchKey && blockText.includes(matchKey)) {
-        const div = document.createElement("div");
-        div.className = "ai-patch-inline";
-        div.setAttribute("data-block", "0");
-        div.setAttribute("contenteditable", "false");
-        const label = document.createElement("span");
-        label.className = "ai-patch-inline__label";
-        label.textContent = "AI 修改中...";
-        const text = document.createElement("div");
-        text.className = "ai-patch-inline__text";
-        text.textContent = patchStreaming.replacementDelta || "...";
-        div.appendChild(label);
-        div.appendChild(text);
-        block.replaceWith(div);
-        patchApplyPendingRef.current = true;
-        return;
-      }
+      if (!matchKey || !blockText.includes(matchKey)) continue;
+      const preview = document.createElement("div");
+      preview.className = "ai-patch-inline";
+      preview.setAttribute("data-block", "0");
+      preview.setAttribute("contenteditable", "false");
+      const label = document.createElement("span");
+      label.className = "ai-patch-inline__label";
+      label.textContent = "AI 修改中...";
+      const text = document.createElement("div");
+      text.className = "ai-patch-inline__text";
+      text.textContent = patchStreaming.replacementDelta || "...";
+      preview.append(label, text);
+      block.replaceWith(preview);
+      patchApplyPendingRef.current = true;
+      return;
     }
-    // targetText 未匹配时静默(下次 patch 仍会重试),避免噪声日志
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patchStreaming]);
+  }, [patchStreaming, existingPost?.content, getEditorElement]);
 
-  // ── patch 落地:content 变化后 setValue 重建 DOM,预览块自然消失 ───
   useEffect(() => {
-    if (!patchApplyPendingRef.current) return;
-    if (!vditorReadyRef.current) return;
-    const newContent = existingPost?.content || "";
-    patchApplyPendingRef.current = false;
-    isProgrammaticChange.current = true;
-    const safety = setTimeout(() => { isProgrammaticChange.current = false; }, 50);
-    vditorRef.current?.setValue(expandBlankLines(newContent));
-    return () => clearTimeout(safety);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [existingPost?.content]);
-
-  // ── 超时兜底:30 秒未落地则 setValue 恢复 ─────────────────────────
-  useEffect(() => {
-    if (!patchApplyPendingRef.current) return;
-    const timer = setTimeout(() => {
-      patchApplyPendingRef.current = false;
-      vditorRef.current?.setValue(expandBlankLines(existingPost?.content || ""));
+    if (!patchStreaming) return;
+    const timer = window.setTimeout(() => {
+      dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
       setError("AI 修改超时，请重试");
     }, 30000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patchApplyPendingRef.current]);
+    return () => window.clearTimeout(timer);
+  }, [patchStreaming?.targetText, dispatch]);
 
   const handleCancel = useCallback(() => {
     if (isDirtyRef.current) {

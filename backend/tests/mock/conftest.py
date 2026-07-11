@@ -48,7 +48,13 @@ async def mock_stream_chat(
     context=None,
 ):
     """模拟流式聊天响应。"""
-    yield "你好！这是一个测试回复。"
+    yield "\0ROUNDDELTA\0" + json.dumps({"round_id": 1, "delta": "你好！这是一个测试回复。"})
+    yield "\0ROUNDEND\0" + json.dumps({
+        "round_id": 1,
+        "classification": "final",
+        "text": "你好！这是一个测试回复。",
+        "loop_step_index": None,
+    })
     yield "\n\n\0DONE\0\n" + json.dumps({
         "type": "done",
         "conversation_id": conversation_id or 1,
