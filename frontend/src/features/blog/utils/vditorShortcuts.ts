@@ -144,6 +144,48 @@ function isPlainBackspace(event: KeyboardEvent): boolean {
     && !event.isComposing;
 }
 
+function findAncestorListItem(node: Node, root: HTMLElement): HTMLLIElement | null {
+  let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as HTMLElement | null);
+  while (el && el !== root) {
+    if (el.tagName === "LI") return el as HTMLLIElement;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function moveListItemToParagraph(editor: HTMLElement, item: HTMLLIElement): boolean {
+  const list = item.parentElement;
+  if (!list || list.tagName !== "UL" || !editor.contains(list)) return false;
+
+  const paragraph = document.createElement("p");
+  paragraph.setAttribute("data-block", list.getAttribute("data-block") ?? "0");
+  while (item.firstChild) paragraph.appendChild(item.firstChild);
+  paragraph.querySelectorAll("wbr").forEach((node) => node.remove());
+  if (!paragraph.hasChildNodes()) paragraph.appendChild(document.createElement("br"));
+
+  const items = Array.from(list.children);
+  const followingItems = items.slice(items.indexOf(item) + 1);
+  if (followingItems.length === 0) {
+    list.insertAdjacentElement("afterend", paragraph);
+  } else {
+    const trailingList = list.cloneNode(false) as HTMLUListElement;
+    followingItems.forEach((followingItem) => trailingList.appendChild(followingItem));
+    list.insertAdjacentElement("afterend", paragraph);
+    paragraph.insertAdjacentElement("afterend", trailingList);
+  }
+  item.remove();
+  if (!list.children.length) list.remove();
+
+  const selection = window.getSelection();
+  const nextRange = document.createRange();
+  nextRange.setStart(paragraph, 0);
+  nextRange.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(nextRange);
+  editor.dispatchEvent(new Event("input", { bubbles: true }));
+  return true;
+}
+
 export function applyBackspaceShortcut(editor: HTMLElement, event: KeyboardEvent): boolean {
   if (!isPlainBackspace(event)) return false;
   if (!editor.isContentEditable) return false;
@@ -152,6 +194,12 @@ export function applyBackspaceShortcut(editor: HTMLElement, event: KeyboardEvent
   if (!selection || selection.rangeCount === 0) return false;
   const range = selection.getRangeAt(0);
   if (!range.collapsed || !editor.contains(range.startContainer)) return false;
+
+  const listItem = findAncestorListItem(range.startContainer, editor);
+  if (listItem?.parentElement?.tagName === "UL" && isAtBlockStart(range, listItem)) {
+    event.preventDefault();
+    return moveListItemToParagraph(editor, listItem);
+  }
 
   const heading = findAncestorHeading(range.startContainer, editor);
   if (!heading || !isAtBlockStart(range, heading)) return false;
