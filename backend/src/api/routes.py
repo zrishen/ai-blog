@@ -16,6 +16,7 @@ from src.api.preview import router as preview_router
 from src.api.auth import router as auth_router
 from src.api.public_chat import router as public_chat_router
 from src.api.settings import router as settings_router
+from src.api.trash import router as trash_router
 
 router = APIRouter()
 
@@ -45,3 +46,6 @@ router.include_router(research_router)
 
 # 文件预览
 router.include_router(preview_router)
+
+# 回收站
+router.include_router(trash_router)

@@ -70,7 +70,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
 
   useEffect(() => {
     loadPosts();
-  }, [loadPosts]);
+  }, [loadPosts, state.trashRevision]);
 
   const visiblePosts = useMemo(() => {
     let posts = isOwner ? state.blogPosts : state.blogPosts.filter((post) => post.status === "published");

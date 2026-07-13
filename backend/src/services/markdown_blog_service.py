@@ -113,16 +113,19 @@ def slug_from_title(title: str) -> str:
 
 
 async def ensure_unique_slug(base_slug: str, db: AsyncSession, *, user_id: int, exclude_id: Optional[int] = None) -> str:
+    """生成唯一 slug。识别所有记录（含回收站内软删），避免撞 uq_blog_posts_user_slug。
+    软删残留保留在回收站，重建同标题时自动派生 -1/-2 后缀。"""
     slug = base_slug
     counter = 1
     while True:
-        stmt = select(BlogPostModel).where(BlogPostModel.slug == slug, BlogPostModel.user_id == user_id)
+        stmt = select(BlogPostModel).where(
+            BlogPostModel.slug == slug,
+            BlogPostModel.user_id == user_id,
+        )
         if exclude_id is not None:
             stmt = stmt.where(BlogPostModel.id != exclude_id)
         result = await db.execute(stmt)
-        exists_in_db = result.scalar_one_or_none() is not None
-        exists_on_disk = _filepath_for_slug(slug, user_id).exists()
-        if not exists_in_db and not exists_on_disk:
+        if result.scalar_one_or_none() is None and not _filepath_for_slug(slug, user_id).exists():
             return slug
         slug = f"{base_slug}-{counter}"
         counter += 1
@@ -187,12 +190,15 @@ async def sync_file_to_db(
     post = None
     if existing_post_id is not None:
         post = await db.get(BlogPostModel, existing_post_id)
+        if post is not None and post.deleted_at is not None:
+            return None
 
     if post is None:
         result = await db.execute(
             select(BlogPostModel).where(
                 ((BlogPostModel.file_path == file_path) | (BlogPostModel.slug == slug)),
                 BlogPostModel.user_id == user_id,
+                BlogPostModel.deleted_at.is_(None),
             )
         )
         post = result.scalar_one_or_none()

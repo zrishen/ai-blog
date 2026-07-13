@@ -105,7 +105,7 @@ async def blog_write_post(
 
     async with async_session() as db:
         post = await db.get(BlogPostModel, post_id)
-        if not post:
+        if not post or post.deleted_at is not None:
             return f"文章不存在: id={post_id}"
         if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
@@ -173,7 +173,7 @@ async def blog_edit_post(
 
     async with async_session() as db:
         post = await db.get(BlogPostModel, post_id)
-        if not post:
+        if not post or post.deleted_at is not None:
             return f"文章不存在: id={post_id}"
         if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
@@ -235,28 +235,24 @@ async def blog_edit_post(
 
 @tool
 async def blog_delete_post(post_id: int) -> str:
-    """删除指定的博客文章（同时删除 Markdown 文件和数据库记录）。
+    """将指定的博客文章移入回收站。
     当用户要求删除、移除博客文章时优先使用此工具。
     参数 post_id: 文章的数据库 ID（必填）。"""
-    from src.services.markdown_blog_service import delete_post_file
+    from src.services.blog_service import delete_post, get_owned_post
 
     user_id = current_user_id_cv.get()
     if user_id is None:
         return "错误: 未认证用户无法删除文章。"
 
     async with async_session() as db:
-        post = await db.get(BlogPostModel, post_id)
+        post = await get_owned_post(db, post_id, user_id)
         if not post:
-            return f"文章不存在: id={post_id}"
-        if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
 
         slug = post.slug
         title = post.title
-        delete_post_file(slug, user_id)
-        await db.delete(post)
-        await db.commit()
-        return f"文章已删除: id={post_id}, slug={slug}, title={title}"
+        await delete_post(db, post_id, user_id)
+        return f"文章已移入回收站: id={post_id}, slug={slug}, title={title}"
 
 
 @tool
@@ -281,7 +277,7 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
             if not keyword:
                 return "错误: 搜索单篇文章正文时 query 不能为空。"
             post = await db.get(BlogPostModel, post_id)
-            if not post or post.user_id != user_id:
+            if not post or post.user_id != user_id or post.deleted_at is not None:
                 return f"文章不存在: id={post_id}"
 
             data = read_post_by_slug(post.slug, user_id)
@@ -319,7 +315,10 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
             return "\n\n".join(lines)
 
         per_page = 20
-        stmt = select(BlogPostModel).where(BlogPostModel.user_id == user_id)
+        stmt = select(BlogPostModel).where(
+            BlogPostModel.user_id == user_id,
+            BlogPostModel.deleted_at.is_(None),
+        )
         if status.strip():
             stmt = stmt.where(BlogPostModel.status == status.strip())
         stmt = stmt.order_by(BlogPostModel.updated_at.desc())
@@ -384,7 +383,7 @@ async def _read_post_full(post_id: int) -> str:
 
     async with async_session() as db:
         post = await db.get(BlogPostModel, post_id)
-        if not post:
+        if not post or post.deleted_at is not None:
             return f"文章不存在: id={post_id}"
         if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
@@ -416,7 +415,7 @@ async def _get_post_blocks(post_id: int) -> tuple[BlogPostModel | None, list[dic
 
     async with async_session() as db:
         post = await db.get(BlogPostModel, post_id)
-        if not post or post.user_id != user_id:
+        if not post or post.user_id != user_id or post.deleted_at is not None:
             return None, []
 
         blocks = post.blocks_json or []

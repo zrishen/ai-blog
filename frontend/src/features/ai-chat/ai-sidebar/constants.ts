@@ -5,7 +5,7 @@ export interface AISidebarProps {
   contextText?: string;
   siteUsername?: string;
   postSlug?: string;
-  pageType?: "post" | "home" | "kb" | "research" | "about" | "other";
+  pageType?: "post" | "home" | "files" | "research" | "about" | "other";
   postTitle?: string;
 }
 

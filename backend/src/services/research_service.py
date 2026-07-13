@@ -78,7 +78,13 @@ async def _get_owned_topic(db: AsyncSession, topic_id: int, user_id: int) -> Res
 
 
 async def _get_owned_post(db: AsyncSession, post_id: int, user_id: int) -> BlogPost | None:
-    result = await db.execute(select(BlogPost).where(BlogPost.id == post_id, BlogPost.user_id == user_id))
+    result = await db.execute(
+        select(BlogPost).where(
+            BlogPost.id == post_id,
+            BlogPost.user_id == user_id,
+            BlogPost.deleted_at.is_(None),
+        )
+    )
     return result.scalar_one_or_none()
 
 

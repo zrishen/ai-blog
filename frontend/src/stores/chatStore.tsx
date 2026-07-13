@@ -172,6 +172,9 @@ interface ChatState {
   researchSelectedProposalId: number | null;
   trustWritingEnabled: boolean;
   pendingResearchPrompt: string | null;
+
+  // Trash — 恢复/永久删除/清空成功后递增,触发会话/文件库/博客列表刷新
+  trashRevision: number;
 }
 
 type ChatAction =
@@ -241,6 +244,8 @@ type ChatAction =
   | { type: "SET_RESEARCH_SELECTED_PROPOSAL_ID"; payload: number | null }
   | { type: "SET_TRUST_WRITING_ENABLED"; payload: boolean }
   | { type: "SET_PENDING_RESEARCH_PROMPT"; payload: string | null }
+  // Trash
+  | { type: "INCREMENT_TRASH_REVISION" }
   // Navigation
   | { type: "RESET_TO_BLOG_HOME" }
   // Auth
@@ -561,6 +566,9 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, trustWritingEnabled: action.payload };
     case "SET_PENDING_RESEARCH_PROMPT":
       return { ...state, pendingResearchPrompt: action.payload };
+    // Trash
+    case "INCREMENT_TRASH_REVISION":
+      return { ...state, trashRevision: state.trashRevision + 1 };
     // Navigation
     case "RESET_TO_BLOG_HOME":
       return {
@@ -605,6 +613,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         trustWritingEnabled: false,
         pendingResearchPrompt: null,
         mcpServers: [],
+        trashRevision: state.trashRevision + 1,
       };
     default:
       return state;
@@ -672,6 +681,9 @@ const initialState: ChatState = {
   researchSelectedProposalId: null,
   trustWritingEnabled: false,
   pendingResearchPrompt: null,
+
+  // Trash
+  trashRevision: 0,
 };
 
 const ChatContext = createContext<{

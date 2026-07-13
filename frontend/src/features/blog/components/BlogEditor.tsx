@@ -67,6 +67,8 @@ export function BlogEditor() {
   const [drafts, setDrafts] = useState<DraftInfo[]>([]);
   const [draftPanelPos, setDraftPanelPos] = useState({ top: 0, left: 0 });
   const [draftLoading, setDraftLoading] = useState(false);
+  const [draftDeleteTarget, setDraftDeleteTarget] = useState<DraftInfo | null>(null);
+  const [draftDeleting, setDraftDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [researchSummary, setResearchSummary] = useState<BlogResearchSummary | null>(null);
   const [researchLoading, setResearchLoading] = useState(false);
@@ -664,15 +666,20 @@ export function BlogEditor() {
     }
   }, [dispatch, state.blogPosts]);
 
-  const handleDeleteDraft = useCallback(async (draftId: number) => {
+  const handleDeleteDraft = useCallback(async () => {
+    if (!draftDeleteTarget) return;
+    setDraftDeleting(true);
     try {
-      await deleteBlogPost(draftId);
-      setDrafts((prev) => prev.filter((d) => d.id !== draftId));
-      dispatch({ type: "SET_BLOG_POSTS", payload: state.blogPosts.filter((p) => p.id !== draftId) });
+      await deleteBlogPost(draftDeleteTarget.id);
+      setDrafts((prev) => prev.filter((d) => d.id !== draftDeleteTarget.id));
+      dispatch({ type: "SET_BLOG_POSTS", payload: state.blogPosts.filter((p) => p.id !== draftDeleteTarget.id) });
+      setDraftDeleteTarget(null);
     } catch {
       setError("删除草稿失败");
+    } finally {
+      setDraftDeleting(false);
     }
-  }, [dispatch, state.blogPosts]);
+  }, [dispatch, draftDeleteTarget, state.blogPosts]);
 
   const handleUploadCover = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -792,6 +799,15 @@ export function BlogEditor() {
     });
   }, [toolbarExpanded]);
 
+  // 回收站清空/永久删除后,若当前编辑的文章已不存在,自动退回列表
+  useEffect(() => {
+    if (state.trashRevision === 0) return;
+    if (state.blogCurrentPostId != null && !state.blogPosts.some((p) => p.id === state.blogCurrentPostId)) {
+      dispatch({ type: "SET_BLOG_VIEW", payload: "list" });
+      dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
+    }
+  }, [state.trashRevision, state.blogCurrentPostId, state.blogPosts, dispatch]);
+
   useEffect(() => {
     const toolbar = document.getElementById(containerId)?.querySelector<HTMLElement>(".vditor-toolbar");
     if (!toolbar) return;
@@ -872,7 +888,7 @@ export function BlogEditor() {
                               <Button size="sm" className="h-7 rounded-full px-3" onClick={() => handleLoadDraft(draft)} disabled={draftLoading}>
                                 {draftLoading ? "加载中..." : "加载"}
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteDraft(draft.id)}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
@@ -1113,7 +1129,7 @@ export function BlogEditor() {
                           <Button size="sm" className="h-7 rounded-full px-3" onClick={() => handleLoadDraft(draft)} disabled={draftLoading}>
                             {draftLoading ? "加载中..." : "加载"}
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteDraft(draft.id)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
@@ -1168,6 +1184,23 @@ export function BlogEditor() {
               <Button variant="outline">继续编辑</Button>
             </DialogClose>
             <Button onClick={handleSaveDraft}>保存草稿</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={draftDeleteTarget !== null} onOpenChange={(open) => { if (!open && !draftDeleting) setDraftDeleteTarget(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除草稿</DialogTitle>
+            <DialogDescription>
+              确定要删除「{draftDeleteTarget?.title || "未命名草稿"}」吗？删除后可在回收站恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDraftDeleteTarget(null)} disabled={draftDeleting}>取消</Button>
+            <Button variant="destructive" onClick={handleDeleteDraft} disabled={draftDeleting}>
+              {draftDeleting ? "删除中..." : "删除草稿"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

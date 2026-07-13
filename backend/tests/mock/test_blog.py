@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogPost as BlogPostModel
 from src.services.markdown_blog_service import read_post_by_slug
-from src.tools.blog import blog_edit_post, blog_search_posts, current_user_id_cv
+from src.tools.blog import (
+    blog_delete_post,
+    blog_edit_post,
+    blog_read_post,
+    blog_search_posts,
+    blog_write_post,
+    current_user_id_cv,
+)
 
 TEST_USER_ID = 1
 
@@ -385,8 +392,92 @@ async def test_delete_blog_post(client: AsyncClient, db_session: AsyncSession):
     resp = await client.delete(f"/api/blog/posts/{post_id}")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
-    assert not _post_file(slug).exists()
-    assert await db_session.get(BlogPostModel, post_id) is None
+    # 软删除：md 文件保留以便恢复；DB 行保留但 deleted_at 已置位
+    assert _post_file(slug).exists()
+    row = await db_session.get(BlogPostModel, post_id)
+    assert row is not None
+    assert row.deleted_at is not None
+    # 不再出现在文章列表中
+    listing = await client.get("/api/blog/posts")
+    assert all(p["id"] != post_id for p in listing.json()["posts"])
+
+
+@pytest.mark.asyncio
+async def test_deleted_blog_post_is_rejected_by_all_api_boundaries(client: AsyncClient):
+    create_resp = await client.post("/api/blog/posts", json={
+        "title": "软删除边界",
+        "content": "不可见内容",
+        "status": "published",
+    })
+    post_id = create_resp.json()["id"]
+    slug = create_resp.json()["slug"]
+
+    assert (await client.delete(f"/api/blog/posts/{post_id}")).status_code == 200
+
+    responses = [
+        await client.get(f"/api/blog/posts/{post_id}"),
+        await client.put(f"/api/blog/posts/{post_id}", json={"title": "不应更新"}),
+        await client.put(f"/api/blog/posts/{post_id}/publish", json={"publish": True}),
+        await client.delete(f"/api/blog/posts/{post_id}"),
+        await client.post(f"/api/blog/posts/{post_id}/generate-cover"),
+        await client.post(f"/api/blog/posts/{post_id}/suggest-tags"),
+        await client.get(f"/api/public/users/testuser/posts/{slug}"),
+    ]
+
+    assert all(resp.status_code == 404 for resp in responses)
+    owner_listing = await client.get("/api/blog/posts")
+    public_listing = await client.get("/api/public/users/testuser/posts")
+    assert all(post["id"] != post_id for post in owner_listing.json()["posts"])
+    assert all(post["id"] != post_id for post in public_listing.json()["posts"])
+
+
+@pytest.mark.asyncio
+async def test_deleted_blog_post_is_rejected_by_ai_tools(db_session: AsyncSession, monkeypatch):
+    post = BlogPostModel(
+        title="AI 软删除边界",
+        slug="ai-deleted-boundary",
+        content="不可读取内容",
+        status="published",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        deleted = await blog_delete_post.ainvoke({"post_id": post.id})
+        write_result = await blog_write_post.ainvoke({"post_id": post.id, "title": "不应更新"})
+        edit_result = await blog_edit_post.ainvoke({
+            "post_id": post.id,
+            "target_text": "不可读取",
+            "replacement_text": "不应替换",
+        })
+        search_result = await blog_search_posts.ainvoke({"query": "不可读取", "post_id": post.id})
+        read_result = await blog_read_post.ainvoke({"post_id": post.id})
+        delete_again = await blog_delete_post.ainvoke({"post_id": post.id})
+        listing = await blog_search_posts.ainvoke({})
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "已移入回收站" in deleted
+    assert all("文章不存在" in result for result in (
+        write_result,
+        edit_result,
+        search_result,
+        read_result,
+        delete_again,
+    ))
+    assert "AI 软删除边界" not in listing
 
 
 @pytest.mark.asyncio
@@ -436,3 +527,85 @@ async def test_list_blog_posts_with_filter(client: AsyncClient):
     posts = resp.json()["posts"]
     assert posts
     assert all(p["status"] == "published" for p in posts)
+
+
+@pytest.mark.asyncio
+async def test_recreate_after_soft_delete_keeps_trash_and_derivates_slug(client: AsyncClient):
+    """软删后用同标题重建：保留回收站原记录，新文章派生 -1 后缀，不撞 uq_blog_posts_user_slug。"""
+    create_resp = await client.post("/api/blog/posts", json={
+        "title": "同标题文章",
+        "content": "原文",
+        "status": "draft",
+    })
+    assert create_resp.status_code in (200, 201)
+    original = create_resp.json()
+    original_id = original["id"]
+    slug = original["slug"]
+
+    # 软删
+    del_resp = await client.delete(f"/api/blog/posts/{original_id}")
+    assert del_resp.status_code == 200
+    trash_after_delete = await client.get("/api/trash")
+    assert any(
+        i["type"] == "blog_post" and i["id"] == original_id
+        for i in trash_after_delete.json()["items"]
+    )
+
+    # 同标题重建 —— slug 被回收站记录占用，派生 -1 后缀
+    recreate_resp = await client.post("/api/blog/posts", json={
+        "title": "同标题文章",
+        "content": "新文",
+        "status": "published",
+    })
+    assert recreate_resp.status_code in (200, 201)
+    recreated = recreate_resp.json()
+    assert recreated["slug"] == f"{slug}-1"
+    assert recreated["id"] != original_id
+
+    # 回收站里旧软删记录仍保留（未被物理清除、未被复活）
+    trash_final = await client.get("/api/trash")
+    assert any(
+        i["type"] == "blog_post" and i["id"] == original_id
+        for i in trash_final.json()["items"]
+    ), "回收站原记录应保留"
+
+    # active 列表只看到新行
+    listing = await client.get("/api/blog/posts")
+    assert all(p["id"] != original_id for p in listing.json()["posts"])
+    detail = await client.get(f"/api/blog/posts/{recreated['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["content"] == "新文"
+
+
+@pytest.mark.asyncio
+async def test_ensure_intro_post_does_not_revive_or_collide_when_soft_deleted(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """用户软删 ai-blog-intro 后，ensure_intro_post 不复活、不创建、不抛唯一键错误。"""
+    from src.services.blog_service import delete_post, ensure_intro_post
+
+    intro_data = {
+        "title": "官方介绍",
+        "slug": "ai-blog-intro",
+        "tags": "intro",
+        "excerpt": "摘要",
+        "content": "内容",
+        "status": "published",
+    }
+    first = await ensure_intro_post(db_session, intro_data, TEST_USER_ID)
+    assert first is not None
+    assert first.slug == "ai-blog-intro"
+    first_id = first.id
+
+    await delete_post(db_session, first_id, TEST_USER_ID)
+
+    second = await ensure_intro_post(db_session, intro_data, TEST_USER_ID)
+    assert second is not None
+    assert second.id == first_id
+    assert second.deleted_at is not None  # 仍在回收站，未被复活
+
+    # 回收站可见，active 列表不可见
+    trash = await client.get("/api/trash")
+    assert any(i["type"] == "blog_post" and i["id"] == first_id for i in trash.json()["items"])
+    listing = await client.get("/api/blog/posts")
+    assert all(p["id"] != first_id for p in listing.json()["posts"])

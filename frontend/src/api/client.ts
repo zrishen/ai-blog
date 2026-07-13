@@ -38,3 +38,4 @@ export * from "./mcp";
 export * from "./research";
 export * from "./blog";
 export * from "./files";
+export * from "./trash";

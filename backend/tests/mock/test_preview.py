@@ -1,9 +1,12 @@
 """文件预览路由测试。"""
 
 import io
+from datetime import datetime, timezone
 
 import pytest
 from httpx import AsyncClient
+
+from src.database.models import Conversation, FileDocument, Message
 
 from src.config import settings
 from src.main import app
@@ -78,6 +81,65 @@ async def test_preview_pdf_returns_inline_file(client: AsyncClient):
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     assert "inline" in resp.headers.get("content-disposition", "")
+
+
+@pytest.mark.asyncio
+async def test_preview_rejects_soft_deleted_file_library_document(client: AsyncClient, db_session):
+    token, user_id, stored = await _register_and_upload(
+        client, "deleted.pdf", b"%PDF-1.4 deleted", "application/pdf"
+    )
+    db_session.add(FileDocument(
+        collection_name=f"user_{user_id}_file",
+        user_id=str(user_id),
+        original_name="deleted.pdf",
+        file_path=stored,
+        chunk_content="1 chunks",
+        deleted_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    ))
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/preview/{stored}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_preview_keeps_shared_chat_attachment_visible(client: AsyncClient, db_session):
+    token, user_id, stored = await _register_and_upload(
+        client, "shared.pdf", b"%PDF-1.4 shared", "application/pdf"
+    )
+    conversation = Conversation(title="共享附件", user_id=user_id)
+    db_session.add(conversation)
+    await db_session.flush()
+    db_session.add_all([
+        FileDocument(
+            collection_name=f"user_{user_id}_file",
+            user_id=str(user_id),
+            original_name="shared.pdf",
+            file_path=stored,
+            chunk_content="1 chunks",
+            deleted_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        ),
+        Message(
+            conversation_id=conversation.id,
+            role="user",
+            content="附件",
+            file_url=f"/api/uploads/{stored}",
+            token_count=1,
+            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        ),
+    ])
+    await db_session.commit()
+
+    resp = await client.get(
+        f"/api/preview/{stored}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert resp.status_code == 200
 
 
 @pytest.mark.asyncio

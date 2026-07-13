@@ -1,7 +1,6 @@
 """文件预览路由（docx/xlsx → HTML，PDF → inline）。"""
 
 import logging
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse, FileResponse
@@ -10,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import get_db
 from src.database.models import User
-from src.services.file_service import get_user_upload_dir, convert_to_html
+from src.services.file_service import convert_to_html, get_user_upload_dir, is_hidden_soft_deleted_file
 from src.utils.auth import decode_token
 
 logger = logging.getLogger(__name__)
@@ -43,8 +42,20 @@ async def get_preview_user(
 
 
 @router.get("/preview/{filename:path}")
-async def preview_file(filename: str, user: User = Depends(get_preview_user)):
+async def preview_file(
+    filename: str,
+    user: User = Depends(get_preview_user),
+    db: AsyncSession = Depends(get_db),
+):
     """预览文件内容。docx/xlsx 返回 HTML，PDF 直接渲染。需要认证。"""
+    if await is_hidden_soft_deleted_file(
+        db,
+        filename=filename,
+        user_id=user.id,
+        username=user.username,
+    ):
+        raise HTTPException(status_code=404, detail="File not found")
+
     user_dir = get_user_upload_dir(user.id)
     path = user_dir / filename
     resolved = path.resolve()

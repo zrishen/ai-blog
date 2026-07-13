@@ -69,7 +69,11 @@ async def _user_public_context(db: AsyncSession, username: str, post_slug: str |
     if not owner:
         return None
 
-    stmt = select(BlogPost).where(BlogPost.user_id == owner.id, BlogPost.status == "published")
+    stmt = select(BlogPost).where(
+        BlogPost.user_id == owner.id,
+        BlogPost.status == "published",
+        BlogPost.deleted_at.is_(None),
+    )
     if post_slug:
         stmt = stmt.where(BlogPost.slug == post_slug)
     stmt = stmt.order_by(BlogPost.created_at.desc()).limit(8)

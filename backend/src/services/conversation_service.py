@@ -25,7 +25,7 @@ async def list_conversations(user_id: int, session: AsyncSession | None = None):
     async with _get_session(session) as s:
         result = await s.execute(
             select(Conversation)
-            .where(Conversation.user_id == user_id)
+            .where(Conversation.user_id == user_id, Conversation.deleted_at.is_(None))
             .order_by(desc(Conversation.updated_at))
             .limit(50)
         )
@@ -35,33 +35,44 @@ async def list_conversations(user_id: int, session: AsyncSession | None = None):
 async def get_conversation(conversation_id: int, user_id: int, session: AsyncSession | None = None):
     async with _get_session(session) as s:
         result = await s.execute(
-            select(Conversation).where(Conversation.id == conversation_id, Conversation.user_id == user_id)
+            select(Conversation).where(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user_id,
+                Conversation.deleted_at.is_(None),
+            )
         )
         return result.scalar_one_or_none()
 
 
 async def delete_conversation(conversation_id: int, user_id: int, session: AsyncSession | None = None):
     async with _get_session(session) as s:
-        conv = await s.get(Conversation, conversation_id)
-        if conv and conv.user_id == user_id:
-            await s.delete(conv)
-            if session is None:
-                await s.commit()
+        result = await s.execute(
+            select(Conversation).where(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user_id,
+                Conversation.deleted_at.is_(None),
+            )
+        )
+        conv = result.scalar_one_or_none()
+        if conv is None:
+            return
+        conv.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        if session is None:
+            await s.commit()
 
 
 async def get_messages(conversation_id: int, user_id: int, session: AsyncSession | None = None):
     async with _get_session(session) as s:
-        conv = await s.get(Conversation, conversation_id)
+        result = await s.execute(
+            select(Conversation).where(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user_id,
+                Conversation.deleted_at.is_(None),
+            )
+        )
+        conv = result.scalar_one_or_none()
         if conv is None:
             logger.warning("获取对话消息失败：会话不存在 conversation_id=%s user=%s", conversation_id, user_id)
-            return []
-        if conv.user_id != user_id:
-            logger.warning(
-                "获取对话消息失败：用户无权访问 conversation_id=%s user=%s owner=%s",
-                conversation_id,
-                user_id,
-                conv.user_id,
-            )
             return []
         result = await s.execute(
             select(Message)
@@ -98,14 +109,14 @@ async def add_message_pair(
             conversation_id = conv.id
         else:
             conv = await s.get(Conversation, conversation_id)
-            if conv is None or conv.user_id != user_id:
+            if conv is None or conv.user_id != user_id or conv.deleted_at is not None:
                 conv = Conversation(title="New Chat", user_id=user_id, created_at=now, updated_at=now)
                 s.add(conv)
                 await s.flush()
                 conversation_id = conv.id
 
         conv = await s.get(Conversation, conversation_id)
-        if conv:
+        if conv and conv.deleted_at is None:
             conv.updated_at = now
 
         s.add(Message(
@@ -140,7 +151,7 @@ async def add_message_pair(
 async def update_conversation_title(conversation_id: int, user_id: int, title: str, session: AsyncSession | None = None):
     async with _get_session(session) as s:
         conv = await s.get(Conversation, conversation_id)
-        if conv and conv.user_id == user_id:
+        if conv and conv.user_id == user_id and conv.deleted_at is None:
             short = title.replace("\n", " ").strip()[:50] or "New Chat"
             conv.title = short
             conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -184,7 +195,7 @@ async def save_chat_turn(
         async with s.begin():
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             conv = await s.get(Conversation, conversation_id) if conversation_id else None
-            if conv is None or conv.user_id != user_id:
+            if conv is None or conv.user_id != user_id or conv.deleted_at is not None:
                 conv = Conversation(title="New Chat", user_id=user_id, created_at=now, updated_at=now)
                 s.add(conv)
                 await s.flush()

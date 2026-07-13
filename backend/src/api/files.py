@@ -6,7 +6,8 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
-from sqlalchemy import select, update, delete as sql_delete
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,13 +25,13 @@ from src.schemas.file_base import (
     SetCategoryRequest,
 )
 from src.schemas.files import FileUploadResponse
-from src.services.file_service import get_user_upload_dir, save_file, vectorize_and_store
-from src.services.vector_store import (
-    delete_collection,
-    delete_document_chunks,
-    get_collection_count,
-    list_collections,
+from src.services.file_service import (
+    get_user_upload_dir,
+    is_hidden_soft_deleted_file,
+    save_file,
+    vectorize_and_store,
 )
+from src.services.vector_store import delete_document_chunks
 from src.utils.auth import get_current_user
 from src.utils.slug import slugify
 
@@ -88,8 +89,20 @@ async def get_public_uploaded_image(username: str, filename: str):
 
 
 @router.get("/uploads/{filename}")
-async def get_uploaded_file(filename: str, user: User = Depends(get_current_user)):
-    """Serve an uploaded file (requires authentication)."""
+async def get_uploaded_file(filename: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Serve an uploaded file (requires authentication).
+
+    软删隔离：若 filename 是已软删的 FileDocument.file_path，则拒绝下载；
+    非文件库记录（聊天附件等）不受影响。
+    """
+    if await is_hidden_soft_deleted_file(
+        db,
+        filename=filename,
+        user_id=user.id,
+        username=user.username,
+    ):
+        raise HTTPException(status_code=404, detail="File not found")
+
     user_dir = get_user_upload_dir(user.id)
     file_path = user_dir / filename
     resolved = file_path.resolve()
@@ -244,7 +257,11 @@ async def delete_file_category(
         raise HTTPException(status_code=404, detail="Category not found")
     await db.execute(
         update(FileDocument)
-        .where(FileDocument.category_id == category_id, FileDocument.user_id == str(user.id))
+        .where(
+            FileDocument.category_id == category_id,
+            FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
+        )
         .values(category_id=None)
     )
     await db.execute(
@@ -286,7 +303,7 @@ async def upload_to_file_library(
             collection_name,
             original_name=original_name,
             category_id=category_id,
-            user_id=str(user.id),
+            user_id=user.id,
         )
 
         doc = FileDocument(
@@ -341,7 +358,10 @@ async def list_file_documents(
     """List all file library documents, optionally filtered by category."""
     await _ensure_category_owner(db, category_id, user.id)
 
-    stmt = select(FileDocument).where(FileDocument.user_id == str(user.id)).order_by(FileDocument.created_at.desc())
+    stmt = select(FileDocument).where(
+        FileDocument.user_id == str(user.id),
+        FileDocument.deleted_at.is_(None),
+    ).order_by(FileDocument.created_at.desc())
     if category_id is not None:
         stmt = stmt.where(FileDocument.category_id == category_id)
     result = await db.execute(stmt)
@@ -376,8 +396,15 @@ async def set_document_category(
 ):
     """Set or clear a document's category."""
     await _ensure_category_owner(db, data.category_id, user.id)
-    doc = await db.get(FileDocument, doc_id)
-    if not doc or doc.user_id != str(user.id):
+    result = await db.execute(
+        select(FileDocument).where(
+            FileDocument.id == doc_id,
+            FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     doc.category_id = data.category_id
     await db.commit()
@@ -390,31 +417,63 @@ async def delete_file_document(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Delete a file library document (from DB and vector store)."""
-    doc = await db.get(FileDocument, doc_id)
-    if not doc or doc.user_id != str(user.id):
+    """Soft-delete a file library document (hide immediately; Chroma cleanup deferred)."""
+    result = await db.execute(
+        select(FileDocument).where(
+            FileDocument.id == doc_id,
+            FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    collection_name = doc.collection_name
-    stored_name = doc.file_path
-    if not _is_user_collection(collection_name, user.id):
+    if not _is_user_collection(doc.collection_name, user.id):
         raise HTTPException(status_code=404, detail="Document not found")
-    await db.delete(doc)
+
+    # Step 1: DB 软删，使其立刻对用户不可见
+    doc.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
 
-    await delete_document_chunks(collection_name, stored_name)
+    collection_name = doc.collection_name
+    stored_name = doc.file_path
+    try:
+        await delete_document_chunks(collection_name, stored_name)
+    except Exception:
+        logger.exception(
+            "File library soft-delete chroma cleanup failed: doc_id=%s stored_name=%s",
+            doc_id,
+            stored_name,
+        )
+        # commit 已发生，session 内 doc 状态不可靠；重查后清 deleted_at 再 commit
+        await db.rollback()
+        fresh = await db.get(FileDocument, doc_id)
+        if fresh is not None and fresh.deleted_at is not None:
+            fresh.deleted_at = None
+            await db.commit()
+        raise HTTPException(status_code=500, detail="Vector cleanup failed; document remains active")
     return {"status": "ok"}
 
 
 @router.get("/files/collections", response_model=list[FileCollectionResponse])
-async def list_file_collections(user: User = Depends(get_current_user)):
-    """List current user's vector store collections."""
-    collections = [name for name in await list_collections() if _is_user_collection(name, user.id)]
-    result = []
-    for name in collections:
-        count = await get_collection_count(name)
-        if count > 0:
-            result.append(FileCollectionResponse(name=name, document_count=count))
-    return result
+async def list_file_collections(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """List collections that contain current user's active documents."""
+    result = await db.execute(
+        select(FileDocument.collection_name, func.count(FileDocument.id))
+        .where(
+            FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
+        )
+        .group_by(FileDocument.collection_name)
+        .order_by(FileDocument.collection_name)
+    )
+    return [
+        FileCollectionResponse(name=name, document_count=count)
+        for name, count in result.all()
+    ]
 
 
 @router.delete("/files/collections/{name}")
@@ -423,14 +482,42 @@ async def delete_file_collection(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Delete one current-user collection from the vector store."""
+    """Move all active documents in a collection to the recycle bin."""
     if not _is_user_collection(name, user.id):
         raise HTTPException(status_code=404, detail="Collection not found")
-    deleted = await delete_collection(name)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Collection not found")
-    await db.execute(
-        sql_delete(FileDocument).where(FileDocument.collection_name == name, FileDocument.user_id == str(user.id))
+
+    result = await db.execute(
+        select(FileDocument).where(
+            FileDocument.collection_name == name,
+            FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
+        )
     )
-    await db.commit()
+    documents = result.scalars().all()
+    if not documents:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    deleted_count = 0
+    for doc in documents:
+        doc.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.commit()
+        try:
+            await delete_document_chunks(name, doc.file_path)
+        except Exception:
+            logger.exception(
+                "File collection soft-delete chroma cleanup failed: collection=%s doc_id=%s",
+                name,
+                doc.id,
+            )
+            await db.rollback()
+            fresh = await db.get(FileDocument, doc.id)
+            if fresh is not None and fresh.deleted_at is not None:
+                fresh.deleted_at = None
+                await db.commit()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Vector cleanup failed after moving {deleted_count} documents to trash",
+            )
+        deleted_count += 1
+
     return {"status": "ok"}

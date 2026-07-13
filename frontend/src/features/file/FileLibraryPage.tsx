@@ -73,7 +73,7 @@ export function FileLibraryPage() {
     loadFileDocuments(state.fileSelectedCategoryId ?? undefined).catch((err) => {
       setError(err instanceof Error ? err.message : "文件库加载失败");
     });
-  }, [isAuthenticated, state.fileSelectedCategoryId, loadFileDocuments]);
+  }, [isAuthenticated, state.fileSelectedCategoryId, state.trashRevision, loadFileDocuments]);
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -377,7 +377,7 @@ export function FileLibraryPage() {
           <DialogHeader>
             <DialogTitle>确认删除文件</DialogTitle>
             <DialogDescription>
-              确定要删除「{deleteTarget?.name}」吗？这个操作会从文件库中移除该文件。
+              确定要删除「{deleteTarget?.name}」吗？删除后可在回收站恢复。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

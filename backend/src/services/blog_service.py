@@ -78,8 +78,14 @@ async def list_posts(
     is_owner = viewer_user_id is not None and viewer_user_id == owner_id
     can_include_drafts = is_owner and include_drafts_for_owner
 
-    stmt = select(BlogPostModel).where(BlogPostModel.user_id == owner_id)
-    count_stmt = select(func.count(BlogPostModel.id)).where(BlogPostModel.user_id == owner_id)
+    stmt = select(BlogPostModel).where(
+        BlogPostModel.user_id == owner_id,
+        BlogPostModel.deleted_at.is_(None),
+    )
+    count_stmt = select(func.count(BlogPostModel.id)).where(
+        BlogPostModel.user_id == owner_id,
+        BlogPostModel.deleted_at.is_(None),
+    )
 
     if can_include_drafts:
         if status:
@@ -111,13 +117,16 @@ async def list_posts(
 
 
 async def get_post(db: AsyncSession, post_id: int) -> Optional[BlogPostModel]:
-    """获取单篇文章。"""
-    return await db.get(BlogPostModel, post_id)
+    """获取单篇文章（不含回收站内）。"""
+    post = await db.get(BlogPostModel, post_id)
+    if post is None or post.deleted_at is not None:
+        return None
+    return post
 
 
 async def get_owned_post(db: AsyncSession, post_id: int, user_id: int) -> Optional[BlogPostModel]:
     post = await db.get(BlogPostModel, post_id)
-    if not post or post.user_id != user_id:
+    if not post or post.deleted_at is not None or post.user_id != user_id:
         return None
     return post
 
@@ -135,6 +144,7 @@ async def get_post_for_site_viewer(
         select(BlogPostModel).where(
             BlogPostModel.user_id == owner.id,
             BlogPostModel.slug == slug,
+            BlogPostModel.deleted_at.is_(None),
         )
     )
     post = result.scalar_one_or_none()
@@ -183,6 +193,8 @@ async def create_post(db: AsyncSession, data: dict, user_id: int) -> BlogPostMod
 def _check_ownership(post: Optional[BlogPostModel], user_id: int):
     if post is None:
         raise ValueError("Post not found")
+    if post.deleted_at is not None:
+        raise ValueError("Post not found")
     if post.user_id != user_id:
         raise ValueError("Post not found")
 
@@ -230,15 +242,13 @@ async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) 
 
 
 async def delete_post(db: AsyncSession, post_id: int, user_id: int) -> bool:
-    """删除文章。"""
+    """软删除文章（移入回收站，保留 Markdown 文件以便恢复）。"""
     post = await db.get(BlogPostModel, post_id)
     _check_ownership(post, user_id)
 
-    title = post.title
-    delete_post_file(post.slug, user_id)
-    await db.delete(post)
+    post.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
-    logger.info("博客文章 [删除] id=%d title=%s user_id=%s", post_id, title, user_id)
+    logger.info("博客文章 [软删] id=%d title=%s user_id=%s", post_id, post.title, user_id)
     return True
 
 
@@ -264,13 +274,13 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
 async def increment_view_count(db: AsyncSession, post_id: int):
     """增加浏览次数。"""
     post = await db.get(BlogPostModel, post_id)
-    if post:
+    if post and post.deleted_at is None:
         post.view_count = (post.view_count or 0) + 1
         await db.commit()
 
 
 async def ensure_intro_post(db: AsyncSession, data: dict, user_id: int):
-    """确保官方介绍文章存在于 DB，不存在则创建，存在则同步内容。"""
+    """确保官方介绍文章存在；用户删除后仅能从回收站恢复。"""
     stmt = select(BlogPostModel).where(
         BlogPostModel.user_id == user_id,
         BlogPostModel.slug == "ai-blog-intro",
@@ -278,10 +288,13 @@ async def ensure_intro_post(db: AsyncSession, data: dict, user_id: int):
     result = await db.execute(stmt)
     post = result.scalar_one_or_none()
     if post is None:
-        post = await create_post(db, data, user_id)
-    else:
-        post.title = data["title"]
-        post.tags = data["tags"]
-        post.excerpt = data["excerpt"]
-        post.content = data["content"]
-        await db.commit()
+        return await create_post(db, data, user_id)
+    if post.deleted_at is not None:
+        return post
+
+    post.title = data["title"]
+    post.tags = data["tags"]
+    post.excerpt = data["excerpt"]
+    post.content = data["content"]
+    await db.commit()
+    return post

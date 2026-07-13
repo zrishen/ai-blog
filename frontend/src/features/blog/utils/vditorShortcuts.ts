@@ -11,7 +11,7 @@ function findParagraphBlock(node: Node, root: HTMLElement) {
   return element && element.tagName === "P" ? element : null;
 }
 
-export function applyUnorderedListShortcut(editor: HTMLPreElement, event: KeyboardEvent) {
+export function applyUnorderedListShortcut(editor: HTMLElement, event: KeyboardEvent) {
   if (event.key !== " " || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.isComposing) {
     return false;
   }

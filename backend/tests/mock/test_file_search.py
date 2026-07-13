@@ -1,4 +1,6 @@
-from src.tools.file import _filter_and_dedupe_rag_results, _format_rag_context
+import pytest
+
+from src.tools.file import _filter_and_dedupe_rag_results, _format_rag_context, _search_collections
 from src.services.vector_store import SearchResult
 
 
@@ -29,3 +31,23 @@ def test_rag_empty_context_prevents_fabrication():
 
     assert "没有找到与用户问题相关的文件库内容" in context
     assert "不要编造" in context
+
+
+@pytest.mark.asyncio
+async def test_search_collections_only_returns_active_stored_names(monkeypatch):
+    async def fake_search(name, query, embedding, top_k):
+        return [
+            SearchResult(content="active", metadata={"stored_name": "active.pdf"}, distance=0.1),
+            SearchResult(content="deleted", metadata={"stored_name": "deleted.pdf"}, distance=0.1),
+            SearchResult(content="legacy", metadata={"source": "legacy.pdf"}, distance=0.1),
+        ]
+
+    monkeypatch.setattr("src.services.vector_store.search", fake_search)
+
+    results = await _search_collections(
+        {"user_1_file": {"active.pdf"}},
+        "query",
+        [0.1],
+    )
+
+    assert [result.content for _, result in results] == ["active"]

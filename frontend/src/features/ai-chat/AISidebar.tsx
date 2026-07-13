@@ -271,7 +271,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
 
   useEffect(() => {
     if (isPrivate) queueMicrotask(() => void loadConvs());
-  }, [isPrivate, loadConvs]);
+  }, [isPrivate, loadConvs, state.trashRevision]);
 
   // 有选中上下文(AI 修改)时,自动切到 chat 视图(避免 list 视图下选中上下文丢失)
   useEffect(() => {
@@ -567,6 +567,9 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     let patchPlayer: PatchDeltaPlayer | null = null;
     let blogPlayer: PatchDeltaPlayer | null = null;
     let blogStarted = false;
+    const cancelPlayer = (player: PatchDeltaPlayer | null) => {
+      player?.cancel();
+    };
 
     try {
       const appendChunk = (chunk: string) => {
@@ -596,10 +599,6 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         blogPlayer = null;
         blogStarted = false;
       };
-      const cancelPlayer = (p: PatchDeltaPlayer | null) => {
-        if (p) p.cancel();
-      };
-
       if (isPrivate) {
         const pageContext: Record<string, unknown> = { page_type: pageType };
         if (state.blogCurrentPostId) {
@@ -1092,7 +1091,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         <DialogContent className="max-w-[340px] p-0 gap-0">
           <DialogHeader className="px-4 py-3 border-b border-border">
             <DialogTitle className="text-[14px]">确认删除</DialogTitle>
-            <DialogDescription className="text-[12px]">删除后对话记录将无法恢复。</DialogDescription>
+            <DialogDescription className="text-[12px]">删除后可在回收站恢复。</DialogDescription>
           </DialogHeader>
           <DialogFooter className="px-4 py-3 gap-2">
             <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>取消</Button>

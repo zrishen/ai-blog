@@ -437,7 +437,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
           <DialogHeader>
             <DialogTitle>确认删除文章</DialogTitle>
             <DialogDescription>
-              确定要删除「{post.title}」吗？这个操作无法撤销。
+              确定要删除「{post.title}」吗？删除后可在回收站恢复。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

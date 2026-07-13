@@ -1,0 +1,78 @@
+import React from "react";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import "@testing-library/jest-dom/vitest";
+
+// 阻止 NavBar 在挂载时拉取 LLM 设置
+vi.mock("../../src/api/client", () => ({
+  getLLMSettings: vi.fn(() => Promise.resolve({ protocol: "openai", base_url: "", api_key: "", model: "", supports_thinking: true })),
+  updateLLMSettings: vi.fn(),
+}));
+
+import { AuthProvider } from "../../src/stores/authStore";
+import { ChatProvider } from "../../src/stores/chatStore";
+import { NavBar } from "../../src/components/NavBar";
+
+async function renderNav(authed = true) {
+  if (authed) {
+    localStorage.setItem("auth_token", "t");
+    localStorage.setItem("auth_user", JSON.stringify({ id: 1, username: "alice" }));
+  }
+  const utils = render(
+    <MemoryRouter>
+      <AuthProvider>
+        <ChatProvider>
+          <NavBar />
+        </ChatProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  );
+  return utils;
+}
+
+describe("NavBar 回收站入口", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("登录后用户菜单包含「回收站」项,位于「设置」与「登出」之间", async () => {
+    const user = userEvent.setup();
+    await renderNav(true);
+    const trigger = screen.getByTitle("alice");
+    await user.click(trigger);
+    const settingsItem = await screen.findByText("设置");
+    const trashItem = await screen.findByText("回收站");
+    const logoutItem = await screen.findByText("登出");
+    expect(settingsItem).toBeInTheDocument();
+    expect(trashItem).toBeInTheDocument();
+    expect(logoutItem).toBeInTheDocument();
+    const all = Array.from(document.querySelectorAll('[role="menuitem"]'));
+    const iSettings = all.findIndex((el) => el.textContent?.includes("设置"));
+    const iTrash = all.findIndex((el) => el.textContent?.includes("回收站"));
+    const iLogout = all.findIndex((el) => el.textContent?.includes("登出"));
+    expect(iSettings).toBeGreaterThanOrEqual(0);
+    expect(iTrash).toBeGreaterThan(iSettings);
+    expect(iLogout).toBeGreaterThan(iTrash);
+  });
+
+  it("点击「回收站」菜单项打开 TrashDialog", async () => {
+    const user = userEvent.setup();
+    await renderNav(true);
+    const trigger = screen.getByTitle("alice");
+    await user.click(trigger);
+    const trashItem = await screen.findByText("回收站");
+    await user.click(trashItem);
+    await waitFor(() => {
+      const dialog = screen.getByRole("dialog");
+      expect(dialog).toBeInTheDocument();
+      expect(dialog.textContent).toContain("回收站");
+      expect(dialog.textContent).toContain("已删除的文件、文章和 AI 会话会保留在这里，直到永久删除。");
+    });
+  });
+});
+

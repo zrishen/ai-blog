@@ -1,6 +1,11 @@
 """公开聊天服务测试。"""
 
+from datetime import datetime, timezone
+
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.database.models import BlogPost, User
 
 
 @pytest.mark.asyncio
@@ -56,3 +61,42 @@ async def test_public_chat_strips_protocol_reasoning_markers(monkeypatch):
     assert "REASONING" not in content
     assert "reasoning_delta" not in content
     assert "\x00" not in content
+
+
+@pytest.mark.asyncio
+async def test_public_chat_context_excludes_deleted_posts(db_session: AsyncSession):
+    from src.services.public_chat_service import _user_public_context
+
+    owner = User(username="public-context-user", password_hash="mock")
+    db_session.add(owner)
+    await db_session.commit()
+    await db_session.refresh(owner)
+
+    db_session.add_all([
+        BlogPost(
+            title="公开文章",
+            slug="visible-post",
+            content="公开内容",
+            status="published",
+            user_id=owner.id,
+        ),
+        BlogPost(
+            title="已删文章",
+            slug="deleted-post",
+            content="不应进入上下文",
+            status="published",
+            user_id=owner.id,
+            deleted_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        ),
+    ])
+    await db_session.commit()
+
+    context = await _user_public_context(db_session, owner.username)
+    deleted_context = await _user_public_context(db_session, owner.username, "deleted-post")
+
+    assert context is not None
+    assert "公开文章" in context
+    assert "已删文章" not in context
+    assert deleted_context is not None
+    assert "已删文章" not in deleted_context
+    assert "暂无公开文章" in deleted_context

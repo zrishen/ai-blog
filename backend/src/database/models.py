@@ -15,12 +15,14 @@ class Base(DeclarativeBase):
 
 class Conversation(Base):
     __tablename__ = "conversations"
+    __table_args__ = (Index("ix_conversations_user_deleted", "user_id", "deleted_at"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(200), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+    deleted_at = Column(DateTime, nullable=True)
 
 
 class Message(Base):
@@ -46,6 +48,7 @@ class Message(Base):
 
 class FileDocument(Base):
     __tablename__ = "file_documents"
+    __table_args__ = (Index("ix_file_documents_user_deleted", "user_id", "deleted_at"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     collection_name = Column(String(200), nullable=False)
@@ -56,6 +59,7 @@ class FileDocument(Base):
     meta = Column("metadata", Text, nullable=True)
     category_id = Column(Integer, ForeignKey("file_categories.id"), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
+    deleted_at = Column(DateTime, nullable=True)
 
 
 # ---- MCP ----
@@ -114,7 +118,10 @@ class BlogCategory(Base):
 
 class BlogPost(Base):
     __tablename__ = "blog_posts"
-    __table_args__ = (UniqueConstraint("user_id", "slug", name="uq_blog_posts_user_slug"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "slug", name="uq_blog_posts_user_slug"),
+        Index("ix_blog_posts_user_deleted", "user_id", "deleted_at"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(300), nullable=False)
@@ -135,6 +142,7 @@ class BlogPost(Base):
     # AST 缓存(派生数据,可随时从 content 重建):文章正文的块结构数组,
     # 供 AI 章节定位(大纲/读单节)使用,避免读全文消耗 token。
     blocks_json = Column(JSON, nullable=True)
+    deleted_at = Column(DateTime, nullable=True)
 
 
 # ---- Research Graph ----

@@ -17,47 +17,49 @@ RAG_MAX_CONTEXT_CHARS = 6000
 # ════════════════════════════════════════════════════════════════
 
 
-async def _get_active_collections(user_id: int | None = None) -> list[str]:
-    from src.services.vector_store import get_collection_count, list_collections
-
-    try:
-        names = await list_collections()
-    except Exception:
-        return []
-
+async def _get_active_file_whitelist(user_id: int | None = None) -> dict[str, set[str]]:
     if user_id is None:
-        return []
+        return {}
 
-    prefix = f"user_{user_id}_"
-    names = [n for n in names if n.startswith(prefix)]
+    from sqlalchemy import select
 
-    counts = await asyncio.gather(
-        *(get_collection_count(name) for name in names),
-        return_exceptions=True,
-    )
-    return [
-        name
-        for name, count in zip(names, counts)
-        if not isinstance(count, Exception) and count > 0
-    ]
+    from src.database.models import FileDocument
+    from src.database.session import async_session
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(FileDocument.collection_name, FileDocument.file_path).where(
+                FileDocument.user_id == str(user_id),
+                FileDocument.deleted_at.is_(None),
+            )
+        )
+
+    whitelist: dict[str, set[str]] = {}
+    for collection_name, stored_name in result.all():
+        whitelist.setdefault(collection_name, set()).add(stored_name)
+    return whitelist
 
 
 async def _search_collections(
-    collection_names: list[str],
+    active_files: dict[str, set[str]],
     query: str,
     query_embedding: list[float],
 ) -> list[tuple[str, object]]:
     from src.services.vector_store import search
 
-    async def search_one(name: str) -> list[tuple[str, object]]:
+    async def search_one(name: str, stored_names: set[str]) -> list[tuple[str, object]]:
         try:
             results = await search(name, query, query_embedding, settings.rag_top_k)
         except Exception:
             return []
-        return [(name, result) for result in results]
+        return [
+            (name, result)
+            for result in results
+            if (getattr(result, "metadata", None) or {}).get("stored_name") in stored_names
+        ]
 
     batches = await asyncio.gather(
-        *(search_one(name) for name in collection_names),
+        *(search_one(name, stored_names) for name, stored_names in active_files.items()),
         return_exceptions=True,
     )
     merged: list[tuple[str, object]] = []
@@ -152,8 +154,8 @@ async def base_search_file(query: str) -> str:
     if user_id is None:
         return "未认证用户无法检索文件库。"
 
-    active = await _get_active_collections(user_id=user_id)
-    if not active:
+    active_files = await _get_active_file_whitelist(user_id=user_id)
+    if not active_files:
         return _format_empty_rag_context("文件库中没有可检索的文档。")
 
     try:
@@ -161,7 +163,7 @@ async def base_search_file(query: str) -> str:
     except Exception:
         return "无法生成查询嵌入"
 
-    results = await _search_collections(active, query, embeddings[0])
+    results = await _search_collections(active_files, query, embeddings[0])
     results = _filter_and_dedupe_rag_results(results)
     return _format_rag_context(results)
 

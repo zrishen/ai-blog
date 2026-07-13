@@ -13,6 +13,7 @@ import {
   Settings,
   Eye,
   EyeOff,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LoginDialog } from "@/features/auth/LoginDialog";
 import { ProjectMark } from "@/components/ProjectMark";
+import { TrashDialog } from "@/components/TrashDialog";
 import type { AuthUser } from "../stores/authStore";
 import { getLLMSettings, updateLLMSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";
@@ -43,6 +45,7 @@ export function NavBar() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [trashDialogOpen, setTrashDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -221,6 +224,10 @@ export function NavBar() {
               <Settings className="w-4 h-4 text-muted-foreground" />
               设置
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTrashDialogOpen(true)}>
+              <Trash2 className="w-4 h-4 text-muted-foreground" />
+              回收站
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="w-4 h-4 text-muted-foreground" />
@@ -243,6 +250,12 @@ export function NavBar() {
       )}
 
       <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} onSuccess={handleLoginSuccess} />
+      <TrashDialog
+        open={trashDialogOpen}
+        onOpenChange={setTrashDialogOpen}
+        onRestored={() => dispatch({ type: "INCREMENT_TRASH_REVISION" })}
+        onPurged={() => dispatch({ type: "INCREMENT_TRASH_REVISION" })}
+      />
       <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
         <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-5 py-4">

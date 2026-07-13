@@ -2,6 +2,8 @@ import uuid
 from pathlib import Path
 
 from fastapi import UploadFile
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.utils import file_parser
@@ -95,12 +97,62 @@ def delete_uploaded_file(stored_name: str, user_id: int | str) -> bool:
     return False
 
 
+async def is_hidden_soft_deleted_file(
+    db: AsyncSession,
+    *,
+    filename: str,
+    user_id: int,
+    username: str,
+) -> bool:
+    """仅当文件只被软删除的文件库记录引用时隐藏。"""
+    from src.database.models import BlogPost, Conversation, FileDocument, Message
+
+    states = (
+        await db.execute(
+            select(FileDocument.deleted_at).where(
+                FileDocument.user_id == str(user_id),
+                FileDocument.file_path == filename,
+            )
+        )
+    ).scalars().all()
+    if not states or any(deleted_at is None for deleted_at in states):
+        return False
+
+    references = {
+        filename,
+        f"/api/uploads/{filename}",
+        f"/api/public/uploads/{username}/{filename}",
+        f"/api/blog/cover/{filename}",
+    }
+    message_ref = await db.execute(
+        select(Message.id)
+        .join(Conversation, Conversation.id == Message.conversation_id)
+        .where(
+            Conversation.user_id == user_id,
+            Conversation.deleted_at.is_(None),
+            or_(Message.image_url.in_(references), Message.file_url.in_(references)),
+        )
+        .limit(1)
+    )
+    if message_ref.first() is not None:
+        return False
+
+    blog_ref = await db.execute(
+        select(BlogPost.id).where(
+            BlogPost.user_id == user_id,
+            BlogPost.deleted_at.is_(None),
+            BlogPost.cover_image.in_(references),
+        ).limit(1)
+    )
+    return blog_ref.first() is None
+
+
 async def vectorize_and_store(
     stored_filename: str,
     collection_name: str,
     original_name: str | None = None,
     category_id: int | None = None,
-    user_id: str = "default_user",
+    user_id: int | str = "default_user",
 ) -> list[str]:
     """Parse, chunk, embed, and store documents in the vector store.
 
