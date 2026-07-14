@@ -35,7 +35,7 @@ async def test_init_db_adds_deleted_columns_and_indexes_idempotently(tmp_path, m
                     "columns": {column["name"] for column in inspector.get_columns(table)},
                     "indexes": {index["name"] for index in inspector.get_indexes(table)},
                 }
-                for table in ("conversations", "file_documents", "blog_posts")
+                for table in ("conversations", "file_documents", "blog_posts", "file_processing_jobs")
             }
 
         schema = await connection.run_sync(inspect_schema)
@@ -46,5 +46,12 @@ async def test_init_db_adds_deleted_columns_and_indexes_idempotently(tmp_path, m
     assert "ix_file_documents_user_deleted" in schema["file_documents"]["indexes"]
     assert "deleted_at" in schema["blog_posts"]["columns"]
     assert "ix_blog_posts_user_deleted" in schema["blog_posts"]["indexes"]
+    assert {
+        "ix_file_processing_jobs_user_status",
+        "ix_file_processing_jobs_heartbeat",
+        "ix_file_processing_jobs_source_document",
+        "uq_file_processing_jobs_active_key",
+        "uq_file_processing_jobs_user_request",
+    }.issubset(schema["file_processing_jobs"]["indexes"])
 
     await engine.dispose()

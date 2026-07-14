@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timezone
@@ -29,6 +30,7 @@ from src.database.models import (
     BlogPost as BlogPostModel,
     Conversation as ConversationModel,
     FileDocument as FileDocumentModel,
+    FileProcessingJob,
     Message as MessageModel,
 )
 from src.schemas.trash import (
@@ -36,7 +38,12 @@ from src.schemas.trash import (
     TrashFailedItem,
     TrashItem,
 )
-from src.services.file_service import get_user_upload_dir, vectorize_and_store
+from src.services.file_processing_service import (
+    create_or_reuse_restore_job,
+    has_active_restore,
+    schedule_job,
+)
+from src.services.file_service import get_user_upload_dir
 from src.services.markdown_blog_service import delete_post_file
 from src.services.vector_store import delete_document_chunks
 
@@ -301,7 +308,7 @@ async def _restore_blog_post(db: AsyncSession, *, item_id: int, user_id: int) ->
     return TrashItem(type="blog_post", id=post.id, name=post.title, deleted_at=deleted_at)
 
 
-async def _restore_file_document(db: AsyncSession, *, item_id: int, user_id: int) -> TrashItem:
+async def _restore_file_document(db: AsyncSession, *, item_id: int, user_id: int) -> FileProcessingJob:
     result = await db.execute(
         select(FileDocumentModel).where(
             FileDocumentModel.id == item_id,
@@ -312,67 +319,22 @@ async def _restore_file_document(db: AsyncSession, *, item_id: int, user_id: int
     doc = result.scalar_one_or_none()
     if doc is None:
         raise _not_found_error()
-    assert doc.deleted_at is not None
-    deleted_at = doc.deleted_at
 
-    stored_name = doc.file_path
-    original_name = doc.original_name
-    collection_name = doc.collection_name
-    category_id = doc.category_id
-    doc_id = doc.id
-
-    # 原始上传文件必须存在才能恢复向量
-    upload_path = get_user_upload_dir(user_id) / stored_name
-    if not upload_path.exists() or not upload_path.is_file():
+    upload_path = get_user_upload_dir(user_id) / doc.file_path
+    exists, is_file = await asyncio.gather(
+        asyncio.to_thread(upload_path.exists),
+        asyncio.to_thread(upload_path.is_file),
+    )
+    if not exists or not is_file:
         raise _conflict_error("ORIGINAL_FILE_MISSING", "原始文件已丢失，无法恢复向量索引")
 
-    # 保持软删状态下重建向量；失败时清新 chunks 并抛错
-    try:
-        await vectorize_and_store(
-            stored_name,
-            collection_name,
-            original_name=original_name,
-            category_id=category_id,
-            user_id=user_id,
-        )
-    except Exception as exc:
-        logger.exception(
-            "恢复文件时向量重建失败: doc_id=%s stored_name=%s",
-            doc_id,
-            stored_name,
-        )
-        try:
-            await delete_document_chunks(collection_name, stored_name)
-        except Exception:
-            logger.exception(
-                "向量重建失败后清理 chunks 也失败: doc_id=%s stored_name=%s",
-                doc_id,
-                stored_name,
-            )
-        raise _conflict_error("VECTORIZATION_FAILED", f"向量重建失败：{exc}") from exc
-
-    doc.deleted_at = None
-    try:
-        await db.commit()
-    except Exception as exc:
-        await db.rollback()
-        try:
-            await delete_document_chunks(collection_name, stored_name)
-        except Exception:
-            logger.exception(
-                "文件恢复提交失败后清理 chunks 也失败: doc_id=%s stored_name=%s",
-                doc_id,
-                stored_name,
-            )
-        raise _conflict_error("RESTORE_COMMIT_FAILED", "恢复状态保存失败，请重试") from exc
-
-    await db.refresh(doc)
-    return TrashItem(
-        type="file_document",
-        id=doc.id,
-        name=doc.original_name,
-        deleted_at=deleted_at,
+    job = await create_or_reuse_restore_job(
+        db,
+        user_id=user_id,
+        source_document=doc,
     )
+    schedule_job(job.id)
+    return job
 
 
 async def restore_item(
@@ -381,7 +343,7 @@ async def restore_item(
     item_type: str,
     item_id: int,
     user_id: int,
-) -> TrashItem:
+) -> TrashItem | FileProcessingJob:
     if item_type not in SUPPORTED_TYPES:
         raise _not_found_error()
     if item_type == "conversation":
@@ -505,6 +467,8 @@ async def _purge_file_document(db: AsyncSession, *, item_id: int, user_id: int) 
     doc = result.scalar_one_or_none()
     if doc is None:
         raise _not_found_error()
+    if await has_active_restore(db, user_id=user_id, source_document_id=doc.id):
+        raise _conflict_error("FILE_PROCESSING_ACTIVE", "文件正在恢复，暂不能永久删除")
 
     collection_name = doc.collection_name
     stored_name = doc.file_path

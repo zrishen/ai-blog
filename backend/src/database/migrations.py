@@ -21,9 +21,14 @@ _IDEMPOTENT_COLUMNS = {
 }
 
 _IDEMPOTENT_INDEXES = {
-    "ix_conversations_user_deleted": ("conversations", ["user_id", "deleted_at"]),
-    "ix_file_documents_user_deleted": ("file_documents", ["user_id", "deleted_at"]),
-    "ix_blog_posts_user_deleted": ("blog_posts", ["user_id", "deleted_at"]),
+    "ix_conversations_user_deleted": ("conversations", ["user_id", "deleted_at"], False),
+    "ix_file_documents_user_deleted": ("file_documents", ["user_id", "deleted_at"], False),
+    "ix_blog_posts_user_deleted": ("blog_posts", ["user_id", "deleted_at"], False),
+    "ix_file_processing_jobs_user_status": ("file_processing_jobs", ["user_id", "status"], False),
+    "ix_file_processing_jobs_heartbeat": ("file_processing_jobs", ["heartbeat_at"], False),
+    "ix_file_processing_jobs_source_document": ("file_processing_jobs", ["source_document_id"], False),
+    "uq_file_processing_jobs_active_key": ("file_processing_jobs", ["active_key"], True),
+    "uq_file_processing_jobs_user_request": ("file_processing_jobs", ["user_id", "client_request_id"], True),
 }
 
 
@@ -50,13 +55,14 @@ async def init_db():
                     )
                     logger.info("Migration: added column %s.%s", table, column)
 
-            for index_name, (table, cols) in _IDEMPOTENT_INDEXES.items():
+            for index_name, (table, cols, unique) in _IDEMPOTENT_INDEXES.items():
                 if not insp.has_table(table):
                     continue
                 if not _index_exists(insp, table, index_name):
                     cols_sql = ", ".join(cols)
+                    unique_sql = "UNIQUE " if unique else ""
                     conn_sync.execute(
-                        text(f'CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({cols_sql})')
+                        text(f'CREATE {unique_sql}INDEX IF NOT EXISTS {index_name} ON {table} ({cols_sql})')
                     )
                     logger.info("Migration: created index %s on %s", index_name, table)
 

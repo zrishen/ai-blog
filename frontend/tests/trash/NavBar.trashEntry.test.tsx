@@ -13,6 +13,7 @@ vi.mock("../../src/api/client", () => ({
 
 import { AuthProvider } from "../../src/stores/authStore";
 import { ChatProvider } from "../../src/stores/chatStore";
+import { FileProcessingProvider } from "../../src/features/file-processing/FileProcessingProvider";
 import { NavBar } from "../../src/components/NavBar";
 
 async function renderNav(authed = true) {
@@ -24,7 +25,9 @@ async function renderNav(authed = true) {
     <MemoryRouter>
       <AuthProvider>
         <ChatProvider>
-          <NavBar />
+          <FileProcessingProvider>
+            <NavBar />
+          </FileProcessingProvider>
         </ChatProvider>
       </AuthProvider>
     </MemoryRouter>,

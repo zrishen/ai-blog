@@ -1,10 +1,14 @@
 """文件上传 + 文件库路由（文档/分类管理）。"""
 
+import asyncio
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 import logging
+import os
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select, update
@@ -21,15 +25,26 @@ from src.schemas.file_base import (
     FileCollectionResponse,
     FileDocumentListResponse,
     FileDocumentResponse,
-    FileDocumentUploadResponse,
     SetCategoryRequest,
 )
 from src.schemas.files import FileUploadResponse
+from src.schemas.file_processing import FileProcessingJobResponse
+from src.services.file_processing_service import (
+    FileProcessingActiveError,
+    create_or_reuse_upload_job,
+    fail_staging_job,
+    get_job,
+    list_jobs,
+    mark_upload_queued,
+    schedule_job,
+)
 from src.services.file_service import (
+    MAX_FILE_SIZE,
+    _get_extension,
+    _validate_file,
     get_user_upload_dir,
     is_hidden_soft_deleted_file,
     save_file,
-    vectorize_and_store,
 )
 from src.services.vector_store import delete_document_chunks
 from src.utils.auth import get_current_user
@@ -260,7 +275,6 @@ async def delete_file_category(
         .where(
             FileDocument.category_id == category_id,
             FileDocument.user_id == str(user.id),
-            FileDocument.deleted_at.is_(None),
         )
         .values(category_id=None)
     )
@@ -274,79 +288,146 @@ async def delete_file_category(
 # ---- 文件库文档 ----
 
 
-@router.post("/files/documents", response_model=FileDocumentUploadResponse)
+@router.post(
+    "/files/documents",
+    response_model=FileProcessingJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def upload_to_file_library(
     file: UploadFile = File(...),
     category_id: Optional[int] = Form(None),
+    x_file_request_id: str = Header(..., alias="X-File-Request-Id"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Upload a file to the file library (vectorized)."""
+    """Stage a file upload and enqueue durable background vectorization."""
     await _ensure_category_owner(db, category_id, user.id)
-
     try:
-        stored_name, original_name = await save_file(file, allow_images=False, user_id=user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        request_id = str(uuid.UUID(x_file_request_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="X-File-Request-Id must be a UUID") from exc
 
+    original_name = file.filename or "file"
+    error = _validate_file(original_name, file.size, file.content_type, allow_images=False)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+
+    user_dir = get_user_upload_dir(user.id)
+    processing_dir = user_dir / ".processing"
+    processing_dir.mkdir(parents=True, exist_ok=True)
+    stored_name = f"{uuid.uuid4().hex}{_get_extension(original_name)}"
     collection_name = _user_collection(user.id)
     try:
-        logger.info(
-            "File library upload vectorization started: user_id=%s original_name=%s stored_name=%s category_id=%s",
-            user.id,
-            original_name,
-            stored_name,
-            category_id,
-        )
-        chunks = await vectorize_and_store(
-            stored_name,
-            collection_name,
-            original_name=original_name,
-            category_id=category_id,
+        job, created = await create_or_reuse_upload_job(
+            db,
             user_id=user.id,
-        )
-
-        doc = FileDocument(
-            collection_name=collection_name,
-            user_id=str(user.id),
+            client_request_id=request_id,
             original_name=original_name,
-            file_path=stored_name,
-            chunk_content=f"{len(chunks)} chunks",
-            meta="",
+            stored_name=stored_name,
+            collection_name=collection_name,
             category_id=category_id,
-            created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            processing_dir=processing_dir,
         )
-        db.add(doc)
-        await db.commit()
-        await db.refresh(doc)
-        logger.info(
-            "File library upload committed: user_id=%s doc_id=%s stored_name=%s chunks=%s",
-            user.id,
-            doc.id,
-            stored_name,
-            len(chunks),
-        )
+    except FileProcessingActiveError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="FILE_PROCESSING_ACTIVE: 已有文件正在上传或处理",
+        ) from exc
+    if not created:
+        return FileProcessingJobResponse.model_validate(job)
 
-    except Exception as e:
-        from src.services.file_service import delete_uploaded_file
-        logger.exception(
-            "File library upload vectorization failed: user_id=%s original_name=%s stored_name=%s category_id=%s",
-            user.id,
-            original_name,
-            stored_name,
-            category_id,
+    staging_path = Path(job.staging_path)
+    final_path = user_dir / stored_name
+    total = 0
+    output = None
+    moved_to_final = False
+    try:
+        output = await asyncio.to_thread(staging_path.open, "xb")
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_FILE_SIZE:
+                raise ValueError("File exceeds 100MB limit")
+            await asyncio.to_thread(output.write, chunk)
+        if total == 0:
+            raise ValueError("Uploaded file is empty")
+        await asyncio.to_thread(output.flush)
+        await asyncio.to_thread(os.fsync, output.fileno())
+        await asyncio.to_thread(output.close)
+        output = None
+        await asyncio.to_thread(os.replace, staging_path, final_path)
+        moved_to_final = True
+        await mark_upload_queued(db, job)
+    except asyncio.CancelledError:
+        if output is not None:
+            await asyncio.to_thread(output.close)
+        await asyncio.to_thread(staging_path.unlink, missing_ok=True)
+        if moved_to_final:
+            await asyncio.to_thread(final_path.unlink, missing_ok=True)
+        await fail_staging_job(
+            db,
+            job,
+            error_code="UPLOAD_CANCELLED",
+            error_message="Upload request was cancelled",
         )
-        delete_uploaded_file(stored_name, user.id)
-        raise HTTPException(status_code=500, detail=f"Vectorization failed: {str(e)}")
+        raise
+    except ValueError as exc:
+        if output is not None:
+            await asyncio.to_thread(output.close)
+        await asyncio.to_thread(staging_path.unlink, missing_ok=True)
+        await fail_staging_job(
+            db,
+            job,
+            error_code="INVALID_UPLOAD",
+            error_message=str(exc),
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        if output is not None:
+            await asyncio.to_thread(output.close)
+        await asyncio.to_thread(staging_path.unlink, missing_ok=True)
+        if moved_to_final:
+            await asyncio.to_thread(final_path.unlink, missing_ok=True)
+        await fail_staging_job(
+            db,
+            job,
+            error_code="STAGING_FAILED",
+            error_message=str(exc),
+        )
+        raise HTTPException(status_code=500, detail="Upload staging failed") from exc
 
-    return FileDocumentUploadResponse(
-        id=doc.id,
-        collection_name=collection_name,
-        original_name=original_name,
-        chunk_count=len(chunks),
-        category_id=doc.category_id,
-        created_at=doc.created_at,
+    schedule_job(job.id)
+    return FileProcessingJobResponse.model_validate(job)
+
+
+@router.get("/files/processing-jobs/{job_id}", response_model=FileProcessingJobResponse)
+async def get_file_processing_job(
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    job = await get_job(db, job_id=job_id, user_id=user.id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Processing job not found")
+    return FileProcessingJobResponse.model_validate(job)
+
+
+@router.get("/files/processing-jobs", response_model=list[FileProcessingJobResponse])
+async def list_file_processing_jobs(
+    active_only: bool = Query(False),
+    client_request_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    jobs = await list_jobs(
+        db,
+        user_id=user.id,
+        active_only=active_only,
+        client_request_id=client_request_id,
     )
+    return [FileProcessingJobResponse.model_validate(job) for job in jobs]
 
 
 @router.get("/files/documents", response_model=FileDocumentListResponse)

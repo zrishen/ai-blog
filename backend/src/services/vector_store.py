@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -37,6 +38,8 @@ async def add_documents(
     documents: list[str],
     metadata_list: list[dict] | None = None,
     embeddings: list[list[float]] | None = None,
+    progress_callback=None,
+    batch_size: int = 64,
 ) -> None:
     """Add documents to a collection.
 
@@ -49,8 +52,9 @@ async def add_documents(
     if not documents:
         return
 
-    client = _get_client()
-    collection = client.get_or_create_collection(
+    client = await asyncio.to_thread(_get_client)
+    collection = await asyncio.to_thread(
+        client.get_or_create_collection,
         name=collection_name,
         metadata={"hnsw:space": "cosine"},
     )
@@ -59,10 +63,21 @@ async def add_documents(
         metadata_list = [{}] * len(documents)
 
     ids = [str(metadata.get("chunk_id") or f"{collection_name}_{uuid4().hex}_{i}") for i, metadata in enumerate(metadata_list)]
-    upsert_kwargs = {"documents": documents, "metadatas": metadata_list, "ids": ids}
-    if embeddings is not None:
-        upsert_kwargs["embeddings"] = embeddings
-    collection.upsert(**upsert_kwargs)
+    batch_size = max(1, batch_size)
+    for start in range(0, len(documents), batch_size):
+        end = min(start + batch_size, len(documents))
+        upsert_kwargs = {
+            "documents": documents[start:end],
+            "metadatas": metadata_list[start:end],
+            "ids": ids[start:end],
+        }
+        if embeddings is not None:
+            upsert_kwargs["embeddings"] = embeddings[start:end]
+        await asyncio.to_thread(collection.upsert, **upsert_kwargs)
+        if progress_callback:
+            result = progress_callback(end, len(documents), "chunk")
+            if result is not None:
+                await result
 
 
 async def search(
@@ -110,13 +125,13 @@ async def search(
 
 async def delete_document_chunks(collection_name: str, stored_name: str) -> bool:
     """Delete chunks for one stored document from a collection."""
-    client = _get_client()
+    client = await asyncio.to_thread(_get_client)
     try:
-        collection = client.get_collection(name=collection_name)
+        collection = await asyncio.to_thread(client.get_collection, name=collection_name)
     except (ValueError, NotFoundError):
         return False
 
-    collection.delete(where={"stored_name": stored_name})
+    await asyncio.to_thread(collection.delete, where={"stored_name": stored_name})
     return True
 
 

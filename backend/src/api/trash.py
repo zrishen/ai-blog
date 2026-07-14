@@ -6,11 +6,12 @@ DELETE /api/trash/{type}/{id}                永久删除（仅作用于回收�
 DELETE /api/trash                            -> {status, deleted, failed, remaining}
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import get_db
 from src.database.models import User
+from src.schemas.file_processing import FileProcessingJobResponse
 from src.schemas.trash import (
     TrashClearResponse,
     TrashItem,
@@ -38,18 +39,22 @@ async def get_trash(
     return TrashListResponse(items=items, total=len(items))
 
 
-@router.post("/trash/{item_type}/{item_id}/restore", response_model=TrashRestoreResponse)
+@router.post("/trash/{item_type}/{item_id}/restore")
 async def restore_trash_item(
     item_type: str,
     item_id: int,
+    response: Response,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     if item_type not in SUPPORTED_TYPES:
         raise HTTPException(status_code=400, detail=f"不支持的类型: {item_type}")
-    item: TrashItem = await restore_item(
+    item = await restore_item(
         db, item_type=item_type, item_id=item_id, user_id=user.id
     )
+    if item_type == "file_document":
+        response.status_code = status.HTTP_202_ACCEPTED
+        return FileProcessingJobResponse.model_validate(item)
     return TrashRestoreResponse(status="ok", item=item)
 
 

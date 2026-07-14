@@ -9,6 +9,17 @@ const listTrashMock = vi.fn();
 const restoreTrashItemMock = vi.fn();
 const purgeTrashItemMock = vi.fn();
 const emptyTrashMock = vi.fn();
+const restoreFileMock = vi.fn();
+const consumeRestoreSuccessMock = vi.fn();
+let restoreJobsMock: Record<number, unknown> = {};
+
+vi.mock("../../src/features/file-processing/FileProcessingProvider", () => ({
+  useFileProcessing: () => ({
+    restoreJobs: restoreJobsMock,
+    restoreFile: restoreFileMock,
+    consumeRestoreSuccess: consumeRestoreSuccessMock,
+  }),
+}));
 
 vi.mock("../../src/api/trash", () => ({
   listTrash: (...args: unknown[]) => listTrashMock(...args),
@@ -45,11 +56,36 @@ function renderDialog(props?: Partial<React.ComponentProps<typeof TrashDialog>>)
   );
 }
 
+function makeRestoreJob(id: string, status: "running" | "succeeded") {
+  return {
+    id,
+    job_type: "restore",
+    status,
+    current_stage: status === "succeeded" ? "finalize" : "embedding",
+    progress_model_version: "restore_v1",
+    progress_percent: status === "succeeded" ? 100 : 60,
+    progress_json: { model_version: "restore_v1", current_stage: "embedding", stages: {} },
+    client_request_id: null,
+    source_document_id: 2,
+    result_document_id: null,
+    original_name: "条目 2",
+    category_id: null,
+    error_code: null,
+    error_message: null,
+    created_at: "2026-07-14T00:00:00Z",
+    updated_at: "2026-07-14T00:00:01Z",
+    finished_at: status === "succeeded" ? "2026-07-14T00:00:02Z" : null,
+  };
+}
+
 beforeEach(() => {
   listTrashMock.mockReset();
   restoreTrashItemMock.mockReset();
   purgeTrashItemMock.mockReset();
   emptyTrashMock.mockReset();
+  restoreFileMock.mockReset();
+  consumeRestoreSuccessMock.mockReset();
+  restoreJobsMock = {};
 });
 
 afterEach(() => {
@@ -185,6 +221,39 @@ describe("TrashDialog", () => {
     // 恢复按钮禁用,永久删除按钮也禁用
     expect(restoreBtn).toBeDisabled();
     releaseRestore();
+  });
+
+  it("文件恢复成功按 job ID 显式消费并移除回收站行", async () => {
+    const item = makeItems(2)[1];
+    listTrashMock.mockResolvedValueOnce({ items: [item], total: 1 });
+    restoreJobsMock = { 2: makeRestoreJob("restore-job-1", "succeeded") };
+    renderDialog();
+
+    await waitFor(() => expect(consumeRestoreSuccessMock).toHaveBeenCalledWith(2, "restore-job-1"));
+    expect(screen.queryByText("条目 2")).toBeNull();
+    expect(screen.getByText("共 0 项")).toBeInTheDocument();
+    expect(consumeRestoreSuccessMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("同一文件后续新恢复 job 成功时仍会再次消费", async () => {
+    const item = makeItems(2)[1];
+    listTrashMock
+      .mockResolvedValueOnce({ items: [item], total: 1 })
+      .mockResolvedValueOnce({ items: [item], total: 1 });
+    restoreJobsMock = { 2: makeRestoreJob("restore-job-1", "succeeded") };
+    const view = renderDialog();
+
+    await waitFor(() => expect(consumeRestoreSuccessMock).toHaveBeenCalledWith(2, "restore-job-1"));
+    view.rerender(<TrashDialog open={false} onOpenChange={() => {}} />);
+    view.rerender(<TrashDialog open onOpenChange={() => {}} />);
+    expect(await screen.findByText("条目 2")).toBeInTheDocument();
+
+    restoreJobsMock = { 2: makeRestoreJob("restore-job-2", "succeeded") };
+    view.rerender(<TrashDialog open onOpenChange={() => {}} />);
+
+    await waitFor(() => expect(consumeRestoreSuccessMock).toHaveBeenCalledWith(2, "restore-job-2"));
+    expect(consumeRestoreSuccessMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("条目 2")).toBeNull();
   });
 });
 

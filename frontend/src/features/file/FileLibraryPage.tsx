@@ -3,7 +3,8 @@ import { useChat } from "../../stores/chatStore";
 import type { FileCategory } from "../../stores/chatStore";
 import { useAuth } from "../../stores/authStore";
 import { useChatHooks } from "../../hooks/useChat";
-import { uploadToFileLibrary, createFileCategory, deleteFileDocument, setDocumentCategory, listFileCategories } from "../../api/client";
+import { createFileCategory, deleteFileDocument, setDocumentCategory, listFileCategories } from "../../api/client";
+import { useFileProcessing } from "../file-processing/FileProcessingProvider";
 import { FilePreview } from "../../components/FilePreview";
 import { motion } from "motion/react";
 import { ArrowLeft, Upload, FolderPlus, X, Trash2, AlertCircle, FileText, FileSpreadsheet, File, Database, Sparkles, FolderOpen } from "lucide-react";
@@ -48,8 +49,8 @@ export function FileLibraryPage() {
   const { state, dispatch } = useChat();
   const { isAuthenticated } = useAuth();
   const { loadFileDocuments } = useChatHooks();
+  const { isUploadActive, startUpload, clearUploadError } = useFileProcessing();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNewCategory, setShowNewCategory] = useState(false);
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
@@ -73,23 +74,21 @@ export function FileLibraryPage() {
     loadFileDocuments(state.fileSelectedCategoryId ?? undefined).catch((err) => {
       setError(err instanceof Error ? err.message : "文件库加载失败");
     });
-  }, [isAuthenticated, state.fileSelectedCategoryId, state.trashRevision, loadFileDocuments]);
+  }, [isAuthenticated, state.fileSelectedCategoryId, state.fileLibraryRevision, loadFileDocuments]);
 
   const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setUploading(true);
     setError(null);
+    clearUploadError();
     try {
-      await uploadToFileLibrary(file, state.fileSelectedCategoryId ?? undefined);
-      await loadFileDocuments(state.fileSelectedCategoryId ?? undefined);
+      await startUpload(file, state.fileSelectedCategoryId ?? undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "上传失败");
     } finally {
-      setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [state.fileSelectedCategoryId, loadFileDocuments]);
+  }, [clearUploadError, startUpload, state.fileSelectedCategoryId]);
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -176,10 +175,10 @@ export function FileLibraryPage() {
             <Button
               className="gap-1.5 rounded-full shadow-lg shadow-primary/20"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+              disabled={isUploadActive}
             >
               <Upload className="w-3.5 h-3.5" />
-              {uploading ? "上传中..." : "上传文件"}
+              {isUploadActive ? "处理中..." : "上传文件"}
             </Button>
           </div>
           <div className="flex flex-1 min-h-0 flex-col overflow-hidden rounded-3xl border border-border/70 bg-card/90 p-2 shadow-xl shadow-foreground/5">
@@ -226,10 +225,10 @@ export function FileLibraryPage() {
               <Button
                 className="rounded-full shadow-lg shadow-primary/20"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+                disabled={isUploadActive}
               >
                 <Upload className="w-3.5 h-3.5" />
-                {uploading ? "上传中..." : "上传文件"}
+                {isUploadActive ? "处理中..." : "上传文件"}
               </Button>
             </div>
           </div>
@@ -290,9 +289,9 @@ export function FileLibraryPage() {
               上传 PDF、Word 或 Excel 文档后，它们会出现在这里，并可按分类整理。
             </p>
             <div className="mt-5 flex flex-wrap justify-center gap-2">
-              <Button className="rounded-full" onClick={() => fileInputRef.current?.click()}>
+              <Button className="rounded-full" onClick={() => fileInputRef.current?.click()} disabled={isUploadActive}>
                 <Upload className="w-4 h-4" />
-                上传第一个文件
+                {isUploadActive ? "处理中..." : "上传第一个文件"}
               </Button>
               <Button variant="outline" className="rounded-full" onClick={() => setShowNewCategory(true)}>
                 <FolderPlus className="w-4 h-4" />

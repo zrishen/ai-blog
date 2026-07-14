@@ -2,6 +2,7 @@
 
 import io
 import sqlite3
+import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -9,8 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.database.models import FileDocument
+from src.database.models import FileDocument, FileProcessingJob
 from src.services import file_service
+from src.services.file_processing_service import _run_job
 from src.utils.user_dir import invalidate_username_cache
 
 
@@ -141,12 +143,12 @@ async def test_upload_file_document(client: AsyncClient):
     file_content = b"%PDF-1.4 File library document content."
     files = {"file": ("file_doc.pdf", io.BytesIO(file_content), "application/pdf")}
 
-    resp = await client.post("/api/files/documents", files=files)
-    assert resp.status_code == 200
+    resp = await client.post("/api/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+    assert resp.status_code == 202
     data = resp.json()
-    assert "id" in data
-    assert "collection_name" in data
-    assert "original_name" in data
+    assert data["job_type"] == "upload"
+    assert data["status"] == "queued"
+    assert data["progress_percent"] == 30
     assert data["original_name"] == "file_doc.pdf"
 
 
@@ -161,12 +163,13 @@ async def test_upload_file_document_passes_numeric_user_id_to_vectorizer(
         received_user_ids.append(kwargs["user_id"])
         return []
 
-    monkeypatch.setattr("src.api.files.vectorize_and_store", capture_vectorize)
+    monkeypatch.setattr("src.services.file_processing_service.vectorize_and_store", capture_vectorize)
     files = {"file": ("numeric-id.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
 
-    response = await client.post("/api/files/documents", files=files)
+    response = await client.post("/api/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+    await _run_job(response.json()["id"])
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert len(received_user_ids) == 1
     assert isinstance(received_user_ids[0], int)
 
@@ -204,13 +207,15 @@ async def test_list_file_documents(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_set_document_category(client: AsyncClient):
+async def test_set_document_category(client: AsyncClient, db_session: AsyncSession):
     cat_resp = await client.post("/api/files/categories", json={"name": "文档分类"})
     cat_id = cat_resp.json()["id"]
 
     files = {"file": ("doc.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_resp = await client.post("/api/files/documents", files=files)
-    doc_id = doc_resp.json()["id"]
+    doc_resp = await client.post("/api/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+    await _run_job(doc_resp.json()["id"])
+    job = await db_session.get(FileProcessingJob, doc_resp.json()["id"])
+    doc_id = job.result_document_id
 
     resp = await client.patch(f"/api/files/documents/{doc_id}/category", json={
         "category_id": cat_id,
@@ -219,10 +224,12 @@ async def test_set_document_category(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_delete_file_document(client: AsyncClient):
+async def test_delete_file_document(client: AsyncClient, db_session: AsyncSession):
     files = {"file": ("del_doc.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_resp = await client.post("/api/files/documents", files=files)
-    doc_id = doc_resp.json()["id"]
+    doc_resp = await client.post("/api/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+    await _run_job(doc_resp.json()["id"])
+    job = await db_session.get(FileProcessingJob, doc_resp.json()["id"])
+    doc_id = job.result_document_id
 
     resp = await client.delete(f"/api/files/documents/{doc_id}")
     assert resp.status_code == 200
@@ -243,8 +250,9 @@ async def test_delete_file_collection_keeps_failed_document_active(
 ):
     for name in ("collection-a.pdf", "collection-b.pdf"):
         files = {"file": (name, io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-        response = await client.post("/api/files/documents", files=files)
-        assert response.status_code == 200
+        response = await client.post("/api/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+        assert response.status_code == 202
+        await _run_job(response.json()["id"])
 
     documents = (
         await db_session.execute(select(FileDocument).order_by(FileDocument.id))

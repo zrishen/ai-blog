@@ -62,6 +62,44 @@ class FileDocument(Base):
     deleted_at = Column(DateTime, nullable=True)
 
 
+class FileProcessingJob(Base):
+    __tablename__ = "file_processing_jobs"
+    __table_args__ = (
+        UniqueConstraint("active_key", name="uq_file_processing_jobs_active_key"),
+        UniqueConstraint("user_id", "client_request_id", name="uq_file_processing_jobs_user_request"),
+        Index("ix_file_processing_jobs_user_status", "user_id", "status"),
+        Index("ix_file_processing_jobs_heartbeat", "heartbeat_at"),
+        Index("ix_file_processing_jobs_source_document", "source_document_id"),
+    )
+
+    id = Column(String(36), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    job_type = Column(String(20), nullable=False)
+    status = Column(String(20), nullable=False, default="staging")
+    current_stage = Column(String(40), nullable=False)
+    progress_model_version = Column(String(30), nullable=False)
+    progress_percent = Column(Integer, nullable=False, default=0)
+    progress_json = Column(JSON, nullable=False, default=dict)
+    client_request_id = Column(String(36), nullable=False)
+    source_document_id = Column(Integer, ForeignKey("file_documents.id", ondelete="SET NULL"), nullable=True)
+    result_document_id = Column(Integer, ForeignKey("file_documents.id", ondelete="SET NULL"), nullable=True)
+    original_name = Column(String(300), nullable=False)
+    stored_name = Column(String(300), nullable=True)
+    collection_name = Column(String(200), nullable=False)
+    category_id = Column(Integer, ForeignKey("file_categories.id", ondelete="SET NULL"), nullable=True)
+    staging_path = Column(String(500), nullable=True)
+    active_key = Column(String(200), nullable=True)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    execution_token = Column(String(36), nullable=True)
+    heartbeat_at = Column(DateTime, nullable=True)
+    error_code = Column(String(80), nullable=True)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+
+
 # ---- MCP ----
 
 class MCPServer(Base):

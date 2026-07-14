@@ -173,7 +173,10 @@ interface ChatState {
   trustWritingEnabled: boolean;
   pendingResearchPrompt: string | null;
 
-  // Trash — 恢复/永久删除/清空成功后递增,触发会话/文件库/博客列表刷新
+  // 文件处理成功后递增，触发文件库列表刷新
+  fileLibraryRevision: number;
+
+  // Trash — 恢复/永久删除/清空成功后递增,触发会话/博客列表刷新
   trashRevision: number;
 }
 
@@ -244,7 +247,9 @@ type ChatAction =
   | { type: "SET_RESEARCH_SELECTED_PROPOSAL_ID"; payload: number | null }
   | { type: "SET_TRUST_WRITING_ENABLED"; payload: boolean }
   | { type: "SET_PENDING_RESEARCH_PROMPT"; payload: string | null }
-  // Trash
+  // File processing / Trash
+  | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
+  | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
   | { type: "INCREMENT_TRASH_REVISION" }
   // Navigation
   | { type: "RESET_TO_BLOG_HOME" }
@@ -566,7 +571,15 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, trustWritingEnabled: action.payload };
     case "SET_PENDING_RESEARCH_PROMPT":
       return { ...state, pendingResearchPrompt: action.payload };
-    // Trash
+    // File processing / Trash
+    case "INCREMENT_FILE_LIBRARY_REVISION":
+      return { ...state, fileLibraryRevision: state.fileLibraryRevision + 1 };
+    case "INCREMENT_FILE_RESTORE_REVISIONS":
+      return {
+        ...state,
+        fileLibraryRevision: state.fileLibraryRevision + 1,
+        trashRevision: state.trashRevision + 1,
+      };
     case "INCREMENT_TRASH_REVISION":
       return { ...state, trashRevision: state.trashRevision + 1 };
     // Navigation
@@ -613,6 +626,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         trustWritingEnabled: false,
         pendingResearchPrompt: null,
         mcpServers: [],
+        fileLibraryRevision: state.fileLibraryRevision + 1,
         trashRevision: state.trashRevision + 1,
       };
     default:
@@ -682,7 +696,8 @@ const initialState: ChatState = {
   trustWritingEnabled: false,
   pendingResearchPrompt: null,
 
-  // Trash
+  // File processing / Trash
+  fileLibraryRevision: 0,
   trashRevision: 0,
 };
 

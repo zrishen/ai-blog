@@ -29,6 +29,9 @@ async def startup():
     setup_logging()
     await init_db()
 
+    from src.services.file_processing_service import reconcile_jobs
+    await reconcile_jobs()
+
     from src.services.user_service import ensure_system_user
     from src.services.official_intro_service import build_intro_post_payload
     from src.services.blog_service import ensure_intro_post

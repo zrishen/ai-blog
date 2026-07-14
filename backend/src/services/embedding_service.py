@@ -36,7 +36,7 @@ def _get_openai_client() -> AsyncOpenAI:
     return _openai_client
 
 
-async def get_embeddings(texts: list[str]) -> list[list[float]]:
+async def get_embeddings(texts: list[str], progress_callback=None) -> list[list[float]]:
     if not texts:
         return []
 
@@ -68,8 +68,21 @@ async def get_embeddings(texts: list[str]) -> list[list[float]]:
             )
             raise
 
+        indexes = [item.index for item in response.data]
+        expected_indexes = list(range(len(batch)))
+        if len(indexes) != len(batch) or len(set(indexes)) != len(indexes) or sorted(indexes) != expected_indexes:
+            raise ValueError(
+                f"Invalid embedding response indexes: expected={expected_indexes} actual={indexes}"
+            )
         ordered = sorted(response.data, key=lambda item: item.index)
-        embeddings.extend([[float(value) for value in item.embedding] for item in ordered])
+        batch_embeddings = [[float(value) for value in item.embedding] for item in ordered]
+        if any(not embedding for embedding in batch_embeddings):
+            raise ValueError("Embedding response contains an empty vector")
+        embeddings.extend(batch_embeddings)
+        if progress_callback:
+            result = progress_callback(len(embeddings), len(texts), "chunk")
+            if result is not None:
+                await result
         logger.info(
             "Embedding request completed: model=%s batch=%s/%s embeddings=%s",
             settings.embedding_model,

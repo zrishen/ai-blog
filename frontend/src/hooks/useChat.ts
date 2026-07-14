@@ -6,7 +6,6 @@ import {
   deleteConversation,
   getMessages,
   sendChat,
-  uploadToFileLibrary,
   listFileDocuments,
   deleteFileDocument,
   listMCPServers,
@@ -84,24 +83,6 @@ export function useChatHooks() {
       throw error;
     }
   }, [dispatch]);
-
-  const uploadToFileLibraryHook = useCallback(
-    async (file: File, categoryId?: number) => {
-      dispatch({ type: "SET_LOADING", payload: true });
-      const targetCategoryId = categoryId ?? state.fileSelectedCategoryId ?? undefined;
-      try {
-        const doc = await uploadToFileLibrary(file, targetCategoryId);
-        await loadFileDocuments(targetCategoryId);
-        return doc;
-      } catch (error) {
-        console.error("File library upload failed:", error);
-        throw error;
-      } finally {
-        dispatch({ type: "SET_LOADING", payload: false });
-      }
-    },
-    [state.fileSelectedCategoryId, loadFileDocuments, dispatch],
-  );
 
   const removeFileDocument = useCallback(
     async (id: number) => {
@@ -272,7 +253,6 @@ export function useChatHooks() {
     removeConversation,
     sendMessage,
     loadFileDocuments,
-    uploadToFileLibrary: uploadToFileLibraryHook,
     removeFileDocument,
     loadMCPServers,
     addMCPServer,

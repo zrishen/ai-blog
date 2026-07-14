@@ -1,6 +1,7 @@
 """统一回收站测试。"""
 
 import io
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -15,8 +16,26 @@ from src.database.models import (
     BlogPost as BlogPostModel,
     Conversation,
     FileDocument,
+    FileProcessingJob,
     Message,
 )
+from src.services.file_processing_service import _run_job
+
+
+async def _upload_document(client: AsyncClient, db_session: AsyncSession, name: str) -> int:
+    files = {"file": (name, io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
+    response = await client.post(
+        "/api/files/documents",
+        files=files,
+        headers={"X-File-Request-Id": str(uuid.uuid4())},
+    )
+    assert response.status_code == 202
+    job_id = response.json()["id"]
+    await _run_job(job_id)
+    job = await db_session.get(FileProcessingJob, job_id)
+    assert job is not None and job.status == "succeeded"
+    assert job.result_document_id is not None
+    return job.result_document_id
 
 
 # ─────────── Conversation ───────────
@@ -113,10 +132,8 @@ async def test_conversation_purge(client: AsyncClient, db_session: AsyncSession)
 
 
 @pytest.mark.asyncio
-async def test_file_document_soft_delete_then_list(client: AsyncClient):
-    files = {"file": ("del.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_resp = await client.post("/api/files/documents", files=files)
-    doc_id = doc_resp.json()["id"]
+async def test_file_document_soft_delete_then_list(client: AsyncClient, db_session: AsyncSession):
+    doc_id = await _upload_document(client, db_session, "del.pdf")
 
     del_resp = await client.delete(f"/api/files/documents/{doc_id}")
     assert del_resp.status_code == 200
@@ -129,11 +146,9 @@ async def test_file_document_soft_delete_then_list(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_file_document_restore_requires_source_file(client: AsyncClient, monkeypatch):
+async def test_file_document_restore_requires_source_file(client: AsyncClient, db_session: AsyncSession, monkeypatch):
     """软删后回收站可见；恢复时若源文件已丢失则返回 409。"""
-    files = {"file": ("restore.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_resp = await client.post("/api/files/documents", files=files)
-    doc_id = doc_resp.json()["id"]
+    doc_id = await _upload_document(client, db_session, "restore.pdf")
 
     await client.delete(f"/api/files/documents/{doc_id}")
 
@@ -155,9 +170,7 @@ async def test_file_document_restore_requires_source_file(client: AsyncClient, m
 
 @pytest.mark.asyncio
 async def test_file_document_purge(client: AsyncClient, db_session: AsyncSession):
-    files = {"file": ("purge.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_resp = await client.post("/api/files/documents", files=files)
-    doc_id = doc_resp.json()["id"]
+    doc_id = await _upload_document(client, db_session, "purge.pdf")
 
     await client.delete(f"/api/files/documents/{doc_id}")
     resp = await client.delete(f"/api/trash/file_document/{doc_id}")
@@ -286,94 +299,33 @@ async def test_trash_unsupported_type(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_file_document_restore_success_invokes_vectorize(client: AsyncClient, monkeypatch):
-    """恢复成功时调用 vectorize_and_store，文件库列表恢复可见，deleted_at 被清。"""
-    files = {"file": ("ok-restore.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_resp = await client.post("/api/files/documents", files=files)
-    doc_id = doc_resp.json()["id"]
+async def test_file_document_restore_success_invokes_vectorize(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
+):
+    """文件恢复先返回 202 job，worker 成功后才清 deleted_at。"""
+    doc_id = await _upload_document(client, db_session, "ok-restore.pdf")
     await client.delete(f"/api/files/documents/{doc_id}")
 
     calls: list[tuple] = []
-    upload_dir_user_ids: list[int | str] = []
 
     async def _fake_vectorize(stored, collection, **kwargs):
         calls.append((stored, collection, kwargs.get("original_name"), kwargs.get("user_id")))
         return ["chunk-1", "chunk-2"]
 
-    from src.services.file_service import get_user_upload_dir
-
-    def _capture_upload_dir(user_id: int | str):
-        upload_dir_user_ids.append(user_id)
-        return get_user_upload_dir(user_id)
-
-    monkeypatch.setattr("src.services.trash_service.get_user_upload_dir", _capture_upload_dir)
-    monkeypatch.setattr("src.services.trash_service.vectorize_and_store", _fake_vectorize)
+    monkeypatch.setattr("src.services.file_processing_service.vectorize_and_store", _fake_vectorize)
 
     restore = await client.post(f"/api/trash/file_document/{doc_id}/restore")
-    assert restore.status_code == 200
+    assert restore.status_code == 202
     body = restore.json()
-    assert body["status"] == "ok"
-    assert body["item"]["type"] == "file_document"
-    assert body["item"]["id"] == doc_id
+    assert body["job_type"] == "restore"
+    assert body["source_document_id"] == doc_id
+
+    await _run_job(body["id"])
     assert len(calls) == 1
     assert isinstance(calls[0][3], int)
-    assert len(upload_dir_user_ids) == 1
-    assert isinstance(upload_dir_user_ids[0], int)
-
-    listing = await client.get("/api/files/documents")
-    assert any(d["id"] == doc_id for d in listing.json()["documents"])
-
-
-@pytest.mark.asyncio
-async def test_file_restore_commit_failure_cleans_rebuilt_chunks(
-    db_session: AsyncSession,
-    monkeypatch,
-    tmp_path,
-):
-    from src.services.trash_service import restore_item
-
-    source = tmp_path / "restore-commit.pdf"
-    source.write_bytes(b"%PDF-1.4 content")
-    doc = FileDocument(
-        collection_name="user_1_file",
-        user_id="1",
-        original_name="restore-commit.pdf",
-        file_path=source.name,
-        chunk_content="1 chunks",
-        meta="",
-        deleted_at=datetime.now(timezone.utc).replace(tzinfo=None),
-    )
-    db_session.add(doc)
-    await db_session.commit()
-    await db_session.refresh(doc)
-    doc_id = doc.id
-    collection_name = doc.collection_name
-    stored_name = doc.file_path
-
-    monkeypatch.setattr("src.services.trash_service.get_user_upload_dir", lambda user_id: tmp_path)
-    monkeypatch.setattr(
-        "src.services.trash_service.vectorize_and_store",
-        AsyncMock(return_value=["chunk"]),
-    )
-    cleanup = AsyncMock(return_value=True)
-    monkeypatch.setattr("src.services.trash_service.delete_document_chunks", cleanup)
-
-    async def fail_commit():
-        raise RuntimeError("database unavailable")
-
-    monkeypatch.setattr(db_session, "commit", fail_commit)
-
-    with pytest.raises(HTTPException) as exc_info:
-        await restore_item(
-            db_session,
-            item_type="file_document",
-            item_id=doc_id,
-            user_id=1,
-        )
-
-    assert exc_info.value.status_code == 409
-    assert str(exc_info.value.detail).startswith("RESTORE_COMMIT_FAILED:")
-    cleanup.assert_awaited_once_with(collection_name, stored_name)
+    db_session.expire_all()
+    doc = await db_session.get(FileDocument, doc_id)
+    assert doc is not None and doc.deleted_at is None
 
 
 @pytest.mark.asyncio
@@ -382,8 +334,7 @@ async def test_file_purge_chroma_failure_keeps_record(
     db_session: AsyncSession,
     monkeypatch,
 ):
-    files = {"file": ("purge-chroma.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_id = (await client.post("/api/files/documents", files=files)).json()["id"]
+    doc_id = await _upload_document(client, db_session, "purge-chroma.pdf")
     await client.delete(f"/api/files/documents/{doc_id}")
 
     async def fail_cleanup(*args, **kwargs):
@@ -407,8 +358,7 @@ async def test_file_purge_unlink_failure_keeps_record(
     monkeypatch,
     tmp_path,
 ):
-    files = {"file": ("purge-unlink.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
-    doc_id = (await client.post("/api/files/documents", files=files)).json()["id"]
+    doc_id = await _upload_document(client, db_session, "purge-unlink.pdf")
     await client.delete(f"/api/files/documents/{doc_id}")
     doc = await db_session.get(FileDocument, doc_id)
     source = tmp_path / doc.file_path

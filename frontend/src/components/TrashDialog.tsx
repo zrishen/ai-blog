@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Trash2, RotateCcw, Loader2, MessageSquare, FileText, PenLine, Search } from "lucide-react";
 import { listTrash, restoreTrashItem, purgeTrashItem, emptyTrash } from "../api/trash";
 import type { TrashItem, TrashItemType, TrashPurgeResponse } from "../api/trash";
+import { useFileProcessing } from "../features/file-processing/FileProcessingProvider";
+import { FileProcessingProgress } from "../features/file-processing/FileProcessingProgress";
 
 interface TrashDialogProps {
   open: boolean;
@@ -43,18 +45,22 @@ function formatDate(value: string) {
 }
 
 export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashDialogProps) {
+  const { restoreJobs, restoreFile, consumeRestoreSuccess } = useFileProcessing();
   const [items, setItems] = useState<TrashItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [pendingActions, setPendingActions] = useState<Set<string>>(() => new Set());
   const [purgeTarget, setPurgeTarget] = useState<TrashItem | null>(null);
   const [emptyConfirmOpen, setEmptyConfirmOpen] = useState(false);
   const [partialNotice, setPartialNotice] = useState<string | null>(null);
+  const handledRestoreSuccessesRef = useRef(new Set<string>());
 
   const load = useCallback(async () => {
     setLoading(true);
+    setHasLoaded(false);
     setError(null);
     try {
       const data = await listTrash();
@@ -66,6 +72,7 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
       setTotal(0);
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
   }, []);
 
@@ -101,10 +108,14 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
     setPendingActions((current) => new Set(current).add(key));
     setError(null);
     try {
-      await restoreTrashItem(item.type, item.id);
-      setItems((prev) => prev.filter((it) => !(it.type === item.type && it.id === item.id)));
-      setTotal((prev) => Math.max(0, prev - 1));
-      onRestored?.();
+      if (item.type === "file_document") {
+        await restoreFile(item);
+      } else {
+        await restoreTrashItem(item.type, item.id);
+        setItems((prev) => prev.filter((it) => !(it.type === item.type && it.id === item.id)));
+        setTotal((prev) => Math.max(0, prev - 1));
+        onRestored?.();
+      }
     } catch {
       setError("恢复失败，请稍后重试");
     } finally {
@@ -114,7 +125,23 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
         return next;
       });
     }
-  }, [onRestored]);
+  }, [onRestored, restoreFile]);
+
+  useEffect(() => {
+    if (!open || !hasLoaded) return;
+    const succeeded = Object.entries(restoreJobs)
+      .filter(([, job]) => job.status === "succeeded" && !handledRestoreSuccessesRef.current.has(job.id))
+      .map(([sourceId, job]) => ({ sourceId: Number(sourceId), jobId: job.id }));
+    if (succeeded.length === 0) return;
+
+    const succeededIds = succeeded.map(({ sourceId }) => sourceId);
+    succeeded.forEach(({ sourceId, jobId }) => {
+      handledRestoreSuccessesRef.current.add(jobId);
+      consumeRestoreSuccess(sourceId, jobId);
+    });
+    setItems((current) => current.filter((item) => item.type !== "file_document" || !succeededIds.includes(item.id)));
+    setTotal((current) => Math.max(0, current - succeededIds.length));
+  }, [consumeRestoreSuccess, hasLoaded, open, restoreJobs]);
 
   const handleConfirmPurge = useCallback(async () => {
     const item = purgeTarget;
@@ -243,7 +270,9 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
                 const Icon = meta.icon;
                 const restoreKey = `${item.type}:${item.id}:restore`;
                 const purgeKey = `${item.type}:${item.id}:purge`;
-                const restoring = pendingActions.has(restoreKey);
+                const restoreJob = item.type === "file_document" ? restoreJobs[item.id] : undefined;
+                const restoreActive = restoreJob != null && !["succeeded", "failed"].includes(restoreJob.status);
+                const restoring = pendingActions.has(restoreKey) || restoreActive;
                 const purging = pendingActions.has(purgeKey);
                 const rowPending = restoring || purging;
                 return (
@@ -256,6 +285,15 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
                       <div className="text-[12px] text-muted-foreground">
                         {meta.label} · {formatDate(item.deleted_at)}
                       </div>
+                      {restoreJob && (
+                        <div className="mt-1.5">
+                          {restoreJob.status === "failed" ? (
+                            <div className="text-[12px] text-destructive">{restoreJob.error_message || "恢复失败，可重试"}</div>
+                          ) : (
+                            <FileProcessingProgress value={{ percent: restoreJob.progress_percent, stage: restoreJob.current_stage || "正在恢复文件", job: restoreJob }} />
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                       <Button

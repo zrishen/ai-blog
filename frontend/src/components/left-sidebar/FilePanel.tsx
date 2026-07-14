@@ -7,8 +7,8 @@ import {
   createFileCategory,
   deleteFileCategory,
   updateFileCategory,
-  uploadToFileLibrary,
 } from "../../api/client";
+import { useFileProcessing } from "../../features/file-processing/FileProcessingProvider";
 import { FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,7 @@ import { CategoryTree } from "./fileCategoryTree";
 export function FilePanel() {
   const { state, dispatch } = useChat();
   const { isAuthenticated } = useAuth();
+  const { isUploadActive, startUpload, clearUploadError } = useFileProcessing();
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<
     Set<number>
   >(new Set());
@@ -87,7 +88,7 @@ export function FilePanel() {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       loadFileDocs(state.fileSelectedCategoryId);
     }
-  }, [isAuthenticated, state.currentPage, state.fileSelectedCategoryId, loadFileDocs]);
+  }, [isAuthenticated, state.currentPage, state.fileSelectedCategoryId, state.fileLibraryRevision, loadFileDocs]);
 
   const handleCategorySelect = (id: number | null) => {
     dispatch({ type: "SET_FILE_SELECTED_CATEGORY_ID", payload: id });
@@ -221,11 +222,11 @@ export function FilePanel() {
     const categoryId = pendingUploadCategoryRef.current;
     try {
       setFileActionError(null);
-      await uploadToFileLibrary(file, categoryId ?? undefined);
+      clearUploadError();
       if (categoryId !== state.fileSelectedCategoryId) {
         dispatch({ type: "SET_FILE_SELECTED_CATEGORY_ID", payload: categoryId });
       }
-      await loadFileDocs(categoryId);
+      await startUpload(file, categoryId ?? undefined);
     } catch (err) {
       console.error("Failed to upload file:", err);
       setFileActionError(err instanceof Error ? err.message : "文件库上传失败");
@@ -403,7 +404,7 @@ export function FilePanel() {
             <DialogClose asChild>
               <Button variant="outline">取消</Button>
             </DialogClose>
-            <Button onClick={handleUploadFilePick}>选择文件</Button>
+            <Button onClick={handleUploadFilePick} disabled={isUploadActive}>选择文件</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

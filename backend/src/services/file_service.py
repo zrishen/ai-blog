@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -153,6 +154,7 @@ async def vectorize_and_store(
     original_name: str | None = None,
     category_id: int | None = None,
     user_id: int | str = "default_user",
+    progress_reporter=None,
 ) -> list[str]:
     """Parse, chunk, embed, and store documents in the vector store.
 
@@ -164,6 +166,10 @@ async def vectorize_and_store(
 
     from src.utils.chunker import chunk_text
 
+    async def report(stage: str, completed: int, total: int, unit: str) -> None:
+        if progress_reporter:
+            await progress_reporter(stage, completed, total, unit)
+
     logger.info(
         "KB vectorization parse started: stored_name=%s original_name=%s user_id=%s category_id=%s",
         stored_filename,
@@ -171,14 +177,24 @@ async def vectorize_and_store(
         user_id,
         category_id,
     )
-    text = await file_parser.parse_file(stored_filename, user_id=user_id)
+    loop = asyncio.get_running_loop()
+
+    def parser_progress(completed: int, total: int, unit: str) -> None:
+        if progress_reporter:
+            asyncio.run_coroutine_threadsafe(report("parse", completed, total, unit), loop).result()
+
+    path = get_user_upload_dir(user_id) / stored_filename
+    await report("parse", 0, 1, "operation")
+    text = await asyncio.to_thread(file_parser.parse_path, path, parser_progress)
     logger.info(
         "KB vectorization parse completed: stored_name=%s text_length=%s",
         stored_filename,
         len(text),
     )
 
-    chunks = chunk_text(text)
+    await report("chunk", 0, 1, "operation")
+    chunks = await asyncio.to_thread(chunk_text, text)
+    await report("chunk", 1, 1, "operation")
     logger.info(
         "KB vectorization chunking completed: stored_name=%s chunks=%s",
         stored_filename,
@@ -186,15 +202,23 @@ async def vectorize_and_store(
     )
     if not chunks:
         logger.warning("KB vectorization produced no chunks: stored_name=%s", stored_filename)
-        return []
+        raise ValueError("Document contains no indexable text")
 
     logger.info("KB vectorization embedding started: stored_name=%s chunks=%s", stored_filename, len(chunks))
-    embeddings = await get_embeddings(chunks)
+
+    async def embedding_progress(completed: int, total: int, unit: str) -> None:
+        await report("embedding", completed, total, unit)
+
+    await report("embedding", 0, len(chunks), "chunk")
+    embeddings = await get_embeddings(chunks, progress_callback=embedding_progress)
+    if len(embeddings) != len(chunks):
+        raise ValueError(f"Embedding count mismatch: chunks={len(chunks)} embeddings={len(embeddings)}")
     logger.info("KB vectorization embedding completed: stored_name=%s embeddings=%s", stored_filename, len(embeddings))
 
     file_name = original_name or stored_filename
     file_type = _get_extension(file_name).lstrip(".")
     metadata_list = []
+    await report("metadata", 0, len(chunks), "chunk")
     for index in range(len(chunks)):
         metadata = {
             "source": file_name,
@@ -211,6 +235,7 @@ async def vectorize_and_store(
         if category_id is not None:
             metadata["category_id"] = category_id
         metadata_list.append(metadata)
+        await report("metadata", index + 1, len(chunks), "chunk")
 
     logger.info(
         "KB vectorization chroma upsert started: stored_name=%s collection=%s chunks=%s",
@@ -218,7 +243,17 @@ async def vectorize_and_store(
         collection_name,
         len(chunks),
     )
-    await add_documents(collection_name, chunks, metadata_list, embeddings=embeddings)
+    async def vector_progress(completed: int, total: int, unit: str) -> None:
+        await report("vector_store", completed, total, unit)
+
+    await report("vector_store", 0, len(chunks), "chunk")
+    await add_documents(
+        collection_name,
+        chunks,
+        metadata_list,
+        embeddings=embeddings,
+        progress_callback=vector_progress,
+    )
     logger.info(
         "KB vectorization chroma upsert completed: stored_name=%s collection=%s chunks=%s",
         stored_filename,

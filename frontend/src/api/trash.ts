@@ -1,4 +1,5 @@
 import { API_BASE, apiFetch } from "./client";
+import type { FileProcessingJob } from "./files";
 
 export type TrashItemType = "conversation" | "file_document" | "blog_post";
 
@@ -31,9 +32,13 @@ export async function listTrash(): Promise<TrashListResponse> {
   return res.json();
 }
 
-export async function restoreTrashItem(type: TrashItemType, id: number): Promise<void> {
+export async function restoreTrashItem(
+  type: TrashItemType,
+  id: number,
+): Promise<void | FileProcessingJob> {
   const res = await apiFetch(`${API_BASE}/trash/${type}/${id}/restore`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to restore trash item");
+  if (res.status === 202 || type === "file_document") return res.json();
 }
 
 export async function purgeTrashItem(type: TrashItemType, id: number): Promise<void> {
