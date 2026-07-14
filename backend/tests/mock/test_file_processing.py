@@ -399,7 +399,9 @@ async def test_deleted_category_does_not_block_restore_finalize(
     assert deleted.status_code == 200
     db_session.expire_all()
     uncategorized = await db_session.get(FileDocument, doc_id)
-    assert uncategorized.category_id is None
+    # 已软删文档在分类删除时不被重复处理，category_id 暂留指向已删除分类；
+    # 由恢复 finalize 阶段检测分类不存在时清空。
+    assert uncategorized.category_id == category_id
 
     restored = await client.post(f"/api/trash/file_document/{doc_id}/restore")
     assert restored.status_code == 202

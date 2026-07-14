@@ -178,6 +178,15 @@ export async function setDocumentCategory(docId: number, categoryId: number | nu
   if (!res.ok) throw new Error("Failed to set document category");
 }
 
+export async function updateFileDocument(docId: number, originalName: string): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/files/documents/${docId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ original_name: originalName }),
+  });
+  if (!res.ok) throw new Error("Failed to update file document");
+}
+
 export async function deleteFileDocument(docId: number): Promise<void> {
   const res = await apiFetch(`${API_BASE}/files/documents/${docId}`, { method: "DELETE" });
   if (!res.ok) {

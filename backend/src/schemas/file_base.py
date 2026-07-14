@@ -61,6 +61,10 @@ class SetCategoryRequest(BaseModel):
     category_id: int | None
 
 
+class FileDocumentUpdate(BaseModel):
+    original_name: str | None = None
+
+
 class FileDocumentUploadResponse(BaseModel):
     id: int
     collection_name: str

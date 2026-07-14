@@ -99,7 +99,7 @@ async def test_delete_nonexistent_category(client: AsyncClient):
 async def test_delete_file_category_preserves_soft_deleted_documents(
     client: AsyncClient, db_session: AsyncSession
 ):
-    """分类删除只解绑 active 文档；软删文档的 category_id 保持不动（不影响回收站恢复语义）。"""
+    """分类删除只软删 active 文档；已软删文档不重复处理（保留回收站恢复语义）。"""
     from datetime import datetime, timezone
 
     cat_resp = await client.post("/api/files/categories", json={"name": "分类A"})
@@ -124,7 +124,60 @@ async def test_delete_file_category_preserves_soft_deleted_documents(
 
     refreshed = await db_session.get(FileDocument, soft_deleted_id)
     assert refreshed is not None
-    assert refreshed.category_id == cat_id  # 软删文档分类未被解绑
+    assert refreshed.category_id == cat_id  # 已软删文档不重复处理
+
+
+@pytest.mark.asyncio
+async def test_delete_file_category_cascades_subcategories(
+    client: AsyncClient, db_session: AsyncSession
+):
+    """删除分类时连带删除其下所有子孙分类，子孙分类下的 active 文档被软删（可在回收站恢复）。"""
+    from src.database.models import FileCategory as FileCategoryModel
+
+    root_resp = await client.post("/api/files/categories", json={"name": "根"})
+    root_id = root_resp.json()["id"]
+    child_resp = await client.post(
+        "/api/files/categories", json={"name": "子", "parent_id": root_id}
+    )
+    child_id = child_resp.json()["id"]
+    grand_resp = await client.post(
+        "/api/files/categories", json={"name": "孙", "parent_id": child_id}
+    )
+    grand_id = grand_resp.json()["id"]
+
+    active_doc = FileDocument(
+        collection_name="user_1_files",
+        user_id="1",
+        original_name="孙级文档.pdf",
+        file_path="grandchild.pdf",
+        chunk_content="0 chunks",
+        meta="",
+        category_id=grand_id,
+    )
+    db_session.add(active_doc)
+    await db_session.commit()
+    active_doc_id = active_doc.id
+
+    resp = await client.delete(f"/api/files/categories/{root_id}")
+    assert resp.status_code == 200
+
+    remaining_ids = {
+        row[0]
+        for row in (
+            await db_session.execute(
+                select(FileCategoryModel.id).where(
+                    FileCategoryModel.id.in_([root_id, child_id, grand_id])
+                )
+            )
+        ).all()
+    }
+    assert remaining_ids == set(), "子孙分类未级联删除"
+
+    refreshed_doc = await db_session.get(FileDocument, active_doc_id)
+    assert refreshed_doc is not None
+    await db_session.refresh(refreshed_doc)
+    assert refreshed_doc.category_id is None  # 子孙分类下文档被软删时解绑分类
+    assert refreshed_doc.deleted_at is not None  # 子孙分类下 active 文档被软删
 
 
 @pytest.mark.asyncio
@@ -221,6 +274,43 @@ async def test_set_document_category(client: AsyncClient, db_session: AsyncSessi
         "category_id": cat_id,
     })
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_update_file_document_rename(client: AsyncClient, db_session: AsyncSession):
+    files = {"file": ("old_name.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
+    doc_resp = await client.post("/api/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+    await _run_job(doc_resp.json()["id"])
+    job = await db_session.get(FileProcessingJob, doc_resp.json()["id"])
+    doc_id = job.result_document_id
+
+    resp = await client.patch(f"/api/files/documents/{doc_id}", json={
+        "original_name": "  新名称.pdf  ",
+    })
+    assert resp.status_code == 200
+
+    refreshed = await db_session.get(FileDocument, doc_id)
+    assert refreshed is not None
+    assert refreshed.original_name == "新名称.pdf"
+
+
+@pytest.mark.asyncio
+async def test_update_file_document_rejects_empty_name(client: AsyncClient, db_session: AsyncSession):
+    files = {"file": ("ok.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
+    doc_resp = await client.post("/api/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+    await _run_job(doc_resp.json()["id"])
+    job = await db_session.get(FileProcessingJob, doc_resp.json()["id"])
+    doc_id = job.result_document_id
+
+    resp = await client.patch(f"/api/files/documents/{doc_id}", json={
+        "original_name": "   ",
+    })
+    assert resp.status_code == 400
+
+    resp_missing = await client.patch("/api/files/documents/999999", json={
+        "original_name": "新名",
+    })
+    assert resp_missing.status_code == 404
 
 
 @pytest.mark.asyncio

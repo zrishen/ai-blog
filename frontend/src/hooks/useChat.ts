@@ -74,9 +74,9 @@ export function useChatHooks() {
     [state.conversations, state.currentConversationId, dispatch],
   );
 
-  const loadFileDocuments = useCallback(async (categoryId?: number) => {
+  const loadFileDocuments = useCallback(async () => {
     try {
-      const data = await listFileDocuments(categoryId);
+      const data = await listFileDocuments();
       dispatch({ type: "SET_FILE_DOCUMENTS", payload: data.documents });
     } catch (error) {
       console.error("Failed to load file library documents:", error);

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { getPreviewUrl } from "../api/client";
-import { ExternalLink } from "lucide-react";
 
 interface Props {
   filename: string;
@@ -15,7 +14,7 @@ export function FilePreview({ filename }: Props) {
   }
 
   if (ext === "docx" || ext === "xlsx") {
-    return <FilePreviewHTML key={previewUrl} url={previewUrl} filename={filename} />;
+    return <FilePreviewHTML key={previewUrl} url={previewUrl} />;
   }
 
   return (
@@ -31,18 +30,6 @@ function PdfPreview({ filename, previewUrl }: { filename: string; previewUrl: st
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
-      <div className="flex items-center justify-between py-3 px-5 border-b border-border flex-shrink-0">
-        <span className="text-sm font-medium">{filename}</span>
-        <a
-          href={previewUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary no-underline text-sm hover:underline flex items-center gap-1"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          在新窗口打开
-        </a>
-      </div>
       <div className="flex-1 relative overflow-hidden">
         <iframe
           src={previewUrl}
@@ -64,7 +51,7 @@ function PdfPreview({ filename, previewUrl }: { filename: string; previewUrl: st
   );
 }
 
-function FilePreviewHTML({ url, filename }: { url: string; filename: string }) {
+function FilePreviewHTML({ url }: { url: string }) {
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,9 +78,6 @@ function FilePreviewHTML({ url, filename }: { url: string; filename: string }) {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
-      <div className="flex items-center justify-between py-3 px-5 border-b border-border flex-shrink-0">
-        <span className="text-sm font-medium">{filename}</span>
-      </div>
       <div className="flex-1 relative overflow-hidden">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-background">

@@ -25,6 +25,7 @@ from src.schemas.file_base import (
     FileCollectionResponse,
     FileDocumentListResponse,
     FileDocumentResponse,
+    FileDocumentUpdate,
     SetCategoryRequest,
 )
 from src.schemas.files import FileUploadResponse
@@ -261,6 +262,29 @@ async def update_file_category(
     return FileCategoryResponse.model_validate(cat)
 
 
+async def _collect_descendant_category_ids(
+    db: AsyncSession, root_id: int, user_id: int
+) -> list[int]:
+    """收集 root_id 及其所有后代分类的 id（含自身），BFS 遍历。"""
+    rows = await db.execute(
+        select(FileCategoryModel.id, FileCategoryModel.parent_id).where(
+            FileCategoryModel.user_id == user_id
+        )
+    )
+    children_map: dict[int | None, list[int]] = {}
+    for cat_id, parent_id in rows.all():
+        children_map.setdefault(parent_id, []).append(cat_id)
+
+    result: list[int] = [root_id]
+    queue = [root_id]
+    while queue:
+        current = queue.pop(0)
+        for child_id in children_map.get(current, []):
+            result.append(child_id)
+            queue.append(child_id)
+    return result
+
+
 @router.delete("/files/categories/{category_id}")
 async def delete_file_category(
     category_id: int,
@@ -270,16 +294,43 @@ async def delete_file_category(
     cat = await _get_owned_category(db, category_id, user.id)
     if not cat:
         raise HTTPException(status_code=404, detail="Category not found")
-    await db.execute(
-        update(FileDocument)
-        .where(
-            FileDocument.category_id == category_id,
+    descendant_ids = await _collect_descendant_category_ids(db, category_id, user.id)
+
+    docs_result = await db.execute(
+        select(FileDocument).where(
+            FileDocument.category_id.in_(descendant_ids),
             FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
         )
-        .values(category_id=None)
     )
+    docs = docs_result.scalars().all()
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    if docs:
+        await db.execute(
+            update(FileDocument)
+            .where(
+                FileDocument.id.in_([d.id for d in docs]),
+                FileDocument.deleted_at.is_(None),
+            )
+            .values(deleted_at=now, category_id=None)
+        )
+        await db.commit()
+        for doc in docs:
+            try:
+                await delete_document_chunks(doc.collection_name, doc.file_path)
+            except Exception:
+                logger.exception(
+                    "Category delete chroma cleanup failed (best-effort): doc_id=%s stored_name=%s",
+                    doc.id,
+                    doc.file_path,
+                )
+
     await db.execute(
-        sql_delete(FileCategoryModel).where(FileCategoryModel.id == category_id, FileCategoryModel.user_id == user.id)
+        sql_delete(FileCategoryModel).where(
+            FileCategoryModel.id.in_(descendant_ids),
+            FileCategoryModel.user_id == user.id,
+        )
     )
     await db.commit()
     return {"status": "ok"}
@@ -488,6 +539,33 @@ async def set_document_category(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     doc.category_id = data.category_id
+    await db.commit()
+    return {"status": "ok"}
+
+
+@router.patch("/files/documents/{doc_id}")
+async def update_file_document(
+    doc_id: int,
+    data: FileDocumentUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Update editable fields of a file document (currently original_name)."""
+    result = await db.execute(
+        select(FileDocument).where(
+            FileDocument.id == doc_id,
+            FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if data.original_name is not None:
+        trimmed = data.original_name.strip()
+        if not trimmed:
+            raise HTTPException(status_code=400, detail="original_name must not be empty")
+        doc.original_name = trimmed
     await db.commit()
     return {"status": "ok"}
 

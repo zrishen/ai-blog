@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "../../stores/chatStore";
 import { useAuth } from "../../stores/authStore";
+import type { FileDocument } from "../../stores/chatStore";
 import {
   listFileCategories,
   listFileDocuments,
   createFileCategory,
   deleteFileCategory,
   updateFileCategory,
+  setDocumentCategory,
+  deleteFileDocument,
+  updateFileDocument,
 } from "../../api/client";
 import { useFileProcessing } from "../../features/file-processing/FileProcessingProvider";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, FolderPlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,20 +24,34 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { getFileIcon } from "./fileIcons";
 import {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+} from "@/components/ui/context-menu";
+import { Input } from "@/components/ui/input";
+import {
+  groupByCategory,
   isDescOf,
   findCategoryById,
+  flattenCategories,
   type EditingState,
 } from "./fileCategoryUtils";
-import { CategoryTree } from "./fileCategoryTree";
+import { CategoryTree, FileNode, parseDragSource } from "./fileCategoryTree";
+
+interface MoveTarget {
+  kind: "file" | "category";
+  id: number;
+  name: string;
+}
 
 export function FilePanel() {
   const { state, dispatch } = useChat();
   const { isAuthenticated } = useAuth();
   const { isUploadActive, startUpload, clearUploadError } = useFileProcessing();
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<
-    Set<number>
+    Set<string | number>
   >(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingUploadCategoryRef = useRef<number | null>(null);
@@ -43,14 +61,31 @@ export function FilePanel() {
     name: string;
   } | null>(null);
   const [uploadTarget, setUploadTarget] = useState<{
-    id: number;
+    id: number | null;
     name: string;
   } | null>(null);
+  const [newRootOpen, setNewRootOpen] = useState(false);
+  const [newRootName, setNewRootName] = useState("");
   const [editingState, setEditingState] = useState<EditingState | null>(null);
 
   const [dragCategoryId, setDragCategoryId] = useState<number | null>(null);
   const [dropTargetId, setDropTargetId] = useState<number | null>(null);
   const [fileActionError, setFileActionError] = useState<string | null>(null);
+
+  const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
+  const [moveTargetParentId, setMoveTargetParentId] = useState<number | null>(null);
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+
+  const { byCategoryId: documentsByCategory, uncategorized: uncategorizedDocs } =
+    useMemo(() => groupByCategory(state.fileDocuments), [state.fileDocuments]);
+
+  const flatCategories = useMemo(
+    () => flattenCategories(state.fileCategories),
+    [state.fileCategories],
+  );
 
   const loadFileCats = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -68,27 +103,24 @@ export function FilePanel() {
     }
   }, [isAuthenticated, state.currentPage, loadFileCats]);
 
-  const loadFileDocs = useCallback(
-    async (categoryId: number | null) => {
-      if (!isAuthenticated) return;
-      try {
-        const data = await listFileDocuments(categoryId ?? undefined);
-        dispatch({ type: "SET_FILE_DOCUMENTS", payload: data.documents });
-      } catch (e) {
-        console.error("Failed to load file documents:", e);
-        setFileActionError(e instanceof Error ? e.message : "文件库加载失败");
-      }
-    },
-    [dispatch, isAuthenticated]
-  );
+  const loadFileDocs = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const data = await listFileDocuments();
+      dispatch({ type: "SET_FILE_DOCUMENTS", payload: data.documents });
+    } catch (e) {
+      console.error("Failed to load file documents:", e);
+      setFileActionError(e instanceof Error ? e.message : "文件库加载失败");
+    }
+  }, [dispatch, isAuthenticated]);
 
   useEffect(() => {
     if (state.currentPage === "files" && isAuthenticated) {
       // 异步加载文件库；rule 无法识别 useCallback 内的同步 setState 是异步链入口
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadFileDocs(state.fileSelectedCategoryId);
+      loadFileDocs();
     }
-  }, [isAuthenticated, state.currentPage, state.fileSelectedCategoryId, state.fileLibraryRevision, loadFileDocs]);
+  }, [isAuthenticated, state.currentPage, state.fileLibraryRevision, loadFileDocs]);
 
   const handleCategorySelect = (id: number | null) => {
     dispatch({ type: "SET_FILE_SELECTED_CATEGORY_ID", payload: id });
@@ -98,11 +130,8 @@ export function FilePanel() {
   const handleCategoryToggle = (id: number) => {
     setExpandedCategoryIds((current) => {
       const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
@@ -121,9 +150,7 @@ export function FilePanel() {
         dispatch({ type: "SET_FILE_SELECTED_CATEGORY_ID", payload: null });
       }
       await loadFileCats();
-      await loadFileDocs(
-        state.fileSelectedCategoryId === id ? null : state.fileSelectedCategoryId
-      );
+      await loadFileDocs();
     } catch (e) {
       console.error("Failed to delete category:", e);
     }
@@ -139,6 +166,24 @@ export function FilePanel() {
     }, 100);
   };
 
+  const handleConfirmNewRoot = async () => {
+    const trimmed = newRootName.trim();
+    if (!trimmed) {
+      setNewRootOpen(false);
+      return;
+    }
+    try {
+      await createFileCategory({ name: trimmed, parent_id: null });
+      await loadFileCats();
+    } catch (e) {
+      console.error("Failed to create root category:", e);
+      setFileActionError(e instanceof Error ? e.message : "创建分类失败");
+    } finally {
+      setNewRootName("");
+      setNewRootOpen(false);
+    }
+  };
+
   const handleEditingValueChange = (value: string) => {
     setEditingState((prev) => (prev ? { ...prev, value } : null));
   };
@@ -150,30 +195,62 @@ export function FilePanel() {
       setEditingState(null);
       return;
     }
-    const { type, categoryId } = editingState;
+    const state = editingState;
     setEditingState(null);
     try {
-      if (type === "rename") {
-        await updateFileCategory(categoryId, { name: trimmed });
+      if (state.type === "rename") {
+        await updateFileCategory(state.categoryId, { name: trimmed });
+        await loadFileCats();
+      } else if (state.type === "renameFile") {
+        await updateFileDocument(state.docId, trimmed);
+        await loadFileDocs();
       } else {
-        await createFileCategory({ name: trimmed, parent_id: categoryId });
-      }
-      await loadFileCats();
-      if (type === "newSub") {
+        await createFileCategory({ name: trimmed, parent_id: state.categoryId });
+        await loadFileCats();
         setExpandedCategoryIds((prev) => {
           const next = new Set(prev);
-          next.add(categoryId);
+          next.add(state.categoryId);
           return next;
         });
       }
     } catch (e) {
-      console.error(`Failed to ${type === "rename" ? "rename" : "create"} category:`, e);
+      console.error(`Failed to ${state.type === "rename" ? "rename" : state.type === "renameFile" ? "rename file" : "create"}:`, e);
     }
   };
 
   const handleEditingCancel = () => {
     setEditingState(null);
   };
+
+  const handleDropOnRoot = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      const raw = e.dataTransfer.getData("text/plain");
+      const source = parseDragSource(raw);
+      if (!source) return;
+      if (source.kind === "file") {
+        try {
+          await setDocumentCategory(source.id, null);
+          await loadFileDocs();
+        } catch (err) {
+          console.error("Failed to move file to uncategorized:", err);
+        }
+        return;
+      }
+      const sourceCat = findCategoryById(source.id, state.fileCategories);
+      if (!sourceCat) return;
+      try {
+        await updateFileCategory(source.id, {
+          name: sourceCat.name,
+          parent_id: null,
+        });
+        await loadFileCats();
+      } catch (err) {
+        console.error("Failed to move category to root:", err);
+      }
+    },
+    [loadFileCats, loadFileDocs, state.fileCategories],
+  );
 
   const handleDropOnCategory = useCallback(
     async (sourceId: number, targetId: number) => {
@@ -183,7 +260,10 @@ export function FilePanel() {
       const source = findCategoryById(sourceId, state.fileCategories);
       if (!source) return;
       try {
-        await updateFileCategory(sourceId, { name: source.name, parent_id: targetId });
+        await updateFileCategory(sourceId, {
+          name: source.name,
+          parent_id: targetId,
+        });
         setExpandedCategoryIds((prev) => {
           const next = new Set(prev);
           next.add(targetId);
@@ -196,24 +276,89 @@ export function FilePanel() {
         setDragCategoryId(null);
       }
     },
-    [state.fileCategories, loadFileCats]
+    [state.fileCategories, loadFileCats],
   );
 
-  const handleDropOnRoot = useCallback(
-    async (e: React.DragEvent) => {
-      e.preventDefault();
-      const sourceId = Number(e.dataTransfer.getData("text/plain"));
-      if (!sourceId) return;
-      const source = findCategoryById(sourceId, state.fileCategories);
-      if (!source) return;
+  const handleDropFileOnCategory = useCallback(
+    async (fileId: number, targetId: number) => {
+      setDropTargetId(null);
       try {
-        await updateFileCategory(sourceId, { name: source.name, parent_id: null });
-        await loadFileCats();
-      } catch (err) {
-        console.error("Failed to move category to root:", err);
+        await setDocumentCategory(fileId, targetId);
+        await loadFileDocs();
+      } catch (e) {
+        console.error("Failed to move file:", e);
       }
     },
-    [loadFileCats, state.fileCategories]
+    [loadFileDocs],
+  );
+
+  const handleConfirmMove = useCallback(async () => {
+    if (!moveTarget) return;
+    const target = moveTarget;
+    const newParentId = moveTargetParentId;
+    setMoveTarget(null);
+    try {
+      if (target.kind === "file") {
+        await setDocumentCategory(target.id, newParentId);
+        await loadFileDocs();
+      } else {
+        const sourceCat = findCategoryById(target.id, state.fileCategories);
+        if (!sourceCat) return;
+        if (
+          newParentId !== null &&
+          isDescOf(newParentId, target.id, state.fileCategories)
+        )
+          return;
+        await updateFileCategory(target.id, {
+          name: sourceCat.name,
+          parent_id: newParentId,
+        });
+        if (newParentId !== null) {
+          setExpandedCategoryIds((prev) => {
+            const next = new Set(prev);
+            next.add(newParentId);
+            return next;
+          });
+        }
+        await loadFileCats();
+      }
+    } catch (e) {
+      console.error("Failed to move:", e);
+    }
+  }, [moveTarget, moveTargetParentId, state.fileCategories, loadFileCats, loadFileDocs]);
+
+  const handleConfirmFileDelete = useCallback(async () => {
+    if (!deleteFileTarget) return;
+    const target = deleteFileTarget;
+    setDeleteFileTarget(null);
+    try {
+      await deleteFileDocument(target.id);
+      await loadFileDocs();
+    } catch (e) {
+      console.error("Failed to delete file:", e);
+    }
+  }, [deleteFileTarget, loadFileDocs]);
+
+  const handleRequestFileMove = useCallback((doc: FileDocument) => {
+    setMoveTarget({
+      kind: "file",
+      id: doc.id,
+      name: doc.original_name,
+    });
+    setMoveTargetParentId(doc.category_id ?? null);
+  }, []);
+
+  const handleRequestFileRename = useCallback((doc: FileDocument) => {
+    setEditingState({ type: "renameFile", docId: doc.id, value: doc.original_name });
+  }, []);
+
+  const handleRequestCategoryMove = useCallback(
+    (id: number, name: string) => {
+      const cat = findCategoryById(id, state.fileCategories);
+      setMoveTarget({ kind: "category", id, name });
+      setMoveTargetParentId(cat?.parent_id ?? null);
+    },
+    [state.fileCategories],
   );
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,120 +387,164 @@ export function FilePanel() {
     );
   }
 
+  const rootDropTarget = dropTargetId === -1;
+  const rootSelected = state.fileSelectedCategoryId === null;
+  const hasCategories = state.fileCategories.length > 0;
+  const moveCategoryExcludeId =
+    moveTarget?.kind === "category" ? moveTarget.id : undefined;
+
   return (
-    <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
-      <div className="p-4 flex flex-col gap-3">
+    <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-hidden select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
+      <div className="p-3 flex flex-col gap-2">
         {fileActionError && (
           <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-[13px] leading-relaxed text-destructive">
             {fileActionError}
           </div>
         )}
-        <Button
-          variant={
-            state.fileSelectedCategoryId === null ? "secondary" : "ghost"
-          }
-          className={`justify-start text-[13px] px-3 py-2.5 rounded-xl h-auto font-semibold gap-2 transition-all hover:translate-x-0.5 ${
-            state.fileSelectedCategoryId === null ? "bg-primary/10 text-primary shadow-sm" : ""
-          } ${dropTargetId === -1 ? "ring-2 ring-primary/60 bg-primary/12 shadow-md shadow-primary/10" : ""}`}
-          onClick={() => handleCategorySelect(null)}
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            setDropTargetId(-1);
-          }}
-          onDragLeave={(e) => {
-            e.stopPropagation();
-            setDropTargetId(null);
-          }}
-          onDrop={(e) => {
-            e.stopPropagation();
-            setDropTargetId(null);
-            handleDropOnRoot(e);
-          }}
-        >
-          <FolderOpen className="w-4 h-4 flex-shrink-0" />
-          全部分类
-        </Button>
-        {state.fileCategories.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border/80 bg-secondary/50 px-3 py-4 text-[13px] text-muted-foreground">
-            暂无分类，右键或在主界面新建
-          </div>
-        )}
-        <CategoryTree
-          categories={state.fileCategories}
-          selectedId={state.fileSelectedCategoryId}
-          expandedIds={expandedCategoryIds}
-          onSelect={(id) => handleCategorySelect(id)}
-          onToggle={handleCategoryToggle}
-          onRequestDelete={(id, name) => setDeleteTarget({ id, name })}
-          onRequestNewSub={(parentId) => {
-            setExpandedCategoryIds((prev) => {
-              const next = new Set(prev);
-              next.add(parentId);
-              return next;
-            });
-            setEditingState({
-              type: "newSub",
-              categoryId: parentId,
-              value: "",
-            });
-          }}
-          onRequestUpload={(id, name) => setUploadTarget({ id, name })}
-          onRequestRename={(id, currentName) =>
-            setEditingState({
-              type: "rename",
-              categoryId: id,
-              value: currentName,
-            })
-          }
-          editingState={editingState}
-          onEditingValueChange={handleEditingValueChange}
-          onEditingSubmit={handleEditingSubmit}
-          onEditingCancel={handleEditingCancel}
-          dragCategoryId={dragCategoryId}
-          dropTargetId={dropTargetId}
-          onDragStart={setDragCategoryId}
-          onDragEnd={() => {
-            setDragCategoryId(null);
-            setDropTargetId(null);
-          }}
-          onDropOnCategory={handleDropOnCategory}
-          onDropTargetChange={setDropTargetId}
-        />
-
-        <div className="flex items-center justify-between mt-4 mb-1">
-          <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground font-bold">
-            文件
-          </div>
-          <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
-            {state.fileDocuments.length}
-          </span>
-        </div>
-        <div className="flex flex-col gap-2">
-          {state.fileDocuments.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/80 bg-secondary/50 px-3 py-4 text-center text-[13px] text-muted-foreground">暂无文件</div>
-          ) : (
-            state.fileDocuments.map((doc) => (
-              <Button
-                key={doc.id}
-                variant={
-                  state.fileSelectedFile === doc.file_path
-                    ? "secondary"
-                    : "ghost"
-                }
-                className="justify-start text-[13px] px-3 py-2 rounded-xl h-auto font-medium gap-2 truncate transition-all hover:translate-x-0.5 hover:bg-primary/8"
-                onClick={() => handleFileSelect(doc.file_path)}
-                title={doc.original_name}
-              >
-                {getFileIcon(doc.original_name)}
-                {doc.original_name.length > 20
-                  ? doc.original_name.substring(0, 20) + "..."
-                  : doc.original_name}
-              </Button>
-            ))
-          )}
-        </div>
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <Button
+              variant={rootSelected ? "secondary" : "ghost"}
+              className={`flex-1 justify-start text-[13px] px-3 py-2.5 rounded-xl h-auto font-semibold gap-2 transition-all hover:translate-x-0.5 ${
+                rootSelected ? "bg-primary/10 text-primary shadow-sm" : ""
+              } ${rootDropTarget ? "ring-2 ring-primary/60 bg-primary/12 shadow-md shadow-primary/10" : ""}`}
+              onClick={() => handleCategorySelect(null)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDropTargetId(-1);
+              }}
+              onDragLeave={(e) => {
+                e.stopPropagation();
+                setDropTargetId(null);
+              }}
+              onDrop={(e) => {
+                e.stopPropagation();
+                setDropTargetId(null);
+                handleDropOnRoot(e);
+              }}
+            >
+              <FolderOpen className="w-4 h-4 flex-shrink-0" />
+              <span className="flex-1 truncate text-left">全部分类</span>
+              {state.fileDocuments.length > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  {state.fileDocuments.length}
+                </span>
+              )}
+            </Button>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem onClick={() => setNewRootOpen(true)}>
+              <FolderPlus className="w-4 h-4" />
+              新建分类
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => setUploadTarget({ id: null, name: "全部分类" })}
+            >
+              <Upload className="w-4 h-4" />
+              上传文件
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
       </div>
+      {hasCategories ? (
+        <div className="flex-1 overflow-y-auto px-3 pt-px pb-3">
+          <CategoryTree
+            categories={state.fileCategories}
+            selectedId={state.fileSelectedCategoryId}
+            expandedIds={expandedCategoryIds}
+            onSelect={(id) => handleCategorySelect(id)}
+            onToggle={handleCategoryToggle}
+            onRequestDelete={(id, name) => setDeleteTarget({ id, name })}
+            onRequestNewSub={(parentId) => {
+              setExpandedCategoryIds((prev) => {
+                const next = new Set(prev);
+                next.add(parentId);
+                return next;
+              });
+              setEditingState({
+                type: "newSub",
+                categoryId: parentId,
+                value: "",
+              });
+            }}
+            onRequestUpload={(id, name) => setUploadTarget({ id, name })}
+            onRequestRename={(id, currentName) =>
+              setEditingState({
+                type: "rename",
+                categoryId: id,
+                value: currentName,
+              })
+            }
+            onRequestMove={handleRequestCategoryMove}
+            onRequestFileDelete={(doc) =>
+              setDeleteFileTarget({
+                id: doc.id,
+                name: doc.original_name,
+              })
+            }
+            onRequestFileMove={handleRequestFileMove}
+            onRequestFileRename={handleRequestFileRename}
+            editingState={editingState}
+            onEditingValueChange={handleEditingValueChange}
+            onEditingSubmit={handleEditingSubmit}
+            onEditingCancel={handleEditingCancel}
+            dragCategoryId={dragCategoryId}
+            dropTargetId={dropTargetId}
+            onDragStart={setDragCategoryId}
+            onDragEnd={() => {
+              setDragCategoryId(null);
+              setDropTargetId(null);
+            }}
+            onDropOnCategory={handleDropOnCategory}
+            onDropFileOnCategory={handleDropFileOnCategory}
+            onDropTargetChange={setDropTargetId}
+            documentsByCategory={documentsByCategory}
+            selectedFile={state.fileSelectedFile}
+            onSelectFile={handleFileSelect}
+          />
+          {uncategorizedDocs.map((doc) => (
+            <FileNode
+              key={`uncat-${doc.id}`}
+              doc={doc}
+              depth={-1}
+              selectedFile={state.fileSelectedFile}
+              onSelectFile={handleFileSelect}
+              onRequestDelete={(d) =>
+                setDeleteFileTarget({ id: d.id, name: d.original_name })
+              }
+              onRequestMove={handleRequestFileMove}
+              onRequestRename={handleRequestFileRename}
+              editingState={editingState}
+              onEditingValueChange={handleEditingValueChange}
+              onEditingSubmit={handleEditingSubmit}
+              onEditingCancel={handleEditingCancel}
+            />
+          ))}
+        </div>
+      ) : (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="flex-1 flex items-center justify-center px-6 text-center">
+              <span className="text-base text-muted-foreground leading-relaxed">
+                暂无分类，右键可创建分类和上传文件
+              </span>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem onClick={() => setNewRootOpen(true)}>
+              <FolderPlus className="w-4 h-4" />
+              新建分类
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => setUploadTarget({ id: null, name: "全部分类" })}
+            >
+              <Upload className="w-4 h-4" />
+              上传文件
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      )}
       <input
         ref={fileInputRef}
         type="file"
@@ -373,7 +562,7 @@ export function FilePanel() {
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
             <DialogDescription>
-              确定要删除分类「{deleteTarget?.name}」吗？其中的文档将移出分类。
+              确定要删除分类「{deleteTarget?.name}」吗？其下所有子分类将一并删除，分类内文档也将删除（可在回收站恢复）。
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -397,14 +586,126 @@ export function FilePanel() {
           <DialogHeader>
             <DialogTitle>上传文件</DialogTitle>
             <DialogDescription>
-              将文件上传到分类「{uploadTarget?.name}」
+              {uploadTarget?.id === null
+                ? "将文件上传为未分类文档"
+                : `将文件上传到分类「${uploadTarget?.name}」`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">取消</Button>
             </DialogClose>
-            <Button onClick={handleUploadFilePick} disabled={isUploadActive}>选择文件</Button>
+            <Button onClick={handleUploadFilePick} disabled={isUploadActive}>
+              选择文件
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={newRootOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNewRootName("");
+            setNewRootOpen(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>新建分类</DialogTitle>
+            <DialogDescription>在顶层创建一个新的分类。</DialogDescription>
+          </DialogHeader>
+          <Input
+            value={newRootName}
+            onChange={(e) => setNewRootName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleConfirmNewRoot();
+            }}
+            placeholder="分类名称"
+            autoFocus
+          />
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button onClick={handleConfirmNewRoot}>创建</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={moveTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMoveTarget(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              移动{moveTarget?.kind === "file" ? "文件" : "分类"}
+            </DialogTitle>
+            <DialogDescription>
+              将「{moveTarget?.name}」移动到指定
+              {moveTarget?.kind === "file" ? "分类" : "父分类"}。
+            </DialogDescription>
+          </DialogHeader>
+          <select
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none transition-colors hover:border-primary focus:border-primary"
+            value={moveTargetParentId === null ? "" : String(moveTargetParentId)}
+            onChange={(e) =>
+              setMoveTargetParentId(e.target.value ? Number(e.target.value) : null)
+            }
+          >
+            <option value="">
+              {moveTarget?.kind === "file"
+                ? "无分类（未分类）"
+                : "无父分类（升为顶层）"}
+            </option>
+            {flatCategories
+              .filter(
+                (c) =>
+                  moveCategoryExcludeId === undefined ||
+                  c.id !== moveCategoryExcludeId,
+              )
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {"　".repeat(c._depth)}
+                  {c.name}
+                </option>
+              ))}
+          </select>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button onClick={handleConfirmMove}>移动</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteFileTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteFileTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除文件</DialogTitle>
+            <DialogDescription>
+              确定要删除「{deleteFileTarget?.name}」吗？删除后可在回收站恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={handleConfirmFileDelete}>
+              删除
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
