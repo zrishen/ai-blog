@@ -39,7 +39,7 @@ async def add_documents(
     metadata_list: list[dict] | None = None,
     embeddings: list[list[float]] | None = None,
     progress_callback=None,
-    batch_size: int = 64,
+    batch_size: int = 8,
 ) -> None:
     """Add documents to a collection.
 

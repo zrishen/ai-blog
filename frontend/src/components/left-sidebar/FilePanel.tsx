@@ -390,6 +390,8 @@ export function FilePanel() {
   const rootDropTarget = dropTargetId === -1;
   const rootSelected = state.fileSelectedCategoryId === null;
   const hasCategories = state.fileCategories.length > 0;
+  const hasUncategorized = uncategorizedDocs.length > 0;
+  const showEmptyPlaceholder = !hasCategories && !hasUncategorized;
   const moveCategoryExcludeId =
     moveTarget?.kind === "category" ? moveTarget.id : undefined;
 
@@ -447,88 +449,106 @@ export function FilePanel() {
           </ContextMenuContent>
         </ContextMenu>
       </div>
-      {hasCategories ? (
-        <div className="flex-1 overflow-y-auto px-3 pt-px pb-3">
-          <CategoryTree
-            categories={state.fileCategories}
-            selectedId={state.fileSelectedCategoryId}
-            expandedIds={expandedCategoryIds}
-            onSelect={(id) => handleCategorySelect(id)}
-            onToggle={handleCategoryToggle}
-            onRequestDelete={(id, name) => setDeleteTarget({ id, name })}
-            onRequestNewSub={(parentId) => {
-              setExpandedCategoryIds((prev) => {
-                const next = new Set(prev);
-                next.add(parentId);
-                return next;
-              });
-              setEditingState({
-                type: "newSub",
-                categoryId: parentId,
-                value: "",
-              });
-            }}
-            onRequestUpload={(id, name) => setUploadTarget({ id, name })}
-            onRequestRename={(id, currentName) =>
-              setEditingState({
-                type: "rename",
-                categoryId: id,
-                value: currentName,
-              })
-            }
-            onRequestMove={handleRequestCategoryMove}
-            onRequestFileDelete={(doc) =>
-              setDeleteFileTarget({
-                id: doc.id,
-                name: doc.original_name,
-              })
-            }
-            onRequestFileMove={handleRequestFileMove}
-            onRequestFileRename={handleRequestFileRename}
-            editingState={editingState}
-            onEditingValueChange={handleEditingValueChange}
-            onEditingSubmit={handleEditingSubmit}
-            onEditingCancel={handleEditingCancel}
-            dragCategoryId={dragCategoryId}
-            dropTargetId={dropTargetId}
-            onDragStart={setDragCategoryId}
-            onDragEnd={() => {
-              setDragCategoryId(null);
-              setDropTargetId(null);
-            }}
-            onDropOnCategory={handleDropOnCategory}
-            onDropFileOnCategory={handleDropFileOnCategory}
-            onDropTargetChange={setDropTargetId}
-            documentsByCategory={documentsByCategory}
-            selectedFile={state.fileSelectedFile}
-            onSelectFile={handleFileSelect}
-          />
-          {uncategorizedDocs.map((doc) => (
-            <FileNode
-              key={`uncat-${doc.id}`}
-              doc={doc}
-              depth={-1}
-              selectedFile={state.fileSelectedFile}
-              onSelectFile={handleFileSelect}
-              onRequestDelete={(d) =>
-                setDeleteFileTarget({ id: d.id, name: d.original_name })
-              }
-              onRequestMove={handleRequestFileMove}
-              onRequestRename={handleRequestFileRename}
-              editingState={editingState}
-              onEditingValueChange={handleEditingValueChange}
-              onEditingSubmit={handleEditingSubmit}
-              onEditingCancel={handleEditingCancel}
-            />
-          ))}
-        </div>
-      ) : (
+      {showEmptyPlaceholder ? (
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className="flex-1 flex items-center justify-center px-6 text-center">
               <span className="text-base text-muted-foreground leading-relaxed">
                 暂无分类，右键可创建分类和上传文件
               </span>
+            </div>
+          </ContextMenuTrigger>
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem onClick={() => setNewRootOpen(true)}>
+              <FolderPlus className="w-4 h-4" />
+              新建分类
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => setUploadTarget({ id: null, name: "全部分类" })}
+            >
+              <Upload className="w-4 h-4" />
+              上传文件
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
+      ) : (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <div className="flex-1 overflow-y-auto px-3 pt-px pb-3">
+              {hasCategories && (
+                <CategoryTree
+                  categories={state.fileCategories}
+                  selectedId={state.fileSelectedCategoryId}
+                  expandedIds={expandedCategoryIds}
+                  onSelect={(id) => handleCategorySelect(id)}
+                  onToggle={handleCategoryToggle}
+                  onRequestDelete={(id, name) => setDeleteTarget({ id, name })}
+                  onRequestNewSub={(parentId) => {
+                    setExpandedCategoryIds((prev) => {
+                      const next = new Set(prev);
+                      next.add(parentId);
+                      return next;
+                    });
+                    setEditingState({
+                      type: "newSub",
+                      categoryId: parentId,
+                      value: "",
+                    });
+                  }}
+                  onRequestUpload={(id, name) => setUploadTarget({ id, name })}
+                  onRequestRename={(id, currentName) =>
+                    setEditingState({
+                      type: "rename",
+                      categoryId: id,
+                      value: currentName,
+                    })
+                  }
+                  onRequestMove={handleRequestCategoryMove}
+                  onRequestFileDelete={(doc) =>
+                    setDeleteFileTarget({
+                      id: doc.id,
+                      name: doc.original_name,
+                    })
+                  }
+                  onRequestFileMove={handleRequestFileMove}
+                  onRequestFileRename={handleRequestFileRename}
+                  editingState={editingState}
+                  onEditingValueChange={handleEditingValueChange}
+                  onEditingSubmit={handleEditingSubmit}
+                  onEditingCancel={handleEditingCancel}
+                  dragCategoryId={dragCategoryId}
+                  dropTargetId={dropTargetId}
+                  onDragStart={setDragCategoryId}
+                  onDragEnd={() => {
+                    setDragCategoryId(null);
+                    setDropTargetId(null);
+                  }}
+                  onDropOnCategory={handleDropOnCategory}
+                  onDropFileOnCategory={handleDropFileOnCategory}
+                  onDropTargetChange={setDropTargetId}
+                  documentsByCategory={documentsByCategory}
+                  selectedFile={state.fileSelectedFile}
+                  onSelectFile={handleFileSelect}
+                />
+              )}
+              {uncategorizedDocs.map((doc) => (
+                <FileNode
+                  key={`uncat-${doc.id}`}
+                  doc={doc}
+                  depth={-1}
+                  selectedFile={state.fileSelectedFile}
+                  onSelectFile={handleFileSelect}
+                  onRequestDelete={(d) =>
+                    setDeleteFileTarget({ id: d.id, name: d.original_name })
+                  }
+                  onRequestMove={handleRequestFileMove}
+                  onRequestRename={handleRequestFileRename}
+                  editingState={editingState}
+                  onEditingValueChange={handleEditingValueChange}
+                  onEditingSubmit={handleEditingSubmit}
+                  onEditingCancel={handleEditingCancel}
+                />
+              ))}
             </div>
           </ContextMenuTrigger>
           <ContextMenuContent className="w-44">

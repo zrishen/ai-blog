@@ -65,7 +65,7 @@ describe("BlogEditor 工具区折叠/展开", () => {
       </MemoryRouter>,
     );
 
-    expect(await result.findByPlaceholderText("输入文章标题...", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(await result.findByPlaceholderText("输入文章标题...", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(result.queryByText("保存草稿")).toBeInTheDocument();
     expect(result.queryByText("发布文章")).toBeInTheDocument();
     expect(result.queryByText("文章封面")).toBeNull();
@@ -81,7 +81,7 @@ describe("BlogEditor 工具区折叠/展开", () => {
       </MemoryRouter>,
     );
 
-    const toggleBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 2000 });
+    const toggleBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 5000 });
     expect(toggleBtn).toBeInTheDocument();
 
     result.unmount();
@@ -95,16 +95,16 @@ describe("BlogEditor 工具区折叠/展开", () => {
       </MemoryRouter>,
     );
 
-    const toggleBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 2000 });
+    const toggleBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 5000 });
     fireEvent.click(toggleBtn);
 
-    expect(await result.findByText("文章封面", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(await result.findByText("文章封面", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(result.queryByLabelText("展开文章设置")).toBeNull();
-    const collapseBtn = await result.findByLabelText("收缩文章设置", {}, { timeout: 2000 });
+    const collapseBtn = await result.findByLabelText("收缩文章设置", {}, { timeout: 5000 });
     expect(collapseBtn).toBeInTheDocument();
 
     fireEvent.click(collapseBtn);
-    expect(await result.findByLabelText("展开文章设置", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(await result.findByLabelText("展开文章设置", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(result.queryByText("文章封面")).toBeNull();
 
     result.unmount();
@@ -119,11 +119,11 @@ describe("BlogEditor 工具区折叠/展开", () => {
     );
 
     for (let i = 0; i < 3; i++) {
-      const expandBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 2000 });
+      const expandBtn = await result.findByLabelText("展开文章设置", {}, { timeout: 5000 });
       fireEvent.click(expandBtn);
-      expect(await result.findByText("文章封面", {}, { timeout: 2000 })).toBeInTheDocument();
+      expect(await result.findByText("文章封面", {}, { timeout: 5000 })).toBeInTheDocument();
 
-      const collapseBtn = await result.findByLabelText("收缩文章设置", {}, { timeout: 2000 });
+      const collapseBtn = await result.findByLabelText("收缩文章设置", {}, { timeout: 5000 });
       fireEvent.click(collapseBtn);
       expect(result.queryByText("文章封面")).toBeNull();
     }

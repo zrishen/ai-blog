@@ -279,7 +279,7 @@ export function CategoryTree({
               onClick={() => onRequestDelete(cat.id, cat.name)}
             >
               <Trash2 className="w-4 h-4" />
-              删除分类
+              删除
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
@@ -499,7 +499,7 @@ export function FileNode({
           onClick={() => onRequestDelete(doc)}
         >
           <Trash2 className="w-4 h-4" />
-          删除文件
+          删除
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
