@@ -19,6 +19,7 @@ import {
   createResearchTopic,
 } from "../../api/client";
 import type { BlogToolMeta, StreamReference } from "../../api/client";
+import type { ThinkingMode } from "../../api/chat";
 import { TrustContextIndicator } from "./TrustContextIndicator";
 import {
   buildDraftChoices,
@@ -50,7 +51,10 @@ import { MessageList } from "./ai-sidebar/MessageList";
 import { createPatchDeltaPlayer, type PatchDeltaPlayer } from "./ai-sidebar/patchDeltaPlayer";
 import {
   blogToolOperations,
+  DEFAULT_AI_SIDEBAR_THINKING_MODE,
+  loadAISidebarThinkingMode,
   RESEARCH_TOOL_NAMES,
+  saveAISidebarThinkingMode,
   type AISidebarProps,
 } from "./ai-sidebar/constants";
 
@@ -96,6 +100,7 @@ function buildMessageGroups(messages: Message[]) {
 export function AISidebar({ mode, contextText = "", siteUsername, postSlug, pageType = "other", postTitle }: AISidebarProps) {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated } = useAuth();
+  const userId = user?.id;
   const navigate = useNavigate();
   const [topicCreateMode, setTopicCreateMode] = useState(false);
   const [topicCreateMessageId, setTopicCreateMessageId] = useState<number | null>(null);
@@ -135,6 +140,20 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   const selectedError = selectedKey ? state.aiSidebarErrorsByKey[selectedKey] ?? null : null;
   const selectedHistory = selectedKey ? state.aiSidebarHistoryByKey[selectedKey] ?? { loading: false, error: null } : { loading: false, error: null };
   const aiSidebarMessageGroups = useMemo(() => buildMessageGroups(selectedMessages), [selectedMessages]);
+
+  useEffect(() => {
+    dispatch({
+      type: "SET_AI_SIDEBAR_THINKING_MODE",
+      payload: userId
+        ? loadAISidebarThinkingMode(userId)
+        : DEFAULT_AI_SIDEBAR_THINKING_MODE,
+    });
+  }, [dispatch, userId]);
+
+  const handleThinkingModeChange = useCallback((mode: ThinkingMode) => {
+    dispatch({ type: "SET_AI_SIDEBAR_THINKING_MODE", payload: mode });
+    if (userId) saveAISidebarThinkingMode(userId, mode);
+  }, [dispatch, userId]);
 
   useEffect(() => {
     if (!isPrivate || state.aiSidebarSelectedKey) return;
@@ -276,6 +295,8 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   // 有选中上下文(AI 修改)时,自动切到 chat 视图(避免 list 视图下选中上下文丢失)
   useEffect(() => {
     if (state.aiSelectionContext && sidebarView !== "chat") {
+      // 选中上下文来自编辑器外部事件，需要在这里同步侧栏视图
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSidebarView("chat");
     }
   }, [state.aiSelectionContext, sidebarView]);
@@ -991,6 +1012,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         onCollapse={() => dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: false })}
         onBackToList={handleBackToList}
         onNewChat={handleNewChat}
+        onThinkingModeChange={handleThinkingModeChange}
       />
 
       {isPrivate && sidebarView === "list" ? (

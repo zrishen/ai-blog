@@ -6,10 +6,14 @@
 资源删除规则：
 - 恢复 file 时复用 file_service.vectorize_and_store 重建向量，成功才清 deleted_at；
   失败时清新 chunks 以避免残留半向量，并保留在回收站中。
-- 永久删除 conversation 时一并清理独占的本地附件（Message.image_url/file_url），
-  再硬删 Conversation；Message 经外键 CASCADE 同步删除。
-- 永久删除 file 时先删 Chroma chunks（幂等），再删独占上传文件，最后硬删记录。
-- 永久删除 blog 时删独占 Markdown 与独占本地封面，最后硬删记录。
+- 永久删除遵循「DB 先提交、物理后清理」：先在数据库事务中硬删记录并 commit，
+  再 best-effort 清理物理资源（上传文件 / Chroma 向量 / Markdown）。物理清理失败
+  仅记录日志并保留孤儿，由 scripts/cleanup_orphans.py 回收，避免出现
+  「DB 仍可见、但正文/附件/向量已不可逆丢失」的不一致。
+- 永久删除 conversation 时清理独占的本地附件（Message.image_url/file_url）；
+  Message 经外键 CASCADE 同步删除。
+- 永久删除 file 时清理 Chroma chunks（幂等）与独占上传文件。
+- 永久删除 blog 时清理独占 Markdown 与独占本地封面。
 """
 
 from __future__ import annotations
@@ -414,11 +418,14 @@ async def _purge_uploaded_file_if_exclusive(
     if not upload_path.exists():
         return True
     if not upload_path.is_file():
-        raise _purge_error("上传资源不是普通文件，无法永久删除")
+        logger.warning("跳过非普通文件（留待孤儿清理）: %s", upload_path)
+        return False
     try:
         upload_path.unlink()
-    except OSError as exc:
-        raise _purge_error("本地文件删除失败") from exc
+    except OSError:
+        # DB 记录此时已硬删；物理删除失败只留孤儿，由清理脚本回收，不回滚已提交的删除
+        logger.warning("本地文件删除失败（留待孤儿清理）: %s", upload_path, exc_info=True)
+        return False
     return True
 
 
@@ -434,16 +441,11 @@ async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -
     if conv is None:
         raise _not_found_error()
 
+    # commit 前先收集物理资源信息（commit 后相关 Message 记录将被删除）
     attachment_names = await _collect_conversation_attachment_names(db, item_id)
 
-    for stored_name in attachment_names:
-        await _purge_uploaded_file_if_exclusive(
-            db,
-            stored_name=stored_name,
-            user_id=user_id,
-            exclude_conversation_id=item_id,
-        )
-
+    # 先硬删 DB 并提交：DB 状态先进入「不可恢复」，物理资源之后再清理。
+    # 这样即便物理清理失败或进程退出，也不会出现「DB 仍可见、附件已丢失」的不一致。
     await db.execute(
         sql_delete(MessageModel).where(MessageModel.conversation_id == item_id)
     )
@@ -454,6 +456,19 @@ async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -
         )
     )
     await db.commit()
+
+    # commit 成功后 best-effort 清理独占物理附件；失败仅留孤儿（由清理脚本回收），不影响已提交的删除。
+    for stored_name in attachment_names:
+        try:
+            await _purge_uploaded_file_if_exclusive(
+                db,
+                stored_name=stored_name,
+                user_id=user_id,
+            )
+        except Exception:
+            logger.warning(
+                "回收站清理附件失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True
+            )
 
 
 async def _purge_file_document(db: AsyncSession, *, item_id: int, user_id: int) -> None:
@@ -470,31 +485,37 @@ async def _purge_file_document(db: AsyncSession, *, item_id: int, user_id: int) 
     if await has_active_restore(db, user_id=user_id, source_document_id=doc.id):
         raise _conflict_error("FILE_PROCESSING_ACTIVE", "文件正在恢复，暂不能永久删除")
 
+    # commit 前先收集物理资源信息
     collection_name = doc.collection_name
     stored_name = doc.file_path
     doc_id = doc.id
 
-    try:
-        await delete_document_chunks(collection_name, stored_name)
-    except Exception as exc:
-        logger.exception(
-            "永久删除文件时 Chroma 清理失败: doc_id=%s stored_name=%s",
-            doc_id,
-            stored_name,
-        )
-        raise _purge_error("向量索引清理失败") from exc
-
-    await _purge_uploaded_file_if_exclusive(
-        db,
-        stored_name=stored_name,
-        user_id=user_id,
-        exclude_doc_id=doc_id,
-    )
-
+    # 先硬删 DB 并提交，再 best-effort 清理向量与文件，避免「DB 还在、资源已丢」。
     await db.execute(
         sql_delete(FileDocumentModel).where(FileDocumentModel.id == doc_id)
     )
     await db.commit()
+
+    # commit 成功后 best-effort 清理；失败留孤儿，由清理脚本回收。
+    try:
+        await delete_document_chunks(collection_name, stored_name)
+    except Exception:
+        logger.warning(
+            "向量索引清理失败（留待孤儿清理）: doc_id=%s stored_name=%s",
+            doc_id,
+            stored_name,
+            exc_info=True,
+        )
+    try:
+        await _purge_uploaded_file_if_exclusive(
+            db,
+            stored_name=stored_name,
+            user_id=user_id,
+        )
+    except Exception:
+        logger.warning(
+            "上传文件清理失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True
+        )
 
 
 async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> None:
@@ -509,25 +530,17 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
     if post is None:
         raise _not_found_error()
 
+    # commit 前先收集物理资源信息
     slug = post.slug
     post_id = post.id
     cover_value = post.cover_image or ""
+    cover_stored = (
+        _extract_local_filename(cover_value)
+        if not _is_external_or_empty(cover_value)
+        else None
+    )
 
-    # Markdown 文件按 slug 命名且为博客专用，独占则删除
-    if slug:
-        delete_post_file(slug, user_id)
-
-    # 本地封面仅当独占时删除
-    if not _is_external_or_empty(cover_value):
-        cover_stored = _extract_local_filename(cover_value)
-        if cover_stored:
-            await _purge_uploaded_file_if_exclusive(
-                db,
-                stored_name=cover_stored,
-                user_id=user_id,
-                exclude_post_id=post_id,
-            )
-
+    # 先硬删 DB 并提交，再 best-effort 清理 Markdown 与封面，避免「DB 还在、正文已丢」。
     await db.execute(
         sql_delete(BlogPostModel).where(
             BlogPostModel.id == post_id,
@@ -535,6 +548,24 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
         )
     )
     await db.commit()
+
+    # commit 成功后 best-effort 清理；失败留孤儿，由清理脚本回收。
+    if slug:
+        try:
+            delete_post_file(slug, user_id)
+        except Exception:
+            logger.warning("Markdown 清理失败（留待孤儿清理）: slug=%s", slug, exc_info=True)
+    if cover_stored:
+        try:
+            await _purge_uploaded_file_if_exclusive(
+                db,
+                stored_name=cover_stored,
+                user_id=user_id,
+            )
+        except Exception:
+            logger.warning(
+                "封面清理失败（留待孤儿清理）: stored_name=%s", cover_stored, exc_info=True
+            )
 
 
 async def purge_item(

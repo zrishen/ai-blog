@@ -1,5 +1,11 @@
 """共享测试 fixtures。"""
 
+import os
+
+# 在 src.config 首次实例化 Settings 之前注入测试用 jwt_secret，
+# 保证 CI / 未配置 .env 的环境也能启动并签发 Token（此值仅用于测试，不保护任何真实系统）。
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-not-for-production")
+
 import asyncio
 from typing import AsyncGenerator
 

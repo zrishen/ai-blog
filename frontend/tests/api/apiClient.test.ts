@@ -5,6 +5,8 @@ import {
   createConversation,
   deleteConversation,
   getMessages,
+  setAccessToken,
+  getAccessToken,
   type StreamToolMeta,
   type StreamRoundEnd,
 } from "../../src/api/client";
@@ -344,10 +346,10 @@ describe("sendChat SSE 解析", () => {
 });
 
 describe("apiFetch 401 处理", () => {
-  it("401 清空 token 并触发 auth:logout 事件", async () => {
-    localStorage.setItem("auth_token", "t");
-    localStorage.setItem("auth_user", "{}");
-
+  it("401 且 refresh 也失败时清空 access holder 并触发 auth:logout 事件", async () => {
+    setAccessToken("t");
+    // 第一次：原请求 401；第二次：/auth/refresh 也 401 → 触发登出
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 401 }));
     fetchMock.mockResolvedValueOnce(new Response("{}", { status: 401 }));
 
     let eventFired = false;
@@ -358,8 +360,25 @@ describe("apiFetch 401 处理", () => {
     await expect(fetchConversations()).rejects.toThrow("Failed to fetch conversations");
 
     expect(eventFired).toBe(true);
-    expect(localStorage.getItem("auth_token")).toBeNull();
-    expect(localStorage.getItem("auth_user")).toBeNull();
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it("401 后 refresh 成功则更新 access holder 并重试原请求", async () => {
+    setAccessToken("old");
+    // 原请求 401 → refresh 200 → 原请求重试 200
+    fetchMock.mockResolvedValueOnce(new Response("{}", { status: 401 }));
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ access_token: "new", user: { id: 1, username: "a" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ conversations: [] }), { status: 200 }),
+    );
+
+    await expect(fetchConversations()).resolves.toEqual({ conversations: [] });
+    expect(getAccessToken()).toBe("new");
   });
 
   it("非 401 错误抛出但不触发 logout", async () => {
@@ -403,8 +422,8 @@ describe("简单 API 函数：URL 与 payload", () => {
     );
   });
 
-  it("Authorization 头携带 localStorage 中的 token", async () => {
-    localStorage.setItem("auth_token", "tok-abc");
+  it("Authorization 头携带内存中的 access token", async () => {
+    setAccessToken("tok-abc");
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ conversations: [] }), { status: 200 }),
     );

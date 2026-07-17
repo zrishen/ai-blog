@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import type { EditingState } from "./fileCategoryUtils";
+import { parseDragSource } from "./dragSource";
 import { getFileIcon } from "./fileIcons";
 
 export interface CategoryTreeProps {
@@ -504,22 +505,4 @@ export function FileNode({
       </ContextMenuContent>
     </ContextMenu>
   );
-}
-
-export function parseDragSource(
-  data: string,
-): { kind: "cat" | "file"; id: number } | null {
-  if (!data) return null;
-  if (data.startsWith("cat:")) {
-    const id = Number(data.slice(4));
-    return Number.isFinite(id) && id > 0 ? { kind: "cat", id } : null;
-  }
-  if (data.startsWith("file:")) {
-    const id = Number(data.slice(5));
-    return Number.isFinite(id) && id > 0 ? { kind: "file", id } : null;
-  }
-  const legacyId = Number(data);
-  return Number.isFinite(legacyId) && legacyId > 0
-    ? { kind: "cat", id: legacyId }
-    : null;
 }

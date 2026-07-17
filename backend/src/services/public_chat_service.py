@@ -24,7 +24,14 @@ def _truncate(text: str, max_chars: int) -> str:
 _PROTOCOL_MARKERS = ("REASONING", "TOOLDONE", "BLOGDELTA", "PATCHSTART", "PATCHDELTA", "DONE")
 
 
-def _strip_public_protocol_markers(text: str) -> str:
+def _strip_public_protocol_markers(text: str, *, final: bool = False) -> tuple[str, str]:
+    """清理公开聊天输出中的协议标记，返回 (clean_text, remainder)。
+
+    - 命中标记且其后 JSON 完整：整段标记被清除。
+    - 命中标记但 JSON 不完整（chunk 边界切在标记中间）：
+      * final=False（流处理中）：把标记起到末尾作为 remainder 返回，留给下一 chunk 拼接后重处理；
+      * final=True（流结束）：标记作为普通文本输出，绝不截断后续内容。
+    """
     normalized = text.replace("\x00", "").replace("�", "")
     decoder = json.JSONDecoder()
     parts: list[str] = []
@@ -38,20 +45,28 @@ def _strip_public_protocol_markers(text: str) -> str:
             continue
 
         payload_start = index + len(marker)
-        while payload_start < len(normalized) and normalized[payload_start].isspace():
-            payload_start += 1
-        if payload_start < len(normalized) and normalized[payload_start] == "{":
+        p = payload_start
+        while p < len(normalized) and normalized[p].isspace():
+            p += 1
+        if p < len(normalized) and normalized[p] == "{":
             try:
-                _, payload_end = decoder.raw_decode(normalized[payload_start:])
-                index = payload_start + payload_end
+                _, payload_end = decoder.raw_decode(normalized[p:])
+                index = p + payload_end
                 continue
             except ValueError:
-                break
+                if not final:
+                    # 可能是 chunk 切在标记 JSON 中间，保留到下一 chunk 再判
+                    return "".join(parts), normalized[index:]
+                # 流结束仍不完整：标记当普通文本输出，避免静默截断
+                parts.append(normalized[index:payload_start])
+                index = payload_start
+                continue
 
+        # 标记后非 JSON：标记名作为普通文本保留
         parts.append(normalized[index])
         index += 1
 
-    return "".join(parts)
+    return "".join(parts), ""
 
 
 async def _landing_context(db: AsyncSession) -> str:
@@ -129,11 +144,18 @@ async def public_stream_chat(
     ]
 
     try:
+        buffer = ""
         async for chunk in llm.astream(messages):
             if chunk.content:
-                text = _strip_public_protocol_markers(str(chunk.content))
-                if text:
-                    yield text
+                buffer += str(chunk.content)
+                clean, buffer = _strip_public_protocol_markers(buffer)
+                if clean:
+                    yield clean
+        # 流结束：处理剩余 buffer；不完整的标记作为普通文本输出，绝不截断
+        if buffer:
+            clean, _ = _strip_public_protocol_markers(buffer, final=True)
+            if clean:
+                yield clean
     except Exception as e:
         logger.error("Public chat failed: %s", e, exc_info=True)
         yield "抱歉，公开 AI 助手暂时无法响应。"

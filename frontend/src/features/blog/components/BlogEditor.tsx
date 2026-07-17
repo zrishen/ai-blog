@@ -3,7 +3,8 @@ import type { ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useChat } from "../../../stores/chatStore";
-import { createBlogPost, deleteBlogPost, generateBlogCover, getBlogPost, getBlogResearchSummary, getResearchTopic, listBlogPosts, suggestBlogTags, updateBlogPost, uploadFile, type BlogResearchSummary } from "../../../api/client";
+import { useAuth } from "../../../stores/authStore";
+import { createBlogPost, deleteBlogPost, generateBlogCover, getAccessToken, getBlogPost, getBlogResearchSummary, getResearchTopic, listBlogPosts, suggestBlogTags, updateBlogPost, uploadFile, type BlogResearchSummary } from "../../../api/client";
 import Vditor from "vditor";
 import "vditor/dist/index.css";
 import "vditor/dist/js/i18n/zh_CN";
@@ -50,6 +51,7 @@ function getWysiwygReset(vditor: Vditor): HTMLElement | null {
 
 export function BlogEditor() {
   const { state, dispatch } = useChat();
+  const { user: authUser } = useAuth();
   const navigate = useNavigate();
   const existingPost = state.blogPosts.find((p) => p.id === state.blogCurrentPostId);
 
@@ -153,7 +155,6 @@ export function BlogEditor() {
     const safety = setTimeout(() => { isProgrammaticChange.current = false; }, 50);
     vditorRef.current?.setValue(expandBlankLines(newContent));
     return () => clearTimeout(safety);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [existingPost?.content]);
 
   useEffect(() => {
@@ -192,7 +193,7 @@ export function BlogEditor() {
         multiple: false,
         url: "/api/upload",
         setHeaders: () => {
-          const token = localStorage.getItem("auth_token");
+          const token = getAccessToken();
           return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
         },
         format: (files, responseText) => {
@@ -201,10 +202,10 @@ export function BlogEditor() {
             original_name?: string;
             stored_name?: string;
           };
-          const authUser = JSON.parse(localStorage.getItem("auth_user") || "null") as { id?: number; username?: string } | null;
+          const username = authUser?.username;
           const filename = response.original_name || files[0]?.name || response.stored_name || "image";
-          const imageUrl = authUser?.username && response.stored_name
-            ? `/api/public/uploads/${encodeURIComponent(authUser.username)}/${encodeURIComponent(response.stored_name)}`
+          const imageUrl = username && response.stored_name
+            ? `/api/public/uploads/${encodeURIComponent(username)}/${encodeURIComponent(response.stored_name)}`
             : response.download_url;
           return JSON.stringify({
             code: 0,
@@ -362,7 +363,7 @@ export function BlogEditor() {
     } finally {
       setSaving(false);
     }
-  }, [title, content, tags, coverImage, existingPost, state.blogPosts, dispatch, draftKey]);
+  }, [title, content, tags, coverImage, existingPost, state.blogPosts, dispatch, draftKey, exitEditor]);
 
   // ── AI 修改:确保有 postId(新建则静默 create,不切页)──────────────
   const ensurePostId = useCallback(async (): Promise<number | null> => {
@@ -516,13 +517,13 @@ export function BlogEditor() {
       return;
     }
 
-    const cleanTarget = patchStreaming.targetText.replace(/[`*_~#\[\]()>]/g, "").trim();
+    const cleanTarget = patchStreaming.targetText.replace(/[`*_~#[\]()>]/g, "").trim();
     const matchKey = cleanTarget.length > 15 ? cleanTarget.slice(0, 15) : cleanTarget;
     const blocks = Array.from(
       editorEl.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote"),
     );
     for (const block of blocks) {
-      const blockText = (block.textContent || "").replace(/[`*_~#\[\]()>]/g, "");
+      const blockText = (block.textContent || "").replace(/[`*_~#[\]()>]/g, "");
       if (!matchKey || !blockText.includes(matchKey)) continue;
       const preview = document.createElement("div");
       preview.className = "ai-patch-inline";
@@ -541,6 +542,7 @@ export function BlogEditor() {
     }
   }, [patchStreaming, existingPost?.content, getEditorElement]);
 
+  // 超时从目标文本确定时开始计算；流式 replacementDelta 不应重置计时器
   useEffect(() => {
     if (!patchStreaming) return;
     const timer = window.setTimeout(() => {
@@ -548,6 +550,8 @@ export function BlogEditor() {
       setError("AI 修改超时，请重试");
     }, 30000);
     return () => window.clearTimeout(timer);
+    // 只按 targetText 重置；流式 delta 不应延长既有超时。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patchStreaming?.targetText, dispatch]);
 
   const handleCancel = useCallback(() => {

@@ -28,6 +28,7 @@ interface AISidebarHeaderProps {
   onCollapse: () => void;
   onBackToList: () => void;
   onNewChat: () => void;
+  onThinkingModeChange: (mode: ThinkingMode) => void;
 }
 
 const THINKING_MODE_OPTIONS: { mode: ThinkingMode; label: string; icon: React.ReactNode; desc: string }[] = [
@@ -42,6 +43,7 @@ export function AISidebarHeader({
   onCollapse,
   onBackToList,
   onNewChat,
+  onThinkingModeChange,
 }: AISidebarHeaderProps) {
   const { state, dispatch } = useChat();
   const supportsThinking = state.llmSupportsThinking;
@@ -85,12 +87,7 @@ export function AISidebarHeader({
                   <DropdownMenuItem
                     key={opt.mode}
                     disabled={disabled}
-                    onClick={() =>
-                      dispatch({
-                        type: "SET_AI_SIDEBAR_THINKING_MODE",
-                        payload: opt.mode,
-                      })
-                    }
+                    onClick={() => onThinkingModeChange(opt.mode)}
                   >
                     {opt.icon}
                     <span className="ml-2">{opt.label}</span>

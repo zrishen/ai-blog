@@ -25,13 +25,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
+        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.detail || "请求失败");
         return;
       }
-      login(data.token, data.user);
+      login(data.access_token, data.user);
       onSuccess?.(data.user);
     } catch {
       setError("网络错误，请检查后端是否运行");

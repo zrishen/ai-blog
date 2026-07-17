@@ -13,9 +13,12 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ai-blog", version="0.1.0")
 
+# 同源部署（前端走 /api 相对路径）留空即可；跨域部署需通过 CORS_ALLOW_ORIGINS 显式指定 origin，
+# 因为浏览器规范拒绝 credentials 模式下使用通配 "*" origin。
+_cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

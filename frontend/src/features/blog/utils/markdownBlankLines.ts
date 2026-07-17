@@ -1,7 +1,11 @@
 const ZWSP = "​";
 
+// 判断 DOM 空白段落时允许任意空白（含换行/制表符）+ 零宽占位符，仅用于 textContent 判空。
+// eslint-disable-next-line no-irregular-whitespace, no-misleading-character-class
 const BLANK_WS_RE = /[\s​‌‍⁠]/g;
-const STRIP_INVISIBLE_RE = /[\s ​‌‍⁠]/g;
+// 仅清理零宽占位符（ZWSP/ZWNJ/ZWJ/Word Joiner）。绝不能包含 \s：否则会删除正文里的普通空格、
+// 制表符和换行，导致英文单词粘连、标题/列表/代码块结构被压扁破坏。
+const STRIP_INVISIBLE_RE = /[​‌‍⁠]/g;
 
 export function expandBlankLines(md: string): string {
   return md.replace(/\n{3,}/g, (m) => "\n\n" + `${ZWSP}\n\n`.repeat(m.length - 2));

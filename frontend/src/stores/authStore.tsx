@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+import { setAccessToken } from "../api/client";
 
 export interface AuthUser {
   id: number;
@@ -8,50 +9,68 @@ export interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null;
-  token: string | null;
   isAuthenticated: boolean;
+  // 启动时通过 cookie 恢复登录态期间为 true，避免刷新页面闪烁未登录态
+  isInitializing: boolean;
 }
 
 interface AuthContextValue extends AuthState {
-  login: (token: string, user: AuthUser) => void;
+  login: (accessToken: string, user: AuthUser) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function loadAuth(): AuthState {
-  const token = localStorage.getItem("auth_token");
-  const userStr = localStorage.getItem("auth_user");
-  if (token && userStr) {
-    try {
-      return { token, user: JSON.parse(userStr), isAuthenticated: true };
-    } catch {
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("auth_user");
-    }
-  }
-  return { token: null, user: null, isAuthenticated: false };
-}
+const UNAUTHENTICATED: AuthState = {
+  user: null,
+  isAuthenticated: false,
+  isInitializing: false,
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>(loadAuth);
+  const [state, setState] = useState<AuthState>({ ...UNAUTHENTICATED, isInitializing: true });
 
   useEffect(() => {
-    const onLogout = () => setState({ token: null, user: null, isAuthenticated: false });
+    let cancelled = false;
+    // 启动恢复：access token 在内存（刷新页面即丢失），用 HttpOnly cookie 里的 refresh token 换新 access。
+    (async () => {
+      try {
+        const resp = await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
+        if (resp.ok) {
+          const data = (await resp.json()) as { access_token?: string; user?: AuthUser };
+          if (data.access_token && data.user && !cancelled) {
+            setAccessToken(data.access_token);
+            setState({ user: data.user, isAuthenticated: true, isInitializing: false });
+            return;
+          }
+        }
+      } catch {
+        /* 未登录或网络异常都回落到未认证态 */
+      }
+      if (!cancelled) setState({ ...UNAUTHENTICATED, isInitializing: false });
+    })();
+
+    const onLogout = () => {
+      setAccessToken(null);
+      setState(UNAUTHENTICATED);
+    };
     window.addEventListener("auth:logout", onLogout);
-    return () => window.removeEventListener("auth:logout", onLogout);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("auth:logout", onLogout);
+    };
   }, []);
 
-  const login = (token: string, user: AuthUser) => {
-    localStorage.setItem("auth_token", token);
-    localStorage.setItem("auth_user", JSON.stringify(user));
-    setState({ token, user, isAuthenticated: true });
+  const login = (accessToken: string, user: AuthUser) => {
+    setAccessToken(accessToken);
+    setState({ user, isAuthenticated: true, isInitializing: false });
   };
 
   const logout = () => {
-    localStorage.removeItem("auth_token");
-    localStorage.removeItem("auth_user");
-    setState({ token: null, user: null, isAuthenticated: false });
+    // 通知后端吊销 refresh token 记录并清除 cookie；即便请求失败也立即清前端登录态。
+    void fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    setAccessToken(null);
+    setState(UNAUTHENTICATED);
   };
 
   return (

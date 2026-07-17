@@ -36,7 +36,7 @@ async def _register(client: AsyncClient, username: str) -> tuple[str, int]:
         "password": "test1234",
     })
     assert resp.status_code == 201
-    return resp.json()["token"], resp.json()["user"]["id"]
+    return resp.json()["access_token"], resp.json()["user"]["id"]
 
 
 @pytest.mark.asyncio

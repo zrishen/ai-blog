@@ -86,8 +86,8 @@ async def blog_write_post(
     """写入已有博客文章的字段或完整正文。只传需要修改的字段。
     当用户要求修改标题、标签、状态、摘要，或大幅重写整篇正文时使用此工具。
     参数 post_id: 文章的数据库 ID（必填）。
-    参数 title: 新标题（可选）。
-    参数 content: 新 Markdown 正文（可选），传入时会替换整篇正文，不要以与 title 相同的 '# 标题' 开头。
+    参数 title: 新标题（可选），只包含标题文本。
+    参数 content: 新 Markdown 正文（可选），传入时会替换整篇正文；不要重复一级标题，章节标题从 '##' 开始。
     参数 tags: 新标签，逗号分隔（可选）。
     参数 status: 新状态 draft/published（可选）。
     参数 excerpt: 新摘要（可选）。"""
@@ -114,6 +114,7 @@ async def blog_write_post(
         meta = data["meta"] if data else {}
         body = data["body"] if data else post.content
 
+        stale_slug: str | None = None
         if title.strip():
             meta["title"] = title.strip()
             old_slug = post.slug
@@ -121,9 +122,8 @@ async def blog_write_post(
                 slug_from_title(title.strip()), db, user_id=user_id, exclude_id=post_id
             )
             if new_slug != old_slug:
-                from src.services.markdown_blog_service import delete_post_file
-
-                delete_post_file(old_slug, user_id)
+                # 新状态确认后再删旧文件，避免更新失败丢失旧正文
+                stale_slug = old_slug
                 meta["slug"] = new_slug
                 post.slug = new_slug
         if content:
@@ -138,10 +138,15 @@ async def blog_write_post(
         meta["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         slug = meta.get("slug", post.slug)
 
+        # 先写新内容并同步数据库；只有新状态确认成功后才删除旧 slug 文件。
         write_post(slug, meta, body, user_id)
         updated = await sync_file_to_db(slug, db, user_id=user_id, existing_post_id=post_id)
         if updated is None:
             return f"文章更新失败: id={post_id}"
+        if stale_slug:
+            from src.services.markdown_blog_service import delete_post_file
+
+            delete_post_file(stale_slug, user_id)
         return (
             f"文章已更新: id={updated.id}, slug={slug}, "
             f"title={meta.get('title', '')}, status={meta.get('status', '')}"

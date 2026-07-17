@@ -78,10 +78,13 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
 
   useEffect(() => {
     if (!open) return;
+    // 异步加载回收站；rule 无法识别 useCallback 内的同步 setState 是异步链入口
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [open, load]);
 
   // 切换关闭时清理临时状态
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (open) return;
     setPartialNotice(null);
@@ -90,6 +93,7 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
     setPurgeTarget(null);
     setEmptyConfirmOpen(false);
   }, [open]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const filteredItems = useMemo(() => {
     if (!searchKeyword.trim()) return items;

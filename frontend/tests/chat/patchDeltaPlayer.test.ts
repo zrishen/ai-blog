@@ -46,7 +46,7 @@ describe("patchDeltaPlayer", () => {
     expect(chunks.join("").length).toBeGreaterThan(0);
     expect(chunks.join("").length).toBeLessThan("这是逐字出现的新文本".length);
 
-    while (frames.runFrame()) {}
+    while (frames.runFrame()) { /* drain scheduled frames */ }
     expect(chunks.join("")).toBe("这是逐字出现的新文本");
     expect(chunks.length).toBeGreaterThan(1);
   });
@@ -91,7 +91,7 @@ describe("patchDeltaPlayer", () => {
     player.push("第一段内容");
     frames.runFrame();
     player.push("第二段内容");
-    while (frames.runFrame()) {}
+    while (frames.runFrame()) { /* drain scheduled frames */ }
 
     expect(chunks.join("")).toBe("第一段内容第二段内容");
     expect(chunks.length).toBeGreaterThan(1);

@@ -237,9 +237,67 @@ async def test_blog_edit_post_replaces_within_section_only(db_session: AsyncSess
     finally:
         current_user_id_cv.reset(token)
 
+    expected = (
+        "## 背景\n\n这是重复文本第一次出现。\n\n"
+        "## 总结\n\n这是唯一替换第二次出现。"
+    )
     assert "已精准修改" in result
-    assert "重复文本" in post.content  # 第 1 节保留
-    assert "唯一替换" in post.content  # 第 2 节被替换
+    assert "section=2" in result
+    assert post.content == expected
+    _meta, body = _read_markdown(post.slug)
+    assert body == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("content", "target_text", "replacement_text", "expected"), [
+    ("目标文本在开头，后面保持不变。", "目标文本", "新文本", "新文本在开头，后面保持不变。"),
+    ("前面的内容保持不变，末尾目标文本", "目标文本", "新文本", "前面的内容保持不变，末尾新文本"),
+    ("## 标题\n\n**多行**\n原始片段\n\n结尾", "**多行**\n原始片段", "替换片段", "## 标题\n\n替换片段\n\n结尾"),
+    ("删除前缀目标文本删除后缀", "目标文本", "", "删除前缀删除后缀"),
+])
+async def test_blog_edit_post_preserves_non_target_content(
+    db_session: AsyncSession,
+    monkeypatch,
+    content: str,
+    target_text: str,
+    replacement_text: str,
+    expected: str,
+):
+    post = BlogPostModel(
+        title="精准替换边界",
+        slug="precise-edit-boundary",
+        content=content,
+        status="draft",
+        user_id=TEST_USER_ID,
+    )
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        result = await blog_edit_post.ainvoke({
+            "post_id": post.id,
+            "target_text": target_text,
+            "replacement_text": replacement_text,
+        })
+        await db_session.refresh(post)
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert "已精准修改" in result
+    assert post.content == expected
+    _meta, body = _read_markdown(post.slug)
+    assert body == expected
 
 
 @pytest.mark.asyncio

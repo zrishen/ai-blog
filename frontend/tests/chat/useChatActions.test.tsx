@@ -1,11 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
+import type { Conversation, Message } from "../../src/stores/chatStore";
 
 // 让 mock 暴露可控的 fetch 结果
-let conversationsResult: { conversations: any[] } = { conversations: [] };
-let messagesResult: any[] = [];
-let createdConversation: any = null;
+let conversationsResult: { conversations: Conversation[] } = { conversations: [] };
+let messagesResult: Message[] = [];
+let createdConversation: Conversation | null = null;
 
 vi.mock("../../src/api/client", () => ({
   fetchConversations: vi.fn(async () => conversationsResult),
@@ -60,7 +61,7 @@ describe("useChatHooks 其他动作", () => {
 
   it("loadConversations 失败时不抛错，仅切回 isLoading=false", async () => {
     const { fetchConversations } = await import("../../src/api/client");
-    (fetchConversations as any).mockRejectedValueOnce(new Error("net"));
+    vi.mocked(fetchConversations).mockRejectedValueOnce(new Error("net"));
     const { result } = renderChatHook();
 
     await act(async () => {

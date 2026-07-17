@@ -2,12 +2,20 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AuthProvider } from "../../src/stores/authStore";
+import { getAccessToken, setAccessToken } from "../../src/api/client";
 import { LoginForm } from "../../src/features/auth/LoginForm";
 
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  fetchMock = vi.fn();
+  setAccessToken(null);
+  fetchMock = vi.fn(async (url: string) => {
+    // AuthProvider 挂载会调 /auth/refresh 恢复登录态；测试默认未登录
+    if (typeof url === "string" && url.includes("/auth/refresh")) {
+      return new Response(JSON.stringify({ detail: "no session" }), { status: 401 });
+    }
+    return new Response("{}", { status: 200 });
+  });
   vi.stubGlobal("fetch", fetchMock);
   localStorage.clear();
 });
@@ -31,14 +39,20 @@ async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
   await user.click(submitBtn);
 }
 
+function loginResponse() {
+  return new Response(JSON.stringify({ access_token: "tok", user: { id: 7, username: "alice" } }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 describe("LoginForm", () => {
-  it("登录成功：调用 login 写入 token，并回调 onSuccess", async () => {
+  it("登录成功：写入 access holder 并回调 onSuccess", async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ token: "tok", user: { id: 7, username: "alice" } }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }),
+    fetchMock.mockImplementation(async (url: string) =>
+      typeof url === "string" && url.includes("/auth/refresh")
+        ? new Response("{}", { status: 401 })
+        : loginResponse(),
     );
 
     const onSuccess = vi.fn();
@@ -49,16 +63,15 @@ describe("LoginForm", () => {
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalledWith({ id: 7, username: "alice" });
     });
-    expect(localStorage.getItem("auth_token")).toBe("tok");
+    await waitFor(() => expect(getAccessToken()).toBe("tok"));
   });
 
   it("登录失败（HTTP 400 + detail）：显示后端错误信息", async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ detail: "用户名或密码错误" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      }),
+    fetchMock.mockImplementation(async (url: string) =>
+      typeof url === "string" && url.includes("/auth/refresh")
+        ? new Response("{}", { status: 401 })
+        : new Response(JSON.stringify({ detail: "用户名或密码错误" }), { status: 400 }),
     );
 
     render(<LoginForm />, { wrapper });
@@ -67,12 +80,17 @@ describe("LoginForm", () => {
     await waitFor(() => {
       expect(screen.getByText("用户名或密码错误")).toBeInTheDocument();
     });
-    expect(localStorage.getItem("auth_token")).toBeNull();
+    expect(getAccessToken()).toBeNull();
   });
 
   it("网络错误：显示网络错误提示", async () => {
     const user = userEvent.setup();
-    fetchMock.mockRejectedValueOnce(new Error("net"));
+    fetchMock.mockImplementation(async (url: string) => {
+      if (typeof url === "string" && url.includes("/auth/refresh")) {
+        return new Response("{}", { status: 401 });
+      }
+      throw new Error("net");
+    });
 
     render(<LoginForm />, { wrapper });
     await fillAndSubmit(user);
@@ -84,10 +102,10 @@ describe("LoginForm", () => {
 
   it("切换到注册模式时调用 /register 端点", async () => {
     const user = userEvent.setup();
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ token: "t", user: { id: 1, username: "x" } }), {
-        status: 200,
-      }),
+    fetchMock.mockImplementation(async (url: string) =>
+      typeof url === "string" && url.includes("/auth/refresh")
+        ? new Response("{}", { status: 401 })
+        : loginResponse(),
     );
 
     render(<LoginForm />, { wrapper });
@@ -104,8 +122,12 @@ describe("LoginForm", () => {
 
   it("提交期间按钮 disabled 且显示处理中文案", async () => {
     const user = userEvent.setup();
-    // 让 fetch 永远 pending，确保按钮停在 loading 态
-    fetchMock.mockReturnValueOnce(new Promise(() => {}));
+    // login 请求永远 pending，确保按钮停在 loading 态（refresh 仍返回 401 完成）
+    fetchMock.mockImplementation(async (url: string) =>
+      typeof url === "string" && url.includes("/auth/refresh")
+        ? new Response("{}", { status: 401 })
+        : new Promise(() => {}),
+    );
 
     render(<LoginForm />, { wrapper });
     await fillAndSubmit(user);

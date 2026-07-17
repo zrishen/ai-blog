@@ -100,15 +100,17 @@ async def search(
     if top_k is None:
         top_k = settings.rag_top_k
 
-    client = _get_client()
+    client = await asyncio.to_thread(_get_client)
     try:
-        collection = client.get_collection(name=collection_name)
+        collection = await asyncio.to_thread(client.get_collection, name=collection_name)
     except (ValueError, NotFoundError):
         return []
 
-    results = collection.query(
+    count = await asyncio.to_thread(collection.count)
+    results = await asyncio.to_thread(
+        collection.query,
         query_embeddings=[query_embedding],
-        n_results=min(top_k, collection.count()),
+        n_results=min(top_k, count),
         include=["documents", "metadatas", "distances"],
     )
 
@@ -144,9 +146,9 @@ async def delete_collection(collection_name: str) -> bool:
     Returns:
         True if deleted, False if collection didn't exist.
     """
-    client = _get_client()
+    client = await asyncio.to_thread(_get_client)
     try:
-        client.delete_collection(name=collection_name)
+        await asyncio.to_thread(client.delete_collection, name=collection_name)
         return True
     except (ValueError, NotFoundError):
         return False
@@ -158,8 +160,9 @@ async def list_collections() -> list[str]:
     Returns:
         List of collection names.
     """
-    client = _get_client()
-    return [c.name for c in client.list_collections()]
+    client = await asyncio.to_thread(_get_client)
+    collections = await asyncio.to_thread(client.list_collections)
+    return [c.name for c in collections]
 
 
 async def get_collection_count(collection_name: str) -> int:
@@ -171,9 +174,9 @@ async def get_collection_count(collection_name: str) -> int:
     Returns:
         Document count, or 0 if collection doesn't exist.
     """
-    client = _get_client()
+    client = await asyncio.to_thread(_get_client)
     try:
-        collection = client.get_collection(name=collection_name)
-        return collection.count()
+        collection = await asyncio.to_thread(client.get_collection, name=collection_name)
+        return await asyncio.to_thread(collection.count)
     except (ValueError, NotFoundError):
         return 0

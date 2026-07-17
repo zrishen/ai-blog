@@ -1,7 +1,8 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import "@testing-library/jest-dom/vitest";
+import { AuthProvider } from "../../src/stores/authStore";
 
 class MockResizeObserver {
   observe = () => {};
@@ -55,13 +56,22 @@ vi.mock("../../src/api/client", async (importOriginal) => {
 describe("BlogEditor 工具区折叠/展开", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    // AuthProvider 挂载会调 /auth/refresh 恢复登录态；focusMode 测试不依赖登录用户，模拟未登录快速完成
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("默认折叠态：紧凑行可见，大卡片内容隐藏", async () => {
     const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
-        <BlogEditor />
+        <AuthProvider>
+          <BlogEditor />
+        </AuthProvider>
       </MemoryRouter>,
     );
 
@@ -77,7 +87,9 @@ describe("BlogEditor 工具区折叠/展开", () => {
     const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
-        <BlogEditor />
+        <AuthProvider>
+          <BlogEditor />
+        </AuthProvider>
       </MemoryRouter>,
     );
 
@@ -91,7 +103,9 @@ describe("BlogEditor 工具区折叠/展开", () => {
     const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
-        <BlogEditor />
+        <AuthProvider>
+          <BlogEditor />
+        </AuthProvider>
       </MemoryRouter>,
     );
 
@@ -114,7 +128,9 @@ describe("BlogEditor 工具区折叠/展开", () => {
     const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
-        <BlogEditor />
+        <AuthProvider>
+          <BlogEditor />
+        </AuthProvider>
       </MemoryRouter>,
     );
 

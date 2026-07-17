@@ -31,7 +31,7 @@ const UNIT_LABELS: Record<string, string> = {
 
 const CHUNK_PIPELINE_STAGES = ["embedding", "metadata", "vector_store"] as const;
 
-export function getFileProcessingStageLabel(stage: string) {
+function getFileProcessingStageLabel(stage: string) {
   return STAGE_LABELS[stage] ?? stage;
 }
 

@@ -1,7 +1,7 @@
-import { API_BASE, apiFetch, readErrorDetail } from "./client";
+import { API_BASE, apiFetch, readErrorDetail, getAccessToken, setAccessToken } from "./client";
 
 export function getPreviewUrl(filename: string): string {
-  const token = localStorage.getItem("auth_token");
+  const token = getAccessToken();
   const base = `${API_BASE}/preview/${encodeURIComponent(filename)}`;
   return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
@@ -80,8 +80,7 @@ export class FileUploadNetworkError extends Error {
 }
 
 function handleUnauthorized() {
-  localStorage.removeItem("auth_token");
-  localStorage.removeItem("auth_user");
+  setAccessToken(null);
   window.dispatchEvent(new Event("auth:logout"));
 }
 
@@ -98,7 +97,8 @@ export function uploadToFileLibrary(
 
   const promise = new Promise<FileProcessingJob>((resolve, reject) => {
     xhr.open("POST", `${API_BASE}/files/documents`);
-    const token = localStorage.getItem("auth_token");
+    xhr.withCredentials = true;
+    const token = getAccessToken();
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("X-File-Request-Id", clientRequestId);
 

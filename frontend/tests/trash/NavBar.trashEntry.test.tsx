@@ -9,6 +9,8 @@ import "@testing-library/jest-dom/vitest";
 vi.mock("../../src/api/client", () => ({
   getLLMSettings: vi.fn(() => Promise.resolve({ protocol: "openai", base_url: "", api_key: "", model: "", supports_thinking: true })),
   updateLLMSettings: vi.fn(),
+  setAccessToken: vi.fn(),
+  getAccessToken: vi.fn(() => null),
 }));
 
 import { AuthProvider } from "../../src/stores/authStore";
@@ -38,15 +40,24 @@ async function renderNav(authed = true) {
 describe("NavBar 回收站入口", () => {
   beforeEach(() => {
     localStorage.clear();
+    // AuthProvider 挂载用 cookie 调 /auth/refresh 恢复登录态；模拟已登录 alice
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      typeof url === "string" && url.includes("/auth/refresh")
+        ? new Response(JSON.stringify({ access_token: "a", user: { id: 1, username: "alice" } }), {
+            status: 200, headers: { "Content-Type": "application/json" },
+          })
+        : new Response("{}", { status: 200 }),
+    ));
   });
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("登录后用户菜单包含「回收站」项,位于「设置」与「登出」之间", async () => {
     const user = userEvent.setup();
     await renderNav(true);
-    const trigger = screen.getByTitle("alice");
+    const trigger = await screen.findByTitle("alice");
     await user.click(trigger);
     const settingsItem = await screen.findByText("设置");
     const trashItem = await screen.findByText("回收站");
@@ -66,7 +77,7 @@ describe("NavBar 回收站入口", () => {
   it("点击「回收站」菜单项打开 TrashDialog", async () => {
     const user = userEvent.setup();
     await renderNav(true);
-    const trigger = screen.getByTitle("alice");
+    const trigger = await screen.findByTitle("alice");
     await user.click(trigger);
     const trashItem = await screen.findByText("回收站");
     await user.click(trashItem);

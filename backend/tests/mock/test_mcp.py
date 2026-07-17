@@ -31,6 +31,27 @@ async def test_add_mcp_server(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_add_mcp_server_keeps_config_when_discovery_crashes(client: AsyncClient, monkeypatch):
+    """工具发现抛异常时不阻断创建：配置已保存（best-effort），用户可后续启用重试。"""
+    from src.services.mcp import mcp_config
+
+    async def boom(**kwargs):
+        raise RuntimeError("discovery crashed")
+
+    monkeypatch.setattr(mcp_config, "discover_server_tools", boom)
+
+    resp = await client.post("/api/mcp/servers", json={
+        "name": "崩溃MCP",
+        "server_type": "stdio",
+        "command": "python",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "崩溃MCP"
+    assert data["tools"] == []
+
+
+@pytest.mark.asyncio
 async def test_mcp_server_response_does_not_expose_env_vars(client: AsyncClient, monkeypatch):
     from src.services.mcp import mcp_config
 

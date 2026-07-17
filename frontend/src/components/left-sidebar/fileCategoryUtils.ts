@@ -84,7 +84,7 @@ export function collectDescendantIds(id: number, tree: FileCategory[]): number[]
   const walk = (nodes: FileCategory[]) => {
     for (const cat of nodes) {
       if (cat.id === id) {
-        const collect = (sub: FileCategory[]) => {
+        const collect = (sub: FileCategory) => {
           ids.push(sub.id);
           for (const child of sub.children ?? []) collect(child);
         };

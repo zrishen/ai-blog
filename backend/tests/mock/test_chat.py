@@ -369,6 +369,79 @@ async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
 
 
 @pytest.mark.asyncio
+async def test_selected_blog_context_is_injected_into_prompt_and_user_message(monkeypatch):
+    from src.services import chat_service
+
+    captured = {}
+
+    class FakeScalars:
+        def all(self):
+            return []
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return FakeResult()
+
+    class FakeBlogTool:
+        name = "blog_edit_post"
+
+    class FakeChunk:
+        content = "已处理"
+        tool_call_chunks = []
+        additional_kwargs = {}
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            captured["messages"] = payload["messages"]
+            yield {"event": "on_chat_model_stream", "data": {"chunk": FakeChunk()}}
+
+    async def fake_add_message_pair(*args, **kwargs):
+        return 7, SimpleNamespace(id=8)
+
+    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
+    monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
+    monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
+
+    output = "".join([
+        chunk async for chunk in chat_service.stream_chat(
+            "请润色得更简洁",
+            conversation_id=None,
+            user_id=1,
+            context={
+                "page_type": "other",
+                "post_id": 42,
+                "post_title": "测试文章",
+                "selected_text": "需要被润色的中文原文",
+                "section_index": 2,
+            },
+        )
+    ])
+
+    system_text = "\n".join(message["content"] for message in captured["messages"] if message["role"] == "system")
+    user_text = captured["messages"][-1]["content"]
+    assert "DONE" in output
+    assert "测试文章" in system_text
+    assert "ID=42" in system_text
+    assert "blog_edit_post" in system_text
+    assert "第 2 节" in system_text
+    assert user_text.startswith("请润色得更简洁")
+    assert "需要被润色的中文原文" in user_text
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("split_positions", [
     (0.2, 0.5),
     (0.4, 0.7),
@@ -475,6 +548,86 @@ async def test_blog_edit_patch_streams_from_model_tool_arguments(monkeypatch, sp
     assert '{"target_text":"旧文本"}' in output
     assert '{"replacement_delta":"新文本"}' in output
     assert output.count("TOOLDONE") >= 2
+
+
+@pytest.mark.asyncio
+async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monkeypatch):
+    from src.services import chat_service
+
+    tool_input = {
+        "post_id": 1,
+        "target_text": "旧文本\\n第二行",
+        "replacement_text": "新文本😀",
+    }
+
+    class FakeScalars:
+        def all(self):
+            return []
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return FakeResult()
+
+    class FakeBlogTool:
+        name = "blog_edit_post"
+
+    class FakeChunk:
+        content = ""
+        additional_kwargs = {}
+
+        def __init__(self, tool_call_chunks):
+            self.tool_call_chunks = tool_call_chunks
+
+    args_text = json.dumps(tool_input, ensure_ascii=True)
+    unicode_start = args_text.index("\\u", args_text.index('"target_text"'))
+    split_points = [unicode_start + 1, unicode_start + 3, unicode_start + 6, len(args_text)]
+    parts = []
+    previous = 0
+    for point in split_points:
+        parts.append(args_text[previous:point])
+        previous = point
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            for index, args in enumerate(parts):
+                yield {
+                    "event": "on_chat_model_stream",
+                    "data": {"chunk": FakeChunk([{
+                        "index": 0,
+                        "name": "blog_edit_post" if index == 0 else None,
+                        "args": args,
+                    }])},
+                }
+            yield {"event": "on_tool_start", "name": "blog_edit_post", "data": {"input": tool_input}}
+            yield {"event": "on_tool_end", "name": "blog_edit_post", "data": {"output": "文章修改完成"}}
+
+    async def fake_add_message_pair(*args, **kwargs):
+        return 7, SimpleNamespace(id=8)
+
+    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
+    monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
+    monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
+
+    output = "".join([
+        chunk async for chunk in chat_service.stream_chat("修改文章", None, 1)
+    ])
+
+    assert json.dumps({"target_text": tool_input["target_text"]}, ensure_ascii=False, separators=(",", ":")) in output
+    assert json.dumps({"replacement_delta": tool_input["replacement_text"]}, ensure_ascii=False, separators=(",", ":")) in output
+    assert "u65e7" not in output
 
 
 @pytest.mark.asyncio

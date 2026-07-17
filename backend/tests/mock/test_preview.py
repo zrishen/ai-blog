@@ -43,7 +43,7 @@ async def _register_and_upload(client: AsyncClient, filename: str, content: byte
         "username": "preview_user",
         "password": "test1234",
     })
-    token = reg.json()["token"]
+    token = reg.json()["access_token"]
     user_id = reg.json()["user"]["id"]
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -159,7 +159,7 @@ async def test_preview_returns_404_for_missing_file(client: AsyncClient):
         "username": "preview_missing",
         "password": "test1234",
     })
-    token = reg.json()["token"]
+    token = reg.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
     resp = await client.get("/api/preview/non-existent.pdf", headers=headers)

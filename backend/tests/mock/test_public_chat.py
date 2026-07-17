@@ -63,6 +63,29 @@ async def test_public_chat_strips_protocol_reasoning_markers(monkeypatch):
     assert "\x00" not in content
 
 
+def test_public_strip_keeps_remainder_for_marker_split_across_chunks():
+    from src.services.public_chat_service import _strip_public_protocol_markers
+
+    # chunk 切在标记 JSON 中间：不截断，保留为 remainder 等下一 chunk
+    clean, remainder = _strip_public_protocol_markers('TOOLDONE{"stat')
+    assert clean == ""
+    assert remainder == 'TOOLDONE{"stat'
+
+    # 与下一 chunk 拼出完整 JSON 后整体清除，后续正常文本保留
+    clean, remainder = _strip_public_protocol_markers(remainder + 'us":"ok"}后续文本')
+    assert clean == "后续文本"
+    assert remainder == ""
+
+
+def test_public_strip_final_does_not_truncate_incomplete_marker():
+    from src.services.public_chat_service import _strip_public_protocol_markers
+
+    # 流结束仍不完整的标记：作为普通文本输出，绝不丢弃后续内容
+    clean, _ = _strip_public_protocol_markers('前文TOOLDONE{"不完整', final=True)
+    assert "前文" in clean
+    assert "TOOLDONE" in clean
+
+
 @pytest.mark.asyncio
 async def test_public_chat_context_excludes_deleted_posts(db_session: AsyncSession):
     from src.services.public_chat_service import _user_public_context

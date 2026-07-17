@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.engine import get_db
 from src.database.models import User
 from src.services.file_service import convert_to_html, get_user_upload_dir, is_hidden_soft_deleted_file
-from src.utils.auth import decode_token
+from src.utils.auth import decode_access_token
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ async def get_preview_user(
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    payload = decode_token(token)
+    payload = decode_access_token(token)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证令牌")
 

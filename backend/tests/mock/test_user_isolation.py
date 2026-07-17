@@ -48,7 +48,7 @@ async def _register(client: AsyncClient, username: str) -> tuple[str, int]:
     })
     assert resp.status_code == 201, resp.text
     data = resp.json()
-    return data["token"], data["user"]["id"]
+    return data["access_token"], data["user"]["id"]
 
 
 async def _login(client: AsyncClient, username: str) -> str:
@@ -57,7 +57,7 @@ async def _login(client: AsyncClient, username: str) -> str:
         "password": "test1234",
     })
     assert resp.status_code == 200, resp.text
-    return resp.json()["token"]
+    return resp.json()["access_token"]
 
 
 # ---- Blog: 草稿不泄漏给匿名/他人 ----

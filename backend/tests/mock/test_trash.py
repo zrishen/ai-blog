@@ -329,11 +329,12 @@ async def test_file_document_restore_success_invokes_vectorize(
 
 
 @pytest.mark.asyncio
-async def test_file_purge_chroma_failure_keeps_record(
+async def test_file_purge_chroma_failure_still_deletes_record(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch,
 ):
+    """倒序后：DB 先硬删并提交成功，Chroma 清理失败仅留孤儿向量，记录不再保留。"""
     doc_id = await _upload_document(client, db_session, "purge-chroma.pdf")
     await client.delete(f"/api/files/documents/{doc_id}")
 
@@ -343,21 +344,20 @@ async def test_file_purge_chroma_failure_keeps_record(
     monkeypatch.setattr("src.services.trash_service.delete_document_chunks", fail_cleanup)
 
     response = await client.delete(f"/api/trash/file_document/{doc_id}")
-    assert response.status_code == 500
+    assert response.status_code == 200  # DB 删除已成功，物理清理失败不影响响应
 
     db_session.expire_all()
-    doc = await db_session.get(FileDocument, doc_id)
-    assert doc is not None
-    assert doc.deleted_at is not None
+    assert await db_session.get(FileDocument, doc_id) is None  # 记录已硬删；向量孤儿由清理脚本回收
 
 
 @pytest.mark.asyncio
-async def test_file_purge_unlink_failure_keeps_record(
+async def test_file_purge_unlink_failure_still_deletes_record(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch,
     tmp_path,
 ):
+    """倒序后：DB 先硬删并提交成功，本地文件 unlink 失败仅留孤儿文件，记录不再保留。"""
     doc_id = await _upload_document(client, db_session, "purge-unlink.pdf")
     await client.delete(f"/api/files/documents/{doc_id}")
     doc = await db_session.get(FileDocument, doc_id)
@@ -375,12 +375,11 @@ async def test_file_purge_unlink_failure_keeps_record(
     monkeypatch.setattr(Path, "unlink", fail_unlink)
 
     response = await client.delete(f"/api/trash/file_document/{doc_id}")
-    assert response.status_code == 500
+    assert response.status_code == 200  # DB 删除已成功
 
     db_session.expire_all()
-    doc = await db_session.get(FileDocument, doc_id)
-    assert doc is not None
-    assert doc.deleted_at is not None
+    assert await db_session.get(FileDocument, doc_id) is None  # 记录已硬删
+    assert source.exists()  # 本地文件因 unlink 失败残留为孤儿，待清理脚本回收
 
 
 @pytest.mark.asyncio

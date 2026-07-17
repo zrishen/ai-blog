@@ -18,7 +18,7 @@ async def _auth_headers(client: AsyncClient) -> dict[str, str]:
         "password": "test1234",
     })
     assert resp.status_code == 201
-    return {"Authorization": f"Bearer {resp.json()['token']}"}
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
 
 @pytest.mark.asyncio

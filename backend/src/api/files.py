@@ -245,6 +245,10 @@ async def update_file_category(
         parent = await _get_owned_category(db, data.parent_id, user.id)
         if not parent:
             raise HTTPException(status_code=400, detail="父分类不存在")
+        # 禁止把节点移到自己的后代之下，否则会形成父子环，使遍历/删除无限循环
+        descendant_ids = await _collect_descendant_category_ids(db, category_id, user.id)
+        if data.parent_id in descendant_ids:
+            raise HTTPException(status_code=400, detail="不能将分类移到自己的子分类下")
 
     if "name" in data.model_fields_set:
         cat.name = data.name
@@ -277,9 +281,14 @@ async def _collect_descendant_category_ids(
 
     result: list[int] = [root_id]
     queue = [root_id]
+    visited: set[int] = {root_id}
     while queue:
         current = queue.pop(0)
         for child_id in children_map.get(current, []):
+            if child_id in visited:
+                # 环保护：历史坏数据可能存在父子环，已访问的节点不再入队，避免无限循环
+                continue
+            visited.add(child_id)
             result.append(child_id)
             queue.append(child_id)
     return result

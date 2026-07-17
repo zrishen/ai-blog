@@ -1,7 +1,9 @@
 """Markdown 博客服务 — 文件 I/O + frontmatter 解析 + DB 同步。"""
 
 import logging
+import os
 import re
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -92,7 +94,21 @@ def write_post(slug: str, meta: dict, body: str, user_id: int) -> Path:
     text = _serialize_frontmatter(meta, body)
     filepath = _filepath_for_slug(slug, user_id)
     filepath.parent.mkdir(parents=True, exist_ok=True)
-    filepath.write_text(text, encoding="utf-8")
+    # 原子写入：先写同目录临时文件，再 os.replace 原子替换目标。
+    # 写中途崩溃/磁盘满只会留下临时残骸，不会把原文件写成半个。
+    tmp_fd, tmp_path = tempfile.mkstemp(dir=filepath.parent, suffix=".md.tmp")
+    try:
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, filepath)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
     logger.info("Markdown 文件 [写入] slug=%s user_id=%s path=%s", slug, user_id, filepath)
     return filepath
 

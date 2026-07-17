@@ -368,3 +368,36 @@ async def test_delete_file_collection_keeps_failed_document_active(
     ).scalars().all()
     assert documents[0].deleted_at is not None
     assert documents[1].deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_update_category_rejects_moving_under_descendant(client: AsyncClient):
+    """禁止把分类移到自己的后代下，避免形成父子环导致遍历/删除无限循环。"""
+    grandchild_resp = await client.post("/api/files/categories", json={"name": "祖先"})
+    grandchild_id = grandchild_resp.json()["id"]
+    child_resp = await client.post("/api/files/categories", json={
+        "name": "后代",
+        "parent_id": grandchild_id,
+    })
+    child_id = child_resp.json()["id"]
+
+    # 把祖先的父设为后代（后代是祖先的子分类）→ 必须被拒绝
+    resp = await client.put(f"/api/files/categories/{grandchild_id}", json={
+        "parent_id": child_id,
+    })
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_collect_descendant_category_ids_tolerates_cycle(db_session: AsyncSession):
+    """历史坏数据已存在父子环时，BFS 的 visited 保护应避免无限循环。"""
+    from src.api.files import _collect_descendant_category_ids
+    from src.database.models import FileCategory as FileCategoryModel
+
+    cycle_a = FileCategoryModel(id=9001, name="环A", slug="cycle-a", parent_id=9002, user_id=1)
+    cycle_b = FileCategoryModel(id=9002, name="环B", slug="cycle-b", parent_id=9001, user_id=1)
+    db_session.add_all([cycle_a, cycle_b])
+    await db_session.commit()
+
+    result = await _collect_descendant_category_ids(db_session, 9001, 1)
+    assert set(result) <= {9001, 9002}

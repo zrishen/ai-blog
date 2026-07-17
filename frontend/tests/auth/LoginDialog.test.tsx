@@ -7,7 +7,12 @@ import { LoginDialog } from "../../src/features/auth/LoginDialog";
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  fetchMock = vi.fn();
+  fetchMock = vi.fn(async (url: string) =>
+    // AuthProvider 挂载会调 /auth/refresh 恢复登录态；默认未登录
+    typeof url === "string" && url.includes("/auth/refresh")
+      ? new Response("{}", { status: 401 })
+      : new Response("{}", { status: 200 }),
+  );
   vi.stubGlobal("fetch", fetchMock);
   localStorage.clear();
 });
@@ -21,11 +26,13 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 );
 
 function mockLoginSuccess() {
-  fetchMock.mockResolvedValueOnce(
-    new Response(JSON.stringify({ token: "t", user: { id: 1, username: "alice" } }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }),
+  fetchMock.mockImplementation(async (url: string) =>
+    typeof url === "string" && url.includes("/auth/refresh")
+      ? new Response("{}", { status: 401 })
+      : new Response(JSON.stringify({ access_token: "t", user: { id: 1, username: "alice" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
   );
 }
 

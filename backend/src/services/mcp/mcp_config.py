@@ -46,22 +46,28 @@ async def add_mcp_server(db, user_id: int, name: str, server_type: str, **kwargs
     logger.info("MCP服务 [新增] id=%d name=%s type=%s user_id=%s", server.id, name, server_type, user_id)
 
     if server_type in ("stdio", "streamable-http"):
-        args_raw, env_raw = _server_runtime_config(server)
-        discovered = await discover_server_tools(
-            server_type=server_type,
-            command=server.command,
-            args=args_raw,
-            env_vars=env_raw,
-            url=server.url,
-        )
-        if discovered:
-            server.tools = discovered
-            await db.commit()
-            await db.refresh(server)
-            logger.info("MCP服务 [新增] id=%d 发现 %d 个工具: %s",
-                        server.id, len(discovered), [t.get("name", "") for t in discovered])
-        else:
-            logger.warning("MCP服务 [新增] id=%d 未能发现工具", server.id)
+        # 创建语义为「保存配置（未启用）」；工具发现是 best-effort：
+        # 发现失败或无工具都不阻断创建，配置已持久化，用户可后续在启用时重试。
+        # 这与 toggle_server「启用要求发现成功」、以及 discover 返回空时的处理保持一致。
+        try:
+            args_raw, env_raw = _server_runtime_config(server)
+            discovered = await discover_server_tools(
+                server_type=server_type,
+                command=server.command,
+                args=args_raw,
+                env_vars=env_raw,
+                url=server.url,
+            )
+            if discovered:
+                server.tools = discovered
+                await db.commit()
+                await db.refresh(server)
+                logger.info("MCP服务 [新增] id=%d 发现 %d 个工具: %s",
+                            server.id, len(discovered), [t.get("name", "") for t in discovered])
+            else:
+                logger.warning("MCP服务 [新增] id=%d 未能发现工具", server.id)
+        except Exception:
+            logger.warning("MCP服务 [新增] id=%d 工具发现异常，已保存未验证配置", server.id, exc_info=True)
 
     return _server_to_dict(server)
 

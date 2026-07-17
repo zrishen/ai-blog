@@ -232,12 +232,16 @@ async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) 
     elif status != "published":
         meta["published_at"] = None
 
-    if slug != old_slug:
-        delete_post_file(old_slug, user_id)
-
+    # 先写入新内容并同步数据库；只有新状态确认成功后，才删除旧 slug 文件。
+    # 避免「先删旧、再写新」在写新或同步失败时丢失旧正文、或造成 slug 不一致。
     write_post(slug, meta, body, user_id)
     updated = await sync_file_to_db(slug, db, user_id=user_id, existing_post_id=post_id)
-    logger.info("博客文章 [更新] id=%d title=%s", post_id, updated.title if updated else "")
+    if updated is None:
+        # 同步失败：新文件已成孤儿（由清理脚本回收），旧 slug 文件保留以保证可恢复
+        return None
+    if slug != old_slug:
+        delete_post_file(old_slug, user_id)
+    logger.info("博客文章 [更新] id=%d title=%s", post_id, updated.title)
     return updated
 
 

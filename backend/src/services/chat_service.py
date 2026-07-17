@@ -128,8 +128,7 @@ def _system_prompt(
     today = datetime.now().strftime("%Y年%m月%d日")
     base = SYSTEM_BASE + SYSTEM_DATE.format(today=today)
     if tool_names:
-        names = "、".join(tool_names)
-        base += SYSTEM_TOOL_RULES.format(names=names)
+        base += SYSTEM_TOOL_RULES
     base += RAG_AUTO
     if mcp_capabilities_text:
         base += MCP_CAPABILITIES.format(cap_text=mcp_capabilities_text)
@@ -395,19 +394,59 @@ def _extract_partial_json_string(args_json: str, field: str) -> str | None:
     result: list[str] = []
     while i < len(args_json):
         ch = args_json[i]
-        if ch == "\\" and i + 1 < len(args_json):
+        if ch == "\\":
+            if i + 1 >= len(args_json):
+                break
             next_ch = args_json[i + 1]
             if next_ch == '"':
                 result.append('"')
+                i += 2
             elif next_ch == "\\":
                 result.append("\\")
+                i += 2
             elif next_ch == "n":
                 result.append("\n")
+                i += 2
+            elif next_ch == "r":
+                result.append("\r")
+                i += 2
             elif next_ch == "t":
                 result.append("\t")
+                i += 2
+            elif next_ch == "b":
+                result.append("\b")
+                i += 2
+            elif next_ch == "f":
+                result.append("\f")
+                i += 2
+            elif next_ch == "/":
+                result.append("/")
+                i += 2
+            elif next_ch == "u":
+                # Tool 参数可在 Unicode escape 任意位置切片，完整解码前不输出破损预览。
+                if i + 6 > len(args_json):
+                    break
+                try:
+                    code_point = int(args_json[i + 2:i + 6], 16)
+                except ValueError:
+                    break
+                if 0xD800 <= code_point <= 0xDBFF:
+                    if i + 12 > len(args_json) or args_json[i + 6:i + 8] != "\\u":
+                        break
+                    try:
+                        low_surrogate = int(args_json[i + 8:i + 12], 16)
+                    except ValueError:
+                        break
+                    if not 0xDC00 <= low_surrogate <= 0xDFFF:
+                        break
+                    result.append(chr(0x10000 + ((code_point - 0xD800) << 10) + (low_surrogate - 0xDC00)))
+                    i += 12
+                else:
+                    result.append(chr(code_point))
+                    i += 6
             else:
                 result.append(next_ch)
-            i += 2
+                i += 2
         elif ch == '"':
             return "".join(result)
         else:

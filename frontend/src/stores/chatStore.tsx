@@ -606,6 +606,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         aiSidebarInputsByKey: {},
         aiSidebarErrorsByKey: {},
         aiSidebarHistoryByKey: {},
+        aiSidebarThinkingMode: "balanced",
         blogPosts: [],
         blogCurrentView: "list",
         blogCurrentPostId: null,

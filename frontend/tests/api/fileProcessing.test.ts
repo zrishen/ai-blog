@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FileUploadNetworkError, uploadToFileLibrary } from "../../src/api/files";
+import { setAccessToken, getAccessToken } from "../../src/api/client";
 
 class MockXhr {
   static latest: MockXhr;
@@ -43,7 +44,7 @@ const job = {
 
 beforeEach(() => {
   vi.stubGlobal("XMLHttpRequest", MockXhr);
-  localStorage.setItem("auth_token", "token");
+  setAccessToken("token");
 });
 
 describe("uploadToFileLibrary XHR", () => {
@@ -100,7 +101,7 @@ describe("uploadToFileLibrary XHR", () => {
     MockXhr.latest.responseText = "unauthorized";
     MockXhr.latest.onload?.();
     await expect(request.promise).rejects.toThrow("文件库上传失败");
-    expect(localStorage.getItem("auth_token")).toBeNull();
+    expect(getAccessToken()).toBeNull();
     expect(logout).toHaveBeenCalledTimes(1);
     window.removeEventListener("auth:logout", logout);
   });

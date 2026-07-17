@@ -273,6 +273,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     timersRef.current.clear();
     pollingRef.current.clear();
     completedRef.current.clear();
+    // 登出时同步清理当前用户的本地任务状态
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUploadTask(null);
     setRestoreJobs({});
     sessionStorage.removeItem(STORAGE_KEY);

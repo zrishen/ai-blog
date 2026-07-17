@@ -38,7 +38,8 @@ import {
   flattenCategories,
   type EditingState,
 } from "./fileCategoryUtils";
-import { CategoryTree, FileNode, parseDragSource } from "./fileCategoryTree";
+import { CategoryTree, FileNode } from "./fileCategoryTree";
+import { parseDragSource } from "./dragSource";
 
 interface MoveTarget {
   kind: "file" | "category";

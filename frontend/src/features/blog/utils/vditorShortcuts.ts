@@ -1,6 +1,8 @@
 const UNORDERED_LIST_MARKERS = new Set(["-", "*", "+"]);
 const INVISIBLE_TEXT_RE = /(?:\u200b|\u200c|\u200d|\u2060)/g;
 const HEADING_TAG_RE = /^H[1-6]$/;
+// \u5b57\u7b26\u96c6\u5408\u5305\u542b\u7f16\u8f91\u5668\u5b9e\u9645\u5199\u5165\u7684\u4e0d\u53ef\u89c1\u5360\u4f4d\u7b26\uff0c\u4fdd\u7559\u5b57\u9762\u503c\u4ee5\u907f\u514d\u6539\u53d8\u5339\u914d\u884c\u4e3a\u3002
+// eslint-disable-next-line no-misleading-character-class
 const WHITESPACE_RE = /[\s\u200b\u200c\u200d\u2060]/g;
 
 function findParagraphBlock(node: Node, root: HTMLElement) {
