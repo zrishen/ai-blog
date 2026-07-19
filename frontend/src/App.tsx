@@ -191,6 +191,12 @@ function useAISidebarRouteContext() {
 }
 
 function App() {
+  const location = useLocation();
+
+  if (location.pathname === "/") {
+    return <LandingPage />;
+  }
+
   return <AuthenticatedApp />;
 }
 
