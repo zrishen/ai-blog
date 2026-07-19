@@ -10,6 +10,8 @@ FROM node:${NODE_VERSION}-bookworm-slim AS node
 FROM python:${PYTHON_VERSION}-slim-bookworm AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
+    UV_CONCURRENT_DOWNLOADS=4 \
+    UV_HTTP_TIMEOUT=300 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
 
