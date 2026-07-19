@@ -382,3 +382,37 @@ describe("BlogEditor dirty 追踪", () => {
     expect(latestChat!.state.blogCurrentView).toBe("view");
   });
 });
+
+describe("BlogEditor Vditor 生命周期", () => {
+  beforeEach(() => {
+    lastVditor = null;
+    latestChat = null;
+    vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+    api.getBlogResearchSummary.mockResolvedValue(null);
+    api.listBlogPosts.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("P1-Mount: Vditor 实例 mount-only，content 变化只 setValue 不重建，unmount 销毁", async () => {
+    const { unmount } = renderEditor(EXISTING_POST);
+    await waitForVditor();
+    const instance = lastVditor;
+    expect(instance).not.toBeNull();
+    expect(instance!.destroy).not.toHaveBeenCalled();
+
+    // content 变化 → content 同步 effect 调 setValue，但 Vditor 实例不重建（mount-only 空 deps）
+    await act(async () => {
+      latestChat!.dispatch({ type: "UPDATE_BLOG_POST", payload: { ...EXISTING_POST, content: "## 全新章节\n\n全新正文XYZ" } });
+    });
+    expect(lastVditor).toBe(instance);
+    expect(instance!.setValue).toHaveBeenCalledWith(expect.stringContaining("全新正文XYZ"));
+
+    // unmount → cleanup 调 destroy
+    unmount();
+    expect(instance!.destroy).toHaveBeenCalled();
+  });
+});

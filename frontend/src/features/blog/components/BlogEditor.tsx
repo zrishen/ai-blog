@@ -1,10 +1,8 @@
-import { useState, useRef, useEffect, useCallback, useId } from "react";
-import type { ChangeEvent } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useChat } from "../../../stores/chatStore";
-import { useAuth } from "../../../stores/authStore";
-import { createBlogPost, deleteBlogPost, generateBlogCover, getAccessToken, getBlogPost, getBlogResearchSummary, getResearchTopic, listBlogPosts, suggestBlogTags, updateBlogPost, uploadFile, type BlogResearchSummary } from "../../../api/client";
+import { createBlogPost, updateBlogPost } from "../../../api/client";
 import Vditor from "vditor";
 import "vditor/dist/index.css";
 import "vditor/dist/js/i18n/zh_CN";
@@ -28,20 +26,15 @@ import {
 import {
   DEFAULT_COVERS,
   formatDraftTime,
-  formatSaveTime,
   recordNumber,
   recordString,
-  type DraftInfo,
 } from "../utils/blogEditorTypes";
-import { applyBackspaceShortcut, applyEnterShortcuts, applyUnorderedListShortcut } from "../utils/vditorShortcuts";
 import { expandBlankLines, preserveBlankLines } from "../utils/markdownBlankLines";
-import {
-  getEditorI18n,
-  installCodeLanguageMenu,
-  installControlledEditModeMenu,
-  installControlledTableMenu,
-  installTableCellMenu,
-} from "../utils/vditorMenus";
+import { useBlogResearchContext } from "../hooks/useBlogResearchContext";
+import { useBlogCover } from "../hooks/useBlogCover";
+import { useBlogDrafts } from "../hooks/useBlogDrafts";
+import { useVditorBridge } from "../hooks/useVditorBridge";
+import type { BlogPost } from "../types";
 
 function getWysiwygReset(vditor: Vditor): HTMLElement | null {
   return (vditor as unknown as {
@@ -51,7 +44,6 @@ function getWysiwygReset(vditor: Vditor): HTMLElement | null {
 
 export function BlogEditor() {
   const { state, dispatch } = useChat();
-  const { user: authUser } = useAuth();
   const navigate = useNavigate();
   const existingPost = state.blogPosts.find((p) => p.id === state.blogCurrentPostId);
 
@@ -60,40 +52,11 @@ export function BlogEditor() {
   const [tags, setTags] = useState(existingPost?.tags || "");
   const [coverImage, setCoverImage] = useState(existingPost?.cover_image || "");
   const [saving, setSaving] = useState(false);
-  const [generatingCover, setGeneratingCover] = useState(false);
-  const [tagGenerating, setTagGenerating] = useState(false);
-  const [uploadingCover, setUploadingCover] = useState(false);
-  const [lastSaved, setLastSaved] = useState("");
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [showDraftList, setShowDraftList] = useState(false);
-  const [drafts, setDrafts] = useState<DraftInfo[]>([]);
-  const [draftPanelPos, setDraftPanelPos] = useState({ top: 0, left: 0 });
-  const [draftLoading, setDraftLoading] = useState(false);
-  const [draftDeleteTarget, setDraftDeleteTarget] = useState<DraftInfo | null>(null);
-  const [draftDeleting, setDraftDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [researchSummary, setResearchSummary] = useState<BlogResearchSummary | null>(null);
-  const [researchLoading, setResearchLoading] = useState(false);
-  const [researchError, setResearchError] = useState<string | null>(null);
   const [toolbarExpanded, setToolbarExpanded] = useState(false);
-  const [vditorToolbarReady, setVditorToolbarReady] = useState(0);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; selectedText: string; sectionIndex: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftBtnRef = useRef<HTMLDivElement>(null);
-  const draftKey = `draft_blog_${existingPost?.id || "new"}`;
-  const vditorRef = useRef<Vditor | null>(null);
-  const vditorReadyRef = useRef(false);
-  const cleanupEditModeMenuRef = useRef<(() => void) | null>(null);
-  const cleanupTableMenuRef = useRef<(() => void) | null>(null);
-  const cleanupCodeLanguageMenuRef = useRef<(() => void) | null>(null);
-  const cleanupTableCellMenuRef = useRef<(() => void) | null>(null);
-  const cleanupEnterHandlerRef = useRef<(() => void) | null>(null);
-  const containerId = useId();
-  const isProgrammaticChange = useRef(false);
   const isDirtyRef = useRef(false);
-  const patchApplyPendingRef = useRef(false);
   const skipDirtyOnceRef = useRef(false);
   // AI 修改相关
   const aiModifySavingRef = useRef(false);                    // 防止保存期间重复触发
@@ -121,213 +84,70 @@ export function BlogEditor() {
     isDirtyRef.current = true;
   }, [title, content, tags, coverImage]);
 
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (!existingPost?.id) {
-      setResearchSummary(null);
-      setResearchError(null);
-      setResearchLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setResearchLoading(true);
-    setResearchError(null);
-    getBlogResearchSummary(existingPost.id)
-      .then((summary) => {
-        if (!cancelled) setResearchSummary(summary);
-      })
-      .catch(() => {
-        if (!cancelled) setResearchError("事实依据加载失败，请稍后重试");
-      })
-      .finally(() => {
-        if (!cancelled) setResearchLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [existingPost?.id]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  useEffect(() => {
-    if (!vditorReadyRef.current) return;
-    const newContent = existingPost?.content || "";
-    isProgrammaticChange.current = true;
-    const safety = setTimeout(() => { isProgrammaticChange.current = false; }, 50);
-    vditorRef.current?.setValue(expandBlankLines(newContent));
-    return () => clearTimeout(safety);
-  }, [existingPost?.content]);
-
-  useEffect(() => {
-    const container = document.getElementById(containerId);
-    if (container) {
-      container.innerHTML = "";
-    }
-    const vd = new Vditor(containerId, {
-      mode: "wysiwyg",
-      theme: state.theme === "dark" ? "dark" : "classic",
-      i18n: getEditorI18n(),
-      value: expandBlankLines(content),
-      placeholder: "开始写文章...",
-      minHeight: 0,
-      customWysiwygToolbar: (_type, element) => {
-        element.innerHTML = "";
-        element.style.display = "none";
-      },
-      keydown(event) {
-        const editor = document.getElementById(containerId)?.querySelector<HTMLElement>('[contenteditable="true"]');
-        if (!editor) return;
-        if (applyUnorderedListShortcut(editor, event)) return;
-      },
-      toolbar: [
-        "headings", "bold", "italic", "strike", "|",
-        "list", "ordered-list", "check", "quote", "|",
-        "code", "inline-code", "link", "table", "|",
-        "undo", "redo", "|",
-        "edit-mode",
-      ],
-      preview: { actions: [], mode: "editor" },
-      upload: {
-        accept: "image/*",
-        fieldName: "file",
-        max: 20 * 1024 * 1024,
-        multiple: false,
-        url: "/api/upload",
-        setHeaders: () => {
-          const token = getAccessToken();
-          return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
-        },
-        format: (files, responseText) => {
-          const response = JSON.parse(responseText) as {
-            download_url?: string;
-            original_name?: string;
-            stored_name?: string;
-          };
-          const username = authUser?.username;
-          const filename = response.original_name || files[0]?.name || response.stored_name || "image";
-          const imageUrl = username && response.stored_name
-            ? `/api/public/uploads/${encodeURIComponent(username)}/${encodeURIComponent(response.stored_name)}`
-            : response.download_url;
-          return JSON.stringify({
-            code: 0,
-            msg: "",
-            data: {
-              errFiles: [],
-              succMap: {
-                [filename]: imageUrl,
-              },
-            },
-          });
-        },
-      },
-      cache: { enable: false },
-      input(val) {
-        if (isProgrammaticChange.current) {
-          isProgrammaticChange.current = false;
-          return;
-        }
-        setContent(val);
-      },
-      after() {
-        vditorRef.current = vd;
-        vditorReadyRef.current = true;
-        cleanupEditModeMenuRef.current = installControlledEditModeMenu(vd);
-        cleanupTableMenuRef.current = installControlledTableMenu(vd);
-        cleanupCodeLanguageMenuRef.current = installCodeLanguageMenu(vd);
-        cleanupTableCellMenuRef.current = installTableCellMenu(vd, setContent);
-        const editorContainer = document.getElementById(containerId);
-        if (editorContainer) {
-          const enterHandler = (event: KeyboardEvent) => {
-            const editor = editorContainer.querySelector<HTMLElement>('[contenteditable="true"]');
-            if (!editor) return;
-            const handled = applyEnterShortcuts(editor, event) || applyBackspaceShortcut(editor, event);
-            if (handled) {
-              event.stopImmediatePropagation();
-            }
-          };
-          editorContainer.addEventListener("keydown", enterHandler, true);
-          cleanupEnterHandlerRef.current = () => {
-            editorContainer.removeEventListener("keydown", enterHandler, true);
-          };
-        }
-        setVditorToolbarReady((value) => value + 1);
-      },
-    });
-    vditorRef.current = vd;
-    return () => {
-      vditorReadyRef.current = false;
-      cleanupEditModeMenuRef.current?.();
-      cleanupEditModeMenuRef.current = null;
-      cleanupTableMenuRef.current?.();
-      cleanupTableMenuRef.current = null;
-      cleanupCodeLanguageMenuRef.current?.();
-      cleanupCodeLanguageMenuRef.current = null;
-      cleanupTableCellMenuRef.current?.();
-      cleanupTableCellMenuRef.current = null;
-      cleanupEnterHandlerRef.current?.();
-      cleanupEnterHandlerRef.current = null;
-      try {
-        vditorRef.current?.destroy();
-      } catch { /* ignore vditor destroy errors on unmount */ }
-      vditorRef.current = null;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // 用 MutationObserver 强制约束 Vditor 高度，覆盖 JS 内联样式
-  useEffect(() => {
-    const el = document.querySelector(`.blog-editor-body .vditor`) as HTMLElement | null;
-    if (!el) return;
-    const parent = el.parentElement;
-    if (!parent) return;
-
-    const constrain = () => {
-      const h = parent.clientHeight + 'px';
-      el.style.setProperty('height', h, 'important');
-    };
-
-    constrain();
-    const ro = new ResizeObserver(constrain);
-    ro.observe(parent);
-
-    const mo = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.type === 'attributes' && m.attributeName === 'style') {
-          constrain();
-          break;
-        }
-      }
-    });
-    mo.observe(el, { attributes: true, attributeFilter: ['style'] });
-
-    return () => { ro.disconnect(); mo.disconnect(); };
-  }, []);
-
-  useEffect(() => {
-    if (!vditorReadyRef.current) return;
-    const theme = state.theme === "dark" ? "dark" : "classic";
-    vditorRef.current?.setTheme(theme, theme, "native");
-  }, [state.theme]);
-
-  useEffect(() => {
-    if (!title.trim() && !content.trim() && !coverImage) return;
-    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-    draftTimerRef.current = setTimeout(() => {
-      localStorage.setItem(draftKey, JSON.stringify({
-        title, content, tags, coverImage,
-        _savedAt: new Date().toISOString(),
-      }));
-      setLastSaved(formatSaveTime());
-    }, 2000);
-    return () => {
-      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-    };
-  }, [title, content, tags, coverImage, draftKey]);
+  const {
+    containerId,
+    vditorRef,
+    vditorReadyRef,
+    isProgrammaticChangeRef,
+    getEditorElement,
+    getContent,
+    vditorToolbarReady,
+  } = useVditorBridge({
+    content,
+    setContent,
+    existingPost,
+    setError,
+  });
 
   // 退出编辑器:切回详情页/列表,同时清除 URL 的 ?edit(避免刷新跑回编辑页)
   const exitEditor = useCallback(() => {
     dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
     if (window.location.search) navigate(window.location.pathname, { replace: true });
   }, [dispatch, existingPost, navigate]);
+
+  // 加载草稿时把后端 post 整体写回表单 + Vditor（桥接逻辑留主组件）
+  const applyDraft = useCallback((post: BlogPost) => {
+    setTitle(post.title || "");
+    setContent(post.content || "");
+    setTags(post.tags || "");
+    setCoverImage(post.cover_image || "");
+    if (vditorReadyRef.current) {
+      isProgrammaticChangeRef.current = true;
+      setTimeout(() => { isProgrammaticChangeRef.current = false; }, 50);
+      vditorRef.current?.setValue(expandBlankLines(post.content || ""));
+    }
+  }, [vditorRef, vditorReadyRef, isProgrammaticChangeRef]);
+
+  const {
+    drafts,
+    draftPanelPos,
+    showDraftList,
+    draftLoading,
+    draftDeleting,
+    draftDeleteTarget,
+    setDraftDeleteTarget,
+    lastSaved,
+    draftBtnRef,
+    draftKey,
+    showCancelModal,
+    setShowCancelModal,
+    loadDraftList,
+    handleLoadDraft,
+    handleDeleteDraft,
+    handleCancel,
+    handleSaveDraft,
+    handleDiscardDraft,
+  } = useBlogDrafts({
+    existingPost,
+    title,
+    content,
+    tags,
+    coverImage,
+    isDirtyRef,
+    applyDraft,
+    exitEditor,
+    onError: setError,
+  });
 
   const handleSave = useCallback(async (targetStatus: "draft" | "published") => {
     if (!title.trim()) {
@@ -363,7 +183,7 @@ export function BlogEditor() {
     } finally {
       setSaving(false);
     }
-  }, [title, content, tags, coverImage, existingPost, state.blogPosts, dispatch, draftKey, exitEditor]);
+  }, [title, content, tags, coverImage, existingPost, state.blogPosts, dispatch, draftKey, exitEditor, vditorRef]);
 
   // ── AI 修改:确保有 postId(新建则静默 create,不切页)──────────────
   const ensurePostId = useCallback(async (): Promise<number | null> => {
@@ -392,21 +212,9 @@ export function BlogEditor() {
     } finally {
       setSaving(false);
     }
-  }, [existingPost, title, content, tags, coverImage, state.blogPosts, dispatch, draftKey]);
+  }, [existingPost, title, content, tags, coverImage, state.blogPosts, dispatch, draftKey, vditorRef]);
 
   // ── 右键菜单 handler ──────────────────────────────────────────────
-  const getEditorElement = useCallback((): HTMLElement | null => {
-    const vditorElement = vditorRef.current?.vditor?.element as HTMLElement | undefined;
-    const internalEditor = vditorRef.current?.vditor?.wysiwyg?.element as HTMLElement | undefined;
-    const container = document.getElementById(containerId);
-    return (
-      internalEditor
-      ?? vditorElement?.querySelector<HTMLElement>(".vditor-wysiwyg, .vditor-ir, .vditor-sv, .vditor-reset")
-      ?? container?.querySelector<HTMLElement>(".vditor-wysiwyg, .vditor-ir, .vditor-sv, .vditor-reset")
-      ?? null
-    );
-  }, [containerId]);
-
   const isSelectionInsideEditor = useCallback((selection: Selection | null, editorEl: HTMLElement | null) => {
     if (!selection || !editorEl || selection.rangeCount === 0) return false;
     const anchor = selection.anchorNode;
@@ -495,236 +303,21 @@ export function BlogEditor() {
     return () => window.removeEventListener("mousedown", handler, true);
   }, [contextMenu, closeContextMenu]);
 
-  const patchStreaming = state.blogPatchStreaming;
-
-  useEffect(() => {
-    const editorEl = getEditorElement();
-    if (!editorEl) return;
-
-    if (!patchStreaming) {
-      if (patchApplyPendingRef.current) {
-        patchApplyPendingRef.current = false;
-        isProgrammaticChange.current = true;
-        vditorRef.current?.setValue(expandBlankLines(existingPost?.content || ""));
-        window.setTimeout(() => { isProgrammaticChange.current = false; }, 50);
-      }
-      return;
-    }
-
-    const existing = editorEl.querySelector(".ai-patch-inline__text");
-    if (existing instanceof HTMLElement) {
-      existing.textContent = patchStreaming.replacementDelta || "...";
-      return;
-    }
-
-    const cleanTarget = patchStreaming.targetText.replace(/[`*_~#[\]()>]/g, "").trim();
-    const matchKey = cleanTarget.length > 15 ? cleanTarget.slice(0, 15) : cleanTarget;
-    const blocks = Array.from(
-      editorEl.querySelectorAll("p, h1, h2, h3, h4, h5, h6, li, blockquote"),
-    );
-    for (const block of blocks) {
-      const blockText = (block.textContent || "").replace(/[`*_~#[\]()>]/g, "");
-      if (!matchKey || !blockText.includes(matchKey)) continue;
-      const preview = document.createElement("div");
-      preview.className = "ai-patch-inline";
-      preview.setAttribute("data-block", "0");
-      preview.setAttribute("contenteditable", "false");
-      const label = document.createElement("span");
-      label.className = "ai-patch-inline__label";
-      label.textContent = "AI 修改中...";
-      const text = document.createElement("div");
-      text.className = "ai-patch-inline__text";
-      text.textContent = patchStreaming.replacementDelta || "...";
-      preview.append(label, text);
-      block.replaceWith(preview);
-      patchApplyPendingRef.current = true;
-      return;
-    }
-  }, [patchStreaming, existingPost?.content, getEditorElement]);
-
-  // 超时从目标文本确定时开始计算；流式 replacementDelta 不应重置计时器
-  useEffect(() => {
-    if (!patchStreaming) return;
-    const timer = window.setTimeout(() => {
-      dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
-      setError("AI 修改超时，请重试");
-    }, 30000);
-    return () => window.clearTimeout(timer);
-    // 只按 targetText 重置；流式 delta 不应延长既有超时。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patchStreaming?.targetText, dispatch]);
-
-  const handleCancel = useCallback(() => {
-    if (isDirtyRef.current) {
-      setShowCancelModal(true);
-    } else {
-      localStorage.removeItem(draftKey);
-      exitEditor();
-    }
-  }, [draftKey, exitEditor]);
-
-  const handleSaveDraft = useCallback(() => {
-    localStorage.setItem(draftKey, JSON.stringify({
-      title, content, tags, coverImage,
-      _savedAt: new Date().toISOString(),
-    }));
-    setShowCancelModal(false);
-    exitEditor();
-  }, [title, content, tags, coverImage, draftKey, exitEditor]);
-
-  const handleDiscardDraft = useCallback(() => {
-    localStorage.removeItem(draftKey);
-    setShowCancelModal(false);
-    exitEditor();
-  }, [draftKey, exitEditor]);
-
-  const handleSuggestTags = useCallback(async () => {
-    const currentContent = vditorRef.current?.getValue?.() ?? content;
-    if (!currentContent.trim()) {
-      setError("请先输入文章内容，再生成标签");
-      return;
-    }
-    let postId = existingPost?.id;
-    setTagGenerating(true);
-    setError(null);
-    try {
-      if (!postId) {
-        const data = {
-          title: title.trim() || "未命名草稿",
-          content: currentContent,
-          excerpt: generateExcerpt(currentContent),
-          status: "draft" as const,
-        };
-        const created = await createBlogPost(data);
-        dispatch({ type: "SET_BLOG_POSTS", payload: [created, ...state.blogPosts] });
-        dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: created.id });
-        postId = created.id;
-      }
-      const suggested = await suggestBlogTags(postId);
-      if (suggested.length > 0) {
-        setTags(suggested.join(", "));
-      } else {
-        setError("未能生成有效标签，请手动输入");
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "AI 生成标签失败";
-      setError(msg);
-    } finally {
-      setTagGenerating(false);
-    }
-  }, [content, title, existingPost, state.blogPosts, dispatch]);
-
-  const loadDraftList = useCallback(async () => {
-    if (showDraftList) {
-      setShowDraftList(false);
-      return;
-    }
-
-    setError(null);
-    try {
-      const data = await listBlogPosts({ status: "draft", per_page: 50 });
-      const serverDrafts: DraftInfo[] = data.posts.map((post) => ({
-        id: post.id,
-        title: post.title || "未命名草稿",
-        time: post.updated_at || post.created_at || "",
-      }));
-      setDrafts(serverDrafts);
-      if (draftBtnRef.current) {
-        const rect = draftBtnRef.current.getBoundingClientRect();
-        setDraftPanelPos({ top: rect.bottom + 8, left: rect.right - 340 });
-      }
-      setShowDraftList(true);
-    } catch {
-      setDrafts([]);
-      setShowDraftList(true);
-      setError("草稿列表加载失败，请稍后重试");
-    }
-  }, [showDraftList]);
-
-  const handleLoadDraft = useCallback(async (draft: DraftInfo) => {
-    setDraftLoading(true);
-    try {
-      const post = await getBlogPost(draft.id);
-      dispatch({
-        type: "SET_BLOG_POSTS",
-        payload: state.blogPosts.some((p) => p.id === post.id)
-          ? state.blogPosts.map((p) => (p.id === post.id ? { ...p, ...post } : p))
-          : [post, ...state.blogPosts],
-      });
-      dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: post.id });
-      setTitle(post.title || "");
-      setContent(post.content || "");
-      setTags(post.tags || "");
-      setCoverImage(post.cover_image || "");
-      if (vditorReadyRef.current) {
-        isProgrammaticChange.current = true;
-        setTimeout(() => { isProgrammaticChange.current = false; }, 50);
-        vditorRef.current?.setValue(expandBlankLines(post.content || ""));
-      }
-      setError(null);
-      setShowDraftList(false);
-    } catch {
-      setError("草稿加载失败，请稍后重试");
-    } finally {
-      setDraftLoading(false);
-    }
-  }, [dispatch, state.blogPosts]);
-
-  const handleDeleteDraft = useCallback(async () => {
-    if (!draftDeleteTarget) return;
-    setDraftDeleting(true);
-    try {
-      await deleteBlogPost(draftDeleteTarget.id);
-      setDrafts((prev) => prev.filter((d) => d.id !== draftDeleteTarget.id));
-      dispatch({ type: "SET_BLOG_POSTS", payload: state.blogPosts.filter((p) => p.id !== draftDeleteTarget.id) });
-      setDraftDeleteTarget(null);
-    } catch {
-      setError("删除草稿失败");
-    } finally {
-      setDraftDeleting(false);
-    }
-  }, [dispatch, draftDeleteTarget, state.blogPosts]);
-
-  const handleUploadCover = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("请选择图片文件");
-      return;
-    }
-    setUploadingCover(true);
-    setError(null);
-    try {
-      const uploaded = await uploadFile(file);
-      setCoverImage(uploaded.download_url);
-    } catch {
-      setError("上传封面失败，请确认图片格式后重试");
-    } finally {
-      setUploadingCover(false);
-    }
-  }, []);
-
-  const handleGenerateCover = useCallback(async () => {
-    if (!existingPost) {
-      setError("请先保存文章，再使用 AI 生成封面");
-      return;
-    }
-    setGeneratingCover(true);
-    setError(null);
-    try {
-      const updated = await generateBlogCover(existingPost.id);
-      setCoverImage(updated.cover_image || "");
-      dispatch({
-        type: "SET_BLOG_POSTS",
-        payload: state.blogPosts.map((p) => (p.id === existingPost.id ? { ...p, ...updated } : p)),
-      });
-    } catch {
-      setError("AI 生成封面失败，请检查图片模型配置后重试");
-    } finally {
-      setGeneratingCover(false);
-    }
-  }, [existingPost, state.blogPosts, dispatch]);
+  const {
+    generatingCover,
+    uploadingCover,
+    tagGenerating,
+    handleUploadCover,
+    handleGenerateCover,
+    handleSuggestTags,
+  } = useBlogCover({
+    existingPost,
+    title,
+    getContent,
+    onError: setError,
+    onCoverChange: setCoverImage,
+    onTagsChange: setTags,
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -739,31 +332,15 @@ export function BlogEditor() {
 
   const wordCount = content.replace(/\s/g, "").length;
   const lineCount = content ? content.split("\n").length : 1;
-  const linkedTopics = researchSummary?.topics ?? [];
-  const adoptedClaims = researchSummary?.claims ?? [];
-  const fallbackTopicId = state.researchCurrentTopicId ?? (linkedTopics[0] ? recordNumber(linkedTopics[0], "id") : null);
-  const hasResearchContext = Boolean(existingPost || state.researchCurrentTopic || state.trustWritingEnabled || linkedTopics.length || adoptedClaims.length);
-
-  const ensureResearchTopicContext = useCallback(async () => {
-    if (!fallbackTopicId || fallbackTopicId === state.researchCurrentTopicId) return;
-    dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC_ID", payload: fallbackTopicId });
-    try {
-      const detail = await getResearchTopic(fallbackTopicId);
-      dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
-    } catch { /* 自动加载研究主题失败时静默；用户可在研究页面手动重试 */ }
-  }, [dispatch, fallbackTopicId, state.researchCurrentTopicId]);
-
-  const handleGoResearchGraph = () => {
-    dispatch({ type: "SET_PAGE", payload: "research" });
-    navigate(fallbackTopicId ? `/research/${fallbackTopicId}` : "/research");
-  };
-
-  const handleOpenResearchWriting = useCallback(async (choiceMode: "open" | "draft") => {
-    await ensureResearchTopicContext();
-    dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: true });
-    dispatch({ type: "SET_TRUST_WRITING_ENABLED", payload: true });
-    dispatch({ type: "SET_PENDING_RESEARCH_PROMPT", payload: choiceMode === "draft" ? "draft_research_choices" : "open_research_choices" });
-  }, [dispatch, ensureResearchTopicContext]);
+  const {
+    researchLoading,
+    researchError,
+    linkedTopics,
+    adoptedClaims,
+    hasResearchContext,
+    handleGoResearchGraph,
+    handleOpenResearchWriting,
+  } = useBlogResearchContext(existingPost);
 
   useEffect(() => {
     const toolbar = document.getElementById(containerId)?.querySelector<HTMLElement>(".vditor-toolbar");
