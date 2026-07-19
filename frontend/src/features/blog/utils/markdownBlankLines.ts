@@ -5,6 +5,7 @@ const ZWSP = "​";
 const BLANK_WS_RE = /[\s​‌‍⁠]/g;
 // 仅清理零宽占位符（ZWSP/ZWNJ/ZWJ/Word Joiner）。绝不能包含 \s：否则会删除正文里的普通空格、
 // 制表符和换行，导致英文单词粘连、标题/列表/代码块结构被压扁破坏。
+// eslint-disable-next-line no-irregular-whitespace, no-misleading-character-class
 const STRIP_INVISIBLE_RE = /[​‌‍⁠]/g;
 
 export function expandBlankLines(md: string): string {

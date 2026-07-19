@@ -2,6 +2,7 @@
 import { createContext, useContext, useReducer, useEffect } from "react";
 import type { MCPServerConfig, ResearchTopicDetail, ResearchTopicSummary } from "../api/client";
 import type { TrustChoiceOption } from "../features/ai-chat/trustPrompts";
+import type { ThinkingMode } from "../api/chat";
 
 interface Reference {
   type: "rag" | "mcp";
@@ -101,7 +102,6 @@ type Theme = "dark" | "light";
 type Panel = "conversations" | "files" | "mcp";
 type Page = "blog" | "files" | "research";
 type BlogView = "list" | "view" | "edit";
-type ThinkingMode = "fast" | "balanced" | "smart";
 type AISidebarConversationKey = `server:${number}` | `temp:${string}`;
 
 interface AISidebarHistoryState {
@@ -251,8 +251,6 @@ type ChatAction =
   | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
   | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
   | { type: "INCREMENT_TRASH_REVISION" }
-  // Navigation
-  | { type: "RESET_TO_BLOG_HOME" }
   // Auth
   | { type: "LOGOUT" };
 
@@ -332,8 +330,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, isStreaming: action.payload };
     case "SET_THEME": {
       const newTheme = action.payload;
-      document.documentElement.setAttribute("data-theme", newTheme);
-      localStorage.setItem("theme", newTheme);
       return { ...state, theme: newTheme };
     }
     case "SET_FILE_DOCUMENTS":
@@ -582,15 +578,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     case "INCREMENT_TRASH_REVISION":
       return { ...state, trashRevision: state.trashRevision + 1 };
-    // Navigation
-    case "RESET_TO_BLOG_HOME":
-      return {
-        ...state,
-        currentPage: "blog",
-        blogCurrentView: "list",
-        blogCurrentPostId: null,
-        gearMenuOpen: false,
-      };
     // Auth — 登出时清除用户级别 UI 状态（不删后端数据）
     case "LOGOUT":
       return {
@@ -712,6 +699,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", state.theme);
+    localStorage.setItem("theme", state.theme);
   }, [state.theme]);
 
   return (

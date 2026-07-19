@@ -36,6 +36,7 @@ vi.mock("../../src/features/ai-chat/ai-sidebar/MessageList", () => ({
 vi.mock("../../src/features/auth/LoginDialog", () => ({ LoginDialog: () => null }));
 
 let latestChat: ReturnType<typeof useChat> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let capturedOptions: any;
 let settleRequest: (() => void) | null = null;
 let rejectRequest: ((reason: Error) => void) | null = null;

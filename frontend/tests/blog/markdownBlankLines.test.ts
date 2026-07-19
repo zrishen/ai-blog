@@ -29,6 +29,7 @@ describe("expandBlankLines", () => {
   it("normalize 闭环: ZWSP 段被清理后与 DOM 非空块对齐", () => {
     // 模拟 preserveBlankLines 内部的 normalize 步骤
     const mdFromGetValue = "段1\n\n​\n\n段2";
+    // eslint-disable-next-line no-irregular-whitespace, no-misleading-character-class
     const normalized = mdFromGetValue.replace(/[​‌‍⁠]/g, "").replace(/\n{3,}/g, "\n\n");
     expect(normalized).toBe("段1\n\n段2");
     const segments = normalized.split(/\n{2,}/);

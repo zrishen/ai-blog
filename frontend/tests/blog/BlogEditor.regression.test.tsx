@@ -52,6 +52,7 @@ class MockVditor {
       toolbar: { elements: {} },
       currentMode: "wysiwyg",
     };
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     lastVditor = this;
     queueMicrotask(() => opts?.after?.());
   }
