@@ -36,7 +36,7 @@
 - 文件对话：从知识库附加文件作为上下文
 - 上下文压缩：长对话按阈值自动压缩历史
 - 三栏布局里的右侧 AI 侧栏，根据当前页面自动切换上下文（博客、知识库、研究、文章详情）
-- **公开对话**：未登录用户也可在 Landing 页对话，受字符数/轮数与模型 token 限制
+- **公开对话**：未登录用户也可在 Landing 页和公开博客页面对话，受字符数/轮数、模型 token 与每 IP 每日 10 次限制
 
 ### 知识库（RAG）
 - 上传 PDF / DOCX / XLSX / Markdown，自动解析分块入库
@@ -70,10 +70,10 @@
 - 启用后自动注入到 Agent 工具集
 
 ### 用户与权限
-- 注册 / 登录（JWT），密码 bcrypt 哈希
-- **用户级 LLM 配置**：每个用户可在「设置」中配置自己的协议（OpenAI / Anthropic）、Base URL、API Key、Model，后端调用时按用户身份路由
+- 邀请码注册 / 登录（JWT），密码 bcrypt 哈希；未配置邀请码时关闭注册
+- **用户级 LLM 配置**：每个用户可在「设置」中配置自己的协议（OpenAI / Anthropic）、Base URL、API Key、Model，API Key 加密保存，后端调用时按用户身份路由
 - 数据按用户隔离：博客、知识库、对话、研究、MCP、LLM 配置全部 user-scoped
-- 部分内容（发布的文章、Landing 公开对话）对未登录用户只读访问
+- 发布的文章和公开 AI 对未登录用户开放；文件库、研究图谱与 MCP 服务均需登录
 
 ### 主题与布局
 - 浅色 / 深色主题切换
@@ -82,9 +82,20 @@
 
 ## 快速开始
 
+### Docker 部署（推荐用于云服务器）
+
+项目提供前端 Nginx + 后端 FastAPI 的同源容器编排，运行数据继续持久化在 `backend/data`。完整的首次启动、更新、备份与 HTTPS 接入说明见 [`deploy/docker/README.md`](deploy/docker/README.md)。
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+未安装 Docker 时仍可按下方步骤直接运行前后端。
+
 ### 前置要求
 - Python 3.11+（推荐用 [uv](https://github.com/astral-sh/uv) 管理）
-- Node.js 18+（推荐用 [pnpm](https://pnpm.io/) 管理）
+- Node.js 20.19+（容器构建固定使用 Node.js 22；本地依赖以 `package-lock.json` 为准）
 
 ### 1. 配置后端环境变量
 
@@ -94,10 +105,9 @@
 OPENAI_API_KEY=your-api-key
 BASE_URL=https://api.openai.com/v1
 MODEL_NAME=gpt-4o-mini
-# 可选：
-# ANTHROPIC_API_KEY=...
-# EMBEDDING_API_KEY=...
-# JWT_SECRET=please-change-in-production
+JWT_SECRET=用命令生成的高熵随机值
+REGISTRATION_INVITE_CODE=自行分发的邀请码
+LLM_SETTINGS_ENCRYPTION_KEY=用 Fernet.generate_key() 生成的密钥
 ```
 
 > 用户也可以登录后在前端「设置」弹窗中配置自己的 LLM Key，会覆盖后端默认值。
@@ -232,7 +242,7 @@ ai-blog/
 | 研究 | POST | `/api/research/topics/{id}/draft-preview` | 生成博客草稿预览 |
 | 研究 | GET | `/api/research/graph` | 完整图谱数据 |
 | 对话 | POST | `/api/chat/stream` | 私有 SSE 流式对话 |
-| 对话 | POST | `/api/public/chat/stream` | 公开 SSE 流式对话（限额） |
+| 对话 | POST | `/api/public/chat/stream` | 公开 SSE 流式对话（匿名、限额） |
 | 对话 | CRUD | `/api/conversations` | 会话管理 |
 | 知识库 | CRUD | `/api/kb/documents` `/api/kb/categories` | 文档与分类 |
 | 文件 | POST | `/api/files/upload` | 上传文件 |
@@ -273,6 +283,8 @@ pnpm test
 | `BLOG_CONTENT_DIR` | 博客文件根目录 | `data/content/blog` |
 | `UPLOAD_DIR` | 上传根目录 | `data/content/uploads` |
 | `JWT_SECRET` | JWT 签名密钥 | 生产环境务必修改 |
+| `REGISTRATION_INVITE_CODE` | 共享注册邀请码；留空则关闭注册 | 空 |
+| `LLM_SETTINGS_ENCRYPTION_KEY` | 用户 LLM API Key 的 Fernet 加密主密钥 | 必填 |
 | `JWT_EXPIRE_SECONDS` | Token 过期时间 | 7 天 |
 | `EMBEDDING_PROVIDER` | embedding 来源 | `onnx`（本地） |
 | `EMBEDDING_MODEL` | embedding 模型 | `Qwen3-Embedding-8B` |
@@ -281,6 +293,7 @@ pnpm test
 | `RAG_DISTANCE_THRESHOLD` | 距离阈值 | 0.7 |
 | `PUBLIC_CHAT_MAX_INPUT_CHARS` | 公开对话单次输入字符上限 | 2000 |
 | `PUBLIC_CHAT_MAX_OUTPUT_TOKENS` | 公开对话单次输出 token 上限 | 800 |
+| `PUBLIC_CHAT_DAILY_IP_LIMIT` | 两个匿名公开聊天入口共享的每 IP 中国自然日额度 | 10 |
 | `MCP_CALL_TIMEOUT_SECONDS` | MCP 工具调用超时 | 30 |
 
 ## 数据目录与命名

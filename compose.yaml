@@ -1,0 +1,59 @@
+name: ai-blog
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  backend:
+    image: ai-blog-backend:local
+    build:
+      context: .
+      dockerfile: deploy/docker/backend.Dockerfile
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.14}
+        UV_VERSION: ${UV_VERSION:-0.6.5}
+        NODE_VERSION: ${NODE_VERSION:-22}
+    env_file:
+      - ./backend/.env
+    volumes:
+      - type: bind
+        source: ./backend/data
+        target: /app/data
+    expose:
+      - "8000"
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - app-network
+
+  frontend:
+    image: ai-blog-frontend:local
+    build:
+      context: .
+      dockerfile: deploy/docker/frontend.Dockerfile
+      args:
+        NODE_VERSION: ${NODE_VERSION:-22}
+        NGINX_VERSION: ${NGINX_VERSION:-1.28-alpine}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-80}:80"
+    restart: unless-stopped
+    stop_grace_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
