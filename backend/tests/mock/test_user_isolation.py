@@ -45,6 +45,7 @@ async def _register(client: AsyncClient, username: str) -> tuple[str, int]:
     resp = await client.post("/api/auth/register", json={
         "username": username,
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     assert resp.status_code == 201, resp.text
     data = resp.json()

@@ -1,4 +1,7 @@
+import base64
+import binascii
 from pathlib import Path
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
@@ -22,6 +25,8 @@ class Settings(BaseSettings):
     # 不提供可工作的默认值：缺失或使用公开弱值时启动即失败，
     # 部署必须通过 JWT_SECRET 环境变量（或本地 .env）注入高熵随机值。
     jwt_secret: str = ""
+    registration_invite_code: str = ""
+    llm_settings_encryption_key: str
     # access token（短期 JWT，存客户端内存）；refresh token（不透明，存 DB 哈希，放 HttpOnly cookie）
     access_token_expire_seconds: int = 15 * 60
     refresh_token_expire_seconds: int = 30 * 24 * 3600
@@ -39,6 +44,7 @@ class Settings(BaseSettings):
     public_chat_max_context_chars: int = 6000
     public_chat_max_history_messages: int = 10
     public_chat_max_output_tokens: int = 800
+    public_chat_daily_ip_limit: int = 10
     # 三档思考强度: fast(low) / balanced(medium) / smart(high)
     smart_thinking_model_name: str | None = None
     llm_temperature: float = 0.2
@@ -69,6 +75,18 @@ class Settings(BaseSettings):
             raise ValueError(
                 "jwt_secret 仍在使用仓库内的公开默认值，存在被伪造 JWT 的风险，请替换为高熵随机值。"
             )
+        return stripped
+
+    @field_validator("llm_settings_encryption_key")
+    @classmethod
+    def _llm_settings_encryption_key_must_be_valid(cls, value: str) -> str:
+        stripped = value.strip()
+        try:
+            decoded = base64.urlsafe_b64decode(stripped.encode("ascii"))
+        except (UnicodeEncodeError, binascii.Error, ValueError) as exc:
+            raise ValueError("llm_settings_encryption_key 必须是有效的 Fernet 密钥") from exc
+        if len(decoded) != 32:
+            raise ValueError("llm_settings_encryption_key 必须是有效的 Fernet 密钥")
         return stripped
 
     class Config:

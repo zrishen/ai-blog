@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -134,6 +134,20 @@ class LLMSettings(Base):
     model_name = Column(String(200), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class PublicChatDailyUsage(Base):
+    __tablename__ = "public_chat_daily_usage"
+    __table_args__ = (
+        UniqueConstraint("ip_address", "usage_date", name="uq_public_chat_daily_usage_ip_date"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ip_address = Column(String(64), nullable=False)
+    usage_date = Column(Date, nullable=False)
+    request_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
 
 # ---- Blog ----

@@ -42,6 +42,7 @@ async def _register_and_upload(client: AsyncClient, filename: str, content: byte
     reg = await client.post("/api/auth/register", json={
         "username": "preview_user",
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     token = reg.json()["access_token"]
     user_id = reg.json()["user"]["id"]
@@ -158,6 +159,7 @@ async def test_preview_returns_404_for_missing_file(client: AsyncClient):
     reg = await client.post("/api/auth/register", json={
         "username": "preview_missing",
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     token = reg.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

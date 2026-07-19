@@ -16,6 +16,7 @@ async def _auth_headers(client: AsyncClient) -> dict[str, str]:
     resp = await client.post("/api/auth/register", json={
         "username": "settings-user",
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     assert resp.status_code == 201
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}

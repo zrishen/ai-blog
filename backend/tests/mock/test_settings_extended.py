@@ -8,6 +8,7 @@ from src.config import settings
 from src.database.models import LLMSettings
 from src.main import app
 from src.utils.auth import get_current_user, get_optional_user
+from src.utils.secret_crypto import decrypt_secret, is_encrypted_secret
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +35,7 @@ async def _register(client: AsyncClient, username: str) -> tuple[str, int]:
     resp = await client.post("/api/auth/register", json={
         "username": username,
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     assert resp.status_code == 201
     return resp.json()["access_token"], resp.json()["user"]["id"]
@@ -79,7 +81,8 @@ async def test_empty_api_key_does_not_overwrite_existing(client: AsyncClient, db
     record = (await db_session.execute(
         select(LLMSettings).where(LLMSettings.user_id == user_id)
     )).scalar_one()
-    assert record.api_key == "first-key"
+    assert is_encrypted_secret(record.api_key)
+    assert decrypt_secret(record.api_key) == "first-key"
 
 
 @pytest.mark.asyncio
@@ -108,8 +111,10 @@ async def test_settings_are_isolated_per_user(client: AsyncClient, db_session):
     rec_b = (await db_session.execute(
         select(LLMSettings).where(LLMSettings.user_id == user_id_b)
     )).scalar_one()
-    assert rec_a.api_key == "key-a"
-    assert rec_b.api_key == "key-b"
+    assert is_encrypted_secret(rec_a.api_key)
+    assert is_encrypted_secret(rec_b.api_key)
+    assert decrypt_secret(rec_a.api_key) == "key-a"
+    assert decrypt_secret(rec_b.api_key) == "key-b"
     assert rec_a.protocol == "anthropic"
     assert rec_b.protocol == "openai"
 
@@ -161,5 +166,6 @@ async def test_whitespace_in_inputs_is_trimmed(client: AsyncClient, db_session):
     )).scalar_one()
     assert record.protocol == "openai"
     assert record.base_url == "https://spaced.example.com"
-    assert record.api_key == "key-with-spaces"
+    assert is_encrypted_secret(record.api_key)
+    assert decrypt_secret(record.api_key) == "key-with-spaces"
     assert record.model_name == "trimmed-model"

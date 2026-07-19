@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider, useAuth } from "../../src/stores/authStore";
@@ -34,7 +35,9 @@ vi.mock("../../src/features/ai-chat/ai-sidebar/ConversationListView", () => ({
 vi.mock("../../src/features/ai-chat/ai-sidebar/MessageList", () => ({
   MessageList: () => <div>消息列表</div>,
 }));
-vi.mock("../../src/features/auth/LoginDialog", () => ({ LoginDialog: () => null }));
+vi.mock("../../src/features/auth/LoginDialog", () => ({
+  LoginDialog: ({ open }: { open: boolean }) => open ? <div>登录弹窗</div> : null,
+}));
 // 同步化 patch delta player：push 立即 append、finish 立即 resolve，避免 rAF 时序让 blog 写入链测试 flaky
 vi.mock("../../src/features/ai-chat/ai-sidebar/patchDeltaPlayer", () => ({
   createPatchDeltaPlayer: (append: (delta: string) => void) => ({
@@ -126,6 +129,18 @@ describe("AISidebar handleSend 心脏分支", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it("未登录点击 MCP 服务时打开登录弹窗而不是 MCP 配置", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
+
+    renderSidebar();
+    await user.click(await screen.findByRole("button", { name: "添加内容" }));
+    await user.click(await screen.findByText("MCP 服务"));
+
+    expect(await screen.findByText("登录弹窗")).toBeInTheDocument();
+    expect(latestChat?.state.mcpModalOpen).toBe(false);
   });
 
   it("P0-1 onDone 触发 temp→server key 迁移", async () => {

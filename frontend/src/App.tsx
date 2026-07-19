@@ -196,6 +196,7 @@ function App() {
 
 function AuthenticatedApp() {
   const state = useChatState();
+  const { isAuthenticated } = useAuth();
   const aiContext = useAISidebarRouteContext();
   const [groupApi, groupRef] = useGroupCallbackRef();
   const [initialLayout] = useState(loadPanelLayout);
@@ -256,7 +257,7 @@ function AuthenticatedApp() {
           </PanelGroup>
         </PanelGroupCtx.Provider>
 
-        {state.mcpModalOpen && <MCPModal />}
+        {isAuthenticated && state.mcpModalOpen && <MCPModal />}
       </div>
     </ErrorBoundary>
   );

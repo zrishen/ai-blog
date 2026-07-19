@@ -5,6 +5,8 @@ from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.database import migrations
+from src.database.models import Base
+from src.utils.secret_crypto import decrypt_secret, is_encrypted_secret
 
 
 @pytest.mark.asyncio
@@ -53,5 +55,42 @@ async def test_init_db_adds_deleted_columns_and_indexes_idempotently(tmp_path, m
         "uq_file_processing_jobs_active_key",
         "uq_file_processing_jobs_user_request",
     }.issubset(schema["file_processing_jobs"]["indexes"])
+
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_init_db_encrypts_legacy_llm_api_keys_idempotently(tmp_path, monkeypatch):
+    database_path = tmp_path / "legacy-key.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
+    monkeypatch.setattr(migrations, "engine", engine)
+
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(
+            text("INSERT INTO users (id, username, password_hash) VALUES (1, 'legacy', 'hash')")
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO llm_settings (id, user_id, protocol, api_key) "
+                "VALUES (1, 1, 'openai', 'legacy-plain-key')"
+            )
+        )
+
+    await migrations.init_db()
+    async with engine.connect() as connection:
+        first_value = (await connection.execute(
+            text("SELECT api_key FROM llm_settings WHERE id = 1")
+        )).scalar_one()
+
+    await migrations.init_db()
+    async with engine.connect() as connection:
+        second_value = (await connection.execute(
+            text("SELECT api_key FROM llm_settings WHERE id = 1")
+        )).scalar_one()
+
+    assert is_encrypted_secret(first_value)
+    assert decrypt_secret(first_value) == "legacy-plain-key"
+    assert second_value == first_value
 
     await engine.dispose()

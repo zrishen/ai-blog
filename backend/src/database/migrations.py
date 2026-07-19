@@ -10,6 +10,7 @@ from sqlalchemy import inspect, text
 
 from src.database.models import Base
 from src.database.session import engine
+from src.utils.secret_crypto import encrypt_secret, is_encrypted_secret
 
 logger = logging.getLogger(__name__)
 
@@ -67,3 +68,18 @@ async def init_db():
                     logger.info("Migration: created index %s on %s", index_name, table)
 
         await conn.run_sync(_apply_idempotent)
+
+        rows = (await conn.execute(
+            text("SELECT id, api_key FROM llm_settings WHERE api_key IS NOT NULL AND api_key != ''")
+        )).mappings().all()
+        migrated_count = 0
+        for row in rows:
+            if is_encrypted_secret(row["api_key"]):
+                continue
+            await conn.execute(
+                text("UPDATE llm_settings SET api_key = :api_key WHERE id = :id"),
+                {"api_key": encrypt_secret(row["api_key"]), "id": row["id"]},
+            )
+            migrated_count += 1
+        if migrated_count:
+            logger.info("Migration: encrypted %d legacy LLM API keys", migrated_count)

@@ -6,6 +6,7 @@
 """
 
 import logging
+import secrets
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
@@ -39,6 +40,10 @@ class AuthRequest(BaseModel):
     password: str = Field(min_length=4, max_length=100)
 
 
+class RegisterRequest(AuthRequest):
+    invite_code: str = Field(min_length=1, max_length=256)
+
+
 class AuthResponse(BaseModel):
     access_token: str
     user: dict
@@ -61,7 +66,15 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(body: AuthRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def register(body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
+    expected_invite_code = settings.registration_invite_code.strip()
+    supplied_invite_code = body.invite_code.strip()
+    if not expected_invite_code or not secrets.compare_digest(supplied_invite_code, expected_invite_code):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="邀请码无效或注册未开放",
+        )
+
     existing = await db.execute(select(User).where(User.username == body.username))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户名已存在")

@@ -874,8 +874,12 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   }, []);
 
   const handleOpenMcp = useCallback(() => {
+    if (!isAuthenticated) {
+      setLoginDialogOpen(true);
+      return;
+    }
     dispatch({ type: "TOGGLE_MCP_MODAL", payload: true });
-  }, [dispatch]);
+  }, [dispatch, isAuthenticated, setLoginDialogOpen]);
 
   const handleJumpToLatest = useCallback(() => {
     scrollToLatest("smooth");

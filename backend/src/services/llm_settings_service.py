@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.models import LLMSettings
+from src.utils.secret_crypto import decrypt_secret
 
 SUPPORTED_LLM_PROTOCOLS = ("openai", "anthropic")
 
@@ -67,7 +68,7 @@ def build_llm_model_kwargs(
     protocol = normalize_llm_protocol(llm_settings.protocol if llm_settings else None)
     has_custom_model = bool(llm_settings and llm_settings.model_name)
 
-    user_api_key = llm_settings.api_key if llm_settings and llm_settings.api_key else None
+    user_api_key = decrypt_secret(llm_settings.api_key) if llm_settings and llm_settings.api_key else None
     user_base_url = llm_settings.base_url if llm_settings and llm_settings.base_url else None
 
     if allow_official_fallback:

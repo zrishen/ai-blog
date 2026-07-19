@@ -11,6 +11,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +25,9 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(
+          mode === "register" ? { username, password, invite_code: inviteCode } : { username, password },
+        ),
         credentials: "include",
       });
       const data = await res.json();
@@ -66,8 +69,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">用户名</label>
+          <label htmlFor="auth-username" className="block text-sm font-medium text-foreground mb-1">用户名</label>
           <input
+            id="auth-username"
+            name="username"
             type="text"
             className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-primary"
             value={username}
@@ -78,8 +83,10 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-foreground mb-1">密码</label>
+          <label htmlFor="auth-password" className="block text-sm font-medium text-foreground mb-1">密码</label>
           <input
+            id="auth-password"
+            name="password"
             type="password"
             className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-primary"
             value={password}
@@ -88,6 +95,22 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
             minLength={4}
           />
         </div>
+
+        {mode === "register" && (
+          <div>
+            <label htmlFor="auth-invite-code" className="block text-sm font-medium text-foreground mb-1">邀请码</label>
+            <input
+              id="auth-invite-code"
+              name="invite_code"
+              type="text"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-primary"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value)}
+              required
+              autoComplete="off"
+            />
+          </div>
+        )}
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 

@@ -28,12 +28,14 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
   <AuthProvider>{children}</AuthProvider>
 );
 
-async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
-  // LoginForm 的 label 没有 htmlFor 关联，直接用 input 类型查询
-  const usernameInput = screen.getByRole("textbox");
-  const passwordInput = document.querySelector('input[type="password"]')!;
+async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>, inviteCode?: string) {
+  const usernameInput = screen.getByLabelText("用户名");
+  const passwordInput = screen.getByLabelText("密码");
   await user.type(usernameInput, "alice");
   await user.type(passwordInput, "secret");
+  if (inviteCode) {
+    await user.type(screen.getByLabelText("邀请码"), inviteCode);
+  }
   // 顶部 mode 切换 + 表单提交都叫"登录"，按 type=submit 精确选中
   const submitBtn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
   await user.click(submitBtn);
@@ -110,12 +112,15 @@ describe("LoginForm", () => {
 
     render(<LoginForm />, { wrapper });
     await user.click(screen.getByRole("button", { name: "注册" }));
-    await fillAndSubmit(user);
+    await fillAndSubmit(user, "invite-123");
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/auth/register",
-        expect.objectContaining({ method: "POST" }),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ username: "alice", password: "secret", invite_code: "invite-123" }),
+        }),
       );
     });
   });

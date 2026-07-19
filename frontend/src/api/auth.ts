@@ -2,11 +2,11 @@ import { API_BASE, apiFetch, readErrorDetail } from "./client";
 
 // ---- Auth API ----
 
-export async function authRegister(username: string, password: string) {
+export async function authRegister(username: string, password: string, inviteCode: string) {
   const res = await apiFetch(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, invite_code: inviteCode }),
   });
   if (!res.ok) {
     const data = await res.json();

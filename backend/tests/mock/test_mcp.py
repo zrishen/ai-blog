@@ -5,6 +5,25 @@ import json
 import pytest
 from httpx import AsyncClient
 
+from src.main import app
+from src.utils.auth import get_current_user
+
+
+@pytest.mark.asyncio
+async def test_mcp_endpoints_require_authentication(client: AsyncClient):
+    saved_override = app.dependency_overrides.pop(get_current_user, None)
+    try:
+        responses = [
+            await client.get("/api/mcp/servers"),
+            await client.post("/api/mcp/servers", json={"name": "x", "server_type": "stdio"}),
+            await client.put("/api/mcp/servers/1/toggle", json={"is_active": True}),
+            await client.delete("/api/mcp/servers/1"),
+        ]
+        assert all(response.status_code == 401 for response in responses)
+    finally:
+        if saved_override is not None:
+            app.dependency_overrides[get_current_user] = saved_override
+
 
 @pytest.mark.asyncio
 async def test_list_mcp_servers(client: AsyncClient):

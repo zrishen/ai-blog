@@ -22,6 +22,7 @@ async def test_register(client: AsyncClient):
     resp = await client.post("/api/auth/register", json={
         "username": "newuser",
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     assert resp.status_code == 201
     data = resp.json()
@@ -40,10 +41,12 @@ async def test_register_duplicate(client: AsyncClient):
     await client.post("/api/auth/register", json={
         "username": "dupuser",
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     resp = await client.post("/api/auth/register", json={
         "username": "dupuser",
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     assert resp.status_code == 409
     assert "已存在" in resp.json()["detail"]
@@ -61,6 +64,7 @@ async def test_register_succeeds_when_intro_article_fails(client: AsyncClient, m
     resp = await client.post("/api/auth/register", json={
         "username": "seedfail",
         "password": "test1234",
+        "invite_code": settings.registration_invite_code,
     })
     assert resp.status_code == 201
     data = resp.json()
@@ -74,6 +78,7 @@ async def test_login(client: AsyncClient):
     await client.post("/api/auth/register", json={
         "username": "loginuser",
         "password": "mypassword",
+        "invite_code": settings.registration_invite_code,
     })
     resp = await client.post("/api/auth/login", json={
         "username": "loginuser",
@@ -92,6 +97,7 @@ async def test_login_wrong_password(client: AsyncClient):
     await client.post("/api/auth/register", json={
         "username": "wrongpw",
         "password": "correct",
+        "invite_code": settings.registration_invite_code,
     })
     resp = await client.post("/api/auth/login", json={
         "username": "wrongpw",
@@ -111,7 +117,11 @@ async def test_login_nonexistent_user(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_refresh_exchanges_cookie_for_new_access(client: AsyncClient):
-    await client.post("/api/auth/register", json={"username": "rfuser", "password": "pass1234"})
+    await client.post("/api/auth/register", json={
+        "username": "rfuser",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
     first_access = (await client.post("/api/auth/login", json={
         "username": "rfuser", "password": "pass1234",
     })).json()["access_token"]
@@ -128,7 +138,11 @@ async def test_refresh_exchanges_cookie_for_new_access(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_refresh_without_cookie_returns_401(client: AsyncClient):
-    await client.post("/api/auth/register", json={"username": "nocookie", "password": "pass1234"})
+    await client.post("/api/auth/register", json={
+        "username": "nocookie",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
     await client.post("/api/auth/login", json={"username": "nocookie", "password": "pass1234"})
     client.cookies.clear()  # 模拟无 refresh cookie
     resp = await client.post("/api/auth/refresh")
@@ -137,7 +151,11 @@ async def test_refresh_without_cookie_returns_401(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_logout_revokes_refresh_token(client: AsyncClient):
-    await client.post("/api/auth/register", json={"username": "logoutuser", "password": "pass1234"})
+    await client.post("/api/auth/register", json={
+        "username": "logoutuser",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
     await client.post("/api/auth/login", json={"username": "logoutuser", "password": "pass1234"})
     assert client.cookies.get(settings.refresh_cookie_name) is not None
 
@@ -152,10 +170,36 @@ async def test_logout_revokes_refresh_token(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_refresh_token_value_cannot_be_used_as_access(client: AsyncClient):
     """refresh token 是不透明随机串，不能冒充 access token 通过鉴权。"""
-    await client.post("/api/auth/register", json={"username": "opaque", "password": "pass1234"})
+    await client.post("/api/auth/register", json={
+        "username": "opaque",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
     await client.post("/api/auth/login", json={"username": "opaque", "password": "pass1234"})
     refresh_value = client.cookies.get(settings.refresh_cookie_name)
     assert refresh_value is not None
     # refresh 串不是合法 access JWT：decode_access_token 会因非 JWT/无 type 返回 None
     from src.utils.auth import decode_access_token
     assert decode_access_token(refresh_value) is None
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_invalid_invite_code(client: AsyncClient):
+    resp = await client.post("/api/auth/register", json={
+        "username": "noinvite",
+        "password": "pass1234",
+        "invite_code": "wrong-code",
+    })
+    assert resp.status_code == 403
+    assert "邀请码" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_register_is_closed_when_invite_code_is_not_configured(client: AsyncClient, monkeypatch):
+    monkeypatch.setattr(settings, "registration_invite_code", "")
+    resp = await client.post("/api/auth/register", json={
+        "username": "closed",
+        "password": "pass1234",
+        "invite_code": "any-code",
+    })
+    assert resp.status_code == 403

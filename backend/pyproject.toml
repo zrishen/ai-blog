@@ -28,6 +28,7 @@ dependencies = [
     "langgraph>=0.4.0",
     "pyjwt>=2.10.0",
     "bcrypt>=4.0.0",
+    "cryptography>=48.0.0",
     "langchain-anthropic>=1.4.8",
 ]
 
