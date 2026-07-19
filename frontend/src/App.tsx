@@ -1,6 +1,6 @@
 import { Component, createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, matchPath, useLocation } from "react-router-dom";
-import { useChat } from "./stores/chatStore";
+import { useChatState, useChatDispatch } from "./stores/chatStore";
 import { useAuth } from "./stores/authStore";
 import { NavBar } from "./components/NavBar";
 import { LeftSidebar } from "./components/LeftSidebar";
@@ -63,7 +63,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
 }
 
 function FilesRoute() {
-  const { dispatch } = useChat();
+  const dispatch = useChatDispatch();
 
   useEffect(() => {
     dispatch({ type: "SET_PAGE", payload: "files" });
@@ -73,7 +73,7 @@ function FilesRoute() {
 }
 
 function ResearchRoute() {
-  const { dispatch } = useChat();
+  const dispatch = useChatDispatch();
 
   useEffect(() => {
     dispatch({ type: "SET_PAGE", payload: "research" });
@@ -98,7 +98,7 @@ function MainContent() {
 
 function useAISidebarRouteContext() {
   const location = useLocation();
-  const { state } = useChat();
+  const state = useChatState();
   const { isAuthenticated } = useAuth();
 
   return useMemo(() => {
@@ -195,7 +195,7 @@ function App() {
 }
 
 function AuthenticatedApp() {
-  const { state } = useChat();
+  const state = useChatState();
   const aiContext = useAISidebarRouteContext();
   const [groupApi, groupRef] = useGroupCallbackRef();
   const [initialLayout] = useState(loadPanelLayout);

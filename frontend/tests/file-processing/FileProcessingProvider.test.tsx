@@ -34,6 +34,7 @@ vi.mock("../../src/stores/authStore", () => ({
 
 vi.mock("../../src/stores/chatStore", () => ({
   useChat: () => ({ dispatch: mocks.dispatch }),
+  useChatDispatch: () => mocks.dispatch,
 }));
 
 import { FileUploadNetworkError } from "../../src/api/files";

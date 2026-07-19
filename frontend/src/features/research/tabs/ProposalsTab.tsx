@@ -1,7 +1,7 @@
 import { AlertCircle, CheckCircle2, ExternalLink, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useChat } from "../../../stores/chatStore";
+import { useChatDispatch } from "../../../stores/chatStore";
 import type { ResearchTopicDetail } from "../../../api/client";
 import type { ResearchTopicActions } from "../hooks/useResearchTopicActions";
 import {
@@ -22,7 +22,7 @@ interface ProposalsTabProps {
 }
 
 export function ProposalsTab({ topic, actions }: ProposalsTabProps) {
-  const { dispatch } = useChat();
+  const dispatch = useChatDispatch();
   const {
     selectedProposal,
     claimsForProposal,

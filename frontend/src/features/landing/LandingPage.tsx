@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useChat } from "../../stores/chatStore";
+import { useChatDispatch } from "../../stores/chatStore";
 import { getOfficialIntroPost } from "../../api/client";
 import type { BlogPostData } from "../../api/client";
 import Markdown from "react-markdown";
@@ -10,7 +10,7 @@ import { Sparkles, Calendar, Eye, Tags, AlertCircle } from "lucide-react";
 import { splitBlogTags, getBlogTagStyle } from "../blog/utils/blogTags";
 
 export function LandingPage() {
-  const { dispatch } = useChat();
+  const dispatch = useChatDispatch();
   const [post, setPost] = useState<BlogPostData | null>(null);
   const [error, setError] = useState<string | null>(null);
 

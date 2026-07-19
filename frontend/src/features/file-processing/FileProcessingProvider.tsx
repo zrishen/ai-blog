@@ -10,7 +10,7 @@ import {
 } from "../../api/files";
 import { restoreTrashItem, type TrashItem } from "../../api/trash";
 import { useAuth } from "../../stores/authStore";
-import { useChat } from "../../stores/chatStore";
+import { useChatDispatch } from "../../stores/chatStore";
 import { FileProcessingProgress, type FileProcessingProgressValue } from "./FileProcessingProgress";
 import { X } from "lucide-react";
 
@@ -106,7 +106,7 @@ function newestJob(jobs: FileProcessingJob[]) {
 
 export function FileProcessingProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  const { dispatch } = useChat();
+  const dispatch = useChatDispatch();
   const [uploadTask, setUploadTask] = useState<UploadTask | null>(null);
   const [restoreJobs, setRestoreJobs] = useState<Record<number, FileProcessingJob>>({});
   const uploadCancelRef = useRef<(() => void) | null>(null);

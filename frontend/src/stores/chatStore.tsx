@@ -3,118 +3,26 @@ import { createContext, useContext, useReducer, useEffect } from "react";
 import type { MCPServerConfig, ResearchTopicDetail, ResearchTopicSummary } from "../api/client";
 import type { TrustChoiceOption } from "../features/ai-chat/trustPrompts";
 import type { ThinkingMode } from "../api/chat";
-
-interface Reference {
-  type: "rag" | "mcp";
-  source?: string;
-  collection?: string;
-  distance?: number;
-  server?: string;
-  tool?: string;
-}
-
-interface ToolEvent {
-  type: "start" | "end";
-  toolName: string;
-  result?: string;
-  references?: Reference[];
-  callId?: string;
-  roundId?: number;
-  loopStepIndex?: number;
-}
-
-interface Message {
-  id: number;
-  conversation_id: number;
-  role: "user" | "assistant";
-  content: string;
-  image_url?: string;
-  file_url?: string;
-  tool_calls?: Array<{ id: string; name: string; arguments: string }>;
-  tool_results?: string[];
-  thinkingContent?: string;
-  streamingRound?: string;
-  streamFinalized?: boolean;
-  streamError?: string;
-  toolEvents?: ToolEvent[];
-  reasoningContent?: string;
-  loopSteps?: string[];
-  thinkingMode?: ThinkingMode;
-  thinkingDurationMs?: number;
-  trustChoicePrompt?: string | null;
-  trustChoiceOptions?: TrustChoiceOption[];
-  token_count: number;
-  created_at: string;
-}
-
-export function isDisplayableMessage(message: unknown): message is Message {
-  if (!message || typeof message !== "object") return false;
-  const role = (message as { role?: unknown }).role;
-  return role === "user" || role === "assistant";
-}
-
-interface Conversation {
-  id: number;
-  title: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface FileDocument {
-  id: number;
-  collection_name: string;
-  original_name: string;
-  file_path: string;
-  chunk_count: number;
-  category_id: number | null;
-  created_at: string;
-}
-
-// --- New types for blog ---
-
-interface BlogPost {
-  id: number;
-  title: string;
-  slug: string;
-  content?: string;
-  excerpt?: string;
-  cover_image?: string;
-  status: string;
-  tags?: string;
-  author?: string;
-  view_count: number;
-  created_at: string;
-  updated_at?: string;
-  published_at?: string;
-}
-
-interface FileCategory {
-  id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  parent_id: number | null;
-  children?: FileCategory[];
-  created_at: string;
-}
-
-type Theme = "dark" | "light";
-type Panel = "conversations" | "files" | "mcp";
-type Page = "blog" | "files" | "research";
-type BlogView = "list" | "view" | "edit";
-type AISidebarConversationKey = `server:${number}` | `temp:${string}`;
-
-interface AISidebarHistoryState {
-  loading: boolean;
-  error: string | null;
-}
-
-type AIStreamEvent =
-  | { type: "delta"; delta: string }
-  | { type: "loop"; content: string; roundId?: number; loopStepIndex?: number }
-  | { type: "final"; content: string }
-  | { type: "discard" }
-  | { type: "error"; message: string };
+import type {
+  AISidebarConversationKey,
+  AISidebarHistoryState,
+  AIStreamEvent,
+  Conversation,
+  Message,
+  Reference,
+  ToolEvent,
+} from "../features/ai-chat/types";
+import { isDisplayableMessage } from "../features/ai-chat/types";
+import type { BlogPost, BlogView } from "../features/blog/types";
+import type { FileCategory, FileDocument } from "../features/file/types";
+import type { Page, Panel, Theme } from "./types";
+import { researchReducer } from "./slices/researchSlice";
+import { conversationReducer } from "./slices/conversationSlice";
+import { blogReducer } from "./slices/blogSlice";
+import { fileReducer } from "./slices/fileSlice";
+import { uiReducer } from "./slices/uiSlice";
+import { revisionReducer } from "./slices/revisionSlice";
+import { aiSidebarReducer } from "./slices/aiSidebarSlice";
 
 interface ChatState {
   conversations: Conversation[];
@@ -254,330 +162,15 @@ type ChatAction =
   // Auth
   | { type: "LOGOUT" };
 
-function updateMessageWithPayload(
-  message: Message,
-  payload: { content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] },
-): Message {
-  return {
-    ...message,
-    ...(payload.content !== undefined ? { content: payload.content } : {}),
-    ...(payload.thinkingContent !== undefined ? { thinkingContent: payload.thinkingContent } : {}),
-    ...(payload.streamingRound !== undefined ? { streamingRound: payload.streamingRound } : {}),
-    ...(payload.streamFinalized !== undefined ? { streamFinalized: payload.streamFinalized } : {}),
-    ...(payload.streamError !== undefined ? { streamError: payload.streamError } : {}),
-    ...(payload.toolEvents !== undefined ? { toolEvents: payload.toolEvents } : {}),
-    ...(payload.reasoningContent !== undefined ? { reasoningContent: payload.reasoningContent } : {}),
-    ...(payload.loopSteps !== undefined ? { loopSteps: payload.loopSteps } : {}),
-    ...(payload.thinkingMode !== undefined ? { thinkingMode: payload.thinkingMode } : {}),
-    ...(payload.thinkingDurationMs !== undefined ? { thinkingDurationMs: payload.thinkingDurationMs } : {}),
-    ...(payload.trustChoicePrompt !== undefined ? { trustChoicePrompt: payload.trustChoicePrompt } : {}),
-    ...(payload.trustChoiceOptions !== undefined ? { trustChoiceOptions: payload.trustChoiceOptions } : {}),
-  };
-}
-
-function applyStreamEvent(message: Message, event: AIStreamEvent): Message {
-  switch (event.type) {
-    case "delta":
-      return { ...message, streamingRound: (message.streamingRound ?? "") + event.delta };
-    case "loop":
-      return {
-        ...message,
-        streamingRound: "",
-        loopSteps: [...(message.loopSteps ?? []), event.content],
-      };
-    case "final":
-      return {
-        ...message,
-        content: event.content,
-        streamingRound: "",
-        streamFinalized: true,
-        streamError: undefined,
-      };
-    case "discard":
-      return { ...message, streamingRound: "" };
-    case "error":
-      return { ...message, streamingRound: "", streamError: event.message };
-  }
-}
-
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
+  state = researchReducer(state, action);
+  state = conversationReducer(state, action);
+  state = blogReducer(state, action);
+  state = fileReducer(state, action);
+  state = uiReducer(state, action);
+  state = revisionReducer(state, action);
+  state = aiSidebarReducer(state, action);
   switch (action.type) {
-    case "SET_CONVERSATIONS":
-      return { ...state, conversations: action.payload };
-    case "SET_CURRENT_CONVERSATION":
-      return { ...state, currentConversationId: action.payload };
-    case "SET_MESSAGES":
-      return { ...state, messages: action.payload };
-    case "ADD_MESSAGE":
-      return { ...state, messages: [...state.messages, action.payload] };
-    case "UPDATE_MESSAGE":
-      return {
-        ...state,
-        messages: state.messages.map((m) =>
-          m.id === action.payload.id ? { ...m, ...action.payload } : m
-        ),
-      };
-    case "APPLY_MESSAGE_STREAM_EVENT":
-      return {
-        ...state,
-        messages: state.messages.map((m) =>
-          m.id === action.payload.id ? applyStreamEvent(m, action.payload.event) : m
-        ),
-      };
-    case "SET_LOADING":
-      return { ...state, isLoading: action.payload };
-    case "SET_STREAMING":
-      return { ...state, isStreaming: action.payload };
-    case "SET_THEME": {
-      const newTheme = action.payload;
-      return { ...state, theme: newTheme };
-    }
-    case "SET_FILE_DOCUMENTS":
-      return { ...state, fileDocuments: action.payload };
-    case "REMOVE_FILE_DOCUMENT":
-      return {
-        ...state,
-        fileDocuments: state.fileDocuments.filter((d) => d.id !== action.payload),
-      };
-    case "SET_MCP_SERVERS":
-      return { ...state, mcpServers: action.payload };
-    case "REMOVE_MCP_SERVER":
-      return {
-        ...state,
-        mcpServers: state.mcpServers.filter((s) => s.id !== action.payload),
-      };
-    case "SET_ACTIVE_PANEL":
-      return { ...state, activePanel: action.payload };
-    // Layout
-    case "SET_PAGE":
-      return { ...state, currentPage: action.payload, gearMenuOpen: false };
-    case "TOGGLE_GEAR_MENU":
-      return { ...state, gearMenuOpen: action.payload !== undefined ? action.payload : !state.gearMenuOpen };
-    case "TOGGLE_MCP_MODAL":
-      return { ...state, mcpModalOpen: action.payload !== undefined ? action.payload : !state.mcpModalOpen, gearMenuOpen: false };
-    // AI Sidebar
-    case "SET_AI_SIDEBAR_OPEN":
-      return { ...state, aiSidebarOpen: action.payload };
-    case "SET_AI_SIDEBAR_CONV_ID":
-      return { ...state, aiSidebarConversationId: action.payload };
-    case "SET_AI_SIDEBAR_SELECTED_KEY":
-      return {
-        ...state,
-        aiSidebarSelectedKey: action.payload,
-        aiSidebarConversationId: action.payload?.startsWith("server:") ? Number(action.payload.slice(7)) : null,
-        aiSidebarMessages: action.payload ? state.aiSidebarMessagesByKey[action.payload] ?? [] : [],
-      };
-    case "SET_AI_SIDEBAR_MSGS":
-      return { ...state, aiSidebarMessages: action.payload.filter(isDisplayableMessage) };
-    case "SET_AI_SIDEBAR_MSGS_FOR_KEY": {
-      const messages = action.payload.messages.filter(isDisplayableMessage);
-      return {
-        ...state,
-        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
-      };
-    }
-    case "ADD_AI_SIDEBAR_MSG":
-      if (!isDisplayableMessage(action.payload)) return state;
-      return { ...state, aiSidebarMessages: [...state.aiSidebarMessages, action.payload] };
-    case "ADD_AI_SIDEBAR_MSG_FOR_KEY": {
-      if (!isDisplayableMessage(action.payload.message)) return state;
-      const current = state.aiSidebarMessagesByKey[action.payload.key] ?? [];
-      const messages = [...current, action.payload.message];
-      return {
-        ...state,
-        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
-      };
-    }
-    case "UPDATE_AI_SIDEBAR_MSG":
-      return {
-        ...state,
-        aiSidebarMessages: state.aiSidebarMessages.map((m) =>
-          m.id === action.payload.id ? updateMessageWithPayload(m, action.payload) : m
-        ),
-      };
-    case "UPDATE_AI_SIDEBAR_MSG_FOR_KEY": {
-      const current = state.aiSidebarMessagesByKey[action.payload.key] ?? [];
-      const messages = current.map((m) =>
-        m.id === action.payload.id ? updateMessageWithPayload(m, action.payload) : m
-      );
-      return {
-        ...state,
-        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
-      };
-    }
-    case "APPLY_AI_STREAM_EVENT":
-      return {
-        ...state,
-        aiSidebarMessages: state.aiSidebarMessages.map((m) =>
-          m.id === action.payload.id ? applyStreamEvent(m, action.payload.event) : m
-        ),
-      };
-    case "APPLY_AI_STREAM_EVENT_FOR_KEY": {
-      const { key, id, event } = action.payload;
-      const current = state.aiSidebarMessagesByKey[key] ?? [];
-      const messages = current.map((m) => (m.id === id ? applyStreamEvent(m, event) : m));
-      return {
-        ...state,
-        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === key ? messages : state.aiSidebarMessages,
-      };
-    }
-    case "SET_AI_SIDEBAR_STREAMING_FOR_KEY":
-      return {
-        ...state,
-        aiSidebarStreamingByKey: { ...state.aiSidebarStreamingByKey, [action.payload.key]: action.payload.streaming },
-      };
-    case "SET_AI_SIDEBAR_INPUT_FOR_KEY":
-      return {
-        ...state,
-        aiSidebarInputsByKey: { ...state.aiSidebarInputsByKey, [action.payload.key]: action.payload.input },
-      };
-    case "SET_AI_SIDEBAR_ERROR_FOR_KEY":
-      return {
-        ...state,
-        aiSidebarErrorsByKey: { ...state.aiSidebarErrorsByKey, [action.payload.key]: action.payload.error },
-      };
-    case "SET_AI_SIDEBAR_HISTORY_FOR_KEY":
-      return {
-        ...state,
-        aiSidebarHistoryByKey: { ...state.aiSidebarHistoryByKey, [action.payload.key]: action.payload.history },
-      };
-    case "MIGRATE_AI_SIDEBAR_TEMP_KEY": {
-      const { fromKey, toKey, conversationId } = action.payload;
-      const fromMessages = state.aiSidebarMessagesByKey[fromKey] ?? [];
-      const toMessages = fromMessages.map((m) => ({ ...m, conversation_id: conversationId }));
-      const {
-        [fromKey]: _removedMessages,
-        ...messagesByKey
-      } = state.aiSidebarMessagesByKey;
-      const { [fromKey]: removedStreaming, ...streamingByKey } = state.aiSidebarStreamingByKey;
-      const { [fromKey]: removedInput, ...inputsByKey } = state.aiSidebarInputsByKey;
-      const { [fromKey]: removedError, ...errorsByKey } = state.aiSidebarErrorsByKey;
-      const { [fromKey]: removedHistory, ...historyByKey } = state.aiSidebarHistoryByKey;
-      void _removedMessages;
-      return {
-        ...state,
-        aiSidebarSelectedKey: state.aiSidebarSelectedKey === fromKey ? toKey : state.aiSidebarSelectedKey,
-        aiSidebarConversationId: state.aiSidebarSelectedKey === fromKey ? conversationId : state.aiSidebarConversationId,
-        aiSidebarMessages: state.aiSidebarSelectedKey === fromKey ? toMessages : state.aiSidebarMessages,
-        aiSidebarMessagesByKey: { ...messagesByKey, [toKey]: toMessages },
-        aiSidebarStreamingByKey: { ...streamingByKey, [toKey]: removedStreaming ?? false },
-        aiSidebarInputsByKey: { ...inputsByKey, [toKey]: removedInput ?? "" },
-        aiSidebarErrorsByKey: { ...errorsByKey, [toKey]: removedError ?? null },
-        aiSidebarHistoryByKey: { ...historyByKey, [toKey]: removedHistory ?? { loading: false, error: null } },
-      };
-    }
-    case "REMOVE_AI_SIDEBAR_THREAD": {
-      const { key } = action.payload;
-      const { [key]: removedMessages, ...messagesByKey } = state.aiSidebarMessagesByKey;
-      const { [key]: removedStreaming, ...streamingByKey } = state.aiSidebarStreamingByKey;
-      const { [key]: removedInput, ...inputsByKey } = state.aiSidebarInputsByKey;
-      const { [key]: removedError, ...errorsByKey } = state.aiSidebarErrorsByKey;
-      const { [key]: removedHistory, ...historyByKey } = state.aiSidebarHistoryByKey;
-      void removedMessages;
-      void removedStreaming;
-      void removedInput;
-      void removedError;
-      void removedHistory;
-      return {
-        ...state,
-        aiSidebarSelectedKey: state.aiSidebarSelectedKey === key ? null : state.aiSidebarSelectedKey,
-        aiSidebarConversationId: state.aiSidebarSelectedKey === key ? null : state.aiSidebarConversationId,
-        aiSidebarMessages: state.aiSidebarSelectedKey === key ? [] : state.aiSidebarMessages,
-        aiSidebarMessagesByKey: messagesByKey,
-        aiSidebarStreamingByKey: streamingByKey,
-        aiSidebarInputsByKey: inputsByKey,
-        aiSidebarErrorsByKey: errorsByKey,
-        aiSidebarHistoryByKey: historyByKey,
-      };
-    }
-    case "SET_AI_SIDEBAR_THINKING_MODE":
-      return { ...state, aiSidebarThinkingMode: action.payload };
-    case "SET_LLM_SUPPORTS_THINKING":
-      return { ...state, llmSupportsThinking: action.payload };
-    // Blog
-    case "SET_BLOG_POSTS":
-      return { ...state, blogPosts: action.payload };
-    case "SET_BLOG_VIEW":
-      return { ...state, blogCurrentView: action.payload };
-    case "SET_BLOG_CURRENT_POST_ID":
-      return { ...state, blogCurrentPostId: action.payload };
-    case "SET_BLOG_SELECTED_TAG":
-      return { ...state, blogSelectedTag: action.payload };
-    case "UPDATE_BLOG_POST":
-      return {
-        ...state,
-        blogPosts: state.blogPosts.map((p) =>
-          p.id === action.payload.id ? { ...p, ...action.payload } : p
-        ),
-      };
-    case "APPEND_BLOG_STREAMING":
-      return {
-        ...state,
-        blogStreamingContent: (state.blogStreamingContent ?? "") + action.payload,
-      };
-    case "CLEAR_BLOG_STREAMING":
-      return { ...state, blogStreamingContent: null };
-    // AI Selection Context
-    case "SET_AI_SELECTION_CONTEXT":
-      return { ...state, aiSelectionContext: action.payload };
-    case "CLEAR_AI_SELECTION_CONTEXT":
-      return { ...state, aiSelectionContext: null };
-    // Blog Patch Streaming
-    case "START_BLOG_PATCH_STREAMING":
-      return {
-        ...state,
-        blogPatchStreaming: { targetText: action.payload.targetText, replacementDelta: "" },
-      };
-    case "APPEND_BLOG_PATCH_STREAMING":
-      if (!state.blogPatchStreaming) return state;
-      return {
-        ...state,
-        blogPatchStreaming: {
-          targetText: state.blogPatchStreaming.targetText,
-          replacementDelta: state.blogPatchStreaming.replacementDelta + action.payload.replacementDelta,
-        },
-      };
-    case "CLEAR_BLOG_PATCH_STREAMING":
-      return { ...state, blogPatchStreaming: null };
-    // File Library
-    case "SET_FILE_CATEGORIES":
-      return { ...state, fileCategories: action.payload };
-    case "SET_FILE_SELECTED_CATEGORY_ID":
-      return { ...state, fileSelectedCategoryId: action.payload };
-    case "SET_FILE_SELECTED_FILE":
-      return { ...state, fileSelectedFile: action.payload };
-    // Research Graph
-    case "SET_RESEARCH_TOPICS":
-      return { ...state, researchTopics: action.payload };
-    case "SET_RESEARCH_CURRENT_TOPIC_ID":
-      return { ...state, researchCurrentTopicId: action.payload };
-    case "SET_RESEARCH_CURRENT_TOPIC":
-      return { ...state, researchCurrentTopic: action.payload };
-    case "SET_RESEARCH_SELECTED_CLAIM_ID":
-      return { ...state, researchSelectedClaimId: action.payload };
-    case "SET_RESEARCH_SELECTED_CONFLICT_ID":
-      return { ...state, researchSelectedConflictId: action.payload };
-    case "SET_RESEARCH_SELECTED_PROPOSAL_ID":
-      return { ...state, researchSelectedProposalId: action.payload };
-    case "SET_TRUST_WRITING_ENABLED":
-      return { ...state, trustWritingEnabled: action.payload };
-    case "SET_PENDING_RESEARCH_PROMPT":
-      return { ...state, pendingResearchPrompt: action.payload };
-    // File processing / Trash
-    case "INCREMENT_FILE_LIBRARY_REVISION":
-      return { ...state, fileLibraryRevision: state.fileLibraryRevision + 1 };
-    case "INCREMENT_FILE_RESTORE_REVISIONS":
-      return {
-        ...state,
-        fileLibraryRevision: state.fileLibraryRevision + 1,
-        trashRevision: state.trashRevision + 1,
-      };
-    case "INCREMENT_TRASH_REVISION":
-      return { ...state, trashRevision: state.trashRevision + 1 };
     // Auth — 登出时清除用户级别 UI 状态（不删后端数据）
     case "LOGOUT":
       return {
@@ -689,10 +282,8 @@ const initialState: ChatState = {
   trashRevision: 0,
 };
 
-const ChatContext = createContext<{
-  state: ChatState;
-  dispatch: React.Dispatch<ChatAction>;
-}>({ state: initialState, dispatch: () => {} });
+const ChatStateContext = createContext<ChatState>(initialState);
+const ChatDispatchContext = createContext<React.Dispatch<ChatAction>>(() => {});
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
@@ -703,16 +294,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [state.theme]);
 
   return (
-    <ChatContext.Provider value={{ state, dispatch }}>
-      {children}
-    </ChatContext.Provider>
+    <ChatStateContext.Provider value={state}>
+      <ChatDispatchContext.Provider value={dispatch}>
+        {children}
+      </ChatDispatchContext.Provider>
+    </ChatStateContext.Provider>
   );
 }
 
 export function useChat() {
-  const context = useContext(ChatContext);
-  if (!context) throw new Error("useChat must be used within ChatProvider");
-  return context;
+  return { state: useContext(ChatStateContext), dispatch: useContext(ChatDispatchContext) };
+}
+
+export function useChatState(): ChatState {
+  return useContext(ChatStateContext);
+}
+
+export function useChatDispatch(): React.Dispatch<ChatAction> {
+  return useContext(ChatDispatchContext);
 }
 
 export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
@@ -722,3 +321,4 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
 }
 
 export type { Message, Conversation, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, Theme, Panel, Page, BlogView, ThinkingMode, AISidebarConversationKey, AISidebarHistoryState, AIStreamEvent, ToolEvent, Reference, ResearchTopicDetail, ResearchTopicSummary };
+export { isDisplayableMessage };

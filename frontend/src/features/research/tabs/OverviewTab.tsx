@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { useChat } from "../../../stores/chatStore";
+import { useChatDispatch } from "../../../stores/chatStore";
 import type { ResearchTopicDetail } from "../../../api/client";
 import { statusLabel, statusTone } from "../utils/researchFormat";
 
@@ -8,7 +8,7 @@ interface OverviewTabProps {
 }
 
 export function OverviewTab({ topic }: OverviewTabProps) {
-  const { dispatch } = useChat();
+  const dispatch = useChatDispatch();
 
   return (
     <div className="space-y-4">
