@@ -24,12 +24,23 @@ class _ZeroEmbeddingFunction(EmbeddingFunction):
     不依赖任何外部模型，避免 CI 下载 sentence-transformers。
     """
 
+    def __init__(self) -> None:
+        pass
+
     def __call__(self, input):  # type: ignore[override]
         dim = 8
         return cast(Embeddings, [[0.0] * dim for _ in input])
 
-    def name(self) -> str:
+    @staticmethod
+    def name() -> str:
         return "zero"
+
+    @staticmethod
+    def build_from_config(config: dict) -> "_ZeroEmbeddingFunction":
+        return _ZeroEmbeddingFunction()
+
+    def get_config(self) -> dict:
+        return {}
 
 
 _zero_embedding_function = _ZeroEmbeddingFunction()

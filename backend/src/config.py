@@ -3,7 +3,7 @@ import binascii
 from pathlib import Path
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 项目根目录（backend/），所有数据路径基于此绝对路径，不依赖 cwd
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -11,6 +11,8 @@ DATA_DIR = BASE_DIR / "data"
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     openai_api_key: str = ""
     base_url: str = "https://api.openai.com/v1"
     model_name: str = "Qwen3.6-35B"
@@ -88,11 +90,6 @@ class Settings(BaseSettings):
         if len(decoded) != 32:
             raise ValueError("llm_settings_encryption_key 必须是有效的 Fernet 密钥")
         return stripped
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
-
 
 settings = Settings()
 

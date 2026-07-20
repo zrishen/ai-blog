@@ -9,6 +9,7 @@ import {
   listFileDocuments,
   deleteFileDocument,
   listMCPServers,
+  addMCPServer as addMCPServerAPI,
   deleteMCPServer,
 } from "../api/client";
 
@@ -228,7 +229,6 @@ export function useChatHooks() {
       url?: string;
       tools?: string[];
     }) => {
-      const { addMCPServer: addMCPServerAPI } = await import("../api/client");
       const server = await addMCPServerAPI(data);
       const refreshed = await listMCPServers();
       dispatch({ type: "SET_MCP_SERVERS", payload: refreshed.servers });
