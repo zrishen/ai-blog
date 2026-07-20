@@ -68,7 +68,7 @@ describe("四处删除确认文案都改为可在回收站恢复", () => {
   const cases: Array<{ name: string; rel: string; marker: string }> = [
     {
       name: "AISidebar 删除对话确认",
-      rel: path.join("src", "features", "ai-chat", "AISidebar.tsx"),
+      rel: path.join("src", "features", "ai-chat", "ai-sidebar", "AISidebarList.tsx"),
       marker: "删除后可在回收站恢复。",
     },
     {
