@@ -11,7 +11,7 @@ export function formatDate(dateStr: string): string {
   return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
 }
 
-export function dedupeReferences(refs: Reference[]): Reference[] {
+function dedupeReferences(refs: Reference[]): Reference[] {
   return [
     ...new Map(
       refs.map((r) => {

@@ -137,23 +137,6 @@ async def delete_document_chunks(collection_name: str, stored_name: str) -> bool
     return True
 
 
-async def delete_collection(collection_name: str) -> bool:
-    """Delete an entire collection.
-
-    Args:
-        collection_name: Name of the collection to delete.
-
-    Returns:
-        True if deleted, False if collection didn't exist.
-    """
-    client = await asyncio.to_thread(_get_client)
-    try:
-        await asyncio.to_thread(client.delete_collection, name=collection_name)
-        return True
-    except (ValueError, NotFoundError):
-        return False
-
-
 async def list_collections() -> list[str]:
     """List all collection names.
 
@@ -163,20 +146,3 @@ async def list_collections() -> list[str]:
     client = await asyncio.to_thread(_get_client)
     collections = await asyncio.to_thread(client.list_collections)
     return [c.name for c in collections]
-
-
-async def get_collection_count(collection_name: str) -> int:
-    """Get the number of documents in a collection.
-
-    Args:
-        collection_name: Name of the collection.
-
-    Returns:
-        Document count, or 0 if collection doesn't exist.
-    """
-    client = await asyncio.to_thread(_get_client)
-    try:
-        collection = await asyncio.to_thread(client.get_collection, name=collection_name)
-        return await asyncio.to_thread(collection.count)
-    except (ValueError, NotFoundError):
-        return 0

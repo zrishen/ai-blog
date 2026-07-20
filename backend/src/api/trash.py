@@ -14,7 +14,6 @@ from src.database.models import User
 from src.schemas.file_processing import FileProcessingJobResponse
 from src.schemas.trash import (
     TrashClearResponse,
-    TrashItem,
     TrashListResponse,
     TrashRestoreResponse,
 )

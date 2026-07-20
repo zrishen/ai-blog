@@ -1,4 +1,4 @@
-export type TrustChoiceAction =
+type TrustChoiceAction =
   | "start_research"
   | "continue_research"
   | "open_research_graph"
@@ -70,7 +70,7 @@ function findJsonPayload(content: string): unknown | null {
   return null;
 }
 
-export function sanitizeTrustChoices(rawChoices: unknown, appendDismiss = true): TrustChoiceOption[] {
+function sanitizeTrustChoices(rawChoices: unknown, appendDismiss = true): TrustChoiceOption[] {
   if (!Array.isArray(rawChoices)) {
     return appendDismiss ? [{ id: "trust-choice-dismiss", label: "不选择", kind: "action", action: "dismiss" }] : [];
   }
@@ -172,7 +172,7 @@ export function buildDraftChoices(topicTitle?: string): TrustChoicePayload {
   };
 }
 
-export interface TopicSummaryForSelect {
+interface TopicSummaryForSelect {
   id: number;
   title: string;
 }

@@ -15,7 +15,7 @@ export function isDescOf(targetId: number, ancestorId: number, tree: FileCategor
   return false;
 }
 
-export function containsId(id: number, tree: FileCategory[]): boolean {
+function containsId(id: number, tree: FileCategory[]): boolean {
   for (const cat of tree) {
     if (cat.id === id) return true;
     if (containsId(id, cat.children ?? [])) return true;
@@ -32,7 +32,7 @@ export function findCategoryById(id: number, tree: FileCategory[]): FileCategory
   return null;
 }
 
-export interface GroupedDocuments {
+interface GroupedDocuments {
   byCategoryId: Map<number, FileDocument[]>;
   uncategorized: FileDocument[];
 }
@@ -50,33 +50,6 @@ export function groupByCategory(docs: FileDocument[]): GroupedDocuments {
     else byCategoryId.set(doc.category_id, [doc]);
   }
   return { byCategoryId, uncategorized };
-}
-
-export function flattenCategoryPath(id: number, tree: FileCategory[]): FileCategory[] {
-  const path: FileCategory[] = [];
-  const walk = (nodes: FileCategory[]): boolean => {
-    for (const cat of nodes) {
-      if (cat.id === id) {
-        path.push(cat);
-        return true;
-      }
-      if (cat.children?.length && walk(cat.children)) {
-        path.push(cat);
-        return true;
-      }
-    }
-    return false;
-  };
-  walk(tree);
-  return path.reverse();
-}
-
-export function removeSubtree(categories: FileCategory[], id: number): FileCategory[] {
-  return categories
-    .filter((c) => c.id !== id)
-    .map((c) =>
-      c.children?.length ? { ...c, children: removeSubtree(c.children, id) } : c,
-    );
 }
 
 export function collectDescendantIds(id: number, tree: FileCategory[]): number[] {
@@ -99,7 +72,7 @@ export function collectDescendantIds(id: number, tree: FileCategory[]): number[]
   return ids;
 }
 
-export interface FlatCategory extends FileCategory {
+interface FlatCategory extends FileCategory {
   _depth: number;
 }
 

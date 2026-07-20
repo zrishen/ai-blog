@@ -1,7 +1,7 @@
 import { AlertCircle, FileSearch, Search, ShieldCheck, XCircle, Zap, type LucideIcon } from "lucide-react";
 import { CheckCircle2 } from "lucide-react";
 
-export const STAGE_KEYS = [
+const STAGE_KEYS = [
   "search_sources",
   "fetch_pages",
   "extract_claims",
@@ -9,9 +9,9 @@ export const STAGE_KEYS = [
   "await_review",
 ] as const;
 
-export type StageKey = (typeof STAGE_KEYS)[number];
+type StageKey = (typeof STAGE_KEYS)[number];
 
-export const STAGE_LABELS: Record<StageKey, string> = {
+const STAGE_LABELS: Record<StageKey, string> = {
   search_sources: "搜索来源",
   fetch_pages: "抓取页面",
   extract_claims: "提取事实",

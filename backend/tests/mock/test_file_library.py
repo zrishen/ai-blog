@@ -13,7 +13,7 @@ from src.config import settings
 from src.database.models import FileDocument, FileProcessingJob
 from src.services import file_service
 from src.services.file_processing_service import _run_job
-from src.utils.user_dir import invalidate_username_cache
+from src.utils.user_dir import resolve_username
 
 
 # ---- Categories ----
@@ -106,7 +106,7 @@ async def test_delete_file_category_preserves_soft_deleted_documents(
     cat_id = cat_resp.json()["id"]
 
     doc = FileDocument(
-        collection_name=f"user_1_files",
+        collection_name="user_1_files",
         user_id="1",
         original_name="已软删.pdf",
         file_path="soft_deleted.pdf",
@@ -242,12 +242,12 @@ def test_numeric_user_id_resolves_username_upload_directory(tmp_path, monkeypatc
         f"sqlite+aiosqlite:///{database_path.as_posix()}",
     )
     monkeypatch.setattr(file_service, "UPLOAD_DIR", upload_root)
-    invalidate_username_cache()
+    resolve_username.cache_clear()
     try:
         assert file_service.get_user_upload_dir(7) == upload_root / "named-user"
         assert file_service.get_user_upload_dir("7") == upload_root / "7"
     finally:
-        invalidate_username_cache()
+        resolve_username.cache_clear()
 
 
 @pytest.mark.asyncio

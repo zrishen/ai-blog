@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import Conversation, Message
 from src.database.session import async_session
-from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
+from langchain_core.messages import AIMessage, ToolMessage
 
 logger = logging.getLogger(__name__)
 
@@ -80,72 +80,6 @@ async def get_messages(conversation_id: int, user_id: int, session: AsyncSession
             .order_by(Message.created_at, Message.id)
         )
         return result.scalars().all()
-
-
-async def add_message_pair(
-    conversation_id: int | None,
-    user_id: int,
-    user_content: str,
-    user_tokens: int,
-    assistant_content: str,
-    assistant_tokens: int,
-    user_image_url: str | None = None,
-    user_file_url: str | None = None,
-    assistant_reasoning_content: str | None = None,
-    assistant_thinking_content: str | None = None,
-    assistant_tool_events: list[dict] | None = None,
-    assistant_loop_steps: list[str] | None = None,
-    assistant_thinking_duration_ms: int | None = None,
-    assistant_thinking_mode: str | None = None,
-    session: AsyncSession | None = None,
-) -> tuple[int, Message]:
-    async with _get_session(session) as s:
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-
-        if not conversation_id:
-            conv = Conversation(title="New Chat", user_id=user_id, created_at=now, updated_at=now)
-            s.add(conv)
-            await s.flush()
-            conversation_id = conv.id
-        else:
-            conv = await s.get(Conversation, conversation_id)
-            if conv is None or conv.user_id != user_id or conv.deleted_at is not None:
-                conv = Conversation(title="New Chat", user_id=user_id, created_at=now, updated_at=now)
-                s.add(conv)
-                await s.flush()
-                conversation_id = conv.id
-
-        conv = await s.get(Conversation, conversation_id)
-        if conv and conv.deleted_at is None:
-            conv.updated_at = now
-
-        s.add(Message(
-            conversation_id=conversation_id,
-            role="user",
-            content=user_content,
-            image_url=user_image_url,
-            file_url=user_file_url,
-            token_count=user_tokens,
-            created_at=now,
-        ))
-        assistant_msg = Message(
-            conversation_id=conversation_id,
-            role="assistant",
-            content=assistant_content,
-            token_count=assistant_tokens,
-            reasoning_content=assistant_reasoning_content,
-            thinking_content=assistant_thinking_content,
-            tool_events=assistant_tool_events,
-            loop_steps=assistant_loop_steps,
-            thinking_duration_ms=assistant_thinking_duration_ms,
-            thinking_mode=assistant_thinking_mode,
-            created_at=now,
-        )
-        s.add(assistant_msg)
-        if session is None:
-            await s.commit()
-        await s.refresh(assistant_msg)
-        return conversation_id, assistant_msg
 
 
 async def update_conversation_title(conversation_id: int, user_id: int, title: str, session: AsyncSession | None = None):
@@ -251,6 +185,5 @@ async def save_chat_turn(
             s.add(final_message)
             await s.flush()
             conversation_id = conv.id
-            message_id = final_message.id
 
         return conversation_id, final_message

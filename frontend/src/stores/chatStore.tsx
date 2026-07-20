@@ -320,5 +320,5 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   dispatch({ type: "SET_THEME", payload: next });
 }
 
-export type { Message, Conversation, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, Theme, Panel, Page, BlogView, ThinkingMode, AISidebarConversationKey, AISidebarHistoryState, AIStreamEvent, ToolEvent, Reference, ResearchTopicDetail, ResearchTopicSummary };
+export type { Message, Conversation, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference, ResearchTopicDetail };
 export { isDisplayableMessage };

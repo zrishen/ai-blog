@@ -1,4 +1,4 @@
-export type DragSource = { kind: "cat" | "file"; id: number };
+type DragSource = { kind: "cat" | "file"; id: number };
 
 export function parseDragSource(data: string): DragSource | null {
   if (!data) return null;

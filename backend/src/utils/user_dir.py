@@ -43,8 +43,3 @@ def resolve_username(user_id: int | str) -> str:
         logger.debug("resolve_username 查询失败，回退到 str(user_id): user_id=%s", user_id, exc_info=True)
 
     return str(user_id)
-
-
-def invalidate_username_cache() -> None:
-    """用户改名等场景下调用，清空缓存让后续查询重新读 DB。"""
-    resolve_username.cache_clear()

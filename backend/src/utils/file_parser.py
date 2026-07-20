@@ -6,14 +6,6 @@ def _get_extension(filename: str) -> str:
     return Path(filename).suffix.lower()
 
 
-async def parse_file(stored_filename: str, *, user_id: int | str = 1) -> str:
-    """Extract text content from a saved file."""
-    from src.services.file_service import get_user_upload_dir
-
-    path = get_user_upload_dir(user_id) / stored_filename
-    return parse_path(path)
-
-
 def parse_path(path: Path, progress_callback=None) -> str:
     """Synchronously parse a path, optionally reporting completed parser units."""
     ext = _get_extension(path.name)

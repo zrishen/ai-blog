@@ -65,15 +65,6 @@ class FileDocumentUpdate(BaseModel):
     original_name: str | None = None
 
 
-class FileDocumentUploadResponse(BaseModel):
-    id: int
-    collection_name: str
-    original_name: str
-    chunk_count: int
-    category_id: Optional[int] = None
-    created_at: datetime
-
-
 class FileCollectionResponse(BaseModel):
     name: str
     document_count: int

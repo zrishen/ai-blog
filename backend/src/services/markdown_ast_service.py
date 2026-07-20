@@ -165,7 +165,6 @@ def _extract_list_items(tokens: list, list_open_idx: int) -> list[str]:
 
 def _skip_list(tokens: list, list_open_idx: int) -> int:
     """跳过整个列表(匹配 open/close),返回 close 之后的索引。"""
-    close_tag = "bullet_list_close" if tokens[list_open_idx].type == "bullet_list_open" else "ordered_list_close"
     depth = 0
     j = list_open_idx
     while j < len(tokens):

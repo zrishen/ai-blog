@@ -32,12 +32,9 @@ def mock_external_services():
          patch("src.services.trash_service.schedule_job", return_value=None), \
          patch("src.services.file_processing_service.vectorize_and_store", return_value=[]), \
          patch("src.api.files.delete_document_chunks", return_value=True), \
-         patch("src.utils.file_parser.parse_file", return_value="mocked content"), \
          patch("src.services.vector_store.list_collections", return_value=[]), \
-         patch("src.services.vector_store.get_collection_count", return_value=0), \
          patch("src.services.vector_store.search", return_value=[]), \
          patch("src.services.vector_store.delete_document_chunks", return_value=True), \
-         patch("src.services.vector_store.delete_collection", return_value=True), \
          patch("src.services.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
          patch("src.services.trash_service.delete_document_chunks", return_value=True), \
          patch("src.services.trash_service.delete_post_file", return_value=True):

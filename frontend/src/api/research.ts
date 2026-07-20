@@ -163,15 +163,6 @@ export interface ResearchDraftPreview {
   references: ResearchDraftReference[];
 }
 
-export interface BlogPostClaimLink {
-  id: number;
-  post_id: number;
-  claim_id: number;
-  topic_id: number;
-  usage_note?: string | null;
-  created_at: string;
-}
-
 // ============ Research Topics ============
 
 export async function listResearchTopics(): Promise<ResearchTopicSummary[]> {
@@ -200,29 +191,6 @@ export async function getResearchTopic(topicId: number): Promise<ResearchTopicDe
   const res = await apiFetch(`${API_BASE}/research/topics/${topicId}`);
   if (!res.ok) throw new Error("Failed to fetch research topic");
   return res.json();
-}
-
-export async function updateResearchTopic(topicId: number, data: {
-  title?: string;
-  description?: string | null;
-  status?: string;
-  summary?: string | null;
-}): Promise<ResearchTopicSummary> {
-  const res = await apiFetch(`${API_BASE}/research/topics/${topicId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await readErrorDetail(res, "更新研究主题失败");
-    throw new Error(err);
-  }
-  return res.json();
-}
-
-export async function archiveResearchTopic(topicId: number): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/research/topics/${topicId}/archive`, { method: "POST" });
-  if (!res.ok) throw new Error("Failed to archive research topic");
 }
 
 export async function deleteResearchTopic(topicId: number): Promise<void> {
@@ -259,92 +227,7 @@ export async function draftResearch(topicId: number): Promise<ResearchDraftPrevi
   return res.json();
 }
 
-// ============ Research Entities ============
-
-export async function createResearchEntity(topicId: number, data: {
-  name: string;
-  entity_type?: string | null;
-  description?: string | null;
-  confidence?: number;
-  status?: string;
-  aliases?: string[];
-}): Promise<ResearchEntity> {
-  const res = await apiFetch(`${API_BASE}/research/topics/${topicId}/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await readErrorDetail(res, "创建研究实体失败");
-    throw new Error(err);
-  }
-  return res.json();
-}
-
-export async function listResearchEntities(topicId: number): Promise<ResearchEntity[]> {
-  const res = await apiFetch(`${API_BASE}/research/topics/${topicId}/entities`);
-  if (!res.ok) throw new Error("Failed to fetch research entities");
-  return res.json();
-}
-
-export async function getResearchEntity(entityId: number): Promise<ResearchEntity> {
-  const res = await apiFetch(`${API_BASE}/research/entities/${entityId}`);
-  if (!res.ok) throw new Error("Failed to fetch research entity");
-  return res.json();
-}
-
-export async function updateResearchEntity(entityId: number, data: {
-  name?: string;
-  entity_type?: string | null;
-  description?: string | null;
-  confidence?: number;
-  status?: string;
-  aliases?: string[];
-}): Promise<ResearchEntity> {
-  const res = await apiFetch(`${API_BASE}/research/entities/${entityId}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await readErrorDetail(res, "更新研究实体失败");
-    throw new Error(err);
-  }
-  return res.json();
-}
-
-export async function deleteResearchEntity(entityId: number): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/research/entities/${entityId}`, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await readErrorDetail(res, "删除研究实体失败");
-    throw new Error(err);
-  }
-}
-
 // ============ Research Claims ============
-
-export async function createResearchClaim(topicId: number, data: {
-  claim_text: string;
-  status?: string;
-  confidence?: number;
-  claim_type?: string | null;
-  adopted?: boolean;
-  reasoning?: string | null;
-  evidence_ids?: number[];
-  entity_ids?: number[];
-  entity_names?: string[];
-}): Promise<ResearchClaim> {
-  const res = await apiFetch(`${API_BASE}/research/topics/${topicId}/claims`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await readErrorDetail(res, "创建事实声明失败");
-    throw new Error(err);
-  }
-  return res.json();
-}
 
 export async function updateResearchClaim(claimId: number, data: {
   status?: string;
@@ -416,22 +299,3 @@ export async function getBlogResearchSummary(postId: number): Promise<BlogResear
   return res.json();
 }
 
-export async function detachResearchTopicFromPost(postId: number, topicId: number): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/research-topics/${topicId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to detach research topic from post");
-}
-
-export async function adoptClaimForPost(postId: number, claimId: number, usageNote?: string): Promise<BlogPostClaimLink> {
-  const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/claims`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ claim_id: claimId, usage_note: usageNote || "" }),
-  });
-  if (!res.ok) throw new Error("Failed to adopt claim for post");
-  return res.json();
-}
-
-export async function removeClaimFromPost(postId: number, claimId: number): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/claims/${claimId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to remove claim from post");
-}

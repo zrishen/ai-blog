@@ -17,7 +17,6 @@ from src.services.markdown_blog_service import (
     sync_file_to_db,
     write_post,
 )
-from src.utils.slug import slugify
 
 logger = logging.getLogger(__name__)
 

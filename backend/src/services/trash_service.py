@@ -27,7 +27,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import (

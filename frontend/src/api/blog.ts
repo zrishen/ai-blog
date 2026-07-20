@@ -63,10 +63,6 @@ export async function getSitePost(username: string, slug: string): Promise<BlogP
   return res.json();
 }
 
-export async function getOfficialIntroPost(): Promise<BlogPostData> {
-  return getSitePost("ai-blog", "ai-blog-intro");
-}
-
 export async function listBlogPosts(params?: {
   status?: string;
   search?: string;

@@ -491,7 +491,6 @@ async def _build_messages(
             db_messages = await get_messages(conversation_id, user_id)
     else:
         db_messages = []
-        db_messages = []
 
     full_user_message = user_message
     user_token_count = estimate_tokens(full_user_message)
@@ -500,8 +499,6 @@ async def _build_messages(
     # 取最近 40 条（tool 调用会翻倍消息数）
     raw = list(db_messages[-40:])
 
-    # 收集所有 tool_call_id，用于验证配对
-    pending_tool_ids: set[str] = set()
     i = 0
     while i < len(raw):
         m = raw[i]

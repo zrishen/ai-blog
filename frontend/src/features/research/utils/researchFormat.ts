@@ -68,7 +68,7 @@ export function isResearchTabKey(value: string | null): value is ResearchTabKey 
   return RESEARCH_TABS.some(([key]) => key === value);
 }
 
-export type ProposalConflictSummary = {
+type ProposalConflictSummary = {
   between: string;
   reason: string;
 };
@@ -83,7 +83,7 @@ export function numberField(payload: Record<string, unknown>, key: string) {
   return typeof value === "number" ? value : null;
 }
 
-export function stringField(payload: Record<string, unknown>, key: string) {
+function stringField(payload: Record<string, unknown>, key: string) {
   const value = payload[key];
   return typeof value === "string" ? value : "";
 }
@@ -113,9 +113,8 @@ export function proposalOneLineSummary(payload?: Record<string, unknown> | null)
 
 export type ResearchTopicClaim = ResearchTopicDetail["claims"][number];
 export type ResearchTopicSource = ResearchTopicDetail["sources"][number];
-export type ResearchTopicEvidence = ResearchTopicDetail["evidence"][number];
 export type ResearchTopicProposal = ResearchTopicDetail["proposals"][number];
-export type ResearchTopicRelation = ResearchTopicDetail["relations"][number];
+type ResearchTopicRelation = ResearchTopicDetail["relations"][number];
 
 export type ConflictPair = {
   relation: ResearchTopicRelation;

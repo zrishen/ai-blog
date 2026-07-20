@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import FileCategory, FileDocument, FileProcessingJob
 from src.database.session import async_session
-from src.services.file_service import delete_uploaded_file, get_user_upload_dir, vectorize_and_store
+from src.services.file_service import delete_uploaded_file, vectorize_and_store
 from src.services.vector_store import delete_document_chunks
 
 logger = logging.getLogger(__name__)

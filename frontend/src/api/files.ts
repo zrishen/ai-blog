@@ -22,11 +22,6 @@ export interface FileDocumentsResponse {
   documents: FileDocument[];
 }
 
-export interface CollectionInfo {
-  name: string;
-  document_count: number;
-}
-
 export type FileProcessingStatus = "staging" | "queued" | "running" | "succeeded" | "failed";
 
 export interface FileProcessingStage {
@@ -192,20 +187,6 @@ export async function deleteFileDocument(docId: number): Promise<void> {
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`Failed to delete file library document: ${err}`);
-  }
-}
-
-export async function listFileCollections(): Promise<CollectionInfo[]> {
-  const res = await apiFetch(`${API_BASE}/files/collections`);
-  if (!res.ok) throw new Error("Failed to fetch file library collections");
-  return res.json();
-}
-
-export async function deleteFileCollection(name: string): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/files/collections/${name}`, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to delete file library collection: ${err}`);
   }
 }
 

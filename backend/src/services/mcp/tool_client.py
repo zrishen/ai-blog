@@ -12,7 +12,6 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_core.tools import BaseTool
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.session import ClientSession
-from mcp.types import CallToolResult, TextContent
 
 logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -73,37 +72,6 @@ class MCPToolManager:
                 }
         return configs
 
-    async def load_servers(self, servers: list[dict]) -> list[BaseTool]:
-        """从数据库配置加载 MCP 服务器并获取工具。
-
-        servers: [{"name": str, "server_type": "stdio"|"streamable-http", "command": str|None, "args": list|None, "env_vars": dict|None, "url": str|None}]
-        返回: langchain BaseTool 列表
-        """
-        configs = self._build_configs(servers)
-        if not configs:
-            logger.info("No active MCP servers configured")
-            return []
-
-        logger.info("Loading MCP tools from %d server(s): %s", len(configs), list(configs.keys()))
-        self._server_configs = configs
-        self._client = MultiServerMCPClient(configs)
-        tools = await self._client.get_tools()
-        self._tool_map = {t.name: t for t in tools}
-        logger.info("Loaded %d MCP tools: %s", len(tools), list(self._tool_map.keys()))
-        return tools
-
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
-        """调用已加载的工具。"""
-        tool = self._tool_map.get(name)
-        if not tool:
-            raise ValueError(f"Tool '{name}' not found in loaded tools: {list(self._tool_map.keys())}")
-        try:
-            result = await tool.ainvoke(arguments)
-            return str(result)
-        except Exception as e:
-            logger.error("Tool '%s' failed: %s", name, e, exc_info=True)
-            raise
-
     async def call_tool_lazy(
         self,
         server: dict,
@@ -133,10 +101,6 @@ class MCPToolManager:
         except Exception as e:
             logger.error("MCP tool call failed: %s: %s", tool_ref, e, exc_info=True)
             return f"MCP 工具调用失败：{tool_ref}。错误：{e}"
-
-    async def get_tools(self) -> list[BaseTool]:
-        """获取已加载的工具列表。"""
-        return list(self._tool_map.values())
 
     @staticmethod
     def _parse_json_field(value: Any, default: Any) -> Any:

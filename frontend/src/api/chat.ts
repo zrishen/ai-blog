@@ -617,16 +617,6 @@ export async function sendSharedUserChat(
   await readPlainStream(res, onChunk);
 }
 
-export async function sendChatSync(content: string, conversationId: number | null) {
-  const res = await apiFetch(`${API_BASE}/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, conversation_id: conversationId }),
-  });
-  if (!res.ok) throw new Error("Chat request failed");
-  return res.json();
-}
-
 export async function uploadFile(file: File): Promise<{ stored_name: string; original_name: string; download_url: string }> {
   const formData = new FormData();
   formData.append("file", file);

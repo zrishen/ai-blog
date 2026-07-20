@@ -57,7 +57,7 @@ def _is_supported(filename: str, *, allow_images: bool = True) -> bool:
 def _validate_file(filename: str, size: int | None, content_type: str | None, *, allow_images: bool = True) -> str | None:
     """Return error message if invalid, None if OK."""
     if size is not None and size > MAX_FILE_SIZE:
-        return f"File exceeds 100MB limit"
+        return "File exceeds 100MB limit"
     if not _is_supported(filename, allow_images=allow_images):
         ext = _get_extension(filename)
         return f"Unsupported file type: {ext}"

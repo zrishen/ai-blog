@@ -1,6 +1,5 @@
 """研究 prompt 构建测试。"""
 
-import pytest
 from src.database.models import ResearchTopic
 from src.services.research_service import _build_research_prompt
 
