@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import { useChat } from "../stores/chatStore";
-import { listMCPServers, addMCPServer, toggleMCPServer, deleteMCPServer, type MCPServerConfig } from "../api/client";
+import { useChat } from "../../../stores/chatStore";
+import { listMCPServers, addMCPServer, toggleMCPServer, deleteMCPServer, type MCPServerConfig } from "../../../api/client";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Wrench, Globe, Terminal, Trash2, Plus, AlertCircle, ArrowLeft, Eye, Copy, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";

@@ -27,7 +27,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { researchStatusLabel } from "./fileIcons";
+import { statusLabel as researchStatusLabel } from "./utils/researchFormat";
 
 export function ResearchPanel() {
   const { state, dispatch } = useChat();

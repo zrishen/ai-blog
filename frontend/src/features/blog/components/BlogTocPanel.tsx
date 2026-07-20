@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useChat } from "../../stores/chatStore";
+import { useChat } from "../../../stores/chatStore";
 import { ChevronRight } from "lucide-react";
-import { extractHeadings, type TocItem } from "../../features/blog/utils/blogToc";
+import { extractHeadings, type TocItem } from "../utils/blogToc";
 
 function getParentSlug(headings: TocItem[], slug: string): string {
   for (let i = 0; i < headings.length; i++) {

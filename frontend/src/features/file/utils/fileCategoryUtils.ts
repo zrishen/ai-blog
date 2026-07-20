@@ -1,4 +1,4 @@
-import type { FileCategory, FileDocument } from "../../stores/chatStore";
+import type { FileCategory, FileDocument } from "../../../stores/chatStore";
 
 export type EditingState =
   | { type: "rename"; categoryId: number; value: string }

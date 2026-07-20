@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { useChat } from "../../stores/chatStore";
+import { useChat } from "../../../stores/chatStore";
 import { Tags } from "lucide-react";
-import { getBlogTagStyle, splitBlogTags } from "../../features/blog/utils/blogTags";
+import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 
 export function BlogOverviewPanel() {
   const { state, dispatch } = useChat();

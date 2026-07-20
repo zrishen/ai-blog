@@ -1,5 +1,5 @@
 import { useChat } from "../../../stores/chatStore";
-import { FilePreview } from "../../../components/FilePreview";
+import { FilePreview } from "../components/FilePreview";
 
 export function FilePreviewPane() {
   const { state } = useChat();

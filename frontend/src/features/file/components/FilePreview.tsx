@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getPreviewUrl } from "../api/client";
+import { getPreviewUrl } from "../../../api/client";
 
 interface Props {
   filename: string;

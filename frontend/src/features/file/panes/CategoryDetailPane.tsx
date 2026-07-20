@@ -12,7 +12,7 @@ import {
 import {
   collectDescendantIds,
   findCategoryById,
-} from "../../../components/left-sidebar/fileCategoryUtils";
+} from "../utils/fileCategoryUtils";
 import { formatDate, getDocumentIcon } from "./filePaneUtils";
 
 interface CategoryDetailPaneProps {

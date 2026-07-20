@@ -10,10 +10,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, RotateCcw, Loader2, MessageSquare, FileText, PenLine, Search } from "lucide-react";
-import { listTrash, restoreTrashItem, purgeTrashItem, emptyTrash } from "../api/trash";
-import type { TrashItem, TrashItemType, TrashPurgeResponse } from "../api/trash";
-import { useFileProcessing } from "../features/file-processing/FileProcessingProvider";
-import { FileProcessingProgress } from "../features/file-processing/FileProcessingProgress";
+import { listTrash, restoreTrashItem, purgeTrashItem, emptyTrash } from "../../../api/trash";
+import type { TrashItem, TrashItemType, TrashPurgeResponse } from "../../../api/trash";
+import { useFileProcessing } from "../../../features/file-processing/FileProcessingProvider";
+import { FileProcessingProgress } from "../../../features/file-processing/FileProcessingProgress";
 
 interface TrashDialogProps {
   open: boolean;

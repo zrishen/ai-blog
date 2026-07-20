@@ -27,7 +27,7 @@ vi.mock("../../src/api/trash", () => ({
   emptyTrash: (...args: unknown[]) => emptyTrashMock(...args),
 }));
 
-import { TrashDialog, TRASH_SEARCH_THRESHOLD } from "../../src/components/TrashDialog";
+import { TrashDialog, TRASH_SEARCH_THRESHOLD } from "../../src/features/file/components/TrashDialog";
 
 function makeItems(n: number) {
   const items = [];

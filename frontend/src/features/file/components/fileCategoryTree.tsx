@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import type { FileCategory, FileDocument } from "../../stores/chatStore";
+import type { FileCategory, FileDocument } from "../../../stores/chatStore";
 import {
   Folder,
   ChevronRight,
@@ -18,8 +18,8 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
-import type { EditingState } from "./fileCategoryUtils";
-import { parseDragSource } from "./dragSource";
+import type { EditingState } from "../utils/fileCategoryUtils";
+import { parseDragSource } from "../utils/dragSource";
 import { getFileIcon } from "./fileIcons";
 
 export interface CategoryTreeProps {

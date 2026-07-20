@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LoginDialog } from "@/features/auth/LoginDialog";
 import { ProjectMark } from "@/components/ProjectMark";
-import { TrashDialog } from "@/components/TrashDialog";
+import { TrashDialog } from "@/features/file/components/TrashDialog";
 import type { AuthUser } from "../stores/authStore";
 import { getLLMSettings, updateLLMSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";

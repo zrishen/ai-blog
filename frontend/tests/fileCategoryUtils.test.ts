@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FileCategory } from "../src/stores/chatStore";
-import { collectDescendantIds } from "../src/components/left-sidebar/fileCategoryUtils";
-import { parseDragSource } from "../src/components/left-sidebar/dragSource";
+import { collectDescendantIds } from "../src/features/file/utils/fileCategoryUtils";
+import { parseDragSource } from "../src/features/file/utils/dragSource";
 
 const categories: FileCategory[] = [
   {

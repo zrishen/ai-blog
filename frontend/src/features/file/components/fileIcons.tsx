@@ -24,15 +24,3 @@ export function getFileIcon(fileName: string) {
       );
   }
 }
-
-export function researchStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    draft: "草稿",
-    researching: "研究中",
-    reviewing: "待审核",
-    ready: "已确认",
-    stale: "可能过期",
-    archived: "已归档",
-  };
-  return labels[status] ?? status;
-}

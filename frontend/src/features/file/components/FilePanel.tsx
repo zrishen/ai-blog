@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useChat } from "../../stores/chatStore";
-import { useAuth } from "../../stores/authStore";
-import type { FileDocument } from "../../stores/chatStore";
+import { useChat } from "../../../stores/chatStore";
+import { useAuth } from "../../../stores/authStore";
+import type { FileDocument } from "../../../stores/chatStore";
 import {
   listFileCategories,
   listFileDocuments,
@@ -11,8 +11,8 @@ import {
   setDocumentCategory,
   deleteFileDocument,
   updateFileDocument,
-} from "../../api/client";
-import { useFileProcessing } from "../../features/file-processing/FileProcessingProvider";
+} from "../../../api/client";
+import { useFileProcessing } from "../../../features/file-processing/FileProcessingProvider";
 import { FolderOpen, FolderPlus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,9 +37,9 @@ import {
   findCategoryById,
   flattenCategories,
   type EditingState,
-} from "./fileCategoryUtils";
+} from "../utils/fileCategoryUtils";
 import { CategoryTree, FileNode } from "./fileCategoryTree";
-import { parseDragSource } from "./dragSource";
+import { parseDragSource } from "../utils/dragSource";
 
 interface MoveTarget {
   kind: "file" | "category";

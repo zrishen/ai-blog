@@ -10,7 +10,7 @@ import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
 import { FileLibraryPage } from "./features/file/FileLibraryPage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
-import { MCPModal } from "./components/MCPModal";
+import { MCPModal } from "./features/ai-chat/components/MCPModal";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
 import "./App.css";
 

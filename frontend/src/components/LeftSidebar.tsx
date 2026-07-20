@@ -1,8 +1,8 @@
 import { useChat } from "../stores/chatStore";
-import { BlogTocPanel } from "./left-sidebar/BlogTocPanel";
-import { FilePanel } from "./left-sidebar/FilePanel";
-import { ResearchPanel } from "./left-sidebar/ResearchPanel";
-import { BlogOverviewPanel } from "./left-sidebar/BlogOverviewPanel";
+import { BlogTocPanel } from "../features/blog/components/BlogTocPanel";
+import { FilePanel } from "../features/file/components/FilePanel";
+import { ResearchPanel } from "../features/research/ResearchPanel";
+import { BlogOverviewPanel } from "../features/blog/components/BlogOverviewPanel";
 
 export function LeftSidebar() {
   const { state } = useChat();
