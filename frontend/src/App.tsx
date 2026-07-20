@@ -1,9 +1,10 @@
-import { Component, createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, matchPath, useLocation } from "react-router-dom";
 import { useChatState, useChatDispatch } from "./stores/chatStore";
 import { useAuth } from "./stores/authStore";
 import { NavBar } from "./components/NavBar";
 import { LeftSidebar } from "./components/LeftSidebar";
+import { MobileDrawer } from "./components/MobileDrawer";
 import { AISidebar } from "./features/ai-chat/AISidebar";
 import { SiteBlogRoute } from "./features/blog/components/SiteBlogRoute";
 import { SitePostRoute } from "./features/blog/components/SitePostRoute";
@@ -11,10 +12,12 @@ import { LandingPage } from "./features/landing/LandingPage";
 import { FileLibraryPage } from "./features/file/FileLibraryPage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
 import { MCPModal } from "./features/ai-chat/components/MCPModal";
+import { useMediaQuery } from "./hooks/useMediaQuery";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
 import "./App.css";
 
 const LAYOUT_STORAGE_KEY = "app-panel-layout";
+const MOBILE_WORKSPACE_QUERY = "(max-width: 767px)";
 
 function loadPanelLayout() {
   try {
@@ -200,68 +203,118 @@ function App() {
   return <AuthenticatedApp />;
 }
 
+type AISidebarRouteContext = ReturnType<typeof useAISidebarRouteContext>;
+
+function MobileWorkspace({ aiContext }: { aiContext: AISidebarRouteContext }) {
+  const [mobileDrawer, setMobileDrawer] = useState<"navigation" | "ai" | null>(null);
+  const openNavigationButtonRef = useRef<HTMLButtonElement>(null);
+  const openAIButtonRef = useRef<HTMLButtonElement>(null);
+  const closeMobileDrawer = useCallback(() => setMobileDrawer(null), []);
+  const openMobileNavigation = useCallback(() => setMobileDrawer("navigation"), []);
+  const openMobileAI = useCallback(() => setMobileDrawer("ai"), []);
+
+  return (
+    <>
+      <NavBar
+        onOpenNavigation={openMobileNavigation}
+        onOpenAI={openMobileAI}
+        navigationButtonRef={openNavigationButtonRef}
+        aiButtonRef={openAIButtonRef}
+      />
+      <main className="main-content app-body mobile-workspace-main">
+        <MainContent />
+      </main>
+      <MobileDrawer
+        open={mobileDrawer === "navigation"}
+        side="left"
+        title="工作区导航"
+        onOpenChange={(open) => setMobileDrawer(open ? "navigation" : null)}
+        returnFocusRef={openNavigationButtonRef}
+      >
+        <LeftSidebar />
+      </MobileDrawer>
+      <MobileDrawer
+        open={mobileDrawer === "ai"}
+        side="right"
+        title="AI 助手"
+        onOpenChange={(open) => setMobileDrawer(open ? "ai" : null)}
+        returnFocusRef={openAIButtonRef}
+      >
+        <AISidebar {...aiContext} forceExpanded onRequestClose={closeMobileDrawer} />
+      </MobileDrawer>
+    </>
+  );
+}
+
 function AuthenticatedApp() {
   const state = useChatState();
   const { isAuthenticated } = useAuth();
   const aiContext = useAISidebarRouteContext();
+  const isMobileWorkspace = useMediaQuery(MOBILE_WORKSPACE_QUERY);
   const [groupApi, groupRef] = useGroupCallbackRef();
   const [initialLayout] = useState(loadPanelLayout);
   const lastOpenAiSizeRef = useRef(initialLayout.aiOpenSize);
   const leftSizeRef = useRef(initialLayout.leftSize);
   useEffect(() => {
-    if (!groupApi) return;
+    if (!groupApi || isMobileWorkspace) return;
     const aiSize = state.aiSidebarOpen ? lastOpenAiSizeRef.current : 4;
     const leftSize = leftSizeRef.current;
     groupApi.setLayout({ left: leftSize, main: 100 - leftSize - aiSize, ai: aiSize });
-  }, [groupApi, state.aiSidebarOpen]);
+  }, [groupApi, isMobileWorkspace, state.aiSidebarOpen]);
 
   const panelGroupValue = groupApi ?? null;
 
   return (
     <ErrorBoundary>
       <div className="app-root">
-        <NavBar />
-        <PanelGroupCtx.Provider value={panelGroupValue}>
-          <PanelGroup
-            orientation="horizontal"
-            className="app-body"
-            groupRef={groupRef}
-            onLayoutChanged={(layout) => {
-              const leftSize = layout.left;
-              const aiSize = layout.ai;
-              leftSizeRef.current = leftSize;
-              if (aiSize > 5) {
-                lastOpenAiSizeRef.current = aiSize;
-              }
-              savePanelLayout(leftSize, lastOpenAiSizeRef.current);
-            }}
-          >
-            <Panel id="left" defaultSize={`${initialLayout.leftSize}%`} minSize="10%" maxSize="40%">
-              <LeftSidebar />
-            </Panel>
-            <PanelResizeHandle className="w-[6px] -ml-[3px] -mr-[3px] relative z-10 cursor-col-resize group">
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border/60 group-hover:w-[2px] group-hover:bg-primary/40 group-active:bg-primary/60 transition-all" />
-            </PanelResizeHandle>
-            <Panel id="main" defaultSize={`${100 - initialLayout.leftSize - initialLayout.aiOpenSize}%`} minSize="40%">
-              <main className="main-content">
-                <MainContent />
-              </main>
-            </Panel>
-            <PanelResizeHandle className="w-[6px] -ml-[3px] -mr-[3px] relative z-10 cursor-col-resize group">
-              <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border/60 group-hover:w-[2px] group-hover:bg-primary/40 group-active:bg-primary/60 transition-all" />
-            </PanelResizeHandle>
-            <Panel
-              id="ai"
-              collapsible
-              collapsedSize="4%"
-              defaultSize={state.aiSidebarOpen ? `${initialLayout.aiOpenSize}%` : "4%"}
-              minSize="10%"
-              maxSize="50%"
+        {isMobileWorkspace ? (
+          <MobileWorkspace aiContext={aiContext} />
+        ) : (
+          <>
+            <NavBar />
+            <PanelGroupCtx.Provider value={panelGroupValue}>
+            <PanelGroup
+              orientation="horizontal"
+              className="app-body"
+              groupRef={groupRef}
+              onLayoutChanged={(layout) => {
+                const leftSize = layout.left;
+                const aiSize = layout.ai;
+                leftSizeRef.current = leftSize;
+                if (aiSize > 5) {
+                  lastOpenAiSizeRef.current = aiSize;
+                }
+                savePanelLayout(leftSize, lastOpenAiSizeRef.current);
+              }}
             >
-              <AISidebar {...aiContext} />
-            </Panel>
-          </PanelGroup>
-        </PanelGroupCtx.Provider>
+              <Panel id="left" defaultSize={`${initialLayout.leftSize}%`} minSize="10%" maxSize="40%">
+                <LeftSidebar />
+              </Panel>
+              <PanelResizeHandle className="w-[6px] -ml-[3px] -mr-[3px] relative z-10 cursor-col-resize group">
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border/60 group-hover:w-[2px] group-hover:bg-primary/40 group-active:bg-primary/60 transition-all" />
+              </PanelResizeHandle>
+              <Panel id="main" defaultSize={`${100 - initialLayout.leftSize - initialLayout.aiOpenSize}%`} minSize="40%">
+                <main className="main-content">
+                  <MainContent />
+                </main>
+              </Panel>
+              <PanelResizeHandle className="w-[6px] -ml-[3px] -mr-[3px] relative z-10 cursor-col-resize group">
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-px bg-border/60 group-hover:w-[2px] group-hover:bg-primary/40 group-active:bg-primary/60 transition-all" />
+              </PanelResizeHandle>
+              <Panel
+                id="ai"
+                collapsible
+                collapsedSize="4%"
+                defaultSize={state.aiSidebarOpen ? `${initialLayout.aiOpenSize}%` : "4%"}
+                minSize="10%"
+                maxSize="50%"
+              >
+                <AISidebar {...aiContext} />
+              </Panel>
+              </PanelGroup>
+            </PanelGroupCtx.Provider>
+          </>
+        )}
 
         {isAuthenticated && state.mcpModalOpen && <MCPModal />}
       </div>

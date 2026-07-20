@@ -330,7 +330,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
           )}
 
           <div
-            className="relative px-6 pt-4 sm:px-10 sm:pt-5 pb-0"
+            className="relative px-4 pt-4 sm:px-10 sm:pt-5 pb-0"
             style={post.cover_image ? {
               backgroundImage: `url(${post.cover_image})`,
               backgroundSize: "cover",
@@ -391,7 +391,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
               ))}
             </div>
 
-            <h1 className={`relative max-w-none text-4xl font-black leading-tight tracking-[-0.055em] ${isDark && post.cover_image ? "text-white" : "text-foreground"}`}>
+            <h1 className={`relative max-w-none text-3xl font-black leading-tight tracking-[-0.055em] sm:text-4xl ${isDark && post.cover_image ? "text-white" : "text-foreground"}`}>
               {post.title}
             </h1>
 
@@ -409,7 +409,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
 
           <div
             ref={articleRef}
-            className="px-6 pb-10 sm:px-10"
+            className="px-4 pb-10 sm:px-10"
           >
             <div className="prose prose-slate dark:prose-invert mt-2 max-w-none text-foreground prose-headings:tracking-[-0.035em] prose-headings:text-foreground prose-p:mt-0 prose-p:mb-[0.92em] prose-p:leading-[1.86] prose-a:text-primary prose-strong:text-foreground prose-code:rounded-md prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none prose-pre:m-0 prose-pre:rounded-none prose-pre:border-0 prose-pre:bg-transparent prose-pre:p-0 prose-blockquote:rounded-r-2xl prose-blockquote:border-l-primary prose-blockquote:bg-primary/5 prose-blockquote:py-1 prose-img:rounded-2xl prose-img:shadow-lg prose-hr:border-border">
               {patchRenderInfo ? (

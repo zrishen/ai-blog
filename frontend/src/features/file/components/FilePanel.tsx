@@ -399,6 +399,16 @@ export function FilePanel() {
   return (
     <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-hidden select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
       <div className="p-3 flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2 md:hidden">
+          <Button variant="outline" size="sm" className="rounded-full" onClick={() => setNewRootOpen(true)}>
+            <FolderPlus className="h-4 w-4" />
+            新建分类
+          </Button>
+          <Button variant="outline" size="sm" className="rounded-full" onClick={() => setUploadTarget({ id: null, name: "全部分类" })}>
+            <Upload className="h-4 w-4" />
+            上传文件
+          </Button>
+        </div>
         {fileActionError && (
           <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-[13px] leading-relaxed text-destructive">
             {fileActionError}
@@ -455,7 +465,8 @@ export function FilePanel() {
           <ContextMenuTrigger asChild>
             <div className="flex-1 flex items-center justify-center px-6 text-center">
               <span className="text-base text-muted-foreground leading-relaxed">
-                暂无分类，右键可创建分类和上传文件
+                <span className="md:hidden">暂无分类，可使用上方按钮创建分类和上传文件</span>
+                <span className="hidden md:inline">暂无分类，右键可创建分类和上传文件</span>
               </span>
             </div>
           </ContextMenuTrigger>

@@ -125,7 +125,7 @@ export function ConversationListView({
                 </div>
               </div>
               <button
-                className="flex-shrink-0 rounded-full p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                className="flex-shrink-0 rounded-full p-1.5 text-muted-foreground opacity-100 transition-all hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100"
                 onClick={(e) => onDeleteRequest(conv, e)}
                 title="删除对话"
               >

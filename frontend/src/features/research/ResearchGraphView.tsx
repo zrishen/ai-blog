@@ -31,9 +31,9 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
   const hasGraph = nodes.length > 0;
 
   return (
-    <div className="grid min-h-[680px] gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid gap-4 sm:min-h-[680px] xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="overflow-hidden rounded-[1.8rem] border border-border/70 bg-background/55 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-3 sm:p-4">
           <div>
             <h2 className="text-lg font-black tracking-[-0.03em] text-foreground">研究图谱</h2>
             <p className="mt-1 text-sm text-muted-foreground">展示来源、证据、事实和实体之间的可追溯关系。</p>
@@ -46,7 +46,7 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
           </div>
         </div>
 
-        <div className="h-[600px] bg-muted/15">
+        <div className="h-[min(62dvh,520px)] min-h-[360px] bg-muted/15 sm:h-[600px]">
           {hasGraph ? (
             <ReactFlow
               nodes={nodes}
@@ -66,7 +66,7 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
                 setSelectedClaimId(null);
               }}
             >
-              <MiniMap pannable zoomable nodeStrokeWidth={3} className="!bg-background/90" />
+              <MiniMap pannable zoomable nodeStrokeWidth={3} className="!hidden !bg-background/90 md:!block" />
               <Controls />
               <Background gap={22} size={1} />
             </ReactFlow>

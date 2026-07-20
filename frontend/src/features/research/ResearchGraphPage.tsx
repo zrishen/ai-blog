@@ -100,14 +100,14 @@ export function ResearchGraphPage() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-background p-2">
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.8rem] border border-border/70 bg-card/86 shadow-xl shadow-foreground/5 backdrop-blur-xl">
-        <div className="border-b border-border/70 p-5">
+        <div className="border-b border-border/70 p-3 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-[13px] font-semibold text-primary">
                 <BrainCircuit className="h-3.5 w-3.5" />
                 事实审核台
               </div>
-              <h1 className="text-3xl font-black tracking-[-0.04em] text-foreground">{selectedTopic?.title ?? "研究图谱"}</h1>
+              <h1 className="text-2xl font-black tracking-[-0.04em] text-foreground sm:text-3xl">{selectedTopic?.title ?? "研究图谱"}</h1>
               <p className="mt-2 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
                 {selectedTopic?.description || "围绕主题整理来源、证据、事实、冲突和 Agent 更新提案。"}
               </p>
@@ -147,13 +147,13 @@ export function ResearchGraphPage() {
           )}
         </div>
 
-        <div className="flex gap-1 border-b border-border/70 px-4 py-2">
+        <div className="flex gap-1 overflow-x-auto border-b border-border/70 px-3 py-2 sm:px-4">
           {RESEARCH_TABS.map(([key, label]) => (
             <Button
               key={key}
               variant={activeTab === key ? "default" : "ghost"}
               size="sm"
-              className="rounded-full"
+              className="flex-shrink-0 rounded-full"
               onClick={() => handleTabChange(key)}
             >
               {label}
@@ -161,7 +161,7 @@ export function ResearchGraphPage() {
           ))}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
           {!selectedTopic ? (
             <div className="flex h-full min-h-[360px] items-center justify-center rounded-[1.6rem] border border-dashed border-border/80 bg-background/45 p-8 text-center">
               <div>

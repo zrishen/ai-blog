@@ -89,7 +89,7 @@ function FilePreviewHTML({ url }: { url: string }) {
         )}
         {html && (
           <div
-            className="h-full overflow-y-auto p-0 text-sm leading-[1.8]"
+            className="h-full overflow-auto p-0 text-sm leading-[1.8] md:overflow-x-hidden md:overflow-y-auto max-md:[&_img]:max-w-none max-md:[&_table]:min-w-max"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         )}

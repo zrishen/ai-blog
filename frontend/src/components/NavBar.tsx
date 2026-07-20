@@ -14,6 +14,8 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Menu,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +42,14 @@ import type { AuthUser } from "../stores/authStore";
 import { getLLMSettings, updateLLMSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";
 
-export function NavBar() {
+interface NavBarProps {
+  onOpenNavigation?: () => void;
+  onOpenAI?: () => void;
+  navigationButtonRef?: React.Ref<HTMLButtonElement>;
+  aiButtonRef?: React.Ref<HTMLButtonElement>;
+}
+
+export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButtonRef }: NavBarProps = {}) {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -164,16 +173,30 @@ export function NavBar() {
   };
 
   return (
-    <nav className="h-13 flex-shrink-0 flex items-center bg-card/78 backdrop-blur-xl border-b border-border/80 px-4 gap-3 z-100 relative shadow-[0_10px_35px_hsl(var(--foreground)/0.05)] select-none">
+    <nav className="h-13 flex-shrink-0 flex items-center bg-card/78 backdrop-blur-xl border-b border-border/80 px-2.5 sm:px-4 gap-1.5 sm:gap-3 z-100 relative shadow-[0_10px_35px_hsl(var(--foreground)/0.05)] select-none">
+      {onOpenNavigation && (
+        <Button
+          ref={navigationButtonRef}
+          variant="ghost"
+          size="icon"
+          className="rounded-full md:hidden"
+          onClick={onOpenNavigation}
+          title="打开工作区导航"
+          aria-label="打开工作区导航"
+        >
+          <Menu className="h-[18px] w-[18px]" />
+        </Button>
+      )}
+
       <button
-        className="flex items-center gap-2.5 mr-3 cursor-pointer bg-transparent border-none group"
+        className="group mr-1 flex min-w-0 cursor-pointer items-center gap-2 border-none bg-transparent sm:mr-3 sm:gap-2.5"
         onClick={handleLandingHome}
       >
         <span className="flex h-8 w-8 -rotate-6 items-center justify-center text-[#1E2A3A] transition-transform group-hover:-rotate-3 group-hover:scale-105 dark:text-foreground">
           <ProjectMark className="h-7 w-7" />
         </span>
         <span
-          className="text-left whitespace-nowrap text-[15px] font-semibold tracking-[0.06em] text-foreground transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.03]"
+          className="hidden text-left whitespace-nowrap text-[15px] font-semibold tracking-[0.06em] text-foreground transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.03] sm:inline"
           style={{ fontFamily: '"Songti SC", "Noto Serif CJK SC", "STSong", "SimSun", serif' }}
         >
           把想法写成体系
@@ -182,6 +205,19 @@ export function NavBar() {
 
       <div className="flex-1" />
 
+      {onOpenAI && (
+        <Button
+          ref={aiButtonRef}
+          variant="ghost"
+          size="icon"
+          className="rounded-full md:hidden"
+          onClick={onOpenAI}
+          title="打开 AI 助手"
+          aria-label="打开 AI 助手"
+        >
+          <MessageSquare className="h-[18px] w-[18px]" />
+        </Button>
+      )}
 
       <motion.div
         whileTap={{ rotate: 180, scale: 0.9 }}

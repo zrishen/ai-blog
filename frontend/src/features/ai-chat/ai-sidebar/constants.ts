@@ -7,6 +7,8 @@ export interface AISidebarProps {
   postSlug?: string;
   pageType?: "post" | "home" | "files" | "research" | "about" | "other";
   postTitle?: string;
+  onRequestClose?: () => void;
+  forceExpanded?: boolean;
 }
 
 export const blogToolOperations = new Set([

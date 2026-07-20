@@ -34,7 +34,7 @@ function makeTempKey(): AISidebarConversationKey {
   return `temp:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function AISidebar({ mode, contextText = "", siteUsername, postSlug, pageType = "other", postTitle }: AISidebarProps) {
+export function AISidebar({ mode, contextText = "", siteUsername, postSlug, pageType = "other", postTitle, onRequestClose, forceExpanded = false }: AISidebarProps) {
   const { state, dispatch } = useChat();
   const { user } = useAuth();
   const userId = user?.id;
@@ -160,7 +160,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     setHistoryReloadKey,
   }), [isPrivate, selectedKey, sidebarView, conversations, setSidebarView, getActiveKey, setInputForKey, loadConvs, abortControllersRef, runRefs, scrollToLatestAfterRender, handleNewChat, handleBackToList, historyReloadKey, setHistoryReloadKey]);
 
-  if (!state.aiSidebarOpen) {
+  if (!state.aiSidebarOpen && !forceExpanded) {
     return (
       <aside className="relative flex h-full w-full flex-col items-center border-l border-border/80 bg-card/82 pt-3 shadow-[-12px_0_35px_hsl(var(--foreground)/0.03)] backdrop-blur-xl">
         <Button
@@ -182,7 +182,13 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
       <AISidebarHeader
         isPrivate={isPrivate}
         sidebarView={sidebarView}
-        onCollapse={() => dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: false })}
+        onCollapse={() => {
+          if (onRequestClose) {
+            onRequestClose();
+            return;
+          }
+          dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: false });
+        }}
         onBackToList={handleBackToList}
         onNewChat={handleNewChat}
         onThinkingModeChange={handleThinkingModeChange}

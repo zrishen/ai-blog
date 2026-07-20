@@ -110,7 +110,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
             row.type === "single" ? (
               <BlogPostCard key={`single-${row.post.id}`} post={row.post} variant={row.variant} onClick={handlePostClick} />
             ) : (
-              <div key={`double-${row.posts[0].id}-${row.posts[1].id}`} className="flex gap-2">
+              <div key={`double-${row.posts[0].id}-${row.posts[1].id}`} className="flex flex-col gap-2 sm:flex-row">
                 {row.posts.map((post) => (
                   <div key={post.id} className="min-w-0 flex-1">
                     <BlogPostCard post={post} variant="compact" onClick={handlePostClick} />

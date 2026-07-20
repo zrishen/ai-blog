@@ -9,6 +9,7 @@ import {
   Pencil,
   Move,
   Eye,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   ContextMenu,
@@ -18,6 +19,13 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { EditingState } from "../utils/fileCategoryUtils";
 import { parseDragSource } from "../utils/dragSource";
 import { getFileIcon } from "./fileIcons";
@@ -254,6 +262,41 @@ export function CategoryTree({
                     </span>
                   )}
                 </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden"
+                      aria-label={`${cat.name} 更多操作`}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem onClick={() => onRequestNewSub(cat.id)}>
+                      <FolderPlus className="h-4 w-4" />
+                      新建子分类
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onRequestUpload(cat.id, cat.name)}>
+                      <Upload className="h-4 w-4" />
+                      上传文件
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onRequestMove(cat.id, cat.name)}>
+                      <Move className="h-4 w-4" />
+                      移动
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onRequestRename(cat.id, cat.name)}>
+                      <Pencil className="h-4 w-4" />
+                      重命名
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={() => onRequestDelete(cat.id, cat.name)}>
+                      <Trash2 className="h-4 w-4" />
+                      删除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             )}
           </ContextMenuTrigger>
@@ -479,6 +522,37 @@ export function FileNode({
         >
           <span className="flex-shrink-0">{getFileIcon(doc.original_name)}</span>
           <span className="flex-1 truncate">{doc.original_name}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground md:hidden"
+                aria-label={`${doc.original_name} 更多操作`}
+                onClick={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => onSelectFile(doc.file_path)}>
+                <Eye className="h-4 w-4" />
+                预览
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onRequestMove(doc)}>
+                <Move className="h-4 w-4" />
+                移动
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onRequestRename(doc)}>
+                <Pencil className="h-4 w-4" />
+                重命名
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => onRequestDelete(doc)}>
+                <Trash2 className="h-4 w-4" />
+                删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-44">

@@ -450,7 +450,7 @@ export function BlogEditor() {
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.18 }}
                       style={{ position: "fixed", top: draftPanelPos.top, left: draftPanelPos.left, zIndex: 9999 }}
-                      className="max-h-[380px] min-w-[340px] overflow-y-auto rounded-2xl border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl"
+                      className="max-h-[min(380px,70dvh)] w-[calc(100vw-2rem)] max-w-[340px] sm:max-h-[380px] overflow-y-auto rounded-2xl border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl sm:min-w-[340px]"
                     >
                       {drafts.length === 0 ? (
                         <div className="rounded-xl border border-dashed border-border/80 bg-secondary/40 px-5 py-7 text-center text-sm text-muted-foreground">
@@ -469,7 +469,7 @@ export function BlogEditor() {
                               <Button size="sm" className="h-7 rounded-full px-3" onClick={() => handleLoadDraft(draft)} disabled={draftLoading}>
                                 {draftLoading ? "加载中..." : "加载"}
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-100 hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
                                 <Trash2 className="w-3.5 h-3.5" />
                               </Button>
                             </div>
@@ -501,7 +501,7 @@ export function BlogEditor() {
         />
 
         <div className="mt-2 flex flex-wrap items-center gap-2.5">
-          <div className="relative min-w-[220px] flex-1">
+          <div className="relative min-w-0 flex-1 basis-full sm:min-w-[220px] sm:basis-auto">
             <Tags className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="h-9 rounded-full border-border bg-secondary/65 pl-9 pr-20 text-sm shadow-none"
@@ -691,7 +691,7 @@ export function BlogEditor() {
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.18 }}
                   style={{ position: "fixed", top: draftPanelPos.top, left: draftPanelPos.left, zIndex: 9999 }}
-                  className="max-h-[380px] min-w-[340px] overflow-y-auto rounded-2xl border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl"
+                  className="max-h-[min(380px,70dvh)] w-[calc(100vw-2rem)] max-w-[340px] sm:max-h-[380px] overflow-y-auto rounded-2xl border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl sm:min-w-[340px]"
                 >
                   {drafts.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border/80 bg-secondary/40 px-5 py-7 text-center text-sm text-muted-foreground">
@@ -710,7 +710,7 @@ export function BlogEditor() {
                           <Button size="sm" className="h-7 rounded-full px-3" onClick={() => handleLoadDraft(draft)} disabled={draftLoading}>
                             {draftLoading ? "加载中..." : "加载"}
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-100 hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
