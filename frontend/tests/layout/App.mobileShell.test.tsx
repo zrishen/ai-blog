@@ -150,7 +150,10 @@ describe("App 手机端工作台外壳", () => {
 
     const aiTrigger = screen.getByRole("button", { name: "打开 AI 助手" });
     await user.click(aiTrigger);
-    expect(screen.queryByRole("dialog", { name: "工作区导航" })).not.toBeInTheDocument();
+    // 导航抽屉因 AnimatePresence 的滑出动画（exit）会短暂保留在 DOM，等其卸载后再断言互斥。
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "工作区导航" })).not.toBeInTheDocument();
+    });
     expect(screen.getByRole("dialog", { name: "AI 助手" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "关闭 AI 助手" }));

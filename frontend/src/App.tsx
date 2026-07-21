@@ -230,6 +230,7 @@ function MobileWorkspace({ aiContext }: { aiContext: AISidebarRouteContext }) {
         title="工作区导航"
         onOpenChange={(open) => setMobileDrawer(open ? "navigation" : null)}
         returnFocusRef={openNavigationButtonRef}
+        swipeEnabled={mobileDrawer === null || mobileDrawer === "navigation"}
       >
         <LeftSidebar />
       </MobileDrawer>
@@ -239,6 +240,7 @@ function MobileWorkspace({ aiContext }: { aiContext: AISidebarRouteContext }) {
         title="AI 助手"
         onOpenChange={(open) => setMobileDrawer(open ? "ai" : null)}
         returnFocusRef={openAIButtonRef}
+        swipeEnabled={mobileDrawer === null || mobileDrawer === "ai"}
       >
         <AISidebar {...aiContext} forceExpanded onRequestClose={closeMobileDrawer} />
       </MobileDrawer>
