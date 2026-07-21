@@ -47,11 +47,11 @@ function MetaInfo({ post, className }: { post: BlogPost; className?: string }) {
 
 function TagList({ tags, onDarkImage = false }: { tags: string[]; onDarkImage?: boolean }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex min-w-0 flex-nowrap gap-1.5 overflow-hidden">
       {tags.map((tag) => (
         <span
           key={tag}
-          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${onDarkImage ? "border-white/22 bg-white/14 text-white/82 backdrop-blur-md" : ""}`}
+          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${onDarkImage ? "border-white/22 bg-white/14 text-white/82 backdrop-blur-md" : ""}`}
           style={onDarkImage ? undefined : getBlogTagStyle(tag)}
         >
           <Tags className="w-3 h-3" />
@@ -83,7 +83,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
       <motion.article
         whileHover={{ y: -6, scale: 1.005 }}
         transition={{ duration: 0.22 }}
-        className={`group relative h-[16rem] w-full cursor-pointer overflow-hidden rounded-[2rem] border border-border/70 shadow-xl shadow-foreground/5 bg-card/94`}
+        className={`group relative h-[11rem] w-full cursor-pointer overflow-hidden rounded-[2rem] border border-border/70 shadow-xl shadow-foreground/5 bg-card/94 md:h-[16rem]`}
         onClick={() => onClick(post.id)}
       >
         {hasCover && (
@@ -95,7 +95,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
 
         <div className={`absolute inset-x-0 bottom-0 p-6 sm:p-8 ${coverDark ? "text-white" : "text-foreground"}`}>
           {(post.status === "draft" || tags.length > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
               {post.status === "draft" && (
                 <Badge variant="outline" className={coverDark ? "rounded-full border-amber-300/35 bg-amber-400/16 text-amber-100 backdrop-blur-md" : "rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600"}>
                   草稿
@@ -123,19 +123,19 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
       <motion.article
         whileHover={{ y: -5 }}
         transition={{ duration: 0.2 }}
-        className="group flex min-h-[13rem] w-full cursor-pointer flex-col overflow-hidden rounded-[2rem] border border-border/70 bg-card/94 shadow-xl shadow-foreground/5 transition-all duration-200 hover:border-primary/25 lg:h-[13rem] lg:flex-row"
+        className="group flex h-[9rem] w-full cursor-pointer overflow-hidden rounded-[2rem] border border-border/70 bg-card/94 shadow-xl shadow-foreground/5 transition-all duration-200 hover:border-primary/25 md:h-[13rem]"
         onClick={() => onClick(post.id)}
       >
         {hasCover ? (
-          <div className="relative h-64 flex-shrink-0 overflow-hidden border-b border-border/70 lg:h-full lg:w-[42%] lg:border-b-0 lg:border-r">
+          <div className="relative h-full w-[42%] flex-shrink-0 overflow-hidden border-r border-border/70">
             <img src={post.cover_image} alt={post.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
             {isDark && <div className="absolute inset-0 bg-slate-950/75" />}
           </div>
         ) : (
-          <EmptyCover className="h-52 flex-shrink-0 border-x-0 border-t-0 lg:h-full lg:w-[34%] lg:border-b-0 lg:border-l-0 lg:border-r" />
+          <EmptyCover className="h-full w-[34%] flex-shrink-0 border-y-0 border-l-0 border-r border-border/70" />
         )}
         <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <div className="mb-2 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
             {post.status === "draft" && (
               <Badge variant="outline" className="rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600">
                 草稿
@@ -163,11 +163,11 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
     <motion.article
       whileHover={{ y: -4 }}
       transition={{ duration: 0.18 }}
-      className="group flex h-auto min-h-[7rem] w-full cursor-pointer overflow-hidden rounded-[1.55rem] border border-border/70 bg-card/92 shadow-sm transition-all duration-200 hover:border-primary/25 hover:shadow-xl hover:shadow-foreground/5"
+      className="group flex h-auto min-h-[5rem] w-full cursor-pointer overflow-hidden rounded-[1.55rem] border border-border/70 bg-card/92 shadow-sm transition-all duration-200 hover:border-primary/25 hover:shadow-xl hover:shadow-foreground/5 md:min-h-[7rem]"
       onClick={() => onClick(post.id)}
     >
-      <div className="flex min-w-0 flex-1 flex-col p-4">
-        <div className="flex flex-wrap items-center gap-1 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col p-3 md:p-4">
+        <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
           {post.status === "draft" && (
             <Badge variant="outline" className="rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600 text-[11px] px-1.5 py-0">
               草稿
