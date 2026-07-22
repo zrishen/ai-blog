@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import (
     BlogPost as BlogPostModel,
+    ChatAttachment,
     Conversation,
     FileDocument,
     FileProcessingJob,
@@ -103,16 +104,43 @@ async def test_conversation_messages_soft_deleted_with_parent(client: AsyncClien
 
 
 @pytest.mark.asyncio
-async def test_conversation_purge(client: AsyncClient, db_session: AsyncSession):
+async def test_conversation_purge(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     create_resp = await client.post("/api/conversations", json={"title": "永久删除"})
     conv_id = create_resp.json()["id"]
     now = datetime.now(timezone.utc).replace(tzinfo=None)
-    db_session.add(Message(
+    message = Message(
         conversation_id=conv_id,
         role="user",
         content="hi",
         token_count=1,
         created_at=now,
+    )
+    db_session.add(message)
+    await db_session.flush()
+    attachment_root = tmp_path / "chat-attachments"
+    attachment_file = attachment_root / "1" / "purge.txt"
+    attachment_file.parent.mkdir(parents=True)
+    attachment_file.write_text("purge", encoding="utf-8")
+    monkeypatch.setattr("src.config.settings.chat_attachment_dir", str(attachment_root))
+    db_session.add(ChatAttachment(
+        attachment_id=str(uuid.uuid4()),
+        user_id=1,
+        message_id=message.id,
+        original_name="purge.txt",
+        stored_path="1/purge.txt",
+        media_type="text/plain",
+        size_bytes=5,
+        position=0,
+        status="attached",
+        expires_at=now,
+        attached_at=now,
+        created_at=now,
+        updated_at=now,
     ))
     await db_session.commit()
 
@@ -124,6 +152,9 @@ async def test_conversation_purge(client: AsyncClient, db_session: AsyncSession)
     assert await db_session.get(Conversation, conv_id) is None
     msgs = (await db_session.execute(select(Message).where(Message.conversation_id == conv_id))).scalars().all()
     assert msgs == []
+    attachments = (await db_session.execute(select(ChatAttachment))).scalars().all()
+    assert attachments == []
+    assert not attachment_file.exists()
 
 
 # ─────────── FileDocument ───────────

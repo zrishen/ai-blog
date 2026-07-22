@@ -125,7 +125,7 @@ async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
         return FakeAgent()
 
     async def fake_add_message_pair(*args, **kwargs):
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
@@ -193,7 +193,7 @@ async def test_normal_chat_context_excludes_research_tool_rules(monkeypatch):
         return FakeAgent()
 
     async def fake_add_message_pair(*args, **kwargs):
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
@@ -265,7 +265,7 @@ async def test_trust_writing_context_includes_choice_protocol(monkeypatch):
         return FakeAgent()
 
     async def fake_add_message_pair(*args, **kwargs):
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
@@ -339,7 +339,7 @@ async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
         return FakeAgent()
 
     async def fake_add_message_pair(*args, **kwargs):
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
@@ -365,7 +365,7 @@ async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
         for record in caplog.records
         if "[THINKING]" in record.getMessage() and "reasoning_content captured" in record.getMessage()
     ]
-    assert reasoning_logs == ["[THINKING] reasoning_content captured: preview=用户问题分析, len=6"]
+    assert reasoning_logs == ["[THINKING] reasoning_content captured: len=6"]
 
 
 @pytest.mark.asyncio
@@ -406,7 +406,7 @@ async def test_selected_blog_context_is_injected_into_prompt_and_user_message(mo
             yield {"event": "on_chat_model_stream", "data": {"chunk": FakeChunk()}}
 
     async def fake_add_message_pair(*args, **kwargs):
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
@@ -526,7 +526,7 @@ async def test_blog_edit_patch_streams_from_model_tool_arguments(monkeypatch, sp
             }
 
     async def fake_add_message_pair(*args, **kwargs):
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
@@ -612,7 +612,7 @@ async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monke
             yield {"event": "on_tool_end", "name": "blog_edit_post", "data": {"output": "文章修改完成"}}
 
     async def fake_add_message_pair(*args, **kwargs):
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
@@ -672,7 +672,7 @@ async def test_round_protocol_streams_structured_text_and_confirms_final(monkeyp
 
     async def fake_save_chat_turn(*args, **kwargs):
         saved["args"] = args
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
@@ -690,6 +690,121 @@ async def test_round_protocol_streams_structured_text_and_confirms_final(monkeyp
     assert json.dumps("  保留空白  ") in output
     assert saved["args"][5] == "  保留空白  "
     assert "REASONING" in output
+
+
+@pytest.mark.asyncio
+async def test_vision_fallback_retries_without_images():
+    from langchain_core.messages import AIMessage
+    from src.services import chat_service
+
+    calls: list[list[dict]] = []
+
+    class FakeAgent:
+        def __init__(self, should_fail: bool):
+            self.should_fail = should_fail
+
+        async def astream_events(self, payload, version, config=None):
+            calls.append(payload["messages"])
+            if self.should_fail:
+                raise RuntimeError("unknown variant `image_url`, expected `text`")
+            yield {
+                "event": "on_chat_model_end",
+                "data": {"output": AIMessage(content="文字回答")},
+            }
+
+    created = 0
+
+    def fake_create_react_agent(llm, tools, prompt):
+        nonlocal created
+        created += 1
+        return FakeAgent(should_fail=created == 1)
+
+    original = chat_service.create_react_agent
+    chat_service.create_react_agent = fake_create_react_agent
+    try:
+        events = [
+            event async for event in chat_service._astream_agent_with_vision_fallback(
+                object(),
+                [],
+                "prompt",
+                [{"role": "user", "content": [
+                    {"type": "text", "text": "你好"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA=="}},
+                ]}],
+                idle_timeout=1,
+            )
+        ]
+    finally:
+        chat_service.create_react_agent = original
+
+    assert events[0]["event"] == "on_vision_fallback"
+    assert events[-1]["event"] == "on_chat_model_end"
+    assert all(
+        block.get("type") != "image_url"
+        for block in calls[1][-1]["content"]
+    )
+    assert "当前模型不支持图片输入" in calls[1][-1]["content"][-1]["text"]
+
+
+def test_build_current_user_content_formats_provider_images_and_documents():
+    from src.services import chat_service
+    from src.services.chat_attachment_service import PreparedChatAttachment
+
+    image = SimpleNamespace(
+        attachment_id="image-id",
+        original_name="image.png",
+        media_type="image/png",
+        size_bytes=4,
+    )
+    document = SimpleNamespace(
+        attachment_id="file-id",
+        original_name="notes.txt",
+        media_type="text/plain",
+        size_bytes=5,
+    )
+    attachments = [
+        PreparedChatAttachment(
+            attachment=image,
+            position=0,
+            kind="image",
+            image_base64="YWJjZA==",
+        ),
+        PreparedChatAttachment(
+            attachment=document,
+            position=1,
+            kind="file",
+            document_text="hello",
+            extraction_truncated=True,
+        ),
+    ]
+
+    openai_content = chat_service._build_current_user_content(
+        "问题",
+        attachments,
+        provider="openai",
+        legacy_image_url=None,
+    )
+    assert openai_content[1] == {
+        "type": "image_url",
+        "image_url": {"url": "data:image/png;base64,YWJjZA=="},
+    }
+    assert "附件开始：notes.txt" in openai_content[2]["text"]
+    assert "附件内容已按上下文预算截断" in openai_content[2]["text"]
+
+    anthropic_content = chat_service._build_current_user_content(
+        "问题",
+        attachments,
+        provider="anthropic",
+        legacy_image_url=None,
+    )
+    assert anthropic_content[1] == {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": "image/png",
+            "data": "YWJjZA==",
+        },
+    }
 
 
 @pytest.mark.asyncio
@@ -729,7 +844,7 @@ async def test_empty_final_is_confirmed_and_saved(monkeypatch):
 
     async def fake_save_chat_turn(*args, **kwargs):
         saved.append(args)
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
@@ -743,6 +858,50 @@ async def test_empty_final_is_confirmed_and_saved(monkeypatch):
     assert '"classification": "final"' in output
     assert '"text": ""' in output
     assert len(saved) == 1
+
+
+@pytest.mark.asyncio
+async def test_empty_agent_stream_emits_error_and_does_not_save(monkeypatch):
+    from src.services import chat_service
+
+    class FakeScalars:
+        def all(self):
+            return []
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return FakeResult()
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            if False:
+                yield None
+
+    async def save_should_not_run(*args, **kwargs):
+        raise AssertionError("空模型流不应保存消息")
+
+    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
+    monkeypatch.setattr(chat_service, "save_chat_turn", save_should_not_run)
+
+    output = "".join([chunk async for chunk in chat_service.stream_chat("测试", None, 1)])
+
+    assert "STREAMERROR" in output
+    error_payload = json.loads(output.split("\0STREAMERROR\0", 1)[1].split("\n\n", 1)[0])
+    assert "模型未返回最终回复" in error_payload["message"]
+    assert '"message_id": 0' in output
 
 
 @pytest.mark.asyncio
@@ -834,7 +993,7 @@ async def test_parallel_tool_events_use_stable_call_ids(monkeypatch):
     async def fake_save_chat_turn(*args, **kwargs):
         saved["process"] = args[4]
         saved["events"] = kwargs["final_tool_events"]
-        return 7, SimpleNamespace(id=8)
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])

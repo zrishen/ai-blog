@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.models import Message, User
+from src.database.models import ChatAttachment, Message, User
 from src.main import app
 from src.utils.auth import get_current_user
 
@@ -188,3 +188,63 @@ async def test_get_messages_keeps_regular_user_and_assistant_history(
     data = resp.json()
     assert [item["role"] for item in data] == ["user", "assistant"]
     assert [item["content"] for item in data] == ["你好", "你好，有什么可以帮你？"]
+
+
+@pytest.mark.asyncio
+async def test_get_messages_returns_ordered_chat_attachments(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    create_resp = await client.post("/api/conversations", json={"title": "附件历史"})
+    conv_id = create_resp.json()["id"]
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    message = Message(
+        conversation_id=conv_id,
+        role="user",
+        content="请读取附件",
+        token_count=1,
+        created_at=now,
+    )
+    db_session.add(message)
+    await db_session.flush()
+    db_session.add_all([
+        ChatAttachment(
+            attachment_id="00000000-0000-4000-8000-000000000002",
+            user_id=1,
+            message_id=message.id,
+            original_name="second.txt",
+            stored_path="1/second.txt",
+            media_type="text/plain",
+            size_bytes=2,
+            position=1,
+            status="attached",
+            expires_at=now,
+            attached_at=now,
+            created_at=now,
+            updated_at=now,
+        ),
+        ChatAttachment(
+            attachment_id="00000000-0000-4000-8000-000000000001",
+            user_id=1,
+            message_id=message.id,
+            original_name="first.png",
+            stored_path="1/first.png",
+            media_type="image/png",
+            size_bytes=1,
+            position=0,
+            status="attached",
+            expires_at=now,
+            attached_at=now,
+            created_at=now,
+            updated_at=now,
+        ),
+    ])
+    await db_session.commit()
+
+    response = await client.get(f"/api/conversations/{conv_id}/messages")
+
+    assert response.status_code == 200
+    attachments = response.json()[0]["attachments"]
+    assert [item["original_name"] for item in attachments] == ["first.png", "second.txt"]
+    assert attachments[0]["kind"] == "image"
+    assert attachments[1]["kind"] == "file"

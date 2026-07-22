@@ -1,4 +1,4 @@
-"""直接运行 Mock 测试。
+"""直接运行全部测试。
 
 用法:
     cd backend && uv run python tests/run_mock.py
@@ -15,6 +15,6 @@ if __name__ == "__main__":
         sys.executable,
         "-m",
         "pytest",
-        "tests/mock",
+        "tests",
         "-v",
     ], cwd=backend_dir))
