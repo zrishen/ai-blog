@@ -26,6 +26,18 @@ import { uiReducer } from "./slices/uiSlice";
 import { revisionReducer } from "./slices/revisionSlice";
 import { aiSidebarReducer } from "./slices/aiSidebarSlice";
 
+export interface BlogStreamingState {
+  runId: string;
+  content: string;
+  status: "streaming";
+}
+
+export interface BlogPatchStreamingState {
+  runId: string;
+  targetText: string;
+  replacementDelta: string;
+}
+
 interface ChatState {
   conversations: Conversation[];
   currentConversationId: number | null;
@@ -61,13 +73,13 @@ interface ChatState {
   blogCurrentView: BlogView;
   blogCurrentPostId: number | null;
   blogSelectedTag: string | null;
-  blogStreamingContent: string | null;
+  blogStreamingByPostId: Record<number, BlogStreamingState>;
 
   // AI Selection Context (right-click menu)
   aiSelectionContext: { postId: number; selectedText: string; sectionIndex: number } | null;
 
   // Blog Patch Streaming (in-place replacement preview for blog_edit_post)
-  blogPatchStreaming: { targetText: string; replacementDelta: string } | null;
+  blogPatchStreamingByPostId: Record<number, BlogPatchStreamingState>;
 
   // File Library
   fileCategories: FileCategory[];
@@ -142,15 +154,16 @@ type ChatAction =
   | { type: "SET_BLOG_CURRENT_POST_ID"; payload: number | null }
   | { type: "SET_BLOG_SELECTED_TAG"; payload: string | null }
   | { type: "UPDATE_BLOG_POST"; payload: BlogPost }
-  | { type: "APPEND_BLOG_STREAMING"; payload: string }
-  | { type: "CLEAR_BLOG_STREAMING" }
+  | { type: "START_BLOG_STREAMING"; payload: { postId: number; runId: string } }
+  | { type: "APPEND_BLOG_STREAMING"; payload: { postId: number; runId: string; contentDelta: string } }
+  | { type: "CLEAR_BLOG_STREAMING"; payload: { postId: number; runId: string } }
   // AI Selection Context
   | { type: "SET_AI_SELECTION_CONTEXT"; payload: { postId: number; selectedText: string; sectionIndex: number } }
   | { type: "CLEAR_AI_SELECTION_CONTEXT" }
   // Blog Patch Streaming
-  | { type: "START_BLOG_PATCH_STREAMING"; payload: { targetText: string } }
-  | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: { replacementDelta: string } }
-  | { type: "CLEAR_BLOG_PATCH_STREAMING" }
+  | { type: "START_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; targetText: string } }
+  | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; replacementDelta: string } }
+  | { type: "CLEAR_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string } }
   // File Library
   | { type: "SET_FILE_CATEGORIES"; payload: FileCategory[] }
   | { type: "SET_FILE_SELECTED_CATEGORY_ID"; payload: number | null }
@@ -201,9 +214,9 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         blogCurrentView: "list",
         blogCurrentPostId: null,
         blogSelectedTag: null,
-        blogStreamingContent: null,
+        blogStreamingByPostId: {},
         aiSelectionContext: null,
-        blogPatchStreaming: null,
+        blogPatchStreamingByPostId: {},
         fileCategories: [],
         fileDocuments: [],
         fileSelectedCategoryId: null,
@@ -269,9 +282,9 @@ const initialState: ChatState = {
   blogCurrentView: "list",
   blogCurrentPostId: null,
   blogSelectedTag: null,
-  blogStreamingContent: null,
+  blogStreamingByPostId: {},
   aiSelectionContext: null,
-  blogPatchStreaming: null,
+  blogPatchStreamingByPostId: {},
 
   // File Library
   fileCategories: [],

@@ -133,52 +133,59 @@ describe("sendChat SSE 解析", () => {
     expect(doneMeta).toMatchObject({ conversation_id: 7, message_id: 42, user_message_id: 41 });
   });
 
-  it("BLOGDELTA marker 触发 onBlogDelta", async () => {
+  it("BLOGSTART/BLOGDELTA marker 透传文章与流归属", async () => {
     const stream = makeChunkedStream([
+      "\x00BLOGSTART\x00",
+      '{"post_id":42,"stream_id":"1:0"}',
       "\x00BLOGDELTA\x00",
-      '{"content_delta":"# Title"}',
+      '{"post_id":42,"stream_id":"1:0","content_delta":"# Title"}',
       "\x00BLOGDELTA\x00",
-      '{"content_delta":"\\n\\nbody"}',
+      '{"post_id":42,"stream_id":"1:0","content_delta":"\\n\\nbody"}',
     ]);
     fetchMock.mockResolvedValueOnce(makeResponse(stream));
 
-    const deltas: string[] = [];
+    const starts: Array<{ post_id: number; stream_id: string }> = [];
+    const deltas: Array<{ post_id: number; stream_id: string; content_delta: string }> = [];
     await sendChat("hi", null, {
       callbacks: {
         onChunk: () => {},
         onDone: () => {},
-        onBlogDelta: (d) => deltas.push(d),
+        onBlogStart: (event) => starts.push(event),
+        onBlogDelta: (event) => deltas.push(event),
       },
     });
 
-    expect(deltas.join("")).toBe("# Title\n\nbody");
+    expect(starts).toEqual([{ post_id: 42, stream_id: "1:0" }]);
+    expect(deltas.map((event) => event.content_delta).join("")).toBe("# Title\n\nbody");
+    expect(deltas.every((event) => event.post_id === 42 && event.stream_id === "1:0")).toBe(true);
   });
 
-  it("PATCHSTART/PATCHDELTA marker 驱动补丁预览且不泄漏正文", async () => {
+  it("PATCHSTART/PATCHDELTA marker 驱动归属明确的补丁预览且不泄漏正文", async () => {
     const stream = makeChunkedStream([
       "\x00PATCHSTART\x00",
-      '{"target_text":"旧文本"}',
+      '{"post_id":42,"stream_id":"1:0","target_text":"旧文本"}',
       "\x00PATCHDELTA\x00",
-      '{"replacement_delta":"新"}',
+      '{"post_id":42,"stream_id":"1:0","replacement_delta":"新"}',
       "\x00PATCHDELTA\x00",
-      '{"replacement_delta":"文本"}',
+      '{"post_id":42,"stream_id":"1:0","replacement_delta":"文本"}',
     ]);
     fetchMock.mockResolvedValueOnce(makeResponse(stream));
 
     const chunks: string[] = [];
-    let patchStartTarget = "";
-    const patchDeltas: string[] = [];
+    const patchStarts: Array<{ post_id: number; stream_id: string; target_text: string }> = [];
+    const patchDeltas: Array<{ post_id: number; stream_id: string; replacement_delta: string }> = [];
     await sendChat("hi", null, {
       callbacks: {
         onChunk: (c) => chunks.push(c),
         onDone: () => {},
-        onPatchStart: (t) => { patchStartTarget = t; },
-        onPatchDelta: (d) => patchDeltas.push(d),
+        onPatchStart: (event) => patchStarts.push(event),
+        onPatchDelta: (event) => patchDeltas.push(event),
       },
     });
 
-    expect(patchStartTarget).toBe("旧文本");
-    expect(patchDeltas.join("")).toBe("新文本");
+    expect(patchStarts).toEqual([{ post_id: 42, stream_id: "1:0", target_text: "旧文本" }]);
+    expect(patchDeltas.map((event) => event.replacement_delta).join("")).toBe("新文本");
+    expect(patchDeltas.every((event) => event.post_id === 42 && event.stream_id === "1:0")).toBe(true);
     expect(chunks.join("")).toBe("");
   });
 

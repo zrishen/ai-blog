@@ -115,7 +115,6 @@ export function AISidebarChat({
   const historyRequestSeqRef = useRef(new Map<AISidebarConversationKey, number>());
   const streamingByKeyRef = useRef(state.aiSidebarStreamingByKey);
   const skipNextHistoryLoadRef = useRef(new Set<number>());
-  const blogStreamOwnerRef = useRef<AISidebarConversationKey | null>(null);
   const hadResearchToolsRef = useRef(false);
 
   const selectedMessages = useMemo(
@@ -242,23 +241,28 @@ export function AISidebarChat({
     handleLoginSuccess,
   } = useAISidebarNavigation(isAuthenticated);
 
-  const refreshOwnPosts = useCallback(async (blogMeta?: BlogToolMeta) => {
-    if (!user?.username || !blogMeta?.operation || !blogToolOperations.has(blogMeta.operation)) return;
-    if (siteUsername && siteUsername !== user.username) return;
-    try {
-      const currentPostId = state.blogCurrentPostId;
-      const updatedPostId = blogMeta.post_id;
-      if (currentPostId && updatedPostId && currentPostId === updatedPostId) {
+  const refreshOwnPosts = useCallback(async (blogMeta?: BlogToolMeta): Promise<boolean> => {
+    if (!user?.username || !blogMeta?.operation || !blogToolOperations.has(blogMeta.operation)) return false;
+    if (siteUsername && siteUsername !== user.username) return false;
+    const updatedPostId = blogMeta.post_id;
+    if (updatedPostId && (blogMeta.operation === "write_post" || blogMeta.operation === "edit_post")) {
+      try {
         const fullPost = await getBlogPost(updatedPostId);
         dispatch({ type: "UPDATE_BLOG_POST", payload: fullPost });
-        dispatch({ type: "CLEAR_BLOG_STREAMING" });
-      } else {
-        const data = await listSitePosts(user.username, { include_drafts: true, per_page: 50 });
-        dispatch({ type: "SET_BLOG_POSTS", payload: data.posts });
-        dispatch({ type: "CLEAR_BLOG_STREAMING" });
+        return true;
+      } catch (e) {
+        console.warn("Failed to refresh target post after blog tool, falling back to list:", e);
       }
-    } catch (e) { console.warn("Failed to refresh posts after blog tool:", e); }
-  }, [dispatch, siteUsername, user, state.blogCurrentPostId]);
+    }
+    try {
+      const data = await listSitePosts(user.username, { include_drafts: true, per_page: 50 });
+      dispatch({ type: "SET_BLOG_POSTS", payload: data.posts });
+      return true;
+    } catch (e) {
+      console.warn("Failed to refresh posts after blog tool:", e);
+      return false;
+    }
+  }, [dispatch, siteUsername, user]);
 
   const refreshResearchTopicIfNeeded = useCallback(async () => {
     if (!hadResearchToolsRef.current) return;
@@ -314,7 +318,8 @@ export function AISidebarChat({
     };
     let patchPlayer: PatchDeltaPlayer | null = null;
     let blogPlayer: PatchDeltaPlayer | null = null;
-    let blogStarted = false;
+    let activePatchStream: { postId: number; runId: string } | null = null;
+    let activeBlogStream: { postId: number; runId: string } | null = null;
     const cancelPlayer = (player: PatchDeltaPlayer | null) => {
       player?.cancel();
     };
@@ -326,7 +331,6 @@ export function AISidebarChat({
       };
 
       let uiChain: Promise<void> = Promise.resolve();
-      let patchStarted = false;
       const enqueueUi = (fn: () => Promise<void> | void) => {
         uiChain = uiChain.then(fn).catch((err) => {
           if (err && err.name !== "AbortError") {
@@ -339,13 +343,11 @@ export function AISidebarChat({
         const player = patchPlayer;
         if (player) await player.finish();
         patchPlayer = null;
-        patchStarted = false;
       };
       const finishBlog = async () => {
         const player = blogPlayer;
         if (player) await player.finish();
         blogPlayer = null;
-        blogStarted = false;
       };
       if (isPrivate) {
         const pageContext: Record<string, unknown> = { page_type: pageType };
@@ -462,9 +464,6 @@ export function AISidebarChat({
                 loopStepIndex: meta?.loop_step_index,
               }];
               updateAssistant({ toolEvents: runState.toolEvents });
-              if (toolName === "blog_edit_post" || toolName === "blog_create_post" || toolName === "blog_write_post") {
-                if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
-              }
             },
             onToolResult: (toolName, result, blogMeta, references, meta) => {
               const refs: Reference[] = (references || []).map((r: StreamReference) => ({
@@ -485,54 +484,68 @@ export function AISidebarChat({
                 loopStepIndex: meta?.loop_step_index,
               }];
               updateAssistant({ toolEvents: runState.toolEvents });
-              const isPatchTool = toolName === "blog_edit_post";
-              const isBlogWriteTool = toolName === "blog_create_post" || toolName === "blog_write_post";
-              const ownsBlogStream = blogStreamOwnerRef.current === activeKey;
-              if (isPatchTool && ownsBlogStream) {
+              const targetPostId = blogMeta?.post_id;
+              if (toolName === "blog_edit_post" && activePatchStream && targetPostId === activePatchStream.postId) {
+                const completed = activePatchStream;
                 enqueueUi(async () => {
                   await finishPatch();
-                  dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
-                  if (blogMeta?.operation === "edit_post") void refreshOwnPosts(blogMeta);
-                  blogStreamOwnerRef.current = null;
+                  const refreshed = await refreshOwnPosts(blogMeta);
+                  if (refreshed) dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING", payload: completed });
+                  if (activePatchStream?.runId === completed.runId) activePatchStream = null;
                 });
-              } else if (isBlogWriteTool && ownsBlogStream) {
+              } else if (toolName === "blog_write_post" && activeBlogStream && targetPostId === activeBlogStream.postId) {
+                const completed = activeBlogStream;
                 enqueueUi(async () => {
                   await finishBlog();
-                  dispatch({ type: "CLEAR_BLOG_STREAMING" });
-                  void refreshOwnPosts(blogMeta);
-                  blogStreamOwnerRef.current = null;
+                  const refreshed = await refreshOwnPosts(blogMeta);
+                  if (refreshed) dispatch({ type: "CLEAR_BLOG_STREAMING", payload: completed });
+                  if (activeBlogStream?.runId === completed.runId) activeBlogStream = null;
                 });
               } else {
-                void refreshOwnPosts(blogMeta);
+                enqueueUi(async () => { await refreshOwnPosts(blogMeta); });
               }
               if (toolName && RESEARCH_TOOL_NAMES.has(toolName)) hadResearchToolsRef.current = true;
             },
-            onPatchStart: (targetText) => {
-              if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
-              if (blogStreamOwnerRef.current !== activeKey || patchStarted) return;
-              patchStarted = true;
+            onPatchStart: ({ post_id: postId, stream_id: streamId, target_text: targetText }) => {
+              const runId = `${activeKey}:${streamId}`;
+              cancelPlayer(patchPlayer);
+              activePatchStream = { postId, runId };
               patchPlayer = createPatchDeltaPlayer((replacementDelta) => {
-                dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: { replacementDelta } });
+                dispatch({
+                  type: "APPEND_BLOG_PATCH_STREAMING",
+                  payload: { postId, runId, replacementDelta },
+                });
               });
-              dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { targetText } });
+              dispatch({
+                type: "START_BLOG_PATCH_STREAMING",
+                payload: { postId, runId, targetText },
+              });
               patchPlayer.open();
             },
-            onPatchDelta: (replacementDelta) => {
-              if (blogStreamOwnerRef.current === activeKey) {
+            onPatchDelta: ({ post_id: postId, stream_id: streamId, replacement_delta: replacementDelta }) => {
+              const runId = `${activeKey}:${streamId}`;
+              if (activePatchStream?.postId === postId && activePatchStream.runId === runId) {
                 patchPlayer?.push(replacementDelta);
               }
             },
-            onBlogDelta: (contentDelta) => {
-              if (!blogStreamOwnerRef.current) blogStreamOwnerRef.current = activeKey;
-              if (blogStreamOwnerRef.current !== activeKey) return;
-              if (!blogStarted) {
-                blogStarted = true;
-                blogPlayer = createPatchDeltaPlayer((delta) => {
-                  dispatch({ type: "APPEND_BLOG_STREAMING", payload: delta });
+            onBlogStart: ({ post_id: postId, stream_id: streamId }) => {
+              const runId = `${activeKey}:${streamId}`;
+              cancelPlayer(blogPlayer);
+              activeBlogStream = { postId, runId };
+              blogPlayer = createPatchDeltaPlayer((contentDelta) => {
+                dispatch({
+                  type: "APPEND_BLOG_STREAMING",
+                  payload: { postId, runId, contentDelta },
                 });
-                blogPlayer.open();
+              });
+              dispatch({ type: "START_BLOG_STREAMING", payload: { postId, runId } });
+              blogPlayer.open();
+            },
+            onBlogDelta: ({ post_id: postId, stream_id: streamId, content_delta: contentDelta }) => {
+              const runId = `${activeKey}:${streamId}`;
+              if (activeBlogStream?.postId === postId && activeBlogStream.runId === runId) {
+                blogPlayer?.push(contentDelta);
               }
-              blogPlayer?.push(contentDelta);
             },
             onReasoning: (reasoningDelta) => {
               runState.reasoningContent += reasoningDelta;
@@ -557,7 +570,6 @@ export function AISidebarChat({
             },
           });
         }
-        if (blogStreamOwnerRef.current === activeKey) blogStreamOwnerRef.current = null;
         if (runState.streamError) throw new Error(runState.streamError);
         if (!persistenceConfirmed) throw new Error("消息保存状态未确认，请重试。");
         await loadConvs();
@@ -582,8 +594,12 @@ export function AISidebarChat({
     } catch (err) {
       cancelPlayer(patchPlayer);
       cancelPlayer(blogPlayer);
-      dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
-      dispatch({ type: "CLEAR_BLOG_STREAMING" });
+      if (activePatchStream) {
+        dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING", payload: activePatchStream });
+      }
+      if (activeBlogStream) {
+        dispatch({ type: "CLEAR_BLOG_STREAMING", payload: activeBlogStream });
+      }
       if (!persistenceConfirmed) attachments.restoreUploaded(attachmentLocalIds, activeKey);
       if (err instanceof Error && err.name === "AbortError") {
         dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "discard" } } });

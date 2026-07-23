@@ -76,6 +76,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
   const excerpt = getExcerpt(post);
   const tags = splitBlogTags(post.tags, 3);
   const hasCover = Boolean(post.cover_image);
+  const isAIWriting = Boolean(state.blogStreamingByPostId[post.id]);
 
   if (variant === "feature-bg") {
     const coverDark = hasCover && isDark;
@@ -94,8 +95,13 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         )}
 
         <div className={`absolute inset-x-0 bottom-0 p-6 sm:p-8 ${coverDark ? "text-white" : "text-foreground"}`}>
-          {(post.status === "draft" || tags.length > 0) && (
+          {(isAIWriting || post.status === "draft" || tags.length > 0) && (
             <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+              {isAIWriting && (
+                <Badge className={coverDark ? "rounded-full bg-primary/80 text-primary-foreground backdrop-blur-md" : "rounded-full bg-primary/12 text-primary"}>
+                  AI 正在写作
+                </Badge>
+              )}
               {post.status === "draft" && (
                 <Badge variant="outline" className={coverDark ? "rounded-full border-amber-300/35 bg-amber-400/16 text-amber-100 backdrop-blur-md" : "rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600"}>
                   草稿
@@ -136,6 +142,9 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         )}
         <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
           <div className="mb-2 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
+            {isAIWriting && (
+              <Badge className="rounded-full bg-primary/12 text-primary">AI 正在写作</Badge>
+            )}
             {post.status === "draft" && (
               <Badge variant="outline" className="rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600">
                 草稿
@@ -168,6 +177,9 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
     >
       <div className="flex min-w-0 flex-1 flex-col p-3 md:p-4">
         <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
+          {isAIWriting && (
+            <Badge className="rounded-full bg-primary/12 px-1.5 py-0 text-[11px] text-primary">AI 正在写作</Badge>
+          )}
           {post.status === "draft" && (
             <Badge variant="outline" className="rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600 text-[11px] px-1.5 py-0">
               草稿

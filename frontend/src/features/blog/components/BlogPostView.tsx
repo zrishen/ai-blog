@@ -95,7 +95,8 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
   const isDark = state.theme === "dark";
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isStreaming = state.blogStreamingContent !== null;
+  const streamingState = post ? state.blogStreamingByPostId[post.id] : undefined;
+  const isStreaming = Boolean(streamingState);
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLDivElement>(null);
 
@@ -107,14 +108,14 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
     if (isStreaming && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [state.blogStreamingContent, isStreaming]);
+  }, [streamingState?.content, isStreaming]);
 
-  const streamingContent = state.blogStreamingContent;
+  const streamingContent = streamingState?.content;
   const postTitle = post?.title;
   const postContent = post?.content;
   const rawDisplayContent = useMemo(() => {
     // 流式内容优先（AI 正在编辑时）
-    if (streamingContent !== null && streamingContent !== undefined) {
+    if (streamingContent) {
       return streamingContent;
     }
     if (!postTitle || !postContent) return postContent || "";
@@ -128,7 +129,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
   }, [postTitle, postContent, streamingContent]);
   const displayContent = useMemo(() => expandBlankLines(rawDisplayContent), [rawDisplayContent]);
 
-  const patchStreaming = state.blogPatchStreaming;
+  const patchStreaming = post ? state.blogPatchStreamingByPostId[post.id] : undefined;
   const patchRenderInfo = useMemo(() => {
     if (!patchStreaming || !patchStreaming.targetText) return null;
     if (!rawDisplayContent.includes(patchStreaming.targetText)) return null;

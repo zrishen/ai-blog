@@ -224,7 +224,7 @@ describe("BlogEditor AI patch 链", () => {
 
     // 1) START：命中 <p>，注入 .ai-patch-inline，并置 patchApplyPendingRef
     act(() => {
-      latestChat!.dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { targetText: "原始段落内容" } });
+      latestChat!.dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { postId: 17, runId: "patch-1", targetText: "原始段落内容" } });
     });
     const preview = document.querySelector<HTMLElement>(".ai-patch-inline");
     expect(preview).toBeInTheDocument();
@@ -236,7 +236,7 @@ describe("BlogEditor AI patch 链", () => {
 
     // 2) APPEND：流式增量更新预览文本，不重新注入
     act(() => {
-      latestChat!.dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: { replacementDelta: "这是替换后的内容" } });
+      latestChat!.dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: { postId: 17, runId: "patch-1", replacementDelta: "这是替换后的内容" } });
     });
     expect(document.querySelector<HTMLElement>(".ai-patch-inline__text")!.textContent).toBe("这是替换后的内容");
     expect(document.querySelectorAll(".ai-patch-inline")).toHaveLength(1);
@@ -245,7 +245,7 @@ describe("BlogEditor AI patch 链", () => {
 
     // 3) CLEAR：patchApplyPendingRef 已置真 → 回写 setValue(expandBlankLines(existingPost.content))
     act(() => {
-      latestChat!.dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
+      latestChat!.dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING", payload: { postId: 17, runId: "patch-1" } });
     });
     expect(lastVditor!.setValue.mock.calls.length).toBe(setValueCallsBeforeClear + 1);
     expect(lastVditor!.setValue).toHaveBeenLastCalledWith(expect.stringContaining("原始段落内容"));
@@ -256,7 +256,7 @@ describe("BlogEditor AI patch 链", () => {
 
     // 4) patchApplyPendingRef 已复位：再次 CLEAR 不再触发回写
     act(() => {
-      latestChat!.dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
+      latestChat!.dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING", payload: { postId: 17, runId: "patch-1" } });
     });
     expect(lastVditor!.setValue.mock.calls.length).toBe(setValueCallsBeforeClear + 1);
   });
@@ -274,7 +274,7 @@ describe("BlogEditor AI patch 链", () => {
     act(() => {
       latestChat!.dispatch({
         type: "START_BLOG_PATCH_STREAMING",
-        payload: { targetText: "完全不存在的目标文本啊啊啊" },
+        payload: { postId: 17, runId: "patch-missing", targetText: "完全不存在的目标文本啊啊啊" },
       });
     });
     expect(document.querySelector(".ai-patch-inline")).not.toBeInTheDocument();
@@ -283,7 +283,7 @@ describe("BlogEditor AI patch 链", () => {
 
     // CLEAR：因 patchApplyPendingRef 未置真，跳过回写分支
     act(() => {
-      latestChat!.dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
+      latestChat!.dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING", payload: { postId: 17, runId: "patch-missing" } });
     });
     expect(lastVditor!.setValue.mock.calls.length).toBe(setValueCallsBefore);
   });

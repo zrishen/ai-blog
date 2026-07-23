@@ -214,8 +214,8 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
     );
   }, [containerId]);
 
-  // AI 修改 patch 链：START 注入预览 → APPEND 累积文本 → CLEAR 回写 setValue
-  const patchStreaming = state.blogPatchStreaming;
+  // AI 修改 patch 链：仅消费当前文章的 START/APPEND，CLEAR 后回写正式正文
+  const patchStreaming = existingPost ? state.blogPatchStreamingByPostId[existingPost.id] : undefined;
   useEffect(() => {
     const editorEl = getEditorElement();
     if (!editorEl) return;
@@ -265,7 +265,10 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
   useEffect(() => {
     if (!patchStreaming) return;
     const timer = window.setTimeout(() => {
-      dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
+      dispatch({
+        type: "CLEAR_BLOG_PATCH_STREAMING",
+        payload: { postId: existingPost!.id, runId: patchStreaming.runId },
+      });
       setError("AI 修改超时，请重试");
     }, 30000);
     return () => window.clearTimeout(timer);

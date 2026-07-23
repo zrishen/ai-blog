@@ -11,6 +11,7 @@ export interface BlogToolMeta {
 
 const _TOOL_MARKER = "\x00TOOLDONE\x00";
 const _DONE_MARKER = "\x00DONE\x00";
+const _BLOGSTART_MARKER = "\x00BLOGSTART\x00";
 const _BLOGDELTA_MARKER = "\x00BLOGDELTA\x00";
 const _REASONING_MARKER = "\x00REASONING\x00";
 const _LOOPSTEP_MARKER = "\x00LOOPSTEP\x00";
@@ -22,6 +23,7 @@ const _PATCHDELTA_MARKER = "\x00PATCHDELTA\x00";
 const _PROTOCOL_MARKERS = [
   ["REASONING", _REASONING_MARKER],
   ["TOOLDONE", _TOOL_MARKER],
+  ["BLOGSTART", _BLOGSTART_MARKER],
   ["BLOGDELTA", _BLOGDELTA_MARKER],
   ["PATCHSTART", _PATCHSTART_MARKER],
   ["PATCHDELTA", _PATCHDELTA_MARKER],
@@ -184,6 +186,23 @@ export interface StreamToolMeta {
   loop_step_index?: number;
 }
 
+export interface BlogStreamStart {
+  post_id: number;
+  stream_id: string;
+}
+
+export interface BlogStreamDelta extends BlogStreamStart {
+  content_delta: string;
+}
+
+export interface BlogPatchStart extends BlogStreamStart {
+  target_text: string;
+}
+
+export interface BlogPatchDelta extends BlogStreamStart {
+  replacement_delta: string;
+}
+
 export interface SendChatCallbacks {
   onChunk?: (chunk: string) => void;
   onDone?: (metadata: {
@@ -200,14 +219,15 @@ export interface SendChatCallbacks {
     references?: StreamReference[],
     meta?: StreamToolMeta,
   ) => void;
-  onBlogDelta?: (contentDelta: string) => void;
+  onBlogStart?: (event: BlogStreamStart) => void;
+  onBlogDelta?: (event: BlogStreamDelta) => void;
   onReasoning?: (text: string) => void;
   onLoopStep?: (text: string) => void;
   onRoundDelta?: (round: StreamRoundDelta) => void;
   onRoundEnd?: (round: StreamRoundEnd) => void;
   onStreamError?: (error: StreamError) => void;
-  onPatchStart?: (targetText: string) => void;
-  onPatchDelta?: (replacementDelta: string) => void;
+  onPatchStart?: (event: BlogPatchStart) => void;
+  onPatchDelta?: (event: BlogPatchDelta) => void;
 }
 
 export interface SendChatOptions {
@@ -237,6 +257,7 @@ export async function sendChat(
       onDone,
       onToolCall,
       onToolResult,
+      onBlogStart,
       onBlogDelta,
       onReasoning,
       onLoopStep,
@@ -336,6 +357,24 @@ export async function sendChat(
         continue;
       }
 
+      // --- BLOGSTART marker ---
+      const bsIdx = nextMarker?.name === "BLOGSTART" ? nextMarker.index : -1;
+      if (bsIdx !== -1) {
+        if (bsIdx > 0) emitChunk?.(accumulated.substring(0, bsIdx));
+        const afterMarker = accumulated.substring(bsIdx + _BLOGSTART_MARKER.length);
+        const jsonResult = _findCompleteJson(afterMarker, 0);
+        if (!jsonResult) continue;
+        try {
+          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+          if (typeof payload.post_id === "number" && typeof payload.stream_id === "string") {
+            onBlogStart?.(payload as BlogStreamStart);
+          }
+        } catch { /* ignore parse errors */ }
+        accumulated = afterMarker.substring(jsonResult.endIndex);
+        processed = false;
+        continue;
+      }
+
       // --- BLOGDELTA marker ---
       const bdIdx = nextMarker?.name === "BLOGDELTA" ? nextMarker.index : -1;
       if (bdIdx !== -1) {
@@ -347,8 +386,12 @@ export async function sendChat(
         if (jsonResult) {
           try {
             const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-            if (payload.content_delta && onBlogDelta) {
-              onBlogDelta(payload.content_delta);
+            if (
+              typeof payload.post_id === "number"
+              && typeof payload.stream_id === "string"
+              && typeof payload.content_delta === "string"
+            ) {
+              onBlogDelta?.(payload as BlogStreamDelta);
             }
           } catch { /* ignore parse errors */ }
           accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -371,8 +414,12 @@ export async function sendChat(
         if (jsonResult) {
           try {
             const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-            if (payload.target_text !== undefined && onPatchStart) {
-              onPatchStart(payload.target_text);
+            if (
+              typeof payload.post_id === "number"
+              && typeof payload.stream_id === "string"
+              && typeof payload.target_text === "string"
+            ) {
+              onPatchStart?.(payload as BlogPatchStart);
             }
           } catch { /* ignore parse errors */ }
           accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -395,8 +442,12 @@ export async function sendChat(
         if (jsonResult) {
           try {
             const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-            if (payload.replacement_delta !== undefined && onPatchDelta) {
-              onPatchDelta(payload.replacement_delta);
+            if (
+              typeof payload.post_id === "number"
+              && typeof payload.stream_id === "string"
+              && typeof payload.replacement_delta === "string"
+            ) {
+              onPatchDelta?.(payload as BlogPatchDelta);
             }
           } catch { /* ignore parse errors */ }
           accumulated = afterMarker.substring(jsonResult.endIndex);

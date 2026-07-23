@@ -20,16 +20,13 @@ current_user_id_cv: contextvars.ContextVar[int | None] = contextvars.ContextVar(
 
 
 @tool
-async def blog_create_post(
-    title: str, content: str, tags: str = "", status: str = "draft", excerpt: str = ""
-) -> str:
-    """创建一篇新的博客文章。文章将以 Markdown 文件形式保存。
-    当用户要求创建、写一篇新博客文章时优先使用此工具。
+async def blog_create_post(title: str, tags: str = "", excerpt: str = "") -> str:
+    """创建一篇空白博客草稿并返回文章 ID。
+    当用户要求创建、写一篇新博客文章时，必须先使用此工具取得 post_id，
+    再调用 blog_write_post(post_id=..., content=...) 写入完整正文。
     参数 title: 文章标题（必填）。标题会单独显示在页面顶部。
-    参数 content: Markdown 格式的文章正文（必填），不要以与 title 相同的 '# 标题' 开头；如果需要章节标题，从 '##' 开始。
     参数 tags: 标签，逗号分隔，如 "ai, agent"。
-    参数 status: 文章状态，draft（草稿）或 published（发布），默认 draft。
-    参数 excerpt: 文章摘要。"""
+    参数 excerpt: 文章摘要（可选）。"""
     from src.services.markdown_blog_service import (
         slug_from_title,
         ensure_unique_slug,
@@ -55,23 +52,23 @@ async def blog_create_post(
             "title": title.strip(),
             "slug": slug,
             "tags": tags.strip(),
-            "status": status.strip() or "draft",
+            "status": "draft",
             "author": author_name,
             "excerpt": excerpt.strip() or None,
             "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-            "published_at": (
-                datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
-                if status == "published"
-                else None
-            ),
+            "published_at": None,
         }
 
-        write_post(slug, meta, content, user_id)
+        write_post(slug, meta, "", user_id)
         post = await sync_file_to_db(slug, db, user_id=user_id)
         if post is None:
             return f"文章创建失败: slug={slug}"
-        return f"文章已创建: id={post.id}, slug={slug}, title={title.strip()}, status={meta['status']}"
+        return (
+            f"文章草稿已创建: id={post.id}, slug={slug}, "
+            f"title={title.strip()}, status={meta['status']}。"
+            "请继续调用 blog_write_post 写入完整正文。"
+        )
 
 
 @tool

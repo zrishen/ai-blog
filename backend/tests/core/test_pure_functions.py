@@ -2,6 +2,7 @@
 
 import pytest
 
+from src.prompts import SYSTEM_TOOL_RULES
 from src.services.llm_settings_service import (
     SUPPORTED_LLM_PROTOCOLS,
     build_llm_model_kwargs,
@@ -154,6 +155,12 @@ def test_build_llm_model_kwargs_skips_reasoning_effort_for_non_thinking_model():
 
 
 # ---- blog tools ----
+
+
+def test_blog_prompt_requires_create_then_write_for_new_posts():
+    assert "先调用 blog_create_post" in SYSTEM_TOOL_RULES
+    assert "再调用 blog_write_post" in SYSTEM_TOOL_RULES
+    assert "不得创建草稿后直接结束" in SYSTEM_TOOL_RULES
 
 
 def test_blog_tools_expose_read_edit_write_tools():

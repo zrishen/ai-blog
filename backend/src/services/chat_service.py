@@ -75,6 +75,7 @@ from src.prompts import (
 
 logger = logging.getLogger(__name__)
 _DONE_MARKER = chr(0)
+_BLOGSTART_MARKER = f"{_DONE_MARKER}BLOGSTART{_DONE_MARKER}"
 _BLOGDELTA_MARKER = f"{_DONE_MARKER}BLOGDELTA{_DONE_MARKER}"
 _REASONING_MARKER = f"{_DONE_MARKER}REASONING{_DONE_MARKER}"
 _LOOPSTEP_MARKER = f"{_DONE_MARKER}LOOPSTEP{_DONE_MARKER}"
@@ -292,8 +293,9 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
 def _append_vision_fallback_instruction(messages: list[dict]) -> list[dict]:
     fallback = _without_image_blocks(messages)
     instruction = (
-        "\n\n[系统提示：当前模型不支持图片输入。请忽略图片，仅根据用户文字和可读取文档回答，"
-        "并明确告知用户你无法查看本次图片。]"
+        "\n\n[注：当前模型不支持图片输入。请忽略图片，仅根据用户文字和可读取文档回答，"
+        "并明确告知用户你无法查看本次图片。说明时请表述为“模型不支持图片”，"
+        "不要说成系统或平台不支持。]"
     )
     for message in reversed(fallback):
         if message.get("role") != "user":
@@ -335,7 +337,6 @@ async def _astream_agent_with_vision_fallback(
                 raise
             fallback_attempted = True
             active_messages = _append_vision_fallback_instruction(active_messages)
-            yield {"event": "on_vision_fallback"}
 
 
 async def _astream_events_with_heartbeat(
@@ -458,6 +459,16 @@ async def _auto_link_research_context_to_blog_post(
         return {"topic_linked": False, "claim_linked_count": 0, "error": "auto_link_failed"}
 
     return {"topic_linked": bool(topic_link), "claim_linked_count": claim_count}
+
+
+def _extract_partial_int(args_json: str, field: str) -> int | None:
+    """从 partial JSON args 中提取已完整生成的非负整数字段。"""
+    match = re.search(rf'"{re.escape(field)}"\s*:\s*(\d+)(?=\s*[,}}])', args_json)
+    return int(match.group(1)) if match else None
+
+
+def _compact_json(payload: dict[str, object]) -> str:
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 def _extract_partial_content(args_json: str) -> str | None:
@@ -929,6 +940,7 @@ async def stream_chat(
     _pending_blog_tool: dict[int, str] = {}
     _pending_blog_args: dict[int, str] = {}
     _pending_blog_content_yielded: dict[int, str] = {}
+    _pending_blog_started: dict[int, bool] = {}
     _pending_patch_started: dict[int, bool] = {}
     _pending_patch_target: dict[int, str] = {}
     _pending_patch_replacement_yielded: dict[int, str] = {}
@@ -942,7 +954,6 @@ async def stream_chat(
     _tool_call_input_by_id: dict[str, dict[str, Any]] = {}
     _event_run_to_call_id: dict[str, str] = {}
     agent_stream_completed = False
-    vision_fallback_notice: str | None = None
     try:
         token = current_user_id_cv.set(user_id)
         try:
@@ -1028,10 +1039,6 @@ async def stream_chat(
             ):
                 kind = event.get("event", "")
 
-                if kind == "on_vision_fallback":
-                    vision_fallback_notice = "当前模型不支持图片，已忽略图片并根据文字内容回答。"
-                    continue
-
                 if kind == "on_tool_start":
                     tool_name = event.get("name", "")
                     event_data = event.get("data", {})
@@ -1062,6 +1069,7 @@ async def stream_chat(
                     _pending_blog_tool.clear()
                     _pending_blog_args.clear()
                     _pending_blog_content_yielded.clear()
+                    _pending_blog_started.clear()
                     _pending_patch_started.clear()
                     _pending_patch_target.clear()
                     _pending_patch_replacement_yielded.clear()
@@ -1177,6 +1185,7 @@ async def stream_chat(
                                 _pending_blog_tool[idx] = tc_chunk["name"]
                                 _pending_blog_args[idx] = ""
                                 _pending_blog_content_yielded[idx] = ""
+                                _pending_blog_started[idx] = False
                                 _pending_patch_started[idx] = False
                                 _pending_patch_target[idx] = ""
                                 _pending_patch_replacement_yielded[idx] = ""
@@ -1186,17 +1195,30 @@ async def stream_chat(
 
                                 tool_name = _pending_blog_tool.get(idx, "")
 
-                                if tool_name in ("blog_create_post", "blog_write_post"):
-                                    content_so_far = _extract_partial_content(_pending_blog_args[idx])
+                                stream_id = f"{_round_id}:{idx}"
+                                args_so_far = _pending_blog_args[idx]
+                                post_id = _extract_partial_int(args_so_far, "post_id")
+
+                                if tool_name == "blog_write_post" and post_id is not None:
+                                    if not _pending_blog_started.get(idx, False):
+                                        _pending_blog_started[idx] = True
+                                        yield _BLOGSTART_MARKER + _compact_json({
+                                            "post_id": post_id,
+                                            "stream_id": stream_id,
+                                        })
+                                    content_so_far = _extract_partial_content(args_so_far)
                                     if content_so_far is not None:
                                         prev = _pending_blog_content_yielded.get(idx, "")
                                         new_part = content_so_far[len(prev):]
                                         if new_part:
                                             _pending_blog_content_yielded[idx] = content_so_far
-                                            yield f"{_BLOGDELTA_MARKER}{{\"content_delta\":{json.dumps(new_part)}}}"
+                                            yield _BLOGDELTA_MARKER + _compact_json({
+                                                "post_id": post_id,
+                                                "stream_id": stream_id,
+                                                "content_delta": new_part,
+                                            })
 
-                                elif tool_name == "blog_edit_post":
-                                    args_so_far = _pending_blog_args[idx]
+                                elif tool_name == "blog_edit_post" and post_id is not None:
                                     target_so_far = _extract_partial_target(args_so_far) or ""
                                     if (
                                         target_so_far
@@ -1206,7 +1228,11 @@ async def stream_chat(
                                         _pending_patch_started[idx] = True
                                         _pending_patch_target[idx] = target_so_far
                                         _pending_patch_replacement_yielded[idx] = ""
-                                        yield f"{_PATCHSTART_MARKER}{{\"target_text\":{json.dumps(target_so_far, ensure_ascii=False)}}}"
+                                        yield _PATCHSTART_MARKER + _compact_json({
+                                            "post_id": post_id,
+                                            "stream_id": stream_id,
+                                            "target_text": target_so_far,
+                                        })
                                     if _pending_patch_started.get(idx, False):
                                         replacement_so_far = _extract_partial_replacement(args_so_far)
                                         if replacement_so_far is not None:
@@ -1214,7 +1240,11 @@ async def stream_chat(
                                             new_repl = replacement_so_far[len(prev_repl):]
                                             if new_repl:
                                                 _pending_patch_replacement_yielded[idx] = replacement_so_far
-                                                yield f"{_PATCHDELTA_MARKER}{{\"replacement_delta\":{json.dumps(new_repl, ensure_ascii=False)}}}"
+                                                yield _PATCHDELTA_MARKER + _compact_json({
+                                                    "post_id": post_id,
+                                                    "stream_id": stream_id,
+                                                    "replacement_delta": new_repl,
+                                                })
 
                 elif kind == "on_chat_model_end":
                     ai_msg = event.get("data", {}).get("output")
@@ -1311,10 +1341,6 @@ async def stream_chat(
     message_id = 0
     user_message_id = 0
     response_attachments: list[dict[str, Any]] = []
-    if final_confirmed and vision_fallback_notice:
-        if vision_fallback_notice not in full_content:
-            full_content = f"{vision_fallback_notice}\n\n{full_content}".strip()
-        yield f"{_ROUNDEND_MARKER}{json.dumps({'round_id': _round_id, 'classification': 'final', 'text': full_content, 'loop_step_index': None})}"
     if final_confirmed:
         try:
             assistant_token_count = estimate_tokens(full_content)

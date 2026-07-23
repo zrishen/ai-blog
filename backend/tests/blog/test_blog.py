@@ -7,9 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.database.models import BlogPost as BlogPostModel
+from src.database.models import BlogPost as BlogPostModel, User as UserModel
 from src.services.markdown_blog_service import read_post_by_slug
 from src.tools.blog import (
+    blog_create_post,
     blog_delete_post,
     blog_edit_post,
     blog_read_post,
@@ -66,6 +67,58 @@ async def test_create_blog_post(client: AsyncClient, db_session: AsyncSession):
     assert meta["slug"] == data["slug"]
     assert meta["status"] == "draft"
     assert body == "这是测试内容。"
+
+
+@pytest.mark.asyncio
+async def test_ai_create_post_creates_empty_draft_then_write_fills_same_post(
+    db_session: AsyncSession,
+    monkeypatch,
+):
+    """AI 新建文章必须先创建有 ID 的空草稿，再由 write 工具写入正文。"""
+    db_session.add(UserModel(id=TEST_USER_ID, username="testuser", password_hash="mock"))
+    await db_session.commit()
+
+    class ToolSession:
+        async def __aenter__(self):
+            return db_session
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("src.tools.blog.async_session", lambda: ToolSession())
+
+    token = current_user_id_cv.set(TEST_USER_ID)
+    try:
+        created_result = await blog_create_post.ainvoke({
+            "title": "AI 两阶段文章",
+            "tags": "ai, streaming",
+            "excerpt": "先建草稿再写正文",
+        })
+        result = await db_session.execute(
+            select(BlogPostModel).where(BlogPostModel.title == "AI 两阶段文章")
+        )
+        post = result.scalar_one()
+
+        assert f"id={post.id}" in created_result
+        assert post.status == "draft"
+        assert post.content == ""
+        meta, body = _read_markdown(post.slug)
+        assert meta["status"] == "draft"
+        assert body == ""
+
+        write_result = await blog_write_post.ainvoke({
+            "post_id": post.id,
+            "content": "## 正文\n\n这是后续写入的正文。",
+        })
+        await db_session.refresh(post)
+    finally:
+        current_user_id_cv.reset(token)
+
+    assert f"id={post.id}" in write_result
+    assert post.content == "## 正文\n\n这是后续写入的正文。"
+    assert _read_markdown(post.slug)[1] == post.content
+    assert "content" not in blog_create_post.args
+    assert "status" not in blog_create_post.args
 
 
 @pytest.mark.asyncio

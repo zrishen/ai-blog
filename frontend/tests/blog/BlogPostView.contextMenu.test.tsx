@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import "@testing-library/jest-dom/vitest";
 
@@ -139,5 +139,51 @@ describe("BlogPostView 右键菜单", () => {
     const { container } = await renderView({ isOwner: false });
     contextMenuOnContent(container, 5, 5);
     expect(document.body.textContent).not.toContain("复制");
+  });
+
+  it("文章 A 不显示文章 B 的流，切到 B 后立即接续已累积正文和 patch", async () => {
+    const postB = {
+      ...POST,
+      id: 2,
+      title: "目标文章 B",
+      slug: "target-b",
+      content: "B 的旧正文",
+    };
+    let chat: ReturnType<typeof useChat> | null = null;
+
+    function Harness() {
+      chat = useChat();
+      React.useEffect(() => {
+        chat!.dispatch({ type: "SET_BLOG_POSTS", payload: [POST, postB] });
+        chat!.dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: POST.id });
+      }, []);
+      return <BlogPostView username="tester" isOwner />;
+    }
+
+    render(
+      <MemoryRouter>
+        <ChatProvider><Harness /></ChatProvider>
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(document.body).toHaveTextContent("测试文章"));
+
+    act(() => {
+      chat!.dispatch({ type: "START_BLOG_STREAMING", payload: { postId: 2, runId: "write-b" } });
+      chat!.dispatch({ type: "APPEND_BLOG_STREAMING", payload: { postId: 2, runId: "write-b", contentDelta: "## B 实时正文" } });
+      chat!.dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { postId: 2, runId: "patch-b", targetText: "B 的旧正文" } });
+      chat!.dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: { postId: 2, runId: "patch-b", replacementDelta: "B 的实时替换" } });
+    });
+
+    expect(document.body).toHaveTextContent(POST.content);
+    expect(document.body).not.toHaveTextContent("B 实时正文");
+    expect(document.body).not.toHaveTextContent("B 的实时替换");
+
+    act(() => {
+      chat!.dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: 2 });
+    });
+
+    await waitFor(() => expect(document.body).toHaveTextContent("目标文章 B"));
+    expect(document.body).toHaveTextContent("B 实时正文");
+    expect(document.body).toHaveTextContent("AI 编辑中");
   });
 });

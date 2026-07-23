@@ -158,11 +158,11 @@ describe("AISidebar 博客 AI 修改编排", () => {
 
     await act(async () => {
       capturedOptions.callbacks.onToolCall("blog_edit_post", { call_id: "call-1", round_id: 1 });
-      capturedOptions.callbacks.onPatchStart("旧文本");
-      capturedOptions.callbacks.onPatchDelta("新文本");
+      capturedOptions.callbacks.onPatchStart({ post_id: 42, stream_id: "1:0", target_text: "旧文本" });
+      capturedOptions.callbacks.onPatchDelta({ post_id: 42, stream_id: "1:0", replacement_delta: "新文本" });
       await new Promise((resolve) => setTimeout(resolve, 30));
     });
-    await waitFor(() => expect(latestChat!.state.blogPatchStreaming?.replacementDelta).toBe("新文本"));
+    await waitFor(() => expect(latestChat!.state.blogPatchStreamingByPostId[42]?.replacementDelta).toBe("新文本"));
 
     await act(async () => {
       capturedOptions.callbacks.onToolResult("blog_edit_post", "文章已精准修改", {
@@ -172,7 +172,7 @@ describe("AISidebar 博客 AI 修改编排", () => {
       settleRequest?.();
     });
 
-    await waitFor(() => expect(latestChat!.state.blogPatchStreaming).toBeNull());
+    await waitFor(() => expect(latestChat!.state.blogPatchStreamingByPostId[42]).toBeUndefined());
     await waitFor(() => expect(api.getBlogPost).toHaveBeenCalledWith(42));
     await waitFor(() => expect(latestChat!.state.blogPosts[0]?.content).toBe("新文本"));
     expect(latestChat!.state.aiSidebarStreamingByKey["temp:blog-edit"]).toBe(false);
@@ -189,12 +189,12 @@ describe("AISidebar 博客 AI 修改编排", () => {
     await waitFor(() => expect(api.sendChat).toHaveBeenCalledOnce());
 
     await act(async () => {
-      capturedOptions.callbacks.onPatchStart("旧文本");
-      capturedOptions.callbacks.onPatchDelta("半截结果");
+      capturedOptions.callbacks.onPatchStart({ post_id: 42, stream_id: "2:0", target_text: "旧文本" });
+      capturedOptions.callbacks.onPatchDelta({ post_id: 42, stream_id: "2:0", replacement_delta: "半截结果" });
       rejectRequest?.(new Error("网络失败"));
     });
 
-    await waitFor(() => expect(latestChat!.state.blogPatchStreaming).toBeNull());
+    await waitFor(() => expect(latestChat!.state.blogPatchStreamingByPostId[42]).toBeUndefined());
     expect(api.getBlogPost).not.toHaveBeenCalled();
     expect(latestChat!.state.aiSidebarStreamingByKey["temp:blog-edit"]).toBe(false);
     expect(latestChat!.state.aiSidebarErrorsByKey["temp:blog-edit"]).toBe("无法获取回复，请稍后重试");

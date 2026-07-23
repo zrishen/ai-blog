@@ -354,31 +354,32 @@ describe("AISidebar handleSend 心脏分支", () => {
     expect(api.sendChat).not.toHaveBeenCalled();
   });
 
-  it("P0-6 onBlogDelta 累积 blogStreaming，onToolResult(create) 后 CLEAR", async () => {
-    api.listSitePosts.mockResolvedValue({ posts: [] });
+  it("P0-6 write 流按 postId 累积，正式文章刷新后 CLEAR", async () => {
+    api.getBlogPost.mockResolvedValue({ id: 99, title: "生成文章", content: "生成的博客片段" });
     renderSidebar();
     await waitFor(() => expect(latestAuthUser?.username).toBe("alice"));
     await sendOnce();
 
-    // onToolCall 占据 blog 流所有权 → onBlogDelta 创建 player 并累积
     await act(async () => {
-      capturedOptions.callbacks.onToolCall("blog_create_post", { call_id: "c1", round_id: 1 });
-      capturedOptions.callbacks.onBlogDelta("生成的博客片段");
+      capturedOptions.callbacks.onToolCall("blog_write_post", { call_id: "c1", round_id: 1 });
+      capturedOptions.callbacks.onBlogStart({ post_id: 99, stream_id: "1:0" });
+      capturedOptions.callbacks.onBlogDelta({ post_id: 99, stream_id: "1:0", content_delta: "生成的博客片段" });
     });
-    await waitFor(() => expect(latestChat!.state.blogStreamingContent).toBe("生成的博客片段"));
+    await waitFor(() => expect(latestChat!.state.blogStreamingByPostId[99]?.content).toBe("生成的博客片段"));
 
-    // onToolResult(create_post) → finishBlog + CLEAR_BLOG_STREAMING
+    // onToolResult(write_post) → 先刷新正式文章，再 CLEAR_BLOG_STREAMING
     await act(async () => {
       capturedOptions.callbacks.onToolResult(
-        "blog_create_post",
+        "blog_write_post",
         "done",
-        { operation: "create_post", post_id: 99 },
+        { operation: "write_post", post_id: 99 },
         [],
         { call_id: "c1", round_id: 1 },
       );
       capturedOptions.callbacks.onDone({ conversation_id: 42, message_id: 100, user_message_id: 99 });
       settleRequest?.();
     });
-    await waitFor(() => expect(latestChat!.state.blogStreamingContent).toBeNull());
+    await waitFor(() => expect(latestChat!.state.blogStreamingByPostId[99]).toBeUndefined());
+    expect(api.getBlogPost).toHaveBeenCalledWith(99);
   });
 });

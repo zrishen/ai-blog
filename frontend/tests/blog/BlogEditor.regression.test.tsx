@@ -321,17 +321,17 @@ describe("BlogEditor 核心回归", () => {
     const reset = document.querySelector<HTMLElement>(".vditor-reset")!;
     reset.innerHTML = "<p>原始段落内容</p>";
     act(() => {
-      latestChat!.dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { targetText: "原始段落内容" } });
+      latestChat!.dispatch({ type: "START_BLOG_PATCH_STREAMING", payload: { postId: 17, runId: "timeout", targetText: "原始段落内容" } });
     });
     expect(document.querySelector(".ai-patch-inline")).toBeInTheDocument();
 
     act(() => {
       vi.advanceTimersByTime(29_000);
-      latestChat!.dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: { replacementDelta: "正在生成" } });
+      latestChat!.dispatch({ type: "APPEND_BLOG_PATCH_STREAMING", payload: { postId: 17, runId: "timeout", replacementDelta: "正在生成" } });
       vi.advanceTimersByTime(1_000);
     });
 
-    expect(latestChat!.state.blogPatchStreaming).toBeNull();
+    expect(latestChat!.state.blogPatchStreamingByPostId[17]).toBeUndefined();
     expect(screen.getByText("AI 修改超时，请重试")).toBeInTheDocument();
   });
 });

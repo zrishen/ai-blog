@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import React from "react";
+import { act, render, screen } from "@testing-library/react";
 import { BlogPostCard } from "../../src/features/blog/components/BlogPostCard";
-import { ChatProvider } from "../../src/stores/chatStore";
+import { ChatProvider, useChat } from "../../src/stores/chatStore";
 import type { BlogPost } from "../../src/stores/chatStore";
 
 const basePost: BlogPost = {
@@ -63,5 +64,20 @@ describe("BlogPostCard 渲染", () => {
   it("渲染草稿状态徽标", () => {
     renderCard({ status: "draft" as BlogPost["status"] }, "compact");
     expect(screen.getByText("草稿")).toBeInTheDocument();
+  });
+
+  it("目标文章存在流式状态时显示 AI 正在写作", () => {
+    let dispatch: ReturnType<typeof useChat>["dispatch"] | null = null;
+    function Harness() {
+      dispatch = useChat().dispatch;
+      return <BlogPostCard post={basePost} variant="compact" onClick={vi.fn()} />;
+    }
+    render(<ChatProvider><Harness /></ChatProvider>);
+
+    act(() => {
+      dispatch!({ type: "START_BLOG_STREAMING", payload: { postId: 1, runId: "write-1" } });
+    });
+
+    expect(screen.getByText("AI 正在写作")).toBeInTheDocument();
   });
 });

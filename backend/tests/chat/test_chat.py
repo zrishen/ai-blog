@@ -3,6 +3,7 @@
 import inspect
 import json
 import logging
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -545,9 +546,106 @@ async def test_blog_edit_patch_streams_from_model_tool_arguments(monkeypatch, sp
 
     assert "PATCHSTART" in output
     assert "PATCHDELTA" in output
-    assert '{"target_text":"旧文本"}' in output
-    assert '{"replacement_delta":"新文本"}' in output
+    assert '{"post_id":1,"stream_id":"1:0","target_text":"旧文本"}' in output
+    assert '{"post_id":1,"stream_id":"1:0","replacement_delta":"新文本"}' in output
     assert output.count("TOOLDONE") >= 2
+
+
+def test_partial_int_waits_for_json_number_delimiter():
+    from src.services.chat_service import _extract_partial_int
+
+    assert _extract_partial_int('{"post_id": 4', "post_id") is None
+    assert _extract_partial_int('{"post_id": 42, "content": "', "post_id") == 42
+    assert _extract_partial_int('{"post_id": 42}', "post_id") == 42
+
+
+@pytest.mark.asyncio
+async def test_blog_write_stream_carries_post_and_stream_identity(monkeypatch):
+    from src.services import chat_service
+
+    tool_input = {
+        "post_id": 42,
+        "content": "## 新正文\n\n实时生成内容",
+    }
+
+    class FakeScalars:
+        def all(self):
+            return []
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return FakeResult()
+
+    class FakeBlogTool:
+        name = "blog_write_post"
+
+    class FakeChunk:
+        content = ""
+        additional_kwargs = {}
+
+        def __init__(self, tool_call_chunks):
+            self.tool_call_chunks = tool_call_chunks
+
+    args_text = json.dumps(tool_input, ensure_ascii=False)
+    split_at = args_text.index('"content"') + len('"content": "## 新')
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": FakeChunk([{
+                    "index": 0,
+                    "name": "blog_write_post",
+                    "args": args_text[:split_at],
+                }])},
+            }
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": FakeChunk([{
+                    "index": 0,
+                    "name": None,
+                    "args": args_text[split_at:],
+                }])},
+            }
+            yield {"event": "on_tool_start", "name": "blog_write_post", "data": {"input": tool_input}}
+            yield {
+                "event": "on_tool_end",
+                "name": "blog_write_post",
+                "data": {"output": "文章已更新: id=42, slug=test, title=测试, status=draft"},
+            }
+
+    async def fake_add_message_pair(*args, **kwargs):
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
+
+    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
+    monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
+    monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
+
+    output = "".join([
+        chunk async for chunk in chat_service.stream_chat("重写文章", None, 1)
+    ])
+
+    assert 'BLOGSTART\x00{"post_id":42,"stream_id":"1:0"}' in output
+    delta_payloads = [
+        json.loads(match)
+        for match in re.findall(r"BLOGDELTA\x00(\{[^\x00]+?\})(?=\x00|\n\n|$)", output)
+    ]
+    assert delta_payloads
+    assert all(item["post_id"] == 42 and item["stream_id"] == "1:0" for item in delta_payloads)
+    assert "".join(item["content_delta"] for item in delta_payloads) == tool_input["content"]
 
 
 @pytest.mark.asyncio
@@ -625,8 +723,16 @@ async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monke
         chunk async for chunk in chat_service.stream_chat("修改文章", None, 1)
     ])
 
-    assert json.dumps({"target_text": tool_input["target_text"]}, ensure_ascii=False, separators=(",", ":")) in output
-    assert json.dumps({"replacement_delta": tool_input["replacement_text"]}, ensure_ascii=False, separators=(",", ":")) in output
+    assert json.dumps({
+        "post_id": 1,
+        "stream_id": "1:0",
+        "target_text": tool_input["target_text"],
+    }, ensure_ascii=False, separators=(",", ":")) in output
+    assert json.dumps({
+        "post_id": 1,
+        "stream_id": "1:0",
+        "replacement_delta": tool_input["replacement_text"],
+    }, ensure_ascii=False, separators=(",", ":")) in output
     assert "u65e7" not in output
 
 
@@ -737,8 +843,8 @@ async def test_vision_fallback_retries_without_images():
     finally:
         chat_service.create_react_agent = original
 
-    assert events[0]["event"] == "on_vision_fallback"
     assert events[-1]["event"] == "on_chat_model_end"
+    assert len(calls) == 2
     assert all(
         block.get("type") != "image_url"
         for block in calls[1][-1]["content"]
