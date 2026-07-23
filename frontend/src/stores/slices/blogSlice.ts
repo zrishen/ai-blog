@@ -10,8 +10,22 @@ function removePostKey<T>(record: Record<number, T>, postId: number): Record<num
 // Blog 切片：博客 CRUD + 按文章隔离的流式预览 + 选区，其它 action 原样返回。
 export function blogReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
-    case "SET_BLOG_POSTS":
-      return { ...state, blogPosts: action.payload };
+    case "SET_BLOG_POSTS": {
+      // 列表接口不含完整正文（content 为可选）：合并时保留已加载的详情正文，
+      // 避免 create_post 等触发的列表刷新把当前打开文章的正文冲成空。
+      const previousById = new Map(state.blogPosts.map((p) => [p.id, p]));
+      return {
+        ...state,
+        blogPosts: action.payload.map((p) => {
+          const prev = previousById.get(p.id);
+          const incomingContent = typeof p.content === "string" ? p.content : "";
+          if (prev && prev.content && !incomingContent.trim()) {
+            return { ...p, content: prev.content };
+          }
+          return p;
+        }),
+      };
+    }
     case "SET_BLOG_VIEW":
       return { ...state, blogCurrentView: action.payload };
     case "SET_BLOG_CURRENT_POST_ID":

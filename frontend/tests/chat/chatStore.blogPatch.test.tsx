@@ -38,6 +38,32 @@ describe("chatStore 博客 AI 流式状态", () => {
     expect(result.current.state.blogStreamingByPostId[2]?.content).toBe("文章二");
   });
 
+  it("SET_BLOG_POSTS 列表项缺少正文时保留已加载的详情正文（create 草稿刷新不冲掉当前文章）", () => {
+    const { result } = renderHook(() => useChat(), { wrapper });
+
+    act(() => {
+      result.current.dispatch({ type: "SET_BLOG_POSTS", payload: [
+        { id: 1, title: "文章A", slug: "a", content: "正文A", status: "published", view_count: 0, created_at: "2026-07-23" },
+        { id: 2, title: "文章B", slug: "b", content: "正文B", status: "draft", view_count: 0, created_at: "2026-07-23" },
+      ] });
+    });
+
+    // create_post 等触发的列表刷新：列表接口返回项不带 content
+    act(() => {
+      result.current.dispatch({ type: "SET_BLOG_POSTS", payload: [
+        { id: 1, title: "文章A", slug: "a", status: "published", view_count: 0, created_at: "2026-07-23" },
+        { id: 2, title: "文章B", slug: "b", status: "draft", view_count: 0, created_at: "2026-07-23" },
+        { id: 3, title: "新草稿C", slug: "c", status: "draft", view_count: 0, created_at: "2026-07-23" },
+      ] });
+    });
+
+    // 已加载的文章正文不被列表（无 content）冲掉
+    expect(result.current.state.blogPosts.find((p) => p.id === 1)?.content).toBe("正文A");
+    expect(result.current.state.blogPosts.find((p) => p.id === 2)?.content).toBe("正文B");
+    // 新建草稿随列表出现
+    expect(result.current.state.blogPosts.find((p) => p.id === 3)?.title).toBe("新草稿C");
+  });
+
   it("按 postId 隔离 patch 流，并忽略没有匹配 START 的增量", () => {
     const { result } = renderHook(() => useChat(), { wrapper });
 
