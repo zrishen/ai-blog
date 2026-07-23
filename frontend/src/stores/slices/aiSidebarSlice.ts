@@ -1,5 +1,5 @@
 import type { ChatState, ChatAction } from "../chatStore";
-import type { Message, ToolEvent } from "../../features/ai-chat/types";
+import type { ChatAttachment, Message, ToolEvent } from "../../features/ai-chat/types";
 import { isDisplayableMessage } from "../../features/ai-chat/types";
 import type { TrustChoiceOption } from "../../features/ai-chat/trustPrompts";
 import type { ThinkingMode } from "../../api/chat";
@@ -7,11 +7,13 @@ import { applyStreamEvent } from "./streamEvent";
 
 function updateMessageWithPayload(
   message: Message,
-  payload: { content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] },
+  payload: { content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] },
 ): Message {
   return {
     ...message,
     ...(payload.content !== undefined ? { content: payload.content } : {}),
+    ...(payload.conversation_id !== undefined ? { conversation_id: payload.conversation_id } : {}),
+    ...(payload.attachments !== undefined ? { attachments: payload.attachments } : {}),
     ...(payload.thinkingContent !== undefined ? { thinkingContent: payload.thinkingContent } : {}),
     ...(payload.streamingRound !== undefined ? { streamingRound: payload.streamingRound } : {}),
     ...(payload.streamFinalized !== undefined ? { streamFinalized: payload.streamFinalized } : {}),
@@ -81,6 +83,20 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
       };
     }
+    case "RECONCILE_AI_SIDEBAR_MESSAGE_IDS": {
+      const { key, optimisticUserId, userMessageId, optimisticAssistantId, assistantMessageId } = action.payload;
+      const current = state.aiSidebarMessagesByKey[key] ?? [];
+      const messages = current.map((message) => {
+        if (message.id === optimisticUserId) return { ...message, id: userMessageId };
+        if (message.id === optimisticAssistantId) return { ...message, id: assistantMessageId };
+        return message;
+      });
+      return {
+        ...state,
+        aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [key]: messages },
+        aiSidebarMessages: state.aiSidebarSelectedKey === key ? messages : state.aiSidebarMessages,
+      };
+    }
     case "APPLY_AI_STREAM_EVENT":
       return {
         ...state,
@@ -118,6 +134,56 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         ...state,
         aiSidebarHistoryByKey: { ...state.aiSidebarHistoryByKey, [action.payload.key]: action.payload.history },
       };
+    case "ADD_AI_SIDEBAR_ATTACHMENTS_FOR_KEY": {
+      const current = state.aiSidebarAttachmentsByKey[action.payload.key] ?? [];
+      return {
+        ...state,
+        aiSidebarAttachmentsByKey: {
+          ...state.aiSidebarAttachmentsByKey,
+          [action.payload.key]: [...current, ...action.payload.attachments].sort((a, b) => a.position - b.position),
+        },
+      };
+    }
+    case "UPDATE_AI_SIDEBAR_ATTACHMENT_FOR_KEY": {
+      const current = state.aiSidebarAttachmentsByKey[action.payload.key] ?? [];
+      return {
+        ...state,
+        aiSidebarAttachmentsByKey: {
+          ...state.aiSidebarAttachmentsByKey,
+          [action.payload.key]: current.map((item) =>
+            item.localId === action.payload.localId ? { ...item, ...action.payload.patch } : item
+          ),
+        },
+      };
+    }
+    case "REMOVE_AI_SIDEBAR_ATTACHMENT_FOR_KEY": {
+      const current = state.aiSidebarAttachmentsByKey[action.payload.key] ?? [];
+      return {
+        ...state,
+        aiSidebarAttachmentsByKey: {
+          ...state.aiSidebarAttachmentsByKey,
+          [action.payload.key]: current.filter((item) => item.localId !== action.payload.localId),
+        },
+      };
+    }
+    case "SORT_AI_SIDEBAR_ATTACHMENTS_FOR_KEY": {
+      const current = state.aiSidebarAttachmentsByKey[action.payload.key] ?? [];
+      const positions = new Map(action.payload.localIds.map((localId, index) => [localId, index]));
+      return {
+        ...state,
+        aiSidebarAttachmentsByKey: {
+          ...state.aiSidebarAttachmentsByKey,
+          [action.payload.key]: [...current]
+            .sort((a, b) => (positions.get(a.localId) ?? a.position) - (positions.get(b.localId) ?? b.position))
+            .map((item, position) => ({ ...item, position })),
+        },
+      };
+    }
+    case "CLEAR_AI_SIDEBAR_ATTACHMENTS_FOR_KEY": {
+      const { [action.payload.key]: removedAttachments, ...attachmentsByKey } = state.aiSidebarAttachmentsByKey;
+      void removedAttachments;
+      return { ...state, aiSidebarAttachmentsByKey: attachmentsByKey };
+    }
     case "MIGRATE_AI_SIDEBAR_TEMP_KEY": {
       const { fromKey, toKey, conversationId } = action.payload;
       const fromMessages = state.aiSidebarMessagesByKey[fromKey] ?? [];
@@ -130,6 +196,7 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
       const { [fromKey]: removedInput, ...inputsByKey } = state.aiSidebarInputsByKey;
       const { [fromKey]: removedError, ...errorsByKey } = state.aiSidebarErrorsByKey;
       const { [fromKey]: removedHistory, ...historyByKey } = state.aiSidebarHistoryByKey;
+      const { [fromKey]: removedAttachments, ...attachmentsByKey } = state.aiSidebarAttachmentsByKey;
       void _removedMessages;
       return {
         ...state,
@@ -141,6 +208,7 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         aiSidebarInputsByKey: { ...inputsByKey, [toKey]: removedInput ?? "" },
         aiSidebarErrorsByKey: { ...errorsByKey, [toKey]: removedError ?? null },
         aiSidebarHistoryByKey: { ...historyByKey, [toKey]: removedHistory ?? { loading: false, error: null } },
+        aiSidebarAttachmentsByKey: { ...attachmentsByKey, [toKey]: removedAttachments ?? [] },
       };
     }
     case "REMOVE_AI_SIDEBAR_THREAD": {
@@ -150,11 +218,13 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
       const { [key]: removedInput, ...inputsByKey } = state.aiSidebarInputsByKey;
       const { [key]: removedError, ...errorsByKey } = state.aiSidebarErrorsByKey;
       const { [key]: removedHistory, ...historyByKey } = state.aiSidebarHistoryByKey;
+      const { [key]: removedAttachments, ...attachmentsByKey } = state.aiSidebarAttachmentsByKey;
       void removedMessages;
       void removedStreaming;
       void removedInput;
       void removedError;
       void removedHistory;
+      void removedAttachments;
       return {
         ...state,
         aiSidebarSelectedKey: state.aiSidebarSelectedKey === key ? null : state.aiSidebarSelectedKey,
@@ -165,6 +235,7 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         aiSidebarInputsByKey: inputsByKey,
         aiSidebarErrorsByKey: errorsByKey,
         aiSidebarHistoryByKey: historyByKey,
+        aiSidebarAttachmentsByKey: attachmentsByKey,
       };
     }
     case "SET_AI_SIDEBAR_THINKING_MODE":

@@ -6,6 +6,7 @@
 from fastapi import APIRouter
 
 from src.api.chat import router as chat_router
+from src.api.chat_attachments import router as chat_attachments_router
 from src.api.conversations import router as conversations_router
 from src.api.mcp import router as mcp_router
 from src.api.status import router as status_router
@@ -32,6 +33,7 @@ router.include_router(conversations_router)
 
 # 聊天（流式 / 非流式）
 router.include_router(chat_router)
+router.include_router(chat_attachments_router)
 router.include_router(public_chat_router)
 
 # 文件上传 + 文件库

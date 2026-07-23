@@ -16,9 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 _IDEMPOTENT_COLUMNS = {
-    "conversations": ("deleted_at", "DATETIME"),
-    "file_documents": ("deleted_at", "DATETIME"),
-    "blog_posts": ("deleted_at", "DATETIME"),
+    "conversations": [("deleted_at", "DATETIME")],
+    "file_documents": [("deleted_at", "DATETIME")],
+    "blog_posts": [("deleted_at", "DATETIME")],
+    "chat_attachments": [
+        ("position", "INTEGER"),
+        ("extracted_text", "TEXT"),
+        ("extraction_truncated", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
 }
 
 _IDEMPOTENT_INDEXES = {
@@ -30,6 +35,7 @@ _IDEMPOTENT_INDEXES = {
     "ix_file_processing_jobs_source_document": ("file_processing_jobs", ["source_document_id"], False),
     "uq_file_processing_jobs_active_key": ("file_processing_jobs", ["active_key"], True),
     "uq_file_processing_jobs_user_request": ("file_processing_jobs", ["user_id", "client_request_id"], True),
+    "uq_chat_attachments_message_position": ("chat_attachments", ["message_id", "position"], True),
 }
 
 
@@ -47,14 +53,15 @@ async def init_db():
 
         def _apply_idempotent(conn_sync):
             insp = inspect(conn_sync)
-            for table, (column, coltype) in _IDEMPOTENT_COLUMNS.items():
+            for table, columns in _IDEMPOTENT_COLUMNS.items():
                 if not insp.has_table(table):
                     continue
-                if not _column_exists(insp, table, column):
-                    conn_sync.execute(
-                        text(f'ALTER TABLE {table} ADD COLUMN {column} {coltype}')
-                    )
-                    logger.info("Migration: added column %s.%s", table, column)
+                for column, coltype in columns:
+                    if not _column_exists(insp, table, column):
+                        conn_sync.execute(
+                            text(f'ALTER TABLE {table} ADD COLUMN {column} {coltype}')
+                        )
+                        logger.info("Migration: added column %s.%s", table, column)
 
             for index_name, (table, cols, unique) in _IDEMPOTENT_INDEXES.items():
                 if not insp.has_table(table):

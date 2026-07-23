@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import (
     BlogPost as BlogPostModel,
+    ChatAttachment as ChatAttachmentModel,
     Conversation as ConversationModel,
     FileDocument as FileDocumentModel,
     FileProcessingJob,
@@ -42,6 +43,7 @@ from src.schemas.trash import (
     TrashFailedItem,
     TrashItem,
 )
+from src.services.chat_attachment_service import _resolve_stored_path
 from src.services.file_processing_service import (
     create_or_reuse_restore_job,
     has_active_restore,
@@ -429,6 +431,23 @@ async def _purge_uploaded_file_if_exclusive(
     return True
 
 
+async def _collect_chat_attachment_paths(
+    db: AsyncSession,
+    *,
+    conversation_id: int,
+    user_id: int,
+) -> list[PurePath]:
+    result = await db.execute(
+        select(ChatAttachmentModel.stored_path)
+        .join(MessageModel, ChatAttachmentModel.message_id == MessageModel.id)
+        .where(
+            MessageModel.conversation_id == conversation_id,
+            ChatAttachmentModel.user_id == user_id,
+        )
+    )
+    return [PurePath(stored_path) for stored_path in result.scalars().all()]
+
+
 async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -> None:
     result = await db.execute(
         select(ConversationModel).where(
@@ -443,9 +462,22 @@ async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -
 
     # commit 前先收集物理资源信息（commit 后相关 Message 记录将被删除）
     attachment_names = await _collect_conversation_attachment_names(db, item_id)
+    chat_attachment_paths = await _collect_chat_attachment_paths(
+        db,
+        conversation_id=item_id,
+        user_id=user_id,
+    )
 
     # 先硬删 DB 并提交：DB 状态先进入「不可恢复」，物理资源之后再清理。
     # 这样即便物理清理失败或进程退出，也不会出现「DB 仍可见、附件已丢失」的不一致。
+    await db.execute(
+        sql_delete(ChatAttachmentModel).where(
+            ChatAttachmentModel.user_id == user_id,
+            ChatAttachmentModel.message_id.in_(
+                select(MessageModel.id).where(MessageModel.conversation_id == item_id)
+            ),
+        )
+    )
     await db.execute(
         sql_delete(MessageModel).where(MessageModel.conversation_id == item_id)
     )
@@ -468,6 +500,16 @@ async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -
         except Exception:
             logger.warning(
                 "回收站清理附件失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True
+            )
+    for stored_path in chat_attachment_paths:
+        try:
+            path = _resolve_stored_path(stored_path.as_posix())
+            await asyncio.to_thread(path.unlink, missing_ok=True)
+        except Exception:
+            logger.warning(
+                "回收站清理聊天附件失败（留待孤儿清理）: stored_path=%s",
+                stored_path,
+                exc_info=True,
             )
 
 

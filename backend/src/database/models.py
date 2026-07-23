@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -60,6 +60,44 @@ class FileDocument(Base):
     category_id = Column(Integer, ForeignKey("file_categories.id"), nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     deleted_at = Column(DateTime, nullable=True)
+
+
+class ChatAttachment(Base):
+    __tablename__ = "chat_attachments"
+    __table_args__ = (
+        UniqueConstraint("user_id", "attachment_id", name="uq_chat_attachments_user_attachment"),
+        UniqueConstraint("stored_path", name="uq_chat_attachments_stored_path"),
+        UniqueConstraint("message_id", "position", name="uq_chat_attachments_message_position"),
+        CheckConstraint(
+            "status IN ('pending', 'claimed', 'attached')",
+            name="ck_chat_attachments_status",
+        ),
+        Index("ix_chat_attachments_user_status", "user_id", "status"),
+        Index("ix_chat_attachments_user_draft_status", "user_id", "draft_key", "status"),
+        Index("ix_chat_attachments_user_claim", "user_id", "claim_token", "status"),
+        Index("ix_chat_attachments_pending_expires", "status", "expires_at"),
+        Index("ix_chat_attachments_user_message", "user_id", "message_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    attachment_id = Column(String(36), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    draft_key = Column(String(120), nullable=True)
+    original_name = Column(String(300), nullable=False)
+    stored_path = Column(String(500), nullable=False)
+    media_type = Column(String(150), nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    position = Column(Integer, nullable=True)
+    extracted_text = Column(Text, nullable=True)
+    extraction_truncated = Column(Boolean, nullable=False, default=False)
+    status = Column(String(20), nullable=False, default="pending")
+    claim_token = Column(String(36), nullable=True)
+    claimed_at = Column(DateTime, nullable=True)
+    attached_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
 
 class FileProcessingJob(Base):

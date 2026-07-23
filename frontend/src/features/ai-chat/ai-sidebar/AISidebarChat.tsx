@@ -37,14 +37,13 @@ import { createPatchDeltaPlayer, type PatchDeltaPlayer } from "./patchDeltaPlaye
 import {
   blogToolOperations,
   RESEARCH_TOOL_NAMES,
+  saveAISidebarSession,
   type AISidebarProps,
 } from "./constants";
 import { useAISidebarNavigation } from "../hooks/useAISidebarNavigation";
+import { useChatAttachments } from "../hooks/useChatAttachments";
 import { useAISidebarRuntime } from "./AISidebarRuntimeContext";
 import type { RunState } from "../AISidebar";
-
-const AI_SIDEBAR_VIEW_STORAGE_KEY = "ai-sidebar-view";
-const AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY = "ai-sidebar-selected-key";
 
 function makeServerKey(conversationId: number): AISidebarConversationKey {
   return `server:${conversationId}`;
@@ -128,6 +127,7 @@ export function AISidebarChat({
   const selectedError = selectedKey ? state.aiSidebarErrorsByKey[selectedKey] ?? null : null;
   const selectedHistory = selectedKey ? state.aiSidebarHistoryByKey[selectedKey] ?? { loading: false, error: null } : { loading: false, error: null };
   const aiSidebarMessageGroups = useMemo(() => buildMessageGroups(selectedMessages), [selectedMessages]);
+  const attachments = useChatAttachments(selectedKey, isPrivate && isAuthenticated && !topicCreateMode && !selectedStreaming);
 
   useEffect(() => {
     streamingByKeyRef.current = state.aiSidebarStreamingByKey;
@@ -279,8 +279,20 @@ export function AISidebarChat({
     assistantId: number;
     assistantStartedAt: number;
     initialConversationId: number | null;
+    attachments: Array<{ id: string }>;
+    attachmentLocalIds: string[];
+    optimisticUserMessageId: number;
   }) => {
-    const { convKey, text, assistantId, assistantStartedAt, initialConversationId } = params;
+    const {
+      convKey,
+      text,
+      assistantId,
+      assistantStartedAt,
+      initialConversationId,
+      attachments: sentAttachments,
+      attachmentLocalIds,
+      optimisticUserMessageId,
+    } = params;
     const controller = new AbortController();
     abortControllersRef.current.set(convKey, controller);
     const runState: RunState = {
@@ -295,6 +307,7 @@ export function AISidebarChat({
     };
     runRefs.current.set(convKey, runState);
     let activeKey = convKey;
+    let persistenceConfirmed = false;
 
     const updateAssistant = (payload: Partial<Message>) => {
       dispatch({ type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY", payload: { key: activeKey, id: assistantId, ...payload } });
@@ -355,12 +368,35 @@ export function AISidebarChat({
         }
 
         await sendChat(text, initialConversationId, {
+          attachments: sentAttachments,
           thinkingMode: state.aiSidebarThinkingMode,
           context: pageContext,
           signal: controller.signal,
           callbacks: {
             onDone: (metadata) => {
+              const validPersistence = [
+                metadata.conversation_id,
+                metadata.message_id,
+                metadata.user_message_id,
+              ].every((value) => Number.isInteger(value) && Number(value) > 0);
+              if (!validPersistence) {
+                runState.streamError = "回复已生成，但消息保存失败，请重试。";
+                return;
+              }
+              persistenceConfirmed = true;
+              attachments.clear(activeKey);
               runState.conversationId = metadata.conversation_id;
+              runState.userMessageId = metadata.user_message_id;
+              runState.assistantPersistedMessageId = metadata.message_id;
+              dispatch({
+                type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
+                payload: {
+                  key: activeKey,
+                  id: optimisticUserMessageId,
+                  ...(metadata.attachments ? { attachments: metadata.attachments } : {}),
+                  conversation_id: metadata.conversation_id,
+                },
+              });
               const serverKey = makeServerKey(metadata.conversation_id);
               if (activeKey !== serverKey) {
                 abortControllersRef.current.delete(activeKey);
@@ -368,8 +404,13 @@ export function AISidebarChat({
                 runRefs.current.delete(activeKey);
                 runRefs.current.set(serverKey, runState);
                 dispatch({ type: "MIGRATE_AI_SIDEBAR_TEMP_KEY", payload: { fromKey: activeKey, toKey: serverKey, conversationId: metadata.conversation_id } });
-                localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "chat");
-                localStorage.setItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY, serverKey);
+                if (user) {
+                  saveAISidebarSession(user.id, {
+                    version: 1,
+                    view: "chat",
+                    target: { kind: "server", conversationId: metadata.conversation_id },
+                  });
+                }
                 activeKey = serverKey;
               }
               skipNextHistoryLoadRef.current.add(metadata.conversation_id);
@@ -500,8 +541,25 @@ export function AISidebarChat({
           },
         });
         await drainUiChain();
+        if (
+          persistenceConfirmed
+          && runState.userMessageId
+          && runState.assistantPersistedMessageId
+        ) {
+          dispatch({
+            type: "RECONCILE_AI_SIDEBAR_MESSAGE_IDS",
+            payload: {
+              key: activeKey,
+              optimisticUserId: optimisticUserMessageId,
+              userMessageId: runState.userMessageId,
+              optimisticAssistantId: assistantId,
+              assistantMessageId: runState.assistantPersistedMessageId,
+            },
+          });
+        }
         if (blogStreamOwnerRef.current === activeKey) blogStreamOwnerRef.current = null;
         if (runState.streamError) throw new Error(runState.streamError);
+        if (!persistenceConfirmed) throw new Error("消息保存状态未确认，请重试。");
         await loadConvs();
         await refreshResearchTopicIfNeeded();
       } else if (siteUsername) {
@@ -526,6 +584,7 @@ export function AISidebarChat({
       cancelPlayer(blogPlayer);
       dispatch({ type: "CLEAR_BLOG_PATCH_STREAMING" });
       dispatch({ type: "CLEAR_BLOG_STREAMING" });
+      if (!persistenceConfirmed) attachments.restoreUploaded(attachmentLocalIds, activeKey);
       if (err instanceof Error && err.name === "AbortError") {
         dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "discard" } } });
         if (!runState.streamFinalized) updateAssistant({ content: "已停止" });
@@ -543,12 +602,15 @@ export function AISidebarChat({
       dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: activeKey, streaming: false } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, refreshResearchTopicIfNeeded, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.researchCurrentTopic, state.researchCurrentTopicId, state.aiSelectionContext, state.trustWritingEnabled]);
+  }, [attachments, dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, refreshResearchTopicIfNeeded, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.researchCurrentTopic, state.researchCurrentTopicId, state.aiSelectionContext, state.trustWritingEnabled]);
 
   const handleSend = useCallback(async (textOverride?: string) => {
     const convKey = getActiveKey();
     const text = (textOverride ?? state.aiSidebarInputsByKey[convKey] ?? "").trim();
-    if (!text || state.aiSidebarStreamingByKey[convKey]) return;
+    const includeDraftAttachments = textOverride === undefined && isPrivate && !topicCreateMode;
+    const readyDrafts = includeDraftAttachments ? attachments.uploaded : [];
+    if ((!text && readyDrafts.length === 0) || state.aiSidebarStreamingByKey[convKey]) return;
+    if (includeDraftAttachments && (attachments.hasUploading || attachments.hasFailed)) return;
 
     const currentMessages = state.aiSidebarMessagesByKey[convKey] ?? [];
     if (state.trustWritingEnabled && !state.researchCurrentTopicId && isPrivate) {
@@ -593,6 +655,9 @@ export function AISidebarChat({
       return;
     }
 
+    const attachmentLocalIds = readyDrafts.map((draft) => draft.localId);
+    const sentAttachments = readyDrafts.flatMap((draft) => draft.attachment ? [{ id: draft.attachment.id }] : []);
+    attachments.markSending(attachmentLocalIds);
     setInputForKey(convKey, "");
     dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: convKey, error: null } });
     dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: convKey, streaming: true } });
@@ -603,6 +668,7 @@ export function AISidebarChat({
       role: "user",
       content: text,
       conversation_id: initialConversationId ?? 0,
+      attachments: readyDrafts.flatMap((draft) => draft.attachment ? [draft.attachment] : []),
       token_count: 0,
       created_at: new Date().toISOString(),
     };
@@ -622,8 +688,17 @@ export function AISidebarChat({
     dispatch({ type: "ADD_AI_SIDEBAR_MSG_FOR_KEY", payload: { key: convKey, message: assistantMsg } });
     scrollToLatestAfterRender(convKey);
 
-    await runChatStream({ convKey, text, assistantId, assistantStartedAt, initialConversationId });
-  }, [dispatch, getActiveKey, isPrivate, runChatStream, scrollToLatestAfterRender, setInputForKey, showTrustChoicePayload, state.aiSidebarInputsByKey, state.aiSidebarMessagesByKey, state.aiSidebarStreamingByKey, state.aiSidebarThinkingMode, state.trustWritingEnabled, state.researchCurrentTopicId, state.researchCurrentTopic, state.researchTopics, topicCreateMessageId, topicCreateMode]);
+    await runChatStream({
+      convKey,
+      text,
+      assistantId,
+      assistantStartedAt,
+      initialConversationId,
+      attachments: sentAttachments,
+      attachmentLocalIds,
+      optimisticUserMessageId: userMsg.id,
+    });
+  }, [attachments, dispatch, getActiveKey, isPrivate, runChatStream, scrollToLatestAfterRender, setInputForKey, showTrustChoicePayload, state.aiSidebarInputsByKey, state.aiSidebarMessagesByKey, state.aiSidebarStreamingByKey, state.aiSidebarThinkingMode, state.trustWritingEnabled, state.researchCurrentTopicId, state.researchCurrentTopic, state.researchTopics, topicCreateMessageId, topicCreateMode]);
 
   const handleStop = useCallback(() => {
     if (!selectedKey) return;
@@ -821,6 +896,13 @@ export function AISidebarChat({
         streaming={selectedStreaming}
         input={selectedInput}
         topicCreateMode={topicCreateMode}
+        attachments={attachments.drafts}
+        attachmentsEnabled={isPrivate && isAuthenticated && !topicCreateMode && !selectedStreaming}
+        sendDisabled={attachments.hasUploading || attachments.hasFailed || (!selectedInput.trim() && attachments.uploaded.length === 0)}
+        getAttachmentPreviewUrl={attachments.getPreviewUrl}
+        onSelectAttachments={attachments.addFiles}
+        onRetryAttachment={attachments.retry}
+        onRemoveAttachment={(localId) => { void attachments.remove(localId); }}
         textareaRef={textareaRef}
         onInputChange={handleInputChange}
         onKeyDown={handleKeyDown}

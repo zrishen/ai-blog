@@ -112,6 +112,27 @@ describe("sendChat SSE 解析", () => {
     expect(doneMeta).toEqual({ conversation_id: 7, message_id: 42 });
   });
 
+  it("DONE marker 与 JSON 分片时等待完整元数据", async () => {
+    const stream = makeChunkedStream([
+      "answer\x00DONE\x00",
+      '{"conversation_id":7,"message_id":42,',
+      '"user_message_id":41,"attachments":[]}',
+    ]);
+    fetchMock.mockResolvedValueOnce(makeResponse(stream));
+
+    const chunks: string[] = [];
+    let doneMeta: { conversation_id: number; message_id: number; user_message_id?: number } | null = null;
+    await sendChat("hi", null, {
+      callbacks: {
+        onChunk: (c) => chunks.push(c),
+        onDone: (m) => { doneMeta = m; },
+      },
+    });
+
+    expect(chunks.join("")).toBe("answer");
+    expect(doneMeta).toMatchObject({ conversation_id: 7, message_id: 42, user_message_id: 41 });
+  });
+
   it("BLOGDELTA marker 触发 onBlogDelta", async () => {
     const stream = makeChunkedStream([
       "\x00BLOGDELTA\x00",

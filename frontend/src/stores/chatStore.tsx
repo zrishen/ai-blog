@@ -7,7 +7,9 @@ import type {
   AISidebarConversationKey,
   AISidebarHistoryState,
   AIStreamEvent,
+  ChatAttachment,
   Conversation,
+  DraftAttachment,
   Message,
   Reference,
   ToolEvent,
@@ -50,6 +52,7 @@ interface ChatState {
   aiSidebarInputsByKey: Record<AISidebarConversationKey, string>;
   aiSidebarErrorsByKey: Record<AISidebarConversationKey, string | null>;
   aiSidebarHistoryByKey: Record<AISidebarConversationKey, AISidebarHistoryState>;
+  aiSidebarAttachmentsByKey: Record<AISidebarConversationKey, DraftAttachment[]>;
   aiSidebarThinkingMode: ThinkingMode;
   llmSupportsThinking: boolean;
 
@@ -116,13 +119,19 @@ type ChatAction =
   | { type: "ADD_AI_SIDEBAR_MSG"; payload: Message }
   | { type: "ADD_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; message: Message } }
   | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
-  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
+  | { type: "RECONCILE_AI_SIDEBAR_MESSAGE_IDS"; payload: { key: AISidebarConversationKey; optimisticUserId: number; userMessageId: number; optimisticAssistantId: number; assistantMessageId: number } }
   | { type: "APPLY_AI_STREAM_EVENT"; payload: { id: number; event: AIStreamEvent } }
   | { type: "APPLY_AI_STREAM_EVENT_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; event: AIStreamEvent } }
   | { type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY"; payload: { key: AISidebarConversationKey; streaming: boolean } }
   | { type: "SET_AI_SIDEBAR_INPUT_FOR_KEY"; payload: { key: AISidebarConversationKey; input: string } }
   | { type: "SET_AI_SIDEBAR_ERROR_FOR_KEY"; payload: { key: AISidebarConversationKey; error: string | null } }
   | { type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY"; payload: { key: AISidebarConversationKey; history: AISidebarHistoryState } }
+  | { type: "ADD_AI_SIDEBAR_ATTACHMENTS_FOR_KEY"; payload: { key: AISidebarConversationKey; attachments: DraftAttachment[] } }
+  | { type: "UPDATE_AI_SIDEBAR_ATTACHMENT_FOR_KEY"; payload: { key: AISidebarConversationKey; localId: string; patch: Partial<DraftAttachment> } }
+  | { type: "REMOVE_AI_SIDEBAR_ATTACHMENT_FOR_KEY"; payload: { key: AISidebarConversationKey; localId: string } }
+  | { type: "SORT_AI_SIDEBAR_ATTACHMENTS_FOR_KEY"; payload: { key: AISidebarConversationKey; localIds: string[] } }
+  | { type: "CLEAR_AI_SIDEBAR_ATTACHMENTS_FOR_KEY"; payload: { key: AISidebarConversationKey } }
   | { type: "MIGRATE_AI_SIDEBAR_TEMP_KEY"; payload: { fromKey: AISidebarConversationKey; toKey: AISidebarConversationKey; conversationId: number } }
   | { type: "REMOVE_AI_SIDEBAR_THREAD"; payload: { key: AISidebarConversationKey } }
   | { type: "SET_AI_SIDEBAR_THINKING_MODE"; payload: ThinkingMode }
@@ -186,6 +195,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         aiSidebarInputsByKey: {},
         aiSidebarErrorsByKey: {},
         aiSidebarHistoryByKey: {},
+        aiSidebarAttachmentsByKey: {},
         aiSidebarThinkingMode: "balanced",
         blogPosts: [],
         blogCurrentView: "list",
@@ -250,6 +260,7 @@ const initialState: ChatState = {
   aiSidebarInputsByKey: {},
   aiSidebarErrorsByKey: {},
   aiSidebarHistoryByKey: {},
+  aiSidebarAttachmentsByKey: {},
   aiSidebarThinkingMode: "balanced",
   llmSupportsThinking: true,
 
@@ -293,6 +304,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("theme", state.theme);
   }, [state.theme]);
 
+  useEffect(() => {
+    const handleAuthLogout = () => dispatch({ type: "LOGOUT" });
+    window.addEventListener("auth:logout", handleAuthLogout);
+    return () => window.removeEventListener("auth:logout", handleAuthLogout);
+  }, []);
+
   return (
     <ChatStateContext.Provider value={state}>
       <ChatDispatchContext.Provider value={dispatch}>
@@ -320,5 +337,5 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   dispatch({ type: "SET_THEME", payload: next });
 }
 
-export type { Message, Conversation, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference, ResearchTopicDetail };
+export type { Message, Conversation, DraftAttachment, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference, ResearchTopicDetail };
 export { isDisplayableMessage };

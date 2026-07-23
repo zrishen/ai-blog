@@ -3,10 +3,12 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import Conversation, get_db
-from src.database.models import Message, User
+from src.database.models import ChatAttachment, Message, User
+from src.schemas.chat_attachment import ChatAttachmentResponse
 from src.schemas.conversation import (
     ConversationCreate,
     ConversationListResponse,
@@ -102,6 +104,30 @@ async def get_conversation_messages(
     user: User = Depends(get_current_user),
 ):
     msgs = await get_messages(conversation_id, user.id, session=db)
+    message_ids = [message.id for message in msgs]
+    attachment_rows = []
+    if message_ids:
+        attachment_rows = list(
+            (
+                await db.execute(
+                    select(ChatAttachment)
+                    .where(
+                        ChatAttachment.user_id == user.id,
+                        ChatAttachment.message_id.in_(message_ids),
+                        ChatAttachment.status == "attached",
+                    )
+                    .order_by(ChatAttachment.message_id, ChatAttachment.position)
+                )
+            ).scalars().all()
+        )
+    attachments_by_message: dict[int, list[ChatAttachmentResponse]] = {}
+    for attachment in attachment_rows:
+        if attachment.message_id is None:
+            continue
+        attachments_by_message.setdefault(attachment.message_id, []).append(
+            ChatAttachmentResponse.from_attachment(attachment)
+        )
+
     return [
         MessageResponse(
             id=m.id,
@@ -110,6 +136,7 @@ async def get_conversation_messages(
             content=_display_content_for_message(m.role, m.content),
             image_url=m.image_url,
             file_url=m.file_url,
+            attachments=attachments_by_message.get(m.id, []),
             token_count=m.token_count,
             created_at=m.created_at,
             reasoningContent=m.reasoning_content,

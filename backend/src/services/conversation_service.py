@@ -5,7 +5,7 @@ import logging
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.models import Conversation, Message
+from src.database.models import ChatAttachment, Conversation, Message
 from src.database.session import async_session
 from langchain_core.messages import AIMessage, ToolMessage
 
@@ -119,12 +119,14 @@ async def save_chat_turn(
     final_tokens: int,
     user_image_url: str | None = None,
     user_file_url: str | None = None,
+    attachment_claim_token: str | None = None,
+    attachment_ids: list[str] | None = None,
     final_reasoning_content: str | None = None,
     final_tool_events: list[dict] | None = None,
     final_loop_steps: list[str] | None = None,
     final_thinking_duration_ms: int | None = None,
     final_thinking_mode: str | None = None,
-) -> tuple[int, Message]:
+) -> tuple[int, Message, Message]:
     async with async_session() as s:
         async with s.begin():
             now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -136,7 +138,42 @@ async def save_chat_turn(
             else:
                 conv.updated_at = now
 
-            s.add(Message(
+            ordered_attachment_ids = attachment_ids or []
+            claimed_attachments: list[ChatAttachment] = []
+            if attachment_claim_token:
+                claimed_attachments = list(
+                    (
+                        await s.execute(
+                            select(ChatAttachment).where(
+                                ChatAttachment.user_id == user_id,
+                                ChatAttachment.claim_token == attachment_claim_token,
+                                ChatAttachment.status == "claimed",
+                            )
+                        )
+                    ).scalars().all()
+                )
+                by_id = {item.attachment_id: item for item in claimed_attachments}
+                if set(by_id) != set(ordered_attachment_ids):
+                    raise ValueError("Claimed attachments no longer match this message")
+                claimed_attachments = [by_id[item] for item in ordered_attachment_ids]
+                user_image_url = next(
+                    (
+                        f"/api/chat/attachments/{item.attachment_id}/content"
+                        for item in claimed_attachments
+                        if item.media_type.startswith("image/")
+                    ),
+                    user_image_url,
+                )
+                user_file_url = next(
+                    (
+                        f"/api/chat/attachments/{item.attachment_id}/content"
+                        for item in claimed_attachments
+                        if not item.media_type.startswith("image/")
+                    ),
+                    user_file_url,
+                )
+
+            user_message = Message(
                 conversation_id=conv.id,
                 role="user",
                 content=user_content,
@@ -144,7 +181,17 @@ async def save_chat_turn(
                 file_url=user_file_url,
                 token_count=user_tokens,
                 created_at=now,
-            ))
+            )
+            s.add(user_message)
+            await s.flush()
+
+            if claimed_attachments:
+                for position, attachment in enumerate(claimed_attachments):
+                    attachment.message_id = user_message.id
+                    attachment.position = position
+                    attachment.status = "attached"
+                    attachment.attached_at = now
+                    attachment.updated_at = now
 
             for msg in process_messages:
                 if isinstance(msg, AIMessage):
@@ -186,4 +233,4 @@ async def save_chat_turn(
             await s.flush()
             conversation_id = conv.id
 
-        return conversation_id, final_message
+        return conversation_id, user_message, final_message

@@ -73,15 +73,24 @@ function Seed() {
   return null;
 }
 
+function AuthAwareSidebar() {
+  const { isAuthenticated, isInitializing } = useAuth();
+  const mode = isInitializing ? "pending" : isAuthenticated ? "private" : "shared";
+  return <AISidebar mode={mode} pageType="post" postTitle="当前文章" />;
+}
+
 function renderSidebar() {
-  localStorage.setItem("auth_token", "token");
-  localStorage.setItem("auth_user", JSON.stringify({ id: 7, username: "alice" }));
+  localStorage.setItem("ai-sidebar-session:v1:7", JSON.stringify({
+    version: 1,
+    view: "chat",
+    target: { kind: "new" },
+  }));
   return render(
     <MemoryRouter>
       <AuthProvider>
         <ChatProvider>
           <Seed />
-          <AISidebar mode="private" pageType="post" postTitle="当前文章" />
+          <AuthAwareSidebar />
         </ChatProvider>
       </AuthProvider>
     </MemoryRouter>,

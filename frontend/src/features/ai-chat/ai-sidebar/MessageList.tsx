@@ -18,6 +18,7 @@ import { TrustChoiceGroup } from "../TrustChoiceGroup";
 import type { TrustChoiceOption } from "../trustPrompts";
 import { collectMessageReferences } from "./messageHelpers";
 import { maskStreamingMarkdown } from "./streamingMarkdown";
+import { MessageAttachments } from "./MessageAttachments";
 
 interface MessageGroup {
   role: Message["role"];
@@ -145,9 +146,9 @@ function MessageListComponent({
               transition={{ duration: 0.2 }}
             >
               <div
-                className={`min-w-0 text-base leading-relaxed ${isAssistantGroup
-                  ? "w-full max-w-none text-left text-foreground"
-                  : "max-w-[86%] rounded-[1.35rem] border border-border/45 bg-muted/70 px-4 py-2 text-left text-foreground shadow-sm"
+                className={`min-w-0 ${isAssistantGroup
+                  ? "w-full max-w-none text-left text-base leading-relaxed text-foreground"
+                  : "flex max-w-[86%] flex-col items-end gap-2"
                   }`}
               >
                 {group.messages.map((msg, groupMsgIndex) => {
@@ -188,7 +189,9 @@ function MessageListComponent({
                   return (
                     <div
                       key={`msg-${groupIndex}-${groupMsgIndex}-${msg.role}`}
-                      className={isAssistant && groupMsgIndex > 0 ? "mt-3 border-t border-border/60 pt-3" : ""}
+                      className={isAssistant
+                        ? (groupMsgIndex > 0 ? "mt-3 border-t border-border/60 pt-3" : "")
+                        : "flex w-full flex-col items-end"}
                     >
                       {showThinkingPlaceholder && <ThinkingPlaceholder />}
                       <ThinkingPanel
@@ -205,10 +208,27 @@ function MessageListComponent({
                         streamError={streamMessage.streamError}
                         durationMs={streamActive ? streamingDurationMs : msg.thinkingDurationMs}
                       />
-                      <MessageBody
-                        messageContent={messageContent}
-                        isAssistant={!!isAssistant}
-                      />
+                      {isAssistant ? (
+                        <>
+                          <MessageAttachments attachments={msg.attachments} />
+                          <MessageBody
+                            messageContent={messageContent}
+                            isAssistant
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <MessageAttachments attachments={msg.attachments} />
+                          {messageContent ? (
+                            <div className="rounded-[1.35rem] border border-border/45 bg-muted/70 px-4 py-2 text-left text-base leading-relaxed text-foreground shadow-sm">
+                              <MessageBody
+                                messageContent={messageContent}
+                                isAssistant={false}
+                              />
+                            </div>
+                          ) : null}
+                        </>
+                      )}
                       {showTrustChoices && (
                         <TrustChoiceGroup
                           options={msg.trustChoiceOptions ?? []}

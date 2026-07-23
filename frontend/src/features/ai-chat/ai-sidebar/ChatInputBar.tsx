@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   Plus,
   Library,
@@ -5,9 +6,12 @@ import {
   Wrench,
   ArrowUp,
   Square,
+  Paperclip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import type { DraftAttachment } from "../types";
+import { AttachmentDraftList } from "./AttachmentDraftList";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +28,13 @@ interface ChatInputBarProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onSend: () => void;
   onStop: () => void;
+  attachments: DraftAttachment[];
+  attachmentsEnabled: boolean;
+  sendDisabled: boolean;
+  getAttachmentPreviewUrl: (localId: string) => string | undefined;
+  onSelectAttachments: (files: FileList) => void;
+  onRetryAttachment: (localId: string) => void;
+  onRemoveAttachment: (localId: string) => void;
   onPickFiles: () => void;
   onPickResearch: () => void;
   onOpenMcp: () => void;
@@ -38,13 +49,52 @@ export function ChatInputBar({
   onKeyDown,
   onSend,
   onStop,
+  attachments,
+  attachmentsEnabled,
+  sendDisabled,
+  getAttachmentPreviewUrl,
+  onSelectAttachments,
+  onRetryAttachment,
+  onRemoveAttachment,
   onPickFiles,
   onPickResearch,
   onOpenMcp,
 }: ChatInputBarProps) {
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!attachmentsEnabled || event.clipboardData.files.length === 0) return;
+    event.preventDefault();
+    onSelectAttachments(event.clipboardData.files);
+  };
+
   return (
-    <div className="mx-3 mb-3 rounded-[1.8rem] border border-border/70 bg-background/78 p-1.5 shadow-lg shadow-foreground/5 transition-all duration-200 focus-within:border-border/70 focus-within:shadow-foreground/5">
-      <div className="flex items-center gap-2">
+    <div className="mx-3 mb-3 flex flex-col gap-2">
+      <input
+        ref={attachmentInputRef}
+        id="ai-sidebar-attachment-input"
+        className="sr-only"
+        type="file"
+        multiple
+        accept="image/png,image/jpeg,image/webp,.pdf,.docx,.xlsx,.txt,.md"
+        disabled={!attachmentsEnabled}
+        onChange={(event) => {
+          if (event.target.files) onSelectAttachments(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      <AttachmentDraftList
+        attachments={attachments}
+        disabled={streaming}
+        getPreviewUrl={getAttachmentPreviewUrl}
+        onRetry={onRetryAttachment}
+        onRemove={onRemoveAttachment}
+      />
+      <div
+        data-testid="ai-chat-composer"
+        className="rounded-[1.8rem] border border-border/70 bg-background/78 p-1.5 shadow-lg shadow-foreground/5 transition-all duration-200 focus-within:border-border/70 focus-within:shadow-foreground/5"
+      >
+        <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -56,7 +106,17 @@ export function ChatInputBar({
               <Plus className="h-6 w-6" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-44">
+          <DropdownMenuContent side="top" align="start" className="w-48">
+            <DropdownMenuItem
+              disabled={!attachmentsEnabled}
+              onSelect={(event) => {
+                event.preventDefault();
+                attachmentInputRef.current?.click();
+              }}
+            >
+              <Paperclip className="mr-2 h-4 w-4" />
+              上传文件
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={onPickFiles}>
               <Library className="mr-2 h-4 w-4" />
               文件库
@@ -80,6 +140,7 @@ export function ChatInputBar({
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={handlePaste}
           rows={1}
         />
         <Button
@@ -89,12 +150,13 @@ export function ChatInputBar({
               : "h-9 w-9 flex-shrink-0 rounded-full shadow-md shadow-primary/20"
           }
           onClick={streaming ? onStop : onSend}
-          disabled={!streaming && !input.trim()}
+          disabled={!streaming && sendDisabled}
           title={streaming ? "停止生成" : "发送消息"}
           aria-label={streaming ? "停止生成" : "发送消息"}
         >
           {streaming ? <Square className="h-3.5 w-3.5" /> : <ArrowUp className="h-4 w-4" />}
         </Button>
+        </div>
       </div>
     </div>
   );

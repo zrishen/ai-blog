@@ -7,6 +7,8 @@ import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AISidebarHeader } from "./ai-sidebar/AISidebarHeader";
 import {
+  loadAISidebarSession,
+  saveAISidebarSession,
   type AISidebarProps,
 } from "./ai-sidebar/constants";
 import { useAISidebarThinkingMode } from "./hooks/useAISidebarThinkingMode";
@@ -16,8 +18,6 @@ import { AISidebarList } from "./ai-sidebar/AISidebarList";
 import { AISidebarChat } from "./ai-sidebar/AISidebarChat";
 
 const SHARED_CONVERSATION_KEY: AISidebarConversationKey = "temp:shared";
-const AI_SIDEBAR_VIEW_STORAGE_KEY = "ai-sidebar-view";
-const AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY = "ai-sidebar-selected-key";
 
 export interface RunState {
   finalContent: string;
@@ -27,6 +27,8 @@ export interface RunState {
   streamError: string | null;
   assistantStartedAt: number;
   assistantMessageId: number;
+  assistantPersistedMessageId?: number;
+  userMessageId?: number;
   conversationId: number | null;
 }
 
@@ -36,35 +38,57 @@ function makeTempKey(): AISidebarConversationKey {
 
 export function AISidebar({ mode, contextText = "", siteUsername, postSlug, pageType = "other", postTitle, onRequestClose, forceExpanded = false }: AISidebarProps) {
   const { state, dispatch } = useChat();
-  const { user } = useAuth();
+  const { user, isAuthenticated, isInitializing } = useAuth();
   const userId = user?.id;
-  const [sidebarView, setSidebarView] = useState<"list" | "chat">(() => {
-    if (mode !== "private") return "chat";
-    const storedView = localStorage.getItem(AI_SIDEBAR_VIEW_STORAGE_KEY);
-    const storedKey = localStorage.getItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY);
-    return storedView === "chat" && storedKey?.startsWith("server:") ? "chat" : "list";
-  });
+  const [sidebarView, setSidebarView] = useState<"list" | "chat">("list");
+  const [readyScope, setReadyScope] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const abortControllersRef = useRef(new Map<AISidebarConversationKey, AbortController>());
   const runRefs = useRef(new Map<AISidebarConversationKey, RunState>());
   const loadConvsSeqRef = useRef(0);
+  const initializedScopeRef = useRef<string | null>(null);
 
   const isPrivate = mode === "private";
-  const selectedKey = isPrivate ? state.aiSidebarSelectedKey : SHARED_CONVERSATION_KEY;
+  const currentScope = mode === "pending" ? "pending" : isPrivate && userId ? `private:${userId}` : mode;
+  const selectedKey = mode === "shared" ? SHARED_CONVERSATION_KEY : isPrivate ? state.aiSidebarSelectedKey : null;
 
   const handleThinkingModeChange = useAISidebarThinkingMode(userId);
 
   useEffect(() => {
-    if (!isPrivate || state.aiSidebarSelectedKey) return;
-    const storedView = localStorage.getItem(AI_SIDEBAR_VIEW_STORAGE_KEY);
-    const storedKey = localStorage.getItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY) as AISidebarConversationKey | null;
-    if (storedView === "chat" && storedKey?.startsWith("server:")) {
-      queueMicrotask(() => {
-        dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: storedKey });
+    if (mode === "pending" || initializedScopeRef.current === currentScope) return;
+    initializedScopeRef.current = currentScope;
+    queueMicrotask(() => {
+      if (mode === "shared") {
         setSidebarView("chat");
-      });
-    }
-  }, [dispatch, isPrivate, state.aiSidebarSelectedKey]);
+        setConversations([]);
+        setReadyScope(currentScope);
+        return;
+      }
+      if (!userId) return;
+
+      const session = loadAISidebarSession(userId);
+      if (session.view === "list") {
+        setSidebarView("list");
+        dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: null });
+        dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: null });
+      } else if (session.target.kind === "server") {
+        setSidebarView("chat");
+        dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: `server:${session.target.conversationId}` });
+      } else {
+        const currentKey = state.aiSidebarSelectedKey;
+        const key = currentKey?.startsWith("temp:") && currentKey !== SHARED_CONVERSATION_KEY
+          ? currentKey
+          : makeTempKey();
+        setSidebarView("chat");
+        dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: key });
+        if (!state.aiSidebarMessagesByKey[key]) {
+          dispatch({ type: "SET_AI_SIDEBAR_MSGS_FOR_KEY", payload: { key, messages: [] } });
+          dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key, history: { loading: false, error: null } } });
+        }
+      }
+      setReadyScope(currentScope);
+    });
+  }, [currentScope, dispatch, mode, state.aiSidebarMessagesByKey, state.aiSidebarSelectedKey, userId]);
 
   const getActiveKey = useCallback((): AISidebarConversationKey => {
     if (!isPrivate) return SHARED_CONVERSATION_KEY;
@@ -88,29 +112,19 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     scrollToLatestAfterRender,
   } = useAISidebarScroll(selectedKey);
 
-  useEffect(() => {
-    if (!isPrivate) {
-      queueMicrotask(() => {
-        setSidebarView("chat");
-        setConversations([]);
-        dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: SHARED_CONVERSATION_KEY });
-        dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: null });
-      });
-    }
-  }, [dispatch, isPrivate]);
-
   const loadConvs = useCallback(async () => {
-    if (!isPrivate) return;
+    if (!isPrivate || isInitializing || !isAuthenticated || !userId) return;
     const seq = ++loadConvsSeqRef.current;
     try {
       const data = await fetchConversations();
       if (seq === loadConvsSeqRef.current) setConversations(data.conversations || []);
     } catch { /* 加载会话列表失败静默；UI 显示空列表即可 */ }
-  }, [isPrivate]);
+  }, [isAuthenticated, isInitializing, isPrivate, userId]);
 
   useEffect(() => {
-    if (isPrivate) queueMicrotask(() => void loadConvs());
-  }, [isPrivate, loadConvs, state.trashRevision]);
+    if (!isPrivate || isInitializing || !isAuthenticated || !userId) return;
+    queueMicrotask(() => void loadConvs());
+  }, [isAuthenticated, isInitializing, isPrivate, loadConvs, state.trashRevision, userId]);
 
   // 有选中上下文(AI 修改)时,自动切到 chat 视图(避免 list 视图下选中上下文丢失)
   useEffect(() => {
@@ -123,21 +137,20 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
 
   const handleNewChat = useCallback(async () => {
     const key = makeTempKey();
-    localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "chat");
-    localStorage.removeItem(AI_SIDEBAR_SELECTED_KEY_STORAGE_KEY);
+    if (userId) saveAISidebarSession(userId, { version: 1, view: "chat", target: { kind: "new" } });
     dispatch({ type: "SET_AI_SIDEBAR_SELECTED_KEY", payload: key });
     dispatch({ type: "SET_AI_SIDEBAR_MSGS_FOR_KEY", payload: { key, messages: [] } });
     dispatch({ type: "SET_AI_SIDEBAR_HISTORY_FOR_KEY", payload: { key, history: { loading: false, error: null } } });
     dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: null } });
     setSidebarView("chat");
     if (isPrivate) await loadConvs();
-  }, [dispatch, isPrivate, loadConvs]);
+  }, [dispatch, isPrivate, loadConvs, userId]);
 
   const handleBackToList = useCallback(() => {
-    if (!isPrivate) return;
-    localStorage.setItem(AI_SIDEBAR_VIEW_STORAGE_KEY, "list");
+    if (!isPrivate || !userId) return;
+    saveAISidebarSession(userId, { version: 1, view: "list" });
     setSidebarView("list");
-  }, [isPrivate]);
+  }, [isPrivate, userId]);
 
   const [historyReloadKey, setHistoryReloadKey] = useState(0);
 
@@ -159,6 +172,12 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
     historyReloadKey,
     setHistoryReloadKey,
   }), [isPrivate, selectedKey, sidebarView, conversations, setSidebarView, getActiveKey, setInputForKey, loadConvs, abortControllersRef, runRefs, scrollToLatestAfterRender, handleNewChat, handleBackToList, historyReloadKey, setHistoryReloadKey]);
+
+  if (mode === "pending" || readyScope !== currentScope) {
+    return (
+      <aside className="relative flex h-full w-full flex-col border-l border-border/80 bg-card/82 shadow-[-12px_0_35px_hsl(var(--foreground)/0.04)] backdrop-blur-xl" />
+    );
+  }
 
   if (!state.aiSidebarOpen && !forceExpanded) {
     return (

@@ -102,9 +102,10 @@ function MainContent() {
 function useAISidebarRouteContext() {
   const location = useLocation();
   const state = useChatState();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isInitializing } = useAuth();
 
   return useMemo(() => {
+    const mode = isInitializing ? "pending" as const : isAuthenticated ? "private" as const : "shared" as const;
     const postMatch = matchPath("/u/:username/posts/:slug", location.pathname);
     const siteMatch = matchPath("/u/:username", location.pathname);
     const siteUsername = postMatch?.params.username ?? siteMatch?.params.username;
@@ -117,7 +118,7 @@ function useAISidebarRouteContext() {
 
       if (currentPost) {
         return {
-          mode: isAuthenticated ? "private" as const : "shared" as const,
+          mode,
           contextText: `当前上下文：${currentPost.title}`,
           siteUsername: undefined,
           postSlug: currentPost.slug,
@@ -127,7 +128,7 @@ function useAISidebarRouteContext() {
       }
 
       return {
-        mode: isAuthenticated ? "private" as const : "shared" as const,
+        mode,
         contextText: "当前上下文：AI Blog 项目介绍 - 基于 AI 的博客写作与知识管理平台",
         siteUsername: undefined,
         postSlug: undefined,
@@ -138,7 +139,7 @@ function useAISidebarRouteContext() {
 
     if (location.pathname === "/files") {
       return {
-        mode: isAuthenticated ? "private" as const : "shared" as const,
+        mode,
         contextText: "当前上下文：文件库",
         siteUsername: undefined,
         postSlug: undefined,
@@ -150,7 +151,7 @@ function useAISidebarRouteContext() {
     if (location.pathname.startsWith("/research")) {
       const topicTitle = state.researchCurrentTopic?.title;
       return {
-        mode: isAuthenticated ? "private" as const : "shared" as const,
+        mode,
         contextText: topicTitle ? `当前上下文：研究图谱 · ${topicTitle}` : "当前上下文：研究图谱",
         siteUsername: undefined,
         postSlug: undefined,
@@ -162,7 +163,7 @@ function useAISidebarRouteContext() {
     if (postMatch && siteUsername) {
       const post = state.blogPosts.find((item) => item.slug === postSlug || item.id === state.blogCurrentPostId);
       return {
-        mode: isAuthenticated ? "private" as const : "shared" as const,
+        mode,
         contextText: post ? `当前上下文：${post.title}` : `当前上下文：${siteUsername} 的文章`,
         siteUsername,
         postSlug,
@@ -173,7 +174,7 @@ function useAISidebarRouteContext() {
 
     if (siteMatch && siteUsername) {
       return {
-        mode: isAuthenticated ? "private" as const : "shared" as const,
+        mode,
         contextText: `当前上下文：${siteUsername} 的博客主页`,
         siteUsername,
         postSlug: undefined,
@@ -183,14 +184,14 @@ function useAISidebarRouteContext() {
     }
 
     return {
-      mode: isAuthenticated ? "private" as const : "shared" as const,
+      mode,
       contextText: "",
       siteUsername: undefined,
       postSlug: undefined,
       pageType: "other" as const,
       postTitle: undefined,
     };
-  }, [isAuthenticated, location.pathname, state.blogCurrentPostId, state.blogPosts, state.researchCurrentTopic?.title]);
+  }, [isAuthenticated, isInitializing, location.pathname, state.blogCurrentPostId, state.blogPosts, state.researchCurrentTopic?.title]);
 }
 
 function App() {

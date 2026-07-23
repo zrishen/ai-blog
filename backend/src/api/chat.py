@@ -24,13 +24,14 @@ async def chat(data: MessageRequest, user: User = Depends(get_current_user)):
     final_content = ""
     last = None
     async for chunk in stream_chat(
-        data.content,
-        data.conversation_id,
-        user.id,
-        data.image_url,
-        data.file_url,
-        data.thinking_mode,
-        data.context,
+        user_message=data.content,
+        conversation_id=data.conversation_id,
+        user_id=user.id,
+        user_image_url=data.image_url,
+        user_file_url=data.file_url,
+        attachment_ids=[str(item.id) for item in data.attachments],
+        thinking_mode=data.thinking_mode,
+        context=data.context,
     ):
         if _STREAMERROR_MARKER in chunk:
             try:
@@ -67,13 +68,14 @@ async def chat_stream(data: MessageRequest, user: User = Depends(get_current_use
     """Streaming chat endpoint."""
     return StreamingResponse(
         stream_chat(
-            data.content,
-            data.conversation_id,
-            user.id,
-            data.image_url,
-            data.file_url,
-            data.thinking_mode,
-            data.context,
+            user_message=data.content,
+            conversation_id=data.conversation_id,
+            user_id=user.id,
+            user_image_url=data.image_url,
+            user_file_url=data.file_url,
+            attachment_ids=[str(item.id) for item in data.attachments],
+            thinking_mode=data.thinking_mode,
+            context=data.context,
         ),
         media_type="text/event-stream",
     )

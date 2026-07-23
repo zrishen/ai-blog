@@ -1,3 +1,4 @@
+import type { ChatAttachment } from "../features/ai-chat/types";
 import { API_BASE, apiFetch } from "./client";
 
 export interface BlogToolMeta {
@@ -185,7 +186,12 @@ export interface StreamToolMeta {
 
 export interface SendChatCallbacks {
   onChunk?: (chunk: string) => void;
-  onDone?: (metadata: { conversation_id: number; message_id: number }) => void;
+  onDone?: (metadata: {
+    conversation_id: number;
+    message_id: number;
+    user_message_id?: number;
+    attachments?: ChatAttachment[];
+  }) => void;
   onToolCall?: (toolName: string, meta?: StreamToolMeta) => void;
   onToolResult?: (
     toolName: string,
@@ -207,6 +213,7 @@ export interface SendChatCallbacks {
 export interface SendChatOptions {
   imageUrl?: string;
   fileUrl?: string;
+  attachments?: Array<{ id: string }>;
   thinkingMode?: ThinkingMode;
   context?: Record<string, unknown>;
   signal?: AbortSignal;
@@ -221,6 +228,7 @@ export async function sendChat(
   const {
     imageUrl,
     fileUrl,
+    attachments,
     thinkingMode,
     context,
     signal,
@@ -248,6 +256,7 @@ export async function sendChat(
       conversation_id: conversationId,
       image_url: imageUrl || null,
       file_url: fileUrl || null,
+      attachments: attachments ?? [],
       thinking_mode: thinkingMode ?? "balanced",
       context: context ?? null,
     }),
@@ -259,7 +268,6 @@ export async function sendChat(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let accumulated = "";
-  let pendingDone = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -272,20 +280,6 @@ export async function sendChat(
     let processed = false;
     while (!processed) {
       processed = true;
-
-      if (pendingDone) {
-        pendingDone = false;
-        const trimmed = accumulated.trim();
-        if (trimmed.startsWith("{")) {
-          try {
-            onDone?.(JSON.parse(trimmed));
-            accumulated = "";
-            continue; // reprocess
-          } catch {
-            /* stream JSON may be partial, ignore parse error */
-          }
-        }
-      }
 
       const nextMarker = _findNextProtocolMarker(accumulated);
 
@@ -516,10 +510,12 @@ export async function sendChat(
       if (doneIdx !== -1) {
         // Emit text before DONE if it's not pure JSON
         const textBefore = accumulated.substring(0, doneIdx).trim();
+        let parsedBefore = false;
         if (textBefore) {
           if (textBefore.startsWith("{")) {
             try {
               onDone?.(JSON.parse(textBefore));
+              parsedBefore = true;
             } catch {
               emitChunk?.(textBefore);
             }
@@ -528,18 +524,27 @@ export async function sendChat(
           }
         }
 
-        const afterDone = accumulated.substring(doneIdx + 7).trim();
-        if (afterDone.startsWith("{")) {
-          try {
-            onDone?.(JSON.parse(afterDone));
-          } catch {
-            /* ignore malformed stream JSON */
-          }
+        const afterDone = accumulated.substring(doneIdx + _DONE_MARKER.length).trimStart();
+        if (parsedBefore) {
+          accumulated = afterDone;
+          processed = false;
+          continue;
         }
-        if (!afterDone) {
-          pendingDone = true;
+        if (!afterDone.startsWith("{")) {
+          accumulated = _DONE_MARKER + afterDone;
+          continue;
         }
-        accumulated = "";
+        const jsonResult = _findCompleteJson(afterDone, 0);
+        if (!jsonResult) {
+          accumulated = _DONE_MARKER + afterDone;
+          continue;
+        }
+        try {
+          onDone?.(JSON.parse(afterDone.substring(0, jsonResult.endIndex)));
+        } catch {
+          /* malformed DONE metadata — consume the frame without applying it */
+        }
+        accumulated = afterDone.substring(jsonResult.endIndex);
         processed = false; // reprocess
         continue;
       }

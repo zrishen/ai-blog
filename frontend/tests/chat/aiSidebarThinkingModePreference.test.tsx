@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { AuthProvider } from "../../src/stores/authStore";
+import { AuthProvider, useAuth } from "../../src/stores/authStore";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 import { AISidebar } from "../../src/features/ai-chat/AISidebar";
 import {
@@ -15,6 +15,12 @@ import {
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <ChatProvider>{children}</ChatProvider>;
+}
+
+function AuthAwareSidebar() {
+  const { isAuthenticated, isInitializing } = useAuth();
+  const mode = isInitializing ? "pending" : isAuthenticated ? "private" : "shared";
+  return <AISidebar mode={mode} />;
 }
 
 beforeEach(() => {
@@ -66,7 +72,7 @@ describe("AI 侧栏思考模式偏好", () => {
       <MemoryRouter>
         <AuthProvider>
           <ChatProvider>
-            <AISidebar mode="private" />
+            <AuthAwareSidebar />
           </ChatProvider>
         </AuthProvider>
       </MemoryRouter>,
@@ -94,13 +100,13 @@ describe("AI 侧栏思考模式偏好", () => {
       <MemoryRouter>
         <AuthProvider>
           <ChatProvider>
-            <AISidebar mode="private" />
+            <AuthAwareSidebar />
           </ChatProvider>
         </AuthProvider>
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole("button", { name: "平衡" }));
+    await user.click(await screen.findByRole("button", { name: "平衡" }));
     await user.click(await screen.findByText("快速", { selector: '[role="menuitem"] *' }));
 
     expect(await screen.findByRole("button", { name: "快速" })).toBeInTheDocument();

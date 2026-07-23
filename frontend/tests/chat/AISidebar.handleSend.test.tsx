@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { AuthProvider, useAuth } from "../../src/stores/authStore";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 import { AISidebar } from "../../src/features/ai-chat/AISidebar";
+import type { ChatAttachment } from "../../src/features/ai-chat/types";
 
 // 复用范式 A：vi.hoisted 把 api/client 全部做成 vi.fn，mock 掉会引入副作用的子组件
 const api = vi.hoisted(() => ({
@@ -24,8 +25,14 @@ const api = vi.hoisted(() => ({
   getAccessToken: vi.fn(() => null),
   setAccessToken: vi.fn(),
 }));
+const attachmentApi = vi.hoisted(() => ({
+  uploadChatAttachment: vi.fn(),
+  deleteChatAttachment: vi.fn(),
+  getChatAttachmentBlob: vi.fn(),
+}));
 
 vi.mock("../../src/api/client", () => api);
+vi.mock("../../src/api/chatAttachments", () => attachmentApi);
 vi.mock("../../src/features/ai-chat/ai-sidebar/AISidebarHeader", () => ({
   AISidebarHeader: () => <div>侧栏标题</div>,
 }));
@@ -74,15 +81,24 @@ function Seed() {
   return null;
 }
 
+function AuthAwareSidebar() {
+  const { isAuthenticated, isInitializing } = useAuth();
+  const mode = isInitializing ? "pending" : isAuthenticated ? "private" : "shared";
+  return <AISidebar mode={mode} />;
+}
+
 function renderSidebar() {
-  localStorage.setItem("auth_token", "token");
-  localStorage.setItem("auth_user", JSON.stringify({ id: 7, username: "alice" }));
+  localStorage.setItem("ai-sidebar-session:v1:7", JSON.stringify({
+    version: 1,
+    view: "chat",
+    target: { kind: "new" },
+  }));
   return render(
     <MemoryRouter>
       <AuthProvider>
         <ChatProvider>
           <Seed />
-          <AISidebar mode="private" />
+          <AuthAwareSidebar />
         </ChatProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -111,7 +127,8 @@ describe("AISidebar handleSend 心脏分支", () => {
         : new Response("{}", { status: 200 }),
     ));
     api.fetchConversations.mockResolvedValue({ conversations: [] });
-    api.getMessages.mockResolvedValue({ messages: [] });
+    api.getMessages.mockResolvedValue([]);
+    attachmentApi.deleteChatAttachment.mockResolvedValue(undefined);
     api.sendChat.mockImplementation((_text: string, _id: number | null, options: unknown) => {
       capturedOptions = options;
       return new Promise<void>((resolve, reject) => {
@@ -143,6 +160,55 @@ describe("AISidebar handleSend 心脏分支", () => {
     expect(latestChat?.state.mcpModalOpen).toBe(false);
   });
 
+  it("上传附件后发送 attachments，并让乐观用户消息携带附件", async () => {
+    const uploaded: ChatAttachment = {
+      id: "attachment-1",
+      kind: "file",
+      original_name: "资料.txt",
+      mime_type: "text/plain",
+      size_bytes: 4,
+      status: "pending",
+      position: 0,
+      download_url: "/api/chat/attachments/attachment-1/content",
+    };
+    attachmentApi.uploadChatAttachment.mockImplementation(() => ({
+      promise: Promise.resolve(uploaded),
+      cancel: vi.fn(),
+    }));
+
+    renderSidebar();
+    await waitFor(() => expect(latestAuthUser?.username).toBe("alice"));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "添加内容" }));
+    const input = document.querySelector<HTMLInputElement>("#ai-sidebar-attachment-input")!;
+    fireEvent.change(input, { target: { files: [new File(["test"], "资料.txt", { type: "text/plain" })] } });
+    await waitFor(() => expect(screen.getByText("资料.txt")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("4 B")).toBeInTheDocument());
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    await sendOnce();
+    expect(capturedOptions.attachments).toEqual([{ id: "attachment-1" }]);
+    const optimisticUserMessage = latestChat!.state.aiSidebarMessagesByKey[TEMP_KEY]?.[0];
+    expect(optimisticUserMessage?.attachments).toEqual([uploaded]);
+
+    const attached = { ...uploaded, status: "attached" as const };
+    await act(async () => {
+      capturedOptions.callbacks.onRoundEnd({ round_id: 1, classification: "final", text: "已读取" });
+      capturedOptions.callbacks.onDone({
+        conversation_id: 42,
+        message_id: 100,
+        user_message_id: 99,
+        attachments: [attached],
+      });
+      settleRequest?.();
+    });
+    const savedUserMessage = latestChat!.state.aiSidebarMessagesByKey["server:42"]?.[0];
+    expect(savedUserMessage?.id).toBe(99);
+    expect(savedUserMessage?.conversation_id).toBe(42);
+    expect(savedUserMessage?.attachments).toEqual([attached]);
+    expect(latestChat!.state.aiSidebarMessagesByKey["server:42"]?.[1].id).toBe(100);
+  });
+
   it("P0-1 onDone 触发 temp→server key 迁移", async () => {
     renderSidebar();
     await waitFor(() => expect(latestAuthUser?.username).toBe("alice"));
@@ -151,7 +217,7 @@ describe("AISidebar handleSend 心脏分支", () => {
     // 流式 final + onDone 迁移到 server:42
     await act(async () => {
       capturedOptions.callbacks.onRoundEnd({ round_id: 1, classification: "final", text: "回复内容" });
-      capturedOptions.callbacks.onDone({ conversation_id: 42, message_id: 100 });
+      capturedOptions.callbacks.onDone({ conversation_id: 42, message_id: 100, user_message_id: 99 });
       settleRequest?.();
     });
 
@@ -164,9 +230,12 @@ describe("AISidebar handleSend 心脏分支", () => {
     expect(serverMsgs?.[1].conversation_id).toBe(42);
     // 流式结束
     expect(latestChat!.state.aiSidebarStreamingByKey["server:42"]).toBe(false);
-    // localStorage 持久化
-    expect(localStorage.getItem("ai-sidebar-selected-key")).toBe("server:42");
-    expect(localStorage.getItem("ai-sidebar-view")).toBe("chat");
+    // user-scoped localStorage 持久化
+    expect(JSON.parse(localStorage.getItem("ai-sidebar-session:v1:7")!)).toEqual({
+      version: 1,
+      view: "chat",
+      target: { kind: "server", conversationId: 42 },
+    });
     // skipNextHistoryLoadRef：迁移后不重复拉历史
     expect(api.getMessages).not.toHaveBeenCalled();
   });
@@ -188,7 +257,7 @@ describe("AISidebar handleSend 心脏分支", () => {
 
     await act(async () => {
       capturedOptions.callbacks.onRoundEnd({ round_id: 1, classification: "final", text: "Hello world" });
-      capturedOptions.callbacks.onDone({ conversation_id: 42, message_id: 100 });
+      capturedOptions.callbacks.onDone({ conversation_id: 42, message_id: 100, user_message_id: 99 });
       settleRequest?.();
     });
 
@@ -307,7 +376,7 @@ describe("AISidebar handleSend 心脏分支", () => {
         [],
         { call_id: "c1", round_id: 1 },
       );
-      capturedOptions.callbacks.onDone({ conversation_id: 42, message_id: 100 });
+      capturedOptions.callbacks.onDone({ conversation_id: 42, message_id: 100, user_message_id: 99 });
       settleRequest?.();
     });
     await waitFor(() => expect(latestChat!.state.blogStreamingContent).toBeNull());

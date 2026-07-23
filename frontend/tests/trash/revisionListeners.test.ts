@@ -9,7 +9,7 @@ describe("trashRevision 监听器已就位", () => {
     {
       name: "AISidebar 监听 trashRevision 刷新对话",
       rel: path.join("src", "features", "ai-chat", "AISidebar.tsx"),
-      marker: "[isPrivate, loadConvs, state.trashRevision]",
+      marker: "[isAuthenticated, isInitializing, isPrivate, loadConvs, state.trashRevision, userId]",
       revisionKey: "state.trashRevision",
       effectCount: 1,
     },

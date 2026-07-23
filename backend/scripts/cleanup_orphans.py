@@ -27,6 +27,7 @@ from sqlalchemy import select
 from src.config import settings
 from src.database.models import (
     BlogPost as BlogPostModel,
+    ChatAttachment as ChatAttachmentModel,
     FileDocument as FileDocumentModel,
     Message as MessageModel,
 )
@@ -67,6 +68,38 @@ async def cleanup_upload_orphans(db, *, dry_run: bool) -> int:
         if not path.is_file() or path.name in referenced:
             continue
         logger.info("发现孤儿上传文件: %s", path)
+        removed += 1
+        if not dry_run:
+            try:
+                path.unlink()
+            except OSError:
+                logger.warning("删除失败: %s", path, exc_info=True)
+    return removed
+
+
+async def cleanup_chat_attachment_orphans(db, *, dry_run: bool) -> int:
+    referenced = {
+        stored_path
+        for (stored_path,) in (
+            await db.execute(select(ChatAttachmentModel.stored_path))
+        ).all()
+        if stored_path
+    }
+    attachment_root = Path(settings.chat_attachment_dir).resolve()
+    if not attachment_root.exists():
+        return 0
+    removed = 0
+    for path in attachment_root.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            relative = path.resolve().relative_to(attachment_root).as_posix()
+        except ValueError:
+            logger.warning("跳过附件目录外文件: %s", path)
+            continue
+        if relative in referenced:
+            continue
+        logger.info("发现孤儿聊天附件: %s", path)
         removed += 1
         if not dry_run:
             try:
@@ -137,10 +170,18 @@ async def main() -> None:
 
     async with async_session() as db:
         uploads = await cleanup_upload_orphans(db, dry_run=args.dry_run)
+        chat_attachments = await cleanup_chat_attachment_orphans(db, dry_run=args.dry_run)
         markdown = await cleanup_markdown_orphans(db, dry_run=args.dry_run)
         vectors = await cleanup_chroma_orphans(db, dry_run=args.dry_run)
     mode = "dry-run" if args.dry_run else "deleted"
-    logger.info("完成（%s）：上传孤儿 %d，Markdown 孤儿 %d，向量孤儿 %d", mode, uploads, markdown, vectors)
+    logger.info(
+        "完成（%s）：上传孤儿 %d，聊天附件孤儿 %d，Markdown 孤儿 %d，向量孤儿 %d",
+        mode,
+        uploads,
+        chat_attachments,
+        markdown,
+        vectors,
+    )
 
 
 if __name__ == "__main__":

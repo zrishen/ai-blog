@@ -47,15 +47,18 @@ function Seed() {
   return null;
 }
 
-function renderSidebar() {
-  localStorage.setItem("auth_token", "token");
-  localStorage.setItem("auth_user", JSON.stringify({ id: 7, username: "alice" }));
+function AuthAwareSidebar() {
+  const { isAuthenticated } = useAuth();
+  return <AISidebar mode={isAuthenticated ? "private" : "shared"} />;
+}
+
+function renderSidebar(options: { deriveModeFromAuth?: boolean } = {}) {
   return render(
     <MemoryRouter>
       <AuthProvider>
         <ChatProvider>
           <Seed />
-          <AISidebar mode="private" />
+          {options.deriveModeFromAuth ? <AuthAwareSidebar /> : <AISidebar mode="private" />}
         </ChatProvider>
       </AuthProvider>
     </MemoryRouter>,
@@ -96,6 +99,97 @@ describe("AISidebar 会话管理", () => {
     await waitFor(() => expect(api.fetchConversations).toHaveBeenCalled());
     expect(await screen.findByText("会话 Alpha")).toBeInTheDocument();
     expect(screen.getByText("会话 Beta")).toBeInTheDocument();
+  });
+
+  it("刷新后等待登录恢复，再恢复上次打开的精确会话和聊天内容", async () => {
+    localStorage.setItem("ai-sidebar-view", "chat");
+    localStorage.setItem("ai-sidebar-selected-key", "server:5");
+    api.fetchConversations.mockResolvedValue({
+      conversations: [
+        { id: 9, title: "更新会话", created_at: "2026-01-04T00:00:00Z" },
+        { id: 5, title: "上次会话", created_at: "2026-01-03T00:00:00Z" },
+      ],
+    });
+    api.getMessages.mockResolvedValue([
+      {
+        id: 51,
+        conversation_id: 5,
+        role: "user",
+        content: "上次的问题",
+        token_count: 1,
+        created_at: "2026-01-03T00:00:00Z",
+      },
+    ]);
+    let resolveRefresh!: (response: Response) => void;
+    const refreshResponse = new Promise<Response>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    vi.stubGlobal("fetch", vi.fn((url: string) =>
+      typeof url === "string" && url.includes("/auth/refresh")
+        ? refreshResponse
+        : Promise.resolve(new Response("{}", { status: 200 })),
+    ));
+
+    renderSidebar({ deriveModeFromAuth: true });
+
+    await Promise.resolve();
+    expect(api.fetchConversations).not.toHaveBeenCalled();
+    expect(api.getMessages).not.toHaveBeenCalled();
+    expect(latestChat!.state.aiSidebarSelectedKey).toBeNull();
+
+    resolveRefresh(new Response(JSON.stringify({ access_token: "access-test", user: { id: 7, username: "alice" } }), {
+      status: 200, headers: { "Content-Type": "application/json" },
+    }));
+
+    await waitFor(() => expect(latestAuthUser?.username).toBe("alice"));
+    await waitFor(() => expect(api.fetchConversations).toHaveBeenCalledOnce());
+    await waitFor(() => expect(latestChat!.state.aiSidebarSelectedKey).toBe("server:5"));
+    await waitFor(() => expect(api.getMessages).toHaveBeenCalledWith(5));
+    expect(api.getMessages).not.toHaveBeenCalledWith(9);
+    expect(screen.getByText("消息列表")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /返回/ })).toBeInTheDocument();
+  });
+
+  it("刷新前是显式新对话时保持新对话，不擅自切到最近会话", async () => {
+    localStorage.setItem("ai-sidebar-view", "chat");
+    api.fetchConversations.mockResolvedValue({
+      conversations: [
+        { id: 8, title: "最近会话", created_at: "2026-01-04T00:00:00Z" },
+        { id: 5, title: "较早会话", created_at: "2026-01-03T00:00:00Z" },
+      ],
+    });
+
+    renderSidebar();
+
+    await waitFor(() => expect(latestChat!.state.aiSidebarSelectedKey).toMatch(/^temp:/));
+    expect(api.getMessages).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem("ai-sidebar-session:v1:7")!)).toEqual({
+      version: 1,
+      view: "chat",
+      target: { kind: "new" },
+    });
+  });
+
+  it("存储的旧会话不在最近列表时仍按 ID 精确恢复", async () => {
+    localStorage.setItem("ai-sidebar-session:v1:7", JSON.stringify({
+      version: 1,
+      view: "chat",
+      target: { kind: "server", conversationId: 55 },
+    }));
+    api.fetchConversations.mockResolvedValue({
+      conversations: [{ id: 8, title: "最近会话", created_at: "2026-01-04T00:00:00Z" }],
+    });
+
+    renderSidebar();
+
+    await waitFor(() => expect(latestChat!.state.aiSidebarSelectedKey).toBe("server:55"));
+    await waitFor(() => expect(api.getMessages).toHaveBeenCalledWith(55));
+    expect(api.getMessages).not.toHaveBeenCalledWith(8);
+    expect(JSON.parse(localStorage.getItem("ai-sidebar-session:v1:7")!)).toEqual({
+      version: 1,
+      view: "chat",
+      target: { kind: "server", conversationId: 55 },
+    });
   });
 
   it("点新对话切到 temp key + chat 视图（返回按钮出现）", async () => {

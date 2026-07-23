@@ -20,6 +20,33 @@ export interface ToolEvent {
   loopStepIndex?: number;
 }
 
+export type ChatAttachmentStatus = "pending" | "claimed" | "attached";
+
+export interface ChatAttachment {
+  id: string;
+  kind: "image" | "file";
+  original_name: string;
+  mime_type: string;
+  size_bytes: number;
+  status: ChatAttachmentStatus;
+  position?: number;
+  download_url: string;
+  preview_url?: string;
+}
+
+export type DraftAttachmentStatus = "queued" | "uploading" | "uploaded" | "sending" | "failed";
+
+export interface DraftAttachment {
+  localId: string;
+  file: File;
+  previewUrl?: string;
+  attachment?: ChatAttachment;
+  status: DraftAttachmentStatus;
+  progress: number;
+  error?: string;
+  position: number;
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
@@ -27,6 +54,7 @@ export interface Message {
   content: string;
   image_url?: string;
   file_url?: string;
+  attachments?: ChatAttachment[];
   tool_calls?: Array<{ id: string; name: string; arguments: string }>;
   tool_results?: string[];
   thinkingContent?: string;
