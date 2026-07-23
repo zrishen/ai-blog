@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     embedding_base_url: str | None = "https://dygptapi.duoyioa.com/openai/v1"
     embedding_api_key: str | None = None
     embedding_batch_size: int = 32
+    # embedding provider: "api"(OpenAI 兼容远程) | "local"(sentence-transformers 进程内模型)
+    embedding_provider: str = "api"
+    embedding_local_model: str = "Qwen/Qwen3-Embedding-0.6B"
+    embedding_local_device: str = "cpu"
     rag_top_k: int = 3
     rag_distance_threshold: float = 0.7
     # 不提供可工作的默认值：缺失或使用公开弱值时启动即失败，

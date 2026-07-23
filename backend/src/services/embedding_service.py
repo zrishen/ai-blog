@@ -1,5 +1,6 @@
-"""Embedding service using Qwen3-Embedding-8B via an OpenAI-compatible API."""
+"""Embedding service: OpenAI 兼容远程 API 或本地 sentence-transformers 进程内模型。"""
 
+import asyncio
 import logging
 import re
 
@@ -10,6 +11,7 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 _openai_client: AsyncOpenAI | None = None
+_local_model = None
 
 
 def _slug(value: str) -> str:
@@ -17,8 +19,15 @@ def _slug(value: str) -> str:
     return slug[:48] or "default"
 
 
+def _effective_embedding_model() -> str:
+    """当前 provider 实际使用的 embedding 模型名（影响 collection 命名与向量空间）。"""
+    if settings.embedding_provider == "local":
+        return settings.embedding_local_model
+    return settings.embedding_model
+
+
 def get_embedding_collection_suffix() -> str:
-    return f"_{_slug(settings.embedding_model)}"
+    return f"_{_slug(_effective_embedding_model())}"
 
 
 def _get_openai_client() -> AsyncOpenAI:
@@ -36,9 +45,60 @@ def _get_openai_client() -> AsyncOpenAI:
     return _openai_client
 
 
+def _get_local_model():
+    """懒加载本地 sentence-transformers 模型（首次调用时加载，常驻进程内存）。"""
+    global _local_model
+    if _local_model is None:
+        from sentence_transformers import SentenceTransformer
+
+        logger.info(
+            "Initializing local embedding model: model=%s device=%s",
+            settings.embedding_local_model,
+            settings.embedding_local_device,
+        )
+        _local_model = SentenceTransformer(
+            settings.embedding_local_model,
+            device=settings.embedding_local_device,
+        )
+    return _local_model
+
+
+async def _embed_local(texts: list[str], progress_callback=None) -> list[list[float]]:
+    """本地模型批量编码；同步 encode 套到线程池，避免阻塞 asyncio 事件循环。"""
+    model = _get_local_model()
+    batch_size = max(1, settings.embedding_batch_size)
+    loop = asyncio.get_running_loop()
+    embeddings: list[list[float]] = []
+    logger.info(
+        "Local embedding batch started: model=%s texts=%s",
+        settings.embedding_local_model,
+        len(texts),
+    )
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start:start + batch_size]
+        batch_embeddings = await loop.run_in_executor(
+            None,
+            lambda b=batch: model.encode(b, normalize_embeddings=True).tolist(),
+        )
+        embeddings.extend(batch_embeddings)
+        if progress_callback:
+            result = progress_callback(len(embeddings), len(texts), "chunk")
+            if result is not None:
+                await result
+    logger.info(
+        "Local embedding batch completed: model=%s embeddings=%s",
+        settings.embedding_local_model,
+        len(embeddings),
+    )
+    return embeddings
+
+
 async def get_embeddings(texts: list[str], progress_callback=None) -> list[list[float]]:
     if not texts:
         return []
+
+    if settings.embedding_provider == "local":
+        return await _embed_local(texts, progress_callback)
 
     client = _get_openai_client()
     batch_size = max(1, min(settings.embedding_batch_size, 32))
