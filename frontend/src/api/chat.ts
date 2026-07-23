@@ -20,9 +20,11 @@ const _ROUNDEND_MARKER = "\x00ROUNDEND\x00";
 const _STREAMERROR_MARKER = "\x00STREAMERROR\x00";
 const _PATCHSTART_MARKER = "\x00PATCHSTART\x00";
 const _PATCHDELTA_MARKER = "\x00PATCHDELTA\x00";
+const _TOOLPREP_MARKER = "\x00TOOLPREP\x00";
 const _PROTOCOL_MARKERS = [
   ["REASONING", _REASONING_MARKER],
   ["TOOLDONE", _TOOL_MARKER],
+  ["TOOLPREP", _TOOLPREP_MARKER],
   ["BLOGSTART", _BLOGSTART_MARKER],
   ["BLOGDELTA", _BLOGDELTA_MARKER],
   ["PATCHSTART", _PATCHSTART_MARKER],
@@ -184,6 +186,7 @@ export interface StreamToolMeta {
   call_id?: string;
   round_id?: number;
   loop_step_index?: number;
+  stream_id?: string;
 }
 
 export interface BlogStreamStart {
@@ -203,6 +206,11 @@ export interface BlogPatchDelta extends BlogStreamStart {
   replacement_delta: string;
 }
 
+export interface ToolPrepEvent {
+  tool_name: string;
+  stream_id: string;
+}
+
 export interface SendChatCallbacks {
   onChunk?: (chunk: string) => void;
   onDone?: (metadata: {
@@ -211,6 +219,7 @@ export interface SendChatCallbacks {
     user_message_id?: number;
     attachments?: ChatAttachment[];
   }) => void;
+  onToolPrep?: (event: ToolPrepEvent) => void;
   onToolCall?: (toolName: string, meta?: StreamToolMeta) => void;
   onToolResult?: (
     toolName: string,
@@ -255,6 +264,7 @@ export async function sendChat(
     callbacks: {
       onChunk,
       onDone,
+      onToolPrep,
       onToolCall,
       onToolResult,
       onBlogStart,
@@ -459,6 +469,24 @@ export async function sendChat(
         continue;
       }
 
+      // --- TOOLPREP marker (工具参数开始流式生成，提前提示) ---
+      const tpIdx = nextMarker?.name === "TOOLPREP" ? nextMarker.index : -1;
+      if (tpIdx !== -1) {
+        if (tpIdx > 0) emitChunk?.(accumulated.substring(0, tpIdx));
+        const afterMarker = accumulated.substring(tpIdx + _TOOLPREP_MARKER.length);
+        const jsonResult = _findCompleteJson(afterMarker, 0);
+        if (!jsonResult) continue;
+        try {
+          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+          if (typeof payload.tool_name === "string" && typeof payload.stream_id === "string") {
+            onToolPrep?.(payload as ToolPrepEvent);
+          }
+        } catch { /* ignore parse errors */ }
+        accumulated = afterMarker.substring(jsonResult.endIndex);
+        processed = false;
+        continue;
+      }
+
       const toolIdx = nextMarker?.name === "TOOLDONE" ? nextMarker.index : -1;
       if (toolIdx !== -1) {
         // Emit any text before the marker
@@ -484,11 +512,12 @@ export async function sendChat(
         const jsonText = afterMarker.substring(braceIdx, fullJson.endIndex);
         try {
           const data = JSON.parse(jsonText);
-          const meta: StreamToolMeta | undefined = (data.call_id !== undefined || data.round_id !== undefined || data.loop_step_index !== undefined)
+          const meta: StreamToolMeta | undefined = (data.call_id !== undefined || data.round_id !== undefined || data.loop_step_index !== undefined || data.stream_id !== undefined)
             ? {
                 call_id: typeof data.call_id === "string" ? data.call_id : undefined,
                 round_id: typeof data.round_id === "number" ? data.round_id : undefined,
                 loop_step_index: typeof data.loop_step_index === "number" ? data.loop_step_index : undefined,
+                stream_id: typeof data.stream_id === "string" ? data.stream_id : undefined,
               }
             : undefined;
           if (data.status === "start" && data.tool_name) {

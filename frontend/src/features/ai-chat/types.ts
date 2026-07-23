@@ -18,6 +18,8 @@ export interface ToolEvent {
   callId?: string;
   roundId?: number;
   loopStepIndex?: number;
+  streamId?: string;
+  status?: "preparing" | "running";
 }
 
 export type ChatAttachmentStatus = "pending" | "claimed" | "attached";

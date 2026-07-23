@@ -439,13 +439,20 @@ function buildThinkingEntries({
   const toolGroups = groupToolPairsForProcesses(toolPairs, processes.length);
   const maxLen = Math.max(processes.length, toolGroups.length);
 
+  const temporaryRound = normalizeThinkingText(streamingRound);
+  let streamingRoundPlaced = false;
   for (let i = 0; i < maxLen; i += 1) {
-    if (processes[i]) entries.push({ type: "process", key: `round-${i}`, content: processes[i] });
+    if (processes[i]) {
+      entries.push({ type: "process", key: `round-${i}`, content: processes[i] });
+    } else if (temporaryRound && i === processes.length && !streamingRoundPlaced) {
+      // 当前正在流式的轮正文补位到已完成轮之后，使其后轮的工具节点排在正文之后（与完成后顺序一致）
+      entries.push({ type: "process", key: "streaming-round-live", content: temporaryRound });
+      streamingRoundPlaced = true;
+    }
     if (toolGroups[i]?.length) entries.push({ type: "action", key: `tools-${i}`, tools: toolGroups[i] });
   }
 
-  const temporaryRound = normalizeThinkingText(streamingRound);
-  if (temporaryRound && !processes.includes(temporaryRound)) {
+  if (temporaryRound && !streamingRoundPlaced && !processes.includes(temporaryRound)) {
     entries.push({ type: "process", key: "streaming-round-live", content: temporaryRound });
   }
   const error = normalizeThinkingText(streamError);
@@ -495,6 +502,22 @@ function buildToolPairs(toolEvents?: Message["toolEvents"]): ToolPair[] {
 
 function groupToolPairsForProcesses(toolPairs: ToolPair[], processCount: number): ToolPair[][] {
   if (toolPairs.length === 0) return [];
+
+  // 优先按工具自身的 roundId 分组：流式过程中 processCount（已完成的轮数）滞后于
+  // 工具事件，只有用 roundId 才能把跨轮工具（如 create→write）正确拆到各自轮，
+  // 避免流式时合并成「N 条命令」、完成后才拆开的不一致。
+  const pairRoundId = (pair: ToolPair) => pair.start?.roundId ?? pair.end?.roundId;
+  if (toolPairs.some((pair) => pairRoundId(pair) !== undefined)) {
+    const groupMap = new Map<number, ToolPair[]>();
+    for (const pair of toolPairs) {
+      const idx = pairRoundId(pair) ?? 0;
+      if (!groupMap.has(idx)) groupMap.set(idx, []);
+      groupMap.get(idx)!.push(pair);
+    }
+    return Array.from(groupMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([, group]) => group);
+  }
 
   const hasLoopStepIndex = toolPairs.some((pair) =>
     pair.start?.loopStepIndex !== undefined || pair.end?.loopStepIndex !== undefined);
@@ -573,11 +596,16 @@ function ProcessText({ content }: { content: string }) {
 function ActionNode({ tools }: { tools: ToolPair[] }) {
   const completeCount = tools.filter((tool) => tool.end).length;
   const allComplete = completeCount === tools.length;
+  const preparingCount = tools.filter((t) => !t.end && t.start?.status === "preparing").length;
   const title = tools.length === 1
-    ? `${allComplete ? "已运行" : "正在运行"} ${formatToolName(tools[0])}`
-    : allComplete
-      ? `已运行 ${tools.length} 条命令`
-      : `正在运行 ${tools.length} 条命令`;
+    ? (tools[0].start?.status === "preparing" && !tools[0].end
+      ? toolPrepLabel(formatToolName(tools[0]))
+      : `${allComplete ? "已运行" : "正在运行"} ${formatToolName(tools[0])}`)
+    : preparingCount > 0
+      ? `正在生成 ${tools.length} 条命令…`
+      : allComplete
+        ? `已运行 ${tools.length} 条命令`
+        : `正在运行 ${tools.length} 条命令`;
 
   return (
     <Collapsible defaultOpen={false}>
@@ -613,6 +641,16 @@ function formatToolName(tool: ToolPair) {
   return tool.end?.toolName || tool.start?.toolName || "操作";
 }
 
+function toolPrepLabel(toolName: string): string {
+  if (toolName === "blog_write_post") return "正在生成文章";
+  if (toolName === "blog_create_post") return "正在创建草稿";
+  if (toolName === "blog_edit_post") return "正在生成修改";
+  if (toolName.startsWith("blog_")) return "正在生成文章";
+  if (toolName.startsWith("file_") || toolName.includes("search")) return "正在检索文件";
+  if (toolName.startsWith("research_")) return "正在研究";
+  return `正在准备 ${toolName}`;
+}
+
 function ToolDetail({ tool }: { tool: ToolPair }) {
   const evt = tool.end || tool.start;
   if (!evt) return null;
@@ -622,7 +660,7 @@ function ToolDetail({ tool }: { tool: ToolPair }) {
   return (
     <div className="text-base leading-relaxed text-muted-foreground/75">
       <div className="font-medium text-muted-foreground">{formatToolName(tool)}</div>
-      {!tool.end && <div className="mt-0.5 text-muted-foreground/80">正在运行...</div>}
+      {!tool.end && <div className="mt-0.5 text-muted-foreground/80">{tool.start?.status === "preparing" ? "正在生成…" : "正在运行..."}</div>}
       {result && (
         <div className="mt-0.5 break-words text-muted-foreground/80">
           {result.slice(0, 220)}

@@ -84,6 +84,7 @@ _ROUNDEND_MARKER = f"{_DONE_MARKER}ROUNDEND{_DONE_MARKER}"
 _STREAMERROR_MARKER = f"{_DONE_MARKER}STREAMERROR{_DONE_MARKER}"
 _PATCHSTART_MARKER = f"{_DONE_MARKER}PATCHSTART{_DONE_MARKER}"
 _PATCHDELTA_MARKER = f"{_DONE_MARKER}PATCHDELTA{_DONE_MARKER}"
+_TOOLPREP_MARKER = f"{_DONE_MARKER}TOOLPREP{_DONE_MARKER}"
 
 _MISSING_API_KEY_MESSAGE = "请先在「设置」页填写你自己的 API 密钥后再发起对话。"
 
@@ -935,6 +936,7 @@ async def stream_chat(
     full_content = ""
     final_confirmed = False
     reasoning_debug_parts: list[str] = []
+    _reasoning_logged_up_to = 0
     tool_events_for_history: list[dict[str, Any]] = []
     loop_steps_for_history: list[str] = []
     _pending_blog_tool: dict[int, str] = {}
@@ -1083,6 +1085,7 @@ async def stream_chat(
                         "status": "start", "tool_name": tool_name, "result": "调用中...",
                         "call_id": call_id, "round_id": tool_round_id,
                         "loop_step_index": loop_step_index,
+                        "stream_id": str(call_meta.get("stream_id", "")),
                     })
 
                 elif kind == "on_tool_end":
@@ -1114,6 +1117,7 @@ async def stream_chat(
                         "status": "end", "tool_name": tool_name, "result": result_text,
                         "call_id": call_id, "round_id": tool_round_id,
                         "loop_step_index": loop_step_index,
+                        "stream_id": str(call_meta.get("stream_id", "")),
                     }
                     if tool_name.startswith("blog_"):
                         blog_meta = _extract_blog_meta(tool_name, result_text)
@@ -1182,13 +1186,20 @@ async def stream_chat(
                             idx = tc_chunk.get("index", 0) or 0
 
                             if tc_chunk.get("name"):
-                                _pending_blog_tool[idx] = tc_chunk["name"]
+                                _tool_name_chunk = tc_chunk["name"]
+                                _is_new_tool = idx not in _pending_blog_tool
+                                _pending_blog_tool[idx] = _tool_name_chunk
                                 _pending_blog_args[idx] = ""
                                 _pending_blog_content_yielded[idx] = ""
                                 _pending_blog_started[idx] = False
                                 _pending_patch_started[idx] = False
                                 _pending_patch_target[idx] = ""
                                 _pending_patch_replacement_yielded[idx] = ""
+                                if _is_new_tool:
+                                    yield _TOOLPREP_MARKER + _compact_json({
+                                        "tool_name": _tool_name_chunk,
+                                        "stream_id": f"{_round_id}:{idx}",
+                                    })
 
                             if tc_chunk.get("args"):
                                 _pending_blog_args[idx] = (_pending_blog_args.get(idx, "") or "") + tc_chunk["args"]
@@ -1250,6 +1261,14 @@ async def stream_chat(
                     ai_msg = event.get("data", {}).get("output")
                     if isinstance(ai_msg, AIMessage):
                         round_text = _extract_text_content(ai_msg.content)
+                        # 工具调用前记录本轮 reasoning（与前端 timeline 一致：reasoning → 工具）
+                        if len(reasoning_debug_parts) > _reasoning_logged_up_to:
+                            round_reasoning = "".join(reasoning_debug_parts[_reasoning_logged_up_to:])
+                            _reasoning_logged_up_to = len(reasoning_debug_parts)
+                            logger.info(
+                                "[THINKING] round %d reasoning: len=%d preview=%s",
+                                _round_id, len(round_reasoning), round_reasoning[:200],
+                            )
                         classification = "loop" if ai_msg.tool_calls else "final"
                         round_payload = {
                             "round_id": _round_id,
@@ -1260,7 +1279,7 @@ async def stream_chat(
                         yield f"{_ROUNDEND_MARKER}{json.dumps(round_payload)}"
                         if ai_msg.tool_calls:
                             _collected_agent_msgs.append(ai_msg)
-                            for tool_call in ai_msg.tool_calls:
+                            for _tc_idx, tool_call in enumerate(ai_msg.tool_calls):
                                 call_id = str(tool_call.get("id", ""))
                                 if not call_id:
                                     continue
@@ -1268,6 +1287,7 @@ async def stream_chat(
                                     **tool_call,
                                     "round_id": _round_id,
                                     "loop_step_index": _loop_step_index,
+                                    "stream_id": f"{_round_id}:{_tc_idx}",
                                 }
                                 _tool_calls_by_id[call_id] = call_meta
                                 _tool_call_ids_by_name.setdefault(str(tool_call.get("name", "")), []).append(call_id)

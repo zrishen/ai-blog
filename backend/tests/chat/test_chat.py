@@ -649,6 +649,79 @@ async def test_blog_write_stream_carries_post_and_stream_identity(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_tool_prep_emitted_and_stream_id_propagated(monkeypatch):
+    from langchain_core.messages import AIMessage
+    from src.services import chat_service
+
+    tool_input = {"post_id": 42, "content": "正文"}
+
+    class FakeScalars:
+        def all(self):
+            return []
+
+    class FakeResult:
+        def scalars(self):
+            return FakeScalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return FakeResult()
+
+    class FakeChunk:
+        content = ""
+        additional_kwargs = {}
+
+        def __init__(self, tool_call_chunks):
+            self.tool_call_chunks = tool_call_chunks
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            # 工具参数流式生成：首块带 name → 触发 TOOLPREP
+            yield {
+                "event": "on_chat_model_stream",
+                "data": {"chunk": FakeChunk([{
+                    "index": 0,
+                    "name": "blog_write_post",
+                    "args": json.dumps(tool_input, ensure_ascii=False),
+                }])},
+            }
+            # 本轮模型结束 → 建立 call_id ↔ stream_id
+            yield {
+                "event": "on_chat_model_end",
+                "data": {"output": AIMessage(content="", tool_calls=[
+                    {"id": "call-1", "name": "blog_write_post", "args": tool_input},
+                ])},
+            }
+            yield {"event": "on_tool_start", "name": "blog_write_post",
+                   "data": {"input": tool_input, "tool_call_id": "call-1"}}
+            yield {"event": "on_tool_end", "name": "blog_write_post", "data": {"output": "已写入 id=42"}}
+
+    async def fake_add_message_pair(*args, **kwargs):
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
+
+    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
+    monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
+    monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
+
+    output = "".join([chunk async for chunk in chat_service.stream_chat("写文章", None, 1)])
+
+    # 首个带 name 的工具分片触发 TOOLPREP，携带与文章预览一致的 stream_id，且只发一次
+    assert output.count('TOOLPREP\x00{"tool_name":"blog_write_post","stream_id":"1:0"}') == 1
+    # on_tool_start / on_tool_end 的 TOOLDONE payload 透传同一 stream_id
+    assert re.search(r'"status":\s*"start".*?"stream_id":\s*"1:0"', output), output
+    assert re.search(r'"status":\s*"end".*?"stream_id":\s*"1:0"', output), output
+
+
+@pytest.mark.asyncio
 async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monkeypatch):
     from src.services import chat_service
 

@@ -160,6 +160,42 @@ describe("sendChat SSE 解析", () => {
     expect(deltas.every((event) => event.post_id === 42 && event.stream_id === "1:0")).toBe(true);
   });
 
+  it("TOOLPREP 提前触发 onToolPrep，TOOLDONE 透传 stream_id 到 onToolCall/onToolResult meta", async () => {
+    const stream = makeChunkedStream([
+      "\x00TOOLPREP\x00",
+      '{"tool_name":"blog_write_post","stream_id":"1:0"}',
+      "\x00TOOLDONE\x00",
+      '{"status":"start","tool_name":"blog_write_post","call_id":"call-1","stream_id":"1:0"}',
+      "\x00TOOLDONE\x00",
+      '{"status":"end","tool_name":"blog_write_post","result":"ok","call_id":"call-1","stream_id":"1:0"}',
+    ]);
+    fetchMock.mockResolvedValueOnce(makeResponse(stream));
+
+    const chunks: string[] = [];
+    const preps: Array<{ tool_name: string; stream_id: string }> = [];
+    const toolCalls: { name: string; meta?: StreamToolMeta }[] = [];
+    const toolResults: { name: string; result: string; meta?: StreamToolMeta }[] = [];
+    await sendChat("hi", null, {
+      callbacks: {
+        onChunk: (c) => chunks.push(c),
+        onDone: () => {},
+        onToolPrep: (event) => preps.push(event),
+        onToolCall: (name, meta) => toolCalls.push({ name, meta }),
+        onToolResult: (name, result, _blogMeta, _refs, meta) =>
+          toolResults.push({ name, result, meta }),
+      },
+    });
+
+    expect(preps).toEqual([{ tool_name: "blog_write_post", stream_id: "1:0" }]);
+    expect(toolCalls).toEqual([
+      { name: "blog_write_post", meta: { call_id: "call-1", round_id: undefined, loop_step_index: undefined, stream_id: "1:0" } },
+    ]);
+    expect(toolResults).toEqual([
+      { name: "blog_write_post", result: "ok", meta: { call_id: "call-1", round_id: undefined, loop_step_index: undefined, stream_id: "1:0" } },
+    ]);
+    expect(chunks.join("")).toBe("");
+  });
+
   it("PATCHSTART/PATCHDELTA marker 驱动归属明确的补丁预览且不泄漏正文", async () => {
     const stream = makeChunkedStream([
       "\x00PATCHSTART\x00",

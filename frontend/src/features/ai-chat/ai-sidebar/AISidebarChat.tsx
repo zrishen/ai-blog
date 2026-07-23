@@ -455,14 +455,45 @@ export function AISidebarChat({
                 dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "error", message } } });
               });
             },
-            onToolCall: (toolName, meta) => {
+            onToolPrep: ({ tool_name: toolName, stream_id: streamId }) => {
+              if (runState.toolEvents.some((e) => e.streamId === streamId && e.type === "start")) return;
+              const parsedRound = Number.parseInt(streamId.split(":")[0], 10);
               runState.toolEvents = [...runState.toolEvents, {
                 type: "start" as const,
                 toolName,
-                callId: meta?.call_id,
-                roundId: meta?.round_id,
-                loopStepIndex: meta?.loop_step_index,
+                streamId,
+                roundId: Number.isNaN(parsedRound) ? undefined : parsedRound,
+                status: "preparing" as const,
               }];
+              updateAssistant({ toolEvents: runState.toolEvents });
+            },
+            onToolCall: (toolName, meta) => {
+              const streamId = meta?.stream_id;
+              const existingIdx = streamId
+                ? runState.toolEvents.findIndex((e) => e.streamId === streamId && e.type === "start")
+                : -1;
+              if (existingIdx !== -1) {
+                const next = [...runState.toolEvents];
+                next[existingIdx] = {
+                  ...next[existingIdx],
+                  toolName,
+                  callId: meta?.call_id,
+                  roundId: meta?.round_id,
+                  loopStepIndex: meta?.loop_step_index,
+                  status: "running" as const,
+                };
+                runState.toolEvents = next;
+              } else {
+                runState.toolEvents = [...runState.toolEvents, {
+                  type: "start" as const,
+                  toolName,
+                  callId: meta?.call_id,
+                  roundId: meta?.round_id,
+                  loopStepIndex: meta?.loop_step_index,
+                  streamId,
+                  status: "running" as const,
+                }];
+              }
               updateAssistant({ toolEvents: runState.toolEvents });
             },
             onToolResult: (toolName, result, blogMeta, references, meta) => {
@@ -482,6 +513,7 @@ export function AISidebarChat({
                 callId: meta?.call_id,
                 roundId: meta?.round_id,
                 loopStepIndex: meta?.loop_step_index,
+                streamId: meta?.stream_id,
               }];
               updateAssistant({ toolEvents: runState.toolEvents });
               const targetPostId = blogMeta?.post_id;
