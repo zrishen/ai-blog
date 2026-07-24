@@ -18,6 +18,26 @@ function loadMermaid(): Promise<MermaidApi> {
 // 记录已 initialize 的主题，避免重复初始化
 let initializedTheme: string | null = null;
 
+// 柔和配色（明/暗两套），覆盖 mermaid 默认主题，让图与博客风格协调
+const LIGHT_VARS = {
+  primaryColor: "#dbeafe",
+  primaryTextColor: "#1e3a5f",
+  primaryBorderColor: "#60a5fa",
+  lineColor: "#64748b",
+  secondaryColor: "#f1f5f9",
+  tertiaryColor: "#fafafa",
+  fontFamily: "inherit",
+};
+const DARK_VARS = {
+  primaryColor: "#1e3a5f",
+  primaryTextColor: "#cbd5e1",
+  primaryBorderColor: "#3b82f6",
+  lineColor: "#94a3b8",
+  secondaryColor: "#1e293b",
+  tertiaryColor: "#0f172a",
+  fontFamily: "inherit",
+};
+
 /** mermaid render 失败会在 body 残留错误 dom（id 形如 d{id} 或 {id}），清理掉 */
 function cleanupMermaidDom(id: string) {
   for (const candidate of [`d${id}`, id]) {
@@ -55,6 +75,9 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
           mermaid.initialize({
             startOnLoad: false,
             theme,
+            look: "handDrawn",
+            handDrawnSeed: 1,
+            themeVariables: isDark ? DARK_VARS : LIGHT_VARS,
             securityLevel: "strict",
           });
           initializedTheme = theme;
