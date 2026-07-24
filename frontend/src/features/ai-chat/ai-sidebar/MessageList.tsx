@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
-import Markdown from "react-markdown";
+import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
   ChevronRight,
@@ -19,6 +19,8 @@ import type { TrustChoiceOption } from "../trustPrompts";
 import { collectMessageReferences } from "./messageHelpers";
 import { maskStreamingMarkdown } from "./streamingMarkdown";
 import { MessageAttachments } from "./MessageAttachments";
+import { MermaidBlock } from "@/components/MermaidBlock";
+import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
 
 interface MessageGroup {
   role: Message["role"];
@@ -588,7 +590,7 @@ function ProcessText({ content }: { content: string }) {
   if (!masked) return null;
   return (
     <div className="prose max-w-none break-words px-1.5 text-base leading-relaxed text-foreground [&_*]:text-foreground prose-p:my-0.5 prose-p:text-base prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-md prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-1 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-1 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert">
-      <Markdown remarkPlugins={[remarkGfm]}>{masked}</Markdown>
+      <Markdown remarkPlugins={[remarkGfm]} components={messageMermaidComponents}>{masked}</Markdown>
     </div>
   );
 }
@@ -696,6 +698,16 @@ function ToolDetail({ tool }: { tool: ToolPair }) {
   );
 }
 
+// mermaid 代码块渲染成图，其余代码块保持默认 <pre>
+const messageMermaidComponents: Components = {
+  pre: ({ children }) => {
+    if (extractCodeLanguage(children) === "mermaid") {
+      return <MermaidBlock code={extractCodeText(children)} />;
+    }
+    return <pre>{children}</pre>;
+  },
+};
+
 interface MessageBodyProps {
   messageContent: string;
   isAssistant: boolean;
@@ -713,7 +725,7 @@ function MessageBody({
           : "prose-p:my-0 prose-ul:my-0 prose-ol:my-0"
           }`}
       >
-        <Markdown remarkPlugins={[remarkGfm]}>{messageContent}</Markdown>
+        <Markdown remarkPlugins={[remarkGfm]} components={messageMermaidComponents}>{messageContent}</Markdown>
       </div>
     );
   }

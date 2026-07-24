@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
 import { expandBlankLines } from "../utils/markdownBlankLines";
+import { MermaidBlock } from "@/components/MermaidBlock";
+import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
 
 // 代码语言 class → 展示名(与编辑器语言选项保持一致)
 const CODE_LANGUAGE_LABELS: Record<string, string> = {
@@ -42,18 +44,6 @@ const CODE_LANGUAGE_LABELS: Record<string, string> = {
   dockerfile: "Dockerfile",
 };
 
-/** 从 react-markdown 渲染出的 <pre><code class="language-xxx"> 中提取语言名 */
-function extractCodeLanguage(children: React.ReactNode): string {
-  const childArray = Array.isArray(children) ? children : [children];
-  for (const child of childArray) {
-    if (child && typeof child === "object" && "props" in child) {
-      const className = ((child as React.ReactElement<{ className?: string }>).props?.className) ?? "";
-      const match = className.match(/language-([\w-]+)/);
-      if (match) return match[1];
-    }
-  }
-  return "";
-}
 import {
   Dialog,
   DialogClose,
@@ -161,6 +151,9 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
       // 注意:node 是 react-markdown 传入的 hast 节点引用,不可透传到 DOM
       void node;
       const language = extractCodeLanguage(children);
+      if (language === "mermaid") {
+        return <MermaidBlock code={extractCodeText(children)} />;
+      }
       const label = language ? CODE_LANGUAGE_LABELS[language] ?? language : "文本";
       return (
         <div className="blog-post-code-block">
