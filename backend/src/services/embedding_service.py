@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import threading
 
 from openai import AsyncOpenAI
 
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 _openai_client: AsyncOpenAI | None = None
 _local_model = None
+_local_model_lock = threading.Lock()
 
 
 def _slug(value: str) -> str:
@@ -46,28 +48,33 @@ def _get_openai_client() -> AsyncOpenAI:
 
 
 def _get_local_model():
-    """懒加载本地 sentence-transformers 模型（首次调用时加载，常驻进程内存）。"""
+    """懒加载本地 sentence-transformers 模型（首次调用时加载，常驻进程内存）。
+
+    加锁（double-check）防止后台预热与首次 RAG 请求并发时重复加载同一个模型。
+    """
     global _local_model
     if _local_model is None:
-        from sentence_transformers import SentenceTransformer
+        with _local_model_lock:
+            if _local_model is None:
+                from sentence_transformers import SentenceTransformer
 
-        logger.info(
-            "Initializing local embedding model: model=%s device=%s",
-            settings.embedding_local_model,
-            settings.embedding_local_device,
-        )
-        _local_model = SentenceTransformer(
-            settings.embedding_local_model,
-            device=settings.embedding_local_device,
-        )
+                logger.info(
+                    "Initializing local embedding model: model=%s device=%s",
+                    settings.embedding_local_model,
+                    settings.embedding_local_device,
+                )
+                _local_model = SentenceTransformer(
+                    settings.embedding_local_model,
+                    device=settings.embedding_local_device,
+                )
     return _local_model
 
 
 async def _embed_local(texts: list[str], progress_callback=None) -> list[list[float]]:
-    """本地模型批量编码；同步 encode 套到线程池，避免阻塞 asyncio 事件循环。"""
-    model = _get_local_model()
-    batch_size = max(1, settings.embedding_batch_size)
+    """本地模型批量编码；模型加载（含等锁）与 encode 都套线程池，避免阻塞 asyncio 事件循环。"""
     loop = asyncio.get_running_loop()
+    model = await loop.run_in_executor(None, _get_local_model)
+    batch_size = max(1, settings.embedding_batch_size)
     embeddings: list[list[float]] = []
     logger.info(
         "Local embedding batch started: model=%s texts=%s",

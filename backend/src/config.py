@@ -2,8 +2,12 @@ import base64
 import binascii
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# 加载 .env 到 os.environ（不覆盖已有值），让 HF_ENDPOINT 等非 Settings 变量也能被第三方库（如 huggingface_hub）读到
+load_dotenv()
 
 # 项目根目录（backend/），所有数据路径基于此绝对路径，不依赖 cwd
 BASE_DIR = Path(__file__).resolve().parent.parent
