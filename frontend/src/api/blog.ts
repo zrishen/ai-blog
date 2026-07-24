@@ -147,8 +147,14 @@ export async function generateBlogCover(id: number): Promise<BlogPostData> {
     method: "POST",
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to generate blog cover: ${err}`);
+    let detail = await res.text();
+    try {
+      const parsed = JSON.parse(detail);
+      if (parsed && typeof parsed.detail === "string") detail = parsed.detail;
+    } catch {
+      // 非 JSON 响应，保留原始文本
+    }
+    throw new Error(detail || `Failed to generate blog cover (HTTP ${res.status})`);
   }
   return res.json();
 }

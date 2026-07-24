@@ -1,28 +1,25 @@
 import { useEffect, useReducer } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { getSitePost, getSiteUser } from "../../../api/client";
+import { getSitePost } from "../../../api/client";
 import { useAuth } from "../../../stores/authStore";
 import { useChat } from "../../../stores/chatStore";
 import { BlogPostView } from "./BlogPostView";
 import { BlogEditor } from "./BlogEditor";
 import { AlertCircle } from "lucide-react";
 
-type State = { loading: boolean; error: string | null; isOwner: boolean };
-type Action =
-  | { type: "reset" }
-  | { type: "loaded"; isOwner: boolean }
-  | { type: "error"; message: string };
+type State = { loading: boolean; error: string | null };
+type Action = { type: "reset" } | { type: "loaded" } | { type: "error"; message: string };
 
-const initialState: State = { loading: true, error: null, isOwner: false };
+const initialState: State = { loading: true, error: null };
 
 function reducer(_state: State, action: Action): State {
   switch (action.type) {
     case "reset":
       return initialState;
     case "loaded":
-      return { loading: false, error: null, isOwner: action.isOwner };
+      return { loading: false, error: null };
     case "error":
-      return { loading: false, error: action.message, isOwner: false };
+      return { loading: false, error: action.message };
   }
 }
 
@@ -33,15 +30,21 @@ export function SitePostRoute() {
   const { state, dispatch } = useChat();
   const [local, localDispatch] = useReducer(reducer, initialState);
 
+  // isOwner 直接用前端登录态比对，不依赖后端 getSiteUser 返回的 is_owner。
+  // 后端 is_owner 基于请求携带的 access token 判断，token 过期/未就绪时公开接口会以匿名身份
+  // 返回 is_owner=false（且因公开接口返回 200 不触发 401 刷新），导致编辑/删除按钮不显示、
+  // 直到刷新页面才恢复。前端比对不受 token 时序影响。
+  const isOwner = isAuthenticated && !!user && user.username === username;
+
   useEffect(() => {
     if (!username || !slug) return;
     let alive = true;
     localDispatch({ type: "reset" });
 
-    Promise.all([getSiteUser(username), getSitePost(username, slug)])
-      .then(([siteUser, post]) => {
+    getSitePost(username, slug)
+      .then((post) => {
         if (!alive) return;
-        localDispatch({ type: "loaded", isOwner: Boolean(siteUser.is_owner) });
+        localDispatch({ type: "loaded" });
         dispatch({ type: "SET_PAGE", payload: "blog" });
         // URL 带 ?edit 时刷新后仍留在编辑页
         dispatch({ type: "SET_BLOG_VIEW", payload: searchParams.get("edit") !== null ? "edit" : "view" });
@@ -59,9 +62,9 @@ export function SitePostRoute() {
     return () => {
       alive = false;
     };
-  }, [username, slug, isAuthenticated, user?.username, dispatch, searchParams]);
+  }, [username, slug, dispatch, searchParams]);
 
-  const { loading, error, isOwner } = local;
+  const { loading, error } = local;
 
   if (!username || !slug) return null;
 

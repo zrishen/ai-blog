@@ -57,8 +57,9 @@ export function useBlogCover({ existingPost, title, getContent, onError, onCover
         type: "SET_BLOG_POSTS",
         payload: state.blogPosts.map((p) => (p.id === existingPost.id ? { ...p, ...updated } : p)),
       });
-    } catch {
-      onError("AI 生成封面失败，请检查图片模型配置后重试");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "";
+      onError(detail ? `AI 生成封面失败：${detail}` : "AI 生成封面失败，请检查图片模型配置后重试");
     } finally {
       setGeneratingCover(false);
     }
