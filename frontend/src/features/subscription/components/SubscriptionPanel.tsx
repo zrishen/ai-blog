@@ -111,7 +111,7 @@ export function SubscriptionPanel() {
           <div
             className={cn(
               "h-full rounded-full transition-all",
-              overWarn ? "bg-destructive" : "bg-primary",
+              overWarn ? "bg-warning" : "bg-primary",
             )}
             style={{ width: `${Math.min(pct, 100)}%` }}
           />
@@ -121,7 +121,7 @@ export function SubscriptionPanel() {
             剩余 {fmtM(status.remaining)}M
             {status.period ? ` · 周期 ${status.period}` : ""}
           </span>
-          <span className={overWarn ? "font-medium text-destructive" : ""}>
+          <span className={overWarn ? "font-medium text-warning-foreground" : ""}>
             占比 {pct.toFixed(1)}%
           </span>
         </div>
@@ -147,14 +147,9 @@ export function SubscriptionPanel() {
           </Button>
         </div>
         {msg && (
-          <div
-            className={cn(
-              "text-[13px]",
-              msg.kind === "ok" ? "text-emerald-600" : "text-destructive",
-            )}
-          >
+          <Alert variant={msg.kind === "ok" ? "success" : "destructive"} className="text-[13px]">
             {msg.text}
-          </div>
+          </Alert>
         )}
       </div>
     </section>

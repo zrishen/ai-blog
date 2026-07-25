@@ -9,12 +9,21 @@ import { PNG } from "pngjs";
 
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceRoot = resolve(frontendRoot, "..");
-const baselinePath = resolve(frontendRoot, "tests/visual/__screenshots__/foundation-controls.png");
 const tempDir = resolve(workspaceRoot, "temps/visual-regression");
-const actualPath = resolve(tempDir, "foundation-controls.actual.png");
-const diffPath = resolve(tempDir, "foundation-controls.diff.png");
 const shouldUpdate = process.argv.includes("--update");
 const suppliedBaseUrl = process.env.VISUAL_BASE_URL;
+const screenshotScenarios = [
+  { key: "foundation-controls", theme: "light", colorScheme: "light" },
+  { key: "foundation-controls-dark", theme: "dark", colorScheme: "dark" },
+];
+
+function screenshotPaths(key) {
+  return {
+    baselinePath: resolve(frontendRoot, `tests/visual/__screenshots__/${key}.png`),
+    actualPath: resolve(tempDir, `${key}.actual.png`),
+    diffPath: resolve(tempDir, `${key}.diff.png`),
+  };
+}
 
 async function pathExists(path) {
   try {
@@ -60,7 +69,7 @@ function getExecutablePath() {
   return undefined;
 }
 
-async function compareScreenshots() {
+async function compareScreenshots({ baselinePath, actualPath, diffPath }) {
   const [baselineBuffer, actualBuffer] = await Promise.all([readFile(baselinePath), readFile(actualPath)]);
   const baseline = PNG.sync.read(baselineBuffer);
   const actual = PNG.sync.read(actualBuffer);
@@ -102,22 +111,29 @@ try {
       ? { executablePath, headless: true }
       : { channel: "chrome", headless: true },
   );
-  const page = await browser.newPage({ viewport: { width: 1120, height: 900 }, deviceScaleFactor: 1 });
-  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
-  await page.goto(`${baseUrl}/__visual-regression`, { waitUntil: "domcontentloaded" });
-  await page.locator("[data-visual-regression]").waitFor();
-  await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
-  await page.locator("[data-visual-regression]").screenshot({ path: actualPath });
+  for (const scenario of screenshotScenarios) {
+    const paths = screenshotPaths(scenario.key);
+    const page = await browser.newPage({ viewport: { width: 1120, height: 900 }, deviceScaleFactor: 1 });
+    await page.addInitScript((theme) => window.localStorage.setItem("theme", theme), scenario.theme);
+    await page.emulateMedia({ colorScheme: scenario.colorScheme, reducedMotion: "reduce" });
+    await page.goto(`${baseUrl}/__visual-regression`, { waitUntil: "domcontentloaded" });
+    await page.locator(`[data-theme="${scenario.theme}"]`).waitFor();
+    await page.locator("[data-visual-regression]").waitFor();
+    await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
+    await page.locator("[data-visual-regression]").screenshot({ path: paths.actualPath });
 
-  if (shouldUpdate) {
-    await mkdir(dirname(baselinePath), { recursive: true });
-    await copyFile(actualPath, baselinePath);
-    console.log(`视觉基线已更新：${baselinePath}`);
-  } else if (!(await pathExists(baselinePath))) {
-    throw new Error(`缺少视觉基线。请先运行：pnpm test:visual -- --update`);
-  } else {
-    await compareScreenshots();
-    console.log("视觉截图回归通过。");
+    if (shouldUpdate) {
+      await mkdir(dirname(paths.baselinePath), { recursive: true });
+      await copyFile(paths.actualPath, paths.baselinePath);
+      console.log(`视觉基线已更新：${paths.baselinePath}`);
+    } else if (!(await pathExists(paths.baselinePath))) {
+      throw new Error(`缺少视觉基线。请先运行：pnpm test:visual -- --update`);
+    } else {
+      await compareScreenshots(paths);
+      console.log(`视觉截图回归通过：${scenario.key}`);
+    }
+
+    await page.close();
   }
 } finally {
   await browser?.close();

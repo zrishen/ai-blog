@@ -61,5 +61,15 @@ describe("SubscriptionPanel", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2); // status + redeem
     });
     expect(await screen.findByText(/兑换成功/)).toBeTruthy();
+    expect(screen.getByRole("status")).toHaveClass("border-success/20", "bg-success/8");
+  });
+
+  it("额度接近上限时使用警示色而非错误色", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockResponse({ ...ACTIVE_STATUS, used: 90_000_000, remaining: 10_000_000 }),
+    );
+    render(<SubscriptionPanel />);
+
+    expect(await screen.findByText(/占比 90.0%/)).toHaveClass("text-warning-foreground");
   });
 });
