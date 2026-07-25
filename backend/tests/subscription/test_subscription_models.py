@@ -19,6 +19,7 @@ async def test_user_defaults_not_admin_no_subscription(db_session):
     await db_session.commit()
 
     assert user.is_admin is False
+    assert user.is_super_admin is False
     assert user.subscription_expires_at is None
 
 

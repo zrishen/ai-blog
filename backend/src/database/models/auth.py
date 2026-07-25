@@ -12,6 +12,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(200), nullable=False)
     is_admin = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_super_admin = Column(Boolean, nullable=False, default=False, server_default=text("0"))
     subscription_expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 

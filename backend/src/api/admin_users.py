@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from src.database.models import User
 from src.database.session import async_session
 from src.services.admin.users_service import grant_subscription, list_users, set_admin
-from src.utils.auth import require_admin
+from src.utils.auth import require_admin, require_super_admin
 
 router = APIRouter(prefix="/admin/users", tags=["admin"])
 
@@ -17,6 +17,7 @@ class UserItem(BaseModel):
     id: int
     username: str
     is_admin: bool
+    is_super_admin: bool
     subscription_expires_at: datetime | None = None
     created_at: datetime | None = None
 
@@ -41,6 +42,7 @@ def _to_item(user: User) -> UserItem:
         id=user.id,
         username=user.username,
         is_admin=user.is_admin,
+        is_super_admin=user.is_super_admin,
         subscription_expires_at=user.subscription_expires_at,
         created_at=user.created_at,
     )
@@ -90,12 +92,14 @@ class SetAdminRequest(BaseModel):
 async def set_user_admin(
     user_id: int,
     payload: SetAdminRequest,
-    _: User = Depends(require_admin),
+    _: User = Depends(require_super_admin),
 ) -> UserItem:
-    """管理员授权/撤销另一用户的管理员身份。用户不存在返回 404。"""
+    """超级管理员授权/撤销普通管理员身份。用户不存在返回 404。"""
     async with async_session() as db:
         try:
             user = await set_admin(db, user_id, payload.is_admin)
         except LookupError as e:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     return _to_item(user)

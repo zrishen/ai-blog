@@ -50,6 +50,15 @@ class AuthResponse(BaseModel):
     user: dict
 
 
+def _user_payload(user: User) -> dict:
+    return {
+        "id": user.id,
+        "username": user.username,
+        "is_admin": user.is_admin,
+        "is_super_admin": user.is_super_admin,
+    }
+
+
 def _set_refresh_cookie(response: Response, raw_token: str) -> None:
     response.set_cookie(
         _REFRESH_COOKIE,
@@ -100,7 +109,7 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
     _set_refresh_cookie(response, refresh)
-    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username, "is_admin": user.is_admin})
+    return AuthResponse(access_token=access, user=_user_payload(user))
 
 
 async def _seed_intro_article(db: AsyncSession, user_id: int):
@@ -122,7 +131,7 @@ async def login(body: AuthRequest, response: Response, db: AsyncSession = Depend
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
     _set_refresh_cookie(response, refresh)
-    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username, "is_admin": user.is_admin})
+    return AuthResponse(access_token=access, user=_user_payload(user))
 
 
 @router.post("/refresh")
@@ -137,7 +146,7 @@ async def refresh(
         _clear_refresh_cookie(response)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话已过期，请重新登录")
     access = create_access_token(user.id, user.username)
-    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username, "is_admin": user.is_admin})
+    return AuthResponse(access_token=access, user=_user_payload(user))
 
 
 @router.post("/logout")
@@ -154,4 +163,4 @@ async def logout(
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "username": user.username, "is_admin": user.is_admin, "created_at": user.created_at.isoformat()}
+    return {**_user_payload(user), "created_at": user.created_at.isoformat()}

@@ -263,7 +263,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               <PenLine className="w-4 h-4 text-muted-foreground" />
               写文章
             </DropdownMenuItem>
-            {user?.is_admin && (
+            {(user?.is_admin || user?.is_super_admin) && (
               <DropdownMenuItem onClick={handleAdmin}>
                 <Shield className="w-4 h-4 text-muted-foreground" />
                 管理后台

@@ -284,6 +284,8 @@ pnpm test
 | `UPLOAD_DIR` | 上传根目录 | `data/content/uploads` |
 | `JWT_SECRET` | JWT 签名密钥 | 生产环境务必修改 |
 | `REGISTRATION_INVITE_CODE` | 共享注册邀请码；留空则关闭注册 | 空 |
+| `SUPER_ADMIN_USERNAME` | 首次启动自动创建的超级管理员用户名 | 空 |
+| `SUPER_ADMIN_PASSWORD` | 首次启动自动创建超级管理员的密码；已有同名账号不会被重置 | 空 |
 | `LLM_SETTINGS_ENCRYPTION_KEY` | 用户 LLM API Key 的 Fernet 加密主密钥 | 必填 |
 | `JWT_EXPIRE_SECONDS` | Token 过期时间 | 7 天 |
 | `EMBEDDING_PROVIDER` | embedding 来源 | `onnx`（本地） |

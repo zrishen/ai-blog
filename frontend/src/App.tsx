@@ -92,11 +92,12 @@ function ResearchRoute() {
 function AdminLayout() {
   const dispatch = useChatDispatch();
   const { user } = useAuth();
+  const canAccessAdmin = Boolean(user?.is_admin || user?.is_super_admin);
   useEffect(() => {
-    if (user?.is_admin) dispatch({ type: "SET_PAGE", payload: "admin" });
-  }, [dispatch, user?.is_admin]);
-  // 非 admin 直接进 /admin → 跳回首页
-  if (!user?.is_admin) return <Navigate to="/" replace />;
+    if (canAccessAdmin) dispatch({ type: "SET_PAGE", payload: "admin" });
+  }, [canAccessAdmin, dispatch]);
+  // 非管理员直接进 /admin → 跳回首页
+  if (!canAccessAdmin) return <Navigate to="/" replace />;
   return <Outlet />;
 }
 

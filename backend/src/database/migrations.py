@@ -30,6 +30,7 @@ _IDEMPOTENT_COLUMNS = {
     ],
     "users": [
         ("is_admin", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("is_super_admin", "BOOLEAN NOT NULL DEFAULT 0"),
         ("subscription_expires_at", "DATETIME"),
     ],
 }

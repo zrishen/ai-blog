@@ -42,6 +42,9 @@ async def _sync_all_blog_posts(session) -> None:
                 synced += 1
             except Exception:
                 logger.warning("启动扫描同步失败: %s", md_file, exc_info=True)
+                # 单篇同步（例如损坏文件或唯一键冲突）失败后，必须清理事务；
+                # 否则后续启动初始化会收到 PendingRollbackError，导致整个应用无法启动。
+                await session.rollback()
     if synced:
         logger.info("启动扫描：同步 %d 篇博客到 DB", synced)
 
@@ -71,6 +74,45 @@ async def _ensure_initial_admin(session) -> None:
     logger.info("已将 %s 提升为初始管理员", username)
 
 
+async def _ensure_super_admin(session) -> None:
+    """按 SUPER_ADMIN_USERNAME / SUPER_ADMIN_PASSWORD 自动创建或提升超级管理员。
+
+    已存在用户只提升权限而不覆盖密码，避免部署重启意外改写已有账号凭据。
+    """
+    username = (settings.super_admin_username or "").strip()
+    password = settings.super_admin_password or ""
+    if not username and not password:
+        return
+    if not username or not password:
+        logger.error("SUPER_ADMIN_USERNAME 与 SUPER_ADMIN_PASSWORD 必须同时配置，跳过超级管理员初始化")
+        return
+
+    from sqlalchemy import select
+
+    from src.database.models import User
+    from src.utils.auth import hash_password
+
+    result = await session.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    if user is None:
+        session.add(User(
+            username=username,
+            password_hash=hash_password(password),
+            is_admin=True,
+            is_super_admin=True,
+        ))
+        await session.commit()
+        logger.info("已自动创建超级管理员 %s", username)
+        return
+
+    if user.is_admin and user.is_super_admin:
+        return
+    user.is_admin = True
+    user.is_super_admin = True
+    await session.commit()
+    logger.info("已将 %s 提升为超级管理员", username)
+
+
 async def startup() -> None:
     setup_logging()
     await init_db()
@@ -87,6 +129,7 @@ async def startup() -> None:
         intro_payload = build_intro_post_payload()
         await ensure_intro_post(session, intro_payload, user.id)
         await _sync_all_blog_posts(session)
+        await _ensure_super_admin(session)
         await _ensure_initial_admin(session)
 
     # 本地 embedding 模型后台预热：provider=local 时启动即起后台线程下载加载，不阻塞 startup；

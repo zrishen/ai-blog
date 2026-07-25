@@ -4,7 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from src.database.models import User
-from src.utils.auth import require_admin
+from src.utils.auth import require_admin, require_super_admin
 
 
 @pytest.mark.asyncio
@@ -20,6 +20,28 @@ async def test_require_admin_rejects_non_admin_user():
     with pytest.raises(HTTPException) as exc:
         await require_admin(user)
     assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_require_admin_allows_super_admin_user():
+    super_admin = User(username="root", password_hash="h", is_super_admin=True)
+    result = await require_admin(super_admin)
+    assert result.is_super_admin is True
+
+
+@pytest.mark.asyncio
+async def test_require_super_admin_rejects_normal_admin():
+    admin = User(username="admin", password_hash="h", is_admin=True)
+    with pytest.raises(HTTPException) as exc:
+        await require_super_admin(admin)
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_require_super_admin_allows_super_admin():
+    super_admin = User(username="root", password_hash="h", is_super_admin=True)
+    result = await require_super_admin(super_admin)
+    assert result.is_super_admin is True
 
 
 @pytest.mark.asyncio

@@ -145,7 +145,14 @@ async def get_optional_user(
 
 
 async def require_admin(user: User = Depends(get_current_user)) -> User:
-    """管理员守卫：依赖 get_current_user，非管理员抛 403。"""
-    if not user.is_admin:
+    """后台守卫：普通管理员和超级管理员均可访问。"""
+    if not user.is_admin and not user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+    return user
+
+
+async def require_super_admin(user: User = Depends(get_current_user)) -> User:
+    """超级管理员守卫：仅用于管理员角色授权与撤销。"""
+    if not user.is_super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要超级管理员权限")
     return user

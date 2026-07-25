@@ -98,7 +98,10 @@ class Settings(BaseSettings):
     subscription_weekly_token_limit: int = 100_000_000
     # 单次请求 input token 上限（模型上下文口径：system+历史+当前+RAG+附件，防单条+附件爆炸）
     subscription_per_request_token_limit: int = 100_000
-    # 初始管理员：部署时指定已存在的用户名，启动自动幂等提升为 admin（首个 admin 引导）。留空不处理。
+    # 超级管理员：首次启动时按账号密码自动创建；账号已存在时只提升权限，不覆盖原密码。
+    super_admin_username: str | None = None
+    super_admin_password: str | None = None
+    # 初始管理员：兼容既有部署，指定已存在的用户名后启动时幂等提升为普通 admin。留空不处理。
     initial_admin_username: str | None = None
 
     # ---- 上下文压缩（compact 摘要）----

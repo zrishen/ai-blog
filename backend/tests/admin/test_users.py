@@ -196,6 +196,29 @@ async def test_set_admin_user_not_found_raises(db_session):
 
 
 @pytest.mark.asyncio
+async def test_set_admin_rejects_super_admin(db_session):
+    super_admin = User(username="root", password_hash="h", is_admin=True, is_super_admin=True)
+    db_session.add(super_admin)
+    await db_session.commit()
+
+    with pytest.raises(ValueError, match="超级管理员"):
+        await set_admin(db_session, super_admin.id, False)
+
+
+@pytest.mark.asyncio
 async def test_set_admin_endpoint_forbidden_for_non_admin(client, _admin_users_routes):
+    resp = await client.put("/api/v1/admin/users/1/admin", json={"is_admin": True})
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_set_admin_endpoint_forbidden_for_normal_admin(client, _admin_users_routes, monkeypatch):
+    from src.main import app
+    from src.utils.auth import get_current_user
+
+    async def _as_normal_admin():
+        return User(username="normal-admin", password_hash="h", is_admin=True)
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, _as_normal_admin)
     resp = await client.put("/api/v1/admin/users/1/admin", json={"is_admin": True})
     assert resp.status_code == 403

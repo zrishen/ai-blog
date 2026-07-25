@@ -110,12 +110,12 @@ async def test_init_db_encrypts_legacy_llm_api_keys_idempotently(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_init_db_adds_subscription_fields_and_tables_idempotently(tmp_path, monkeypatch):
-    """Phase 1：users 补 is_admin/subscription_expires_at；新建 redemption_codes/subscription_weekly_usage 表。"""
+    """旧 users 表补管理员角色与订阅字段；新建订阅相关表。"""
     database_path = tmp_path / "subscription.db"
     engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
     monkeypatch.setattr(migrations, "engine", engine)
 
-    # 旧 users 表（无 is_admin / subscription_expires_at）
+    # 旧 users 表（无管理员角色 / subscription_expires_at）
     async with engine.begin() as connection:
         await connection.execute(
             text(
@@ -140,7 +140,7 @@ async def test_init_db_adds_subscription_fields_and_tables_idempotently(tmp_path
 
         schema = await connection.run_sync(inspect_schema)
 
-    assert {"is_admin", "subscription_expires_at"}.issubset(schema["users_columns"])
+    assert {"is_admin", "is_super_admin", "subscription_expires_at"}.issubset(schema["users_columns"])
     assert {"redemption_codes", "subscription_weekly_usage"}.issubset(schema["tables"])
 
     await engine.dispose()

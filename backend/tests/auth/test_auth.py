@@ -207,21 +207,24 @@ async def test_register_is_closed_when_invite_code_is_not_configured(client: Asy
 
 
 @pytest.mark.asyncio
-async def test_auth_responses_include_is_admin(client: AsyncClient):
-    """register / login / refresh 三处响应的 user 都带 is_admin 字段。"""
+async def test_auth_responses_include_role_flags(client: AsyncClient):
+    """register / login / refresh 三处响应的 user 都带管理员角色字段。"""
     reg = await client.post("/api/v1/auth/register", json={
         "username": "adminfield",
         "password": "pass1234",
         "invite_code": settings.registration_invite_code,
     })
     assert reg.json()["user"]["is_admin"] is False
+    assert reg.json()["user"]["is_super_admin"] is False
 
     login_resp = await client.post("/api/v1/auth/login", json={
         "username": "adminfield", "password": "pass1234",
     })
     assert login_resp.status_code == 200
     assert login_resp.json()["user"]["is_admin"] is False
+    assert login_resp.json()["user"]["is_super_admin"] is False
 
     refresh_resp = await client.post("/api/v1/auth/refresh")
     assert refresh_resp.status_code == 200
     assert refresh_resp.json()["user"]["is_admin"] is False
+    assert refresh_resp.json()["user"]["is_super_admin"] is False

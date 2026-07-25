@@ -9,6 +9,19 @@ import {
 } from "@testing-library/react";
 import { UsersPage } from "../components/UsersPage";
 
+const authState = vi.hoisted(() => ({ isSuperAdmin: false }));
+
+vi.mock("@/stores/authStore", () => ({
+  useAuth: () => ({
+    user: {
+      id: 99,
+      username: "operator",
+      is_admin: true,
+      is_super_admin: authState.isSuperAdmin,
+    },
+  }),
+}));
+
 // ---- helpers ----
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
@@ -37,6 +50,7 @@ function applyRadixPolyfills() {
 describe("UsersPage", () => {
   beforeEach(() => {
     applyRadixPolyfills();
+    authState.isSuperAdmin = false;
   });
   afterEach(() => {
     cleanup();
@@ -53,6 +67,7 @@ describe("UsersPage", () => {
               id: 1,
               username: "alice",
               is_admin: true,
+              is_super_admin: false,
               subscription_expires_at: "2099-01-01T00:00:00Z",
               created_at: "2024-01-01T00:00:00Z",
             },
@@ -60,6 +75,7 @@ describe("UsersPage", () => {
               id: 2,
               username: "bob",
               is_admin: false,
+              is_super_admin: false,
               subscription_expires_at: null,
               created_at: null,
             },
@@ -104,6 +120,7 @@ describe("UsersPage", () => {
               id: 1,
               username: "alice",
               is_admin: true,
+              is_super_admin: false,
               subscription_expires_at: "2099-01-01T00:00:00Z",
               created_at: "2024-01-01T00:00:00Z",
             },
@@ -148,6 +165,7 @@ describe("UsersPage", () => {
             id: 1,
             username: "alice",
             is_admin: false,
+            is_super_admin: false,
             subscription_expires_at: null,
             created_at: null,
           },
@@ -170,5 +188,38 @@ describe("UsersPage", () => {
     expect(await screen.findByText("余额不足")).toBeInTheDocument();
     // 对话框仍在（标题仍可见）
     expect(screen.getByRole("heading", { name: "延期订阅" })).toBeInTheDocument();
+  });
+
+  it("仅超级管理员可见管理员授权操作，且超级管理员显示独立角色徽标", async () => {
+    authState.isSuperAdmin = true;
+    vi.stubGlobal("fetch", vi.fn(() => jsonResponse({
+      items: [
+        {
+          id: 1,
+          username: "root",
+          is_admin: true,
+          is_super_admin: true,
+          subscription_expires_at: null,
+          created_at: null,
+        },
+        {
+          id: 2,
+          username: "member",
+          is_admin: false,
+          is_super_admin: false,
+          subscription_expires_at: null,
+          created_at: null,
+        },
+      ],
+      total: 2,
+      offset: 0,
+      limit: 20,
+    })));
+
+    render(<UsersPage />);
+
+    expect(await screen.findByText("超级管理员")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "设为管理员" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "撤销管理员" })).toBeNull();
   });
 });

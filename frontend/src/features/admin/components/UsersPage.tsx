@@ -25,11 +25,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { useAuth } from "@/stores/authStore";
 
 const PAGE_SIZE = 20;
 
 /** 用户管理：列表（搜索 + 分页）+ 延期订阅。 */
 export function UsersPage() {
+  const { user: currentUser } = useAuth();
+  const canManageAdmins = Boolean(currentUser?.is_super_admin);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
@@ -236,7 +239,9 @@ export function UsersPage() {
                     <TableRow key={u.id}>
                       <TableCell className="font-medium">{u.username}</TableCell>
                       <TableCell>
-                        {u.is_admin ? (
+                        {u.is_super_admin ? (
+                          <Badge variant="secondary">超级管理员</Badge>
+                        ) : u.is_admin ? (
                           <Badge>管理员</Badge>
                         ) : (
                           <span className="text-muted-foreground">普通</span>
@@ -261,7 +266,7 @@ export function UsersPage() {
                           >
                             延期订阅
                           </Button>
-                          {u.is_admin ? (
+                          {canManageAdmins && !u.is_super_admin && (u.is_admin ? (
                             <Button
                               variant="outline"
                               size="sm"
@@ -282,7 +287,7 @@ export function UsersPage() {
                               <Shield className="h-4 w-4" />
                               设为管理员
                             </Button>
-                          )}
+                          ))}
                         </div>
                       </TableCell>
                     </TableRow>

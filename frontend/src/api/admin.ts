@@ -46,6 +46,7 @@ export interface AdminUserItem {
   id: number;
   username: string;
   is_admin: boolean;
+  is_super_admin: boolean;
   subscription_expires_at: string | null;
   created_at: string | null;
 }

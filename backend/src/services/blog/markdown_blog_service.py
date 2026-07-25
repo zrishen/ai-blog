@@ -214,10 +214,13 @@ async def sync_file_to_db(
             select(BlogPostModel).where(
                 ((BlogPostModel.file_path == file_path) | (BlogPostModel.slug == slug)),
                 BlogPostModel.user_id == user_id,
-                BlogPostModel.deleted_at.is_(None),
             )
         )
         post = result.scalar_one_or_none()
+        # 回收站记录仍占用 (user_id, slug) 唯一键；保留原文件以便恢复时，
+        # 启动扫描不得把它重新写成新文章或触发唯一键冲突。
+        if post is not None and post.deleted_at is not None:
+            return None
 
     is_new = post is None
     if is_new:

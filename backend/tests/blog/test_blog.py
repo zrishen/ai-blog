@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.models import BlogPost as BlogPostModel, User as UserModel
-from src.services.blog.markdown_blog_service import read_post_by_slug
+from src.services.blog.markdown_blog_service import read_post_by_slug, sync_file_to_db
 from src.tools.blog import (
     blog_create_post,
     blog_delete_post,
@@ -709,6 +709,10 @@ async def test_ensure_intro_post_does_not_revive_or_collide_when_soft_deleted(
     first_id = first.id
 
     await delete_post(db_session, first_id, TEST_USER_ID)
+
+    # 删除后 Markdown 文件仍在，启动扫描同步时必须跳过回收站记录，不能撞唯一键。
+    synced = await sync_file_to_db("ai-blog-intro", db_session, user_id=TEST_USER_ID)
+    assert synced is None
 
     second = await ensure_intro_post(db_session, intro_data, TEST_USER_ID)
     assert second is not None

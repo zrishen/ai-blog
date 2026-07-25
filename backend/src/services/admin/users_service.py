@@ -68,6 +68,8 @@ async def set_admin(db: AsyncSession, user_id: int, is_admin: bool) -> User:
     user = await db.get(User, user_id)
     if user is None:
         raise LookupError(f"用户不存在: {user_id}")
+    if user.is_super_admin:
+        raise ValueError("不能修改超级管理员的管理员身份")
     user.is_admin = is_admin
     await db.commit()
     await db.refresh(user)
