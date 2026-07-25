@@ -27,7 +27,7 @@ export function ClaimNode({ data, selected }: NodeProps) {
     <div
       className={cn(
         surfaceVariants({ variant: selected ? "selected" : "card" }),
-        "w-[300px] rounded-[1.3rem] p-4 shadow-sm",
+        "w-[300px] rounded-panel p-4 shadow-sm",
         !selected && "border-primary/20 bg-card/95",
       )}
     >

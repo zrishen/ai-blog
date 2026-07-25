@@ -77,7 +77,7 @@ function MessageListComponent({
       <ScrollArea className="relative min-h-0 flex-1">
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-5 text-center">
           <div>
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary/10 text-primary ring-1 ring-primary/15">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
               <Sparkles className="h-6 w-6 animate-pulse" />
             </div>
             <p className="text-base font-black tracking-[-0.04em] text-foreground">正在加载历史对话</p>
@@ -95,7 +95,7 @@ function MessageListComponent({
       <ScrollArea className="relative min-h-0 flex-1">
         <div className="absolute inset-0 z-10 flex items-center justify-center px-5 text-center">
           <div>
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-destructive/10 text-destructive ring-1 ring-destructive/15">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-destructive/10 text-destructive ring-1 ring-destructive/15">
               <AlertCircle className="h-6 w-6" />
             </div>
             <p className="text-base font-black tracking-[-0.04em] text-foreground">历史对话加载失败</p>
@@ -121,7 +121,7 @@ function MessageListComponent({
       <ScrollArea className="relative min-h-0 flex-1">
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-5 text-center">
           <div>
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary/10 text-primary ring-1 ring-primary/15">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
               <Sparkles className="h-6 w-6" />
             </div>
             <p className="text-base font-black tracking-[-0.04em] text-foreground">有什么我可以帮你的？</p>
@@ -222,7 +222,7 @@ function MessageListComponent({
                         <>
                           <MessageAttachments attachments={msg.attachments} />
                           {messageContent ? (
-                            <div className="rounded-[1.35rem] border border-border/45 bg-muted/70 px-4 py-2 text-left text-base leading-relaxed text-foreground shadow-sm">
+                            <div className="rounded-panel border border-border/45 bg-muted/70 px-4 py-2 text-left text-base leading-relaxed text-foreground shadow-sm">
                               <MessageBody
                                 messageContent={messageContent}
                                 isAssistant={false}

@@ -63,6 +63,23 @@ const rawNativeControlAllowlist = new Set([
   "src/features/file/components/FilePanel.tsx",
 ]);
 
+// These are implementation details of a primitive; product code must use a named radius token.
+const rawRadiusAllowlist = new Set([
+  "src/components/ui/scroll-area.tsx",
+]);
+
+// Research graph nodes use color as data encoding. Product-card borders must stay semantic.
+const dataEncodingBorderAllowlist = new Set([
+  "src/features/research/nodes/EntityNode.tsx",
+  "src/features/research/nodes/EvidenceNode.tsx",
+  "src/features/research/nodes/SourceNode.tsx",
+]);
+
+// Mermaid owns its renderer palette and cannot consume Tailwind classes.
+const rendererColorAllowlist = new Set([
+  "src/components/MermaidBlock.tsx",
+]);
+
 const errors = [];
 
 for (const [relativePath, requiredSymbol] of componentContracts) {
@@ -111,13 +128,38 @@ async function listTsxFiles(directory) {
   return paths.flat();
 }
 
-for (const sourcePath of await listTsxFiles(resolve("src"))) {
+const sourceFiles = await listTsxFiles(resolve("src"));
+
+for (const sourcePath of sourceFiles) {
   const sourceRelativePath = relative(process.cwd(), sourcePath).replaceAll("\\", "/");
-  if (rawNativeControlAllowlist.has(sourceRelativePath)) continue;
   const content = await readFile(sourcePath, "utf8");
-  const rawControl = content.match(/<(input|textarea|select)\b/);
-  if (rawControl) {
-    errors.push(`${sourceRelativePath} contains a raw <${rawControl[1]}>; use the shared control component instead.`);
+
+  if (!rawNativeControlAllowlist.has(sourceRelativePath)) {
+    const rawControl = content.match(/<(input|textarea|select)\b/);
+    if (rawControl) {
+      errors.push(`${sourceRelativePath} contains a raw <${rawControl[1]}>; use the shared control component instead.`);
+    }
+  }
+
+  if (!rawRadiusAllowlist.has(sourceRelativePath)) {
+    const rawRadius = content.match(/rounded-\[(?!inherit\])[^\]]+\]/);
+    if (rawRadius) {
+      errors.push(`${sourceRelativePath} contains ${rawRadius[0]}; use a named radius token instead.`);
+    }
+  }
+
+  if (!dataEncodingBorderAllowlist.has(sourceRelativePath)) {
+    const paletteBorder = content.match(/\bborder-(?:amber|blue|cyan|emerald|green|indigo|lime|orange|pink|purple|red|rose|sky|teal|violet)-/);
+    if (paletteBorder) {
+      errors.push(`${sourceRelativePath} contains ${paletteBorder[0]}; card borders must use semantic border tokens.`);
+    }
+  }
+
+  if (!rendererColorAllowlist.has(sourceRelativePath)) {
+    const hardcodedColor = content.match(/#[0-9a-fA-F]{3,8}\b/);
+    if (hardcodedColor) {
+      errors.push(`${sourceRelativePath} contains ${hardcodedColor[0]}; use a semantic color token instead.`);
+    }
   }
 }
 
@@ -126,4 +168,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Visual system guard passed for ${componentContracts.length} shared entry points and ${foundationContracts.length} foundation contracts.`);
+console.log(`Visual system guard passed for ${componentContracts.length} shared entry points, ${foundationContracts.length} foundation contracts, and ${sourceFiles.length} source files.`);

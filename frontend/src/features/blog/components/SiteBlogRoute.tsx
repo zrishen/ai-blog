@@ -64,7 +64,7 @@ export function SiteBlogRoute() {
   if (error) {
     return (
       <div className="flex h-full flex-1 items-center justify-center bg-background p-8">
-        <div className="flex max-w-sm flex-col items-center rounded-[2rem] border border-border/70 bg-card/80 px-8 py-8 text-center shadow-xl shadow-foreground/5">
+        <div className="flex max-w-sm flex-col items-center rounded-feature border border-border/70 bg-card/80 px-8 py-8 text-center shadow-xl shadow-foreground/5">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
             <AlertCircle className="h-5 w-5" />
           </div>

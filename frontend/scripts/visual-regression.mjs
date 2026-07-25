@@ -13,8 +13,14 @@ const tempDir = resolve(workspaceRoot, "temps/visual-regression");
 const shouldUpdate = process.argv.includes("--update");
 const suppliedBaseUrl = process.env.VISUAL_BASE_URL;
 const screenshotScenarios = [
-  { key: "foundation-controls", theme: "light", colorScheme: "light" },
-  { key: "foundation-controls-dark", theme: "dark", colorScheme: "dark" },
+  { key: "foundation-controls", scenario: "foundation", theme: "light", colorScheme: "light" },
+  { key: "foundation-controls-dark", scenario: "foundation", theme: "dark", colorScheme: "dark" },
+  { key: "login-dialog", scenario: "login", theme: "light", colorScheme: "light" },
+  { key: "login-dialog-dark", scenario: "login", theme: "dark", colorScheme: "dark" },
+  { key: "workspace-overview", scenario: "workspace", theme: "light", colorScheme: "light" },
+  { key: "workspace-overview-dark", scenario: "workspace", theme: "dark", colorScheme: "dark" },
+  { key: "admin-overview", scenario: "admin", theme: "light", colorScheme: "light" },
+  { key: "admin-overview-dark", scenario: "admin", theme: "dark", colorScheme: "dark" },
 ];
 
 function screenshotPaths(key) {
@@ -113,12 +119,12 @@ try {
   );
   for (const scenario of screenshotScenarios) {
     const paths = screenshotPaths(scenario.key);
-    const page = await browser.newPage({ viewport: { width: 1120, height: 900 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: { width: 1440, height: 960 }, deviceScaleFactor: 1 });
     await page.addInitScript((theme) => window.localStorage.setItem("theme", theme), scenario.theme);
     await page.emulateMedia({ colorScheme: scenario.colorScheme, reducedMotion: "reduce" });
-    await page.goto(`${baseUrl}/__visual-regression`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${baseUrl}/__visual-regression?scenario=${scenario.scenario}`, { waitUntil: "domcontentloaded" });
     await page.locator(`[data-theme="${scenario.theme}"]`).waitFor();
-    await page.locator("[data-visual-regression]").waitFor();
+    await page.locator(`[data-visual-scenario="${scenario.scenario}"]`).waitFor();
     await page.addStyleTag({ content: "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}" });
     await page.locator("[data-visual-regression]").screenshot({ path: paths.actualPath });
 

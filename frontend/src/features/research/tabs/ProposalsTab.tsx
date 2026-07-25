@@ -63,7 +63,7 @@ export function ProposalsTab({ topic, actions }: ProposalsTabProps) {
 
   if (!topic.proposals.length) {
     return (
-      <div className="rounded-[1.6rem] border border-dashed border-border/80 bg-background/45 p-8 text-center text-sm text-muted-foreground">
+      <div className="rounded-surface border border-dashed border-border/80 bg-background/45 p-8 text-center text-sm text-muted-foreground">
         暂无 Agent 更新提案。
       </div>
     );
@@ -75,7 +75,7 @@ export function ProposalsTab({ topic, actions }: ProposalsTabProps) {
         <button
           key={proposal.id}
           type="button"
-          className="w-full rounded-[1.6rem] border border-border/70 bg-background/55 p-5 text-left transition hover:border-primary/30 hover:bg-background/75"
+          className="w-full rounded-surface border border-border/70 bg-background/55 p-5 text-left transition hover:border-primary/30 hover:bg-background/75"
           onClick={() => {
             setProposalNote(null);
             setConflictNote(null);
@@ -137,7 +137,7 @@ function ProposalDetail({
   const actionable = !["applied", "rejected"].includes(proposal.status);
 
   return (
-    <div className="min-w-0 rounded-[1.8rem] border border-border/70 bg-background/55 p-5">
+    <div className="min-w-0 rounded-shell border border-border/70 bg-background/55 p-5">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Button

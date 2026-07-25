@@ -92,7 +92,7 @@ export function ChatInputBar({
       />
       <div
         data-testid="ai-chat-composer"
-        className="rounded-[1.8rem] border border-border/70 bg-background/78 p-1.5 shadow-lg shadow-foreground/5 transition-all duration-200 focus-within:border-border/70 focus-within:shadow-foreground/5"
+        className="rounded-shell border border-border/70 bg-background/78 p-1.5 shadow-lg shadow-foreground/5 transition-all duration-200 focus-within:border-border/70 focus-within:shadow-foreground/5"
       >
         <div className="flex items-center gap-2">
         <DropdownMenu>

@@ -188,7 +188,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
         className="group mr-1 flex min-w-0 cursor-pointer items-center gap-2 border-none bg-transparent sm:mr-3 sm:gap-2.5"
         onClick={handleHome}
       >
-        <span className="flex h-8 w-8 -rotate-6 items-center justify-center text-[#1E2A3A] transition-transform group-hover:-rotate-3 group-hover:scale-105 dark:text-foreground">
+        <span className="flex h-8 w-8 -rotate-6 items-center justify-center text-foreground transition-transform group-hover:-rotate-3 group-hover:scale-105">
           <ProjectMark className="h-7 w-7" />
         </span>
         <span

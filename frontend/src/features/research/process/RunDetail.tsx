@@ -39,7 +39,7 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
 
   return (
     <div className="min-w-0 space-y-4">
-      <div className="rounded-[1.6rem] border border-border/70 bg-background/55 p-5">
+      <div className="rounded-surface border border-border/70 bg-background/55 p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
         )}
       </div>
 
-      <div className="rounded-[1.6rem] border border-border/70 bg-background/55 p-5">
+      <div className="rounded-surface border border-border/70 bg-background/55 p-5">
         <div className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">阶段进度</div>
         <div className="space-y-2">
           {stages.map((stage) => (
@@ -82,11 +82,11 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
       </div>
 
       {isCompleted && (
-        <div className="rounded-[1.6rem] border border-emerald-500/20 bg-emerald-500/5 p-5">
+        <div className="rounded-surface border border-success/20 bg-success/5 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
                   <FileEdit className="h-4 w-4" />
                 </div>
                 <h3 className="text-sm font-black text-foreground">研究已完成，开始写作</h3>
@@ -154,13 +154,13 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
           stage.current
             ? "border-primary/30 bg-primary/8"
             : stage.done
-              ? "border-emerald-500/15 bg-emerald-500/5"
+              ? "border-success/15 bg-success/5"
               : "border-border/60 bg-background/40"
         }`}
       >
         <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg ${
           stage.done
-            ? "bg-emerald-500/10 text-emerald-600"
+            ? "bg-success/10 text-success"
             : stage.current
               ? "bg-primary/10 text-primary ring-1 ring-primary/20"
               : "bg-muted text-muted-foreground"
@@ -172,7 +172,7 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
           )}
         </div>
         <span className={`text-[13px] font-medium ${
-          stage.done ? "text-emerald-700 dark:text-emerald-300" : stage.current ? "text-primary" : "text-muted-foreground"
+          stage.done ? "text-success" : stage.current ? "text-primary" : "text-muted-foreground"
         }`}>
           {stage.label}
         </span>
@@ -183,7 +183,7 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
           </span>
         )}
         {stage.done && (
-          <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-emerald-500" />
+          <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-success" />
         )}
       </div>
 

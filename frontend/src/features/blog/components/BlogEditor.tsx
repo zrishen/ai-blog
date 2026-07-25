@@ -532,7 +532,7 @@ export function BlogEditor() {
         </div>
 
         {hasResearchContext && (
-          <div className="mt-2 rounded-[1.5rem] border border-primary/15 bg-background/64 p-3 shadow-sm">
+          <div className="mt-2 rounded-surface border border-primary/15 bg-background/64 p-3 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-2.5">
                 <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
@@ -613,7 +613,7 @@ export function BlogEditor() {
           </div>
         )}
 
-        <div className="mt-2 rounded-[1.5rem] border border-border/70 bg-background/56 p-3">
+        <div className="mt-2 rounded-surface border border-border/70 bg-background/56 p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <div className="inline-flex items-center gap-2 text-sm font-bold text-foreground">

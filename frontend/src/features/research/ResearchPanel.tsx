@@ -178,7 +178,7 @@ export function ResearchPanel() {
                     transition={{ duration: 0.15 }}
                     className={cn(
                       surfaceVariants({ variant: isActive ? "selected" : "interactive" }),
-                      "group w-full rounded-[1.25rem] p-3 text-left",
+                      "group w-full rounded-panel p-3 text-left",
                       !isActive && "bg-card/70",
                       researchDeletingId === topic.id && "opacity-60",
                     )}

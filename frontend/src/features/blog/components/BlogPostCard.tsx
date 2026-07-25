@@ -88,14 +88,14 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         transition={{ duration: 0.22 }}
         className={cn(
           surfaceVariants({ variant: "featured" }),
-          "group relative h-[11rem] w-full cursor-pointer overflow-hidden rounded-[2rem] bg-card/94 md:h-[16rem]",
+          "group relative h-[11rem] w-full cursor-pointer overflow-hidden rounded-feature bg-card/94 md:h-[16rem]",
         )}
         onClick={() => onClick(post.id)}
       >
         {hasCover && (
           <>
             <img src={post.cover_image} alt={post.title} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-            <div className={`absolute inset-0 ${isDark ? "bg-slate-950/75" : "bg-card/25 backdrop-blur-[1px]"}`} />
+            <div className={`absolute inset-0 ${isDark ? "bg-foreground/75" : "bg-card/25 backdrop-blur-[1px]"}`} />
           </>
         )}
 
@@ -108,7 +108,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
                 </Badge>
               )}
               {post.status === "draft" && (
-                <Badge variant="outline" className={coverDark ? "rounded-full border-amber-300/35 bg-amber-400/16 text-amber-100 backdrop-blur-md" : "rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600"}>
+                <Badge variant="warning" className={coverDark ? "rounded-full border-warning/35 bg-warning/18 text-warning-foreground backdrop-blur-md" : "rounded-full"}>
                   草稿
                 </Badge>
               )}
@@ -136,14 +136,14 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         transition={{ duration: 0.2 }}
         className={cn(
           surfaceVariants({ variant: "interactive" }),
-          "group flex h-[9rem] w-full cursor-pointer overflow-hidden rounded-[2rem] bg-card/94 md:h-[13rem]",
+          "group flex h-[9rem] w-full cursor-pointer overflow-hidden rounded-feature bg-card/94 md:h-[13rem]",
         )}
         onClick={() => onClick(post.id)}
       >
         {hasCover ? (
           <div className="relative h-full w-[42%] flex-shrink-0 overflow-hidden border-r border-border/70">
             <img src={post.cover_image} alt={post.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-            {isDark && <div className="absolute inset-0 bg-slate-950/75" />}
+            {isDark && <div className="absolute inset-0 bg-foreground/75" />}
           </div>
         ) : (
           <EmptyCover className="h-full w-[34%] flex-shrink-0 border-y-0 border-l-0 border-r border-border/70" />
@@ -154,7 +154,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
               <Badge className="rounded-full bg-primary/12 text-primary">AI 正在写作</Badge>
             )}
             {post.status === "draft" && (
-              <Badge variant="outline" className="rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600">
+              <Badge variant="warning" className="rounded-full">
                 草稿
               </Badge>
             )}
@@ -182,7 +182,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
       transition={{ duration: 0.18 }}
       className={cn(
         surfaceVariants({ variant: "interactive" }),
-        "group flex h-auto min-h-[5rem] w-full cursor-pointer overflow-hidden rounded-[1.55rem] bg-card/92 shadow-sm md:min-h-[7rem]",
+        "group flex h-auto min-h-[5rem] w-full cursor-pointer overflow-hidden rounded-surface bg-card/92 shadow-sm md:min-h-[7rem]",
       )}
       onClick={() => onClick(post.id)}
     >
@@ -192,7 +192,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
             <Badge className="rounded-full bg-primary/12 px-1.5 py-0 text-[11px] text-primary">AI 正在写作</Badge>
           )}
           {post.status === "draft" && (
-            <Badge variant="outline" className="rounded-full border-amber-400/30 bg-amber-500/10 text-amber-600 text-[11px] px-1.5 py-0">
+            <Badge variant="warning" className="rounded-full px-1.5 py-0 text-[11px]">
               草稿
             </Badge>
           )}

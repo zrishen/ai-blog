@@ -26,7 +26,7 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
         const canResolve = Boolean(fromClaim && toClaim && !resolved);
 
         return (
-          <div key={relation.id} className="rounded-[1.6rem] border border-destructive/25 bg-destructive/5 p-5">
+          <div key={relation.id} className="rounded-surface border border-destructive/25 bg-destructive/5 p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-bold text-destructive"><AlertCircle className="h-4 w-4" />冲突事实</div>
               {resolved && <Badge className="rounded-full bg-emerald-600 text-white">已解决</Badge>}

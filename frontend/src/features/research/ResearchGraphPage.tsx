@@ -81,8 +81,8 @@ export function ResearchGraphPage() {
     return (
       <div className="flex h-full flex-col overflow-y-auto bg-background px-8 py-6">
         <div className="mx-auto flex min-h-[60vh] w-full max-w-[760px] items-center justify-center">
-          <div className="relative w-full overflow-hidden rounded-[2rem] border border-border/70 bg-card/86 p-8 text-center shadow-xl shadow-foreground/5 backdrop-blur-xl">
-            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-primary/10 text-primary ring-1 ring-primary/15">
+          <div className="relative w-full overflow-hidden rounded-feature border border-border/70 bg-card/86 p-8 text-center shadow-xl shadow-foreground/5 backdrop-blur-xl">
+            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
               <GitBranch className="h-7 w-7" />
             </div>
             <div className="relative mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-primary/80">Research Graph</div>
@@ -102,7 +102,7 @@ export function ResearchGraphPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background p-2">
-      <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.8rem] border border-border/70 bg-card/86 shadow-xl shadow-foreground/5 backdrop-blur-xl">
+      <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-shell border border-border/70 bg-card/86 shadow-xl shadow-foreground/5 backdrop-blur-xl">
         <div className="border-b border-border/70 p-3 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>

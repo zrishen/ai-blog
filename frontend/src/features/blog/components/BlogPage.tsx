@@ -99,7 +99,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
       {/* 列表只允许纵向滚动（touch-pan-y），把横向触摸交给边缘滑动手势；否则浏览器会把触摸序列绑定到滚动容器，导致滑出抽屉时中栏被一起拖动、面板跟到一半就卡住。 */}
       {visiblePosts.length === 0 ? (
         <section className={cn(surfaceVariants({ variant: "inset" }), "flex min-h-0 flex-1 flex-col items-center justify-center rounded-surface bg-card/62 p-10 text-center shadow-sm")}>
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-primary/10 text-primary ring-1 ring-primary/15">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
             <PenLine className="w-7 h-7" />
           </div>
           <h2 className="text-2xl font-bold tracking-[-0.03em] text-foreground">还没有文章</h2>

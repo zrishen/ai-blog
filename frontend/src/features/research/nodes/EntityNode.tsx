@@ -25,7 +25,7 @@ export function EntityNode({ data, selected }: NodeProps) {
     <div
       className={cn(
         surfaceVariants({ variant: selected ? "selected" : "card" }),
-        "w-[220px] rounded-[1.4rem] p-4 shadow-sm",
+        "w-[220px] rounded-panel p-4 shadow-sm",
         !selected && "border-emerald-500/25 bg-card/95",
       )}
     >

@@ -65,7 +65,7 @@ export function LibraryOverviewPane() {
 
         {state.fileDocuments.length === 0 ? (
           <Surface variant="card" className="flex flex-1 flex-col items-center justify-center rounded-panel p-10 text-center shadow-sm">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-primary/10 text-primary ring-1 ring-primary/15">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
               <Sparkles className="w-7 h-7" />
             </div>
             <h2 className="text-2xl font-bold tracking-[-0.03em] text-foreground">

@@ -40,7 +40,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
     return (
       <Surface variant="dashed" className="flex min-h-[360px] items-center justify-center rounded-surface border-primary/20 bg-primary/6 p-5 text-center text-foreground">
         <div>
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary/10 text-primary ring-1 ring-primary/15">
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
             <RefreshCw className="h-6 w-6 animate-spin" />
           </div>
           <p className="text-base font-black tracking-[-0.04em] text-foreground">加载研究过程</p>

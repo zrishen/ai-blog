@@ -19,7 +19,7 @@ export function ClaimsTab({ topic, actions }: ClaimsTabProps) {
 
   if (!topic.claims.length) {
     return (
-      <div className="rounded-[1.6rem] border border-dashed border-border/80 bg-background/45 p-8 text-center text-sm text-muted-foreground">
+      <div className="rounded-surface border border-dashed border-border/80 bg-background/45 p-8 text-center text-sm text-muted-foreground">
         暂无事实卡片。
       </div>
     );
@@ -35,7 +35,7 @@ export function ClaimsTab({ topic, actions }: ClaimsTabProps) {
             key={claim.id}
             className={cn(
               surfaceVariants({ variant: selected ? "selected" : "inset" }),
-              "rounded-[1.6rem] p-5",
+              "rounded-surface p-5",
             )}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">

@@ -22,7 +22,7 @@ export function SourceNode({ data, selected }: NodeProps) {
     <div
       className={cn(
         surfaceVariants({ variant: selected ? "selected" : "card" }),
-        "w-[240px] rounded-[1.2rem] p-4 shadow-sm",
+        "w-[240px] rounded-panel p-4 shadow-sm",
         !selected && "border-amber-500/25 bg-card/95",
       )}
     >

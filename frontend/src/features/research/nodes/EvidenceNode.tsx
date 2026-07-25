@@ -11,7 +11,7 @@ export function EvidenceNode({ data, selected }: NodeProps) {
     <div
       className={cn(
         surfaceVariants({ variant: selected ? "selected" : "card" }),
-        "w-[260px] rounded-[1.2rem] p-4 shadow-sm",
+        "w-[260px] rounded-panel p-4 shadow-sm",
         !selected && "border-sky-500/25 bg-card/95",
       )}
     >

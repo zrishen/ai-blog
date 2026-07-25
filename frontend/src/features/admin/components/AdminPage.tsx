@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 
 export const ADMIN_DIALOG_CLASS =
-  "rounded-[1.6rem] border-border/70 bg-card/95 shadow-2xl shadow-foreground/10 backdrop-blur-xl";
+  "rounded-surface border-border/70 bg-card/95 shadow-2xl shadow-foreground/10 backdrop-blur-xl";
 
 export function AdminPage({
   children,
