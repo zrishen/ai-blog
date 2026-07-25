@@ -60,6 +60,7 @@ export function LandingPage() {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [loginDestination, setLoginDestination] = useState<"blog" | "research">("blog");
   const personalBlogPath = user?.username
     ? `/u/${encodeURIComponent(user.username)}`
     : "/";
@@ -67,10 +68,22 @@ export function LandingPage() {
   const handlePersonalBlogClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (isAuthenticated && user?.username) return;
     event.preventDefault();
+    setLoginDestination("blog");
+    setLoginDialogOpen(true);
+  };
+
+  const handleResearchClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (isAuthenticated) return;
+    event.preventDefault();
+    setLoginDestination("research");
     setLoginDialogOpen(true);
   };
 
   const handleLoginSuccess = (loggedInUser: AuthUser) => {
+    if (loginDestination === "research") {
+      navigate("/research");
+      return;
+    }
     navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
   };
 
@@ -229,7 +242,7 @@ export function LandingPage() {
               每一次写作都可以回到你的资料、研究与历史内容。AI Blog
               不只帮你完成一篇文章，也帮你建立下一篇文章的起点。
             </p>
-            <Link to="/research">
+            <Link to="/research" onClick={handleResearchClick}>
               探索研究空间
               <ArrowRight aria-hidden="true" />
             </Link>
