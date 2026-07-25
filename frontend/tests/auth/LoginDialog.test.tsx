@@ -81,4 +81,13 @@ describe("LoginDialog", () => {
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("supports a light appearance inside fixed-light pages", () => {
+    render(
+      <LoginDialog open={true} onOpenChange={vi.fn()} appearance="light" />,
+      { wrapper },
+    );
+
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-theme", "light");
+  });
 });

@@ -2,7 +2,7 @@
 @plugin "@tailwindcss/typography";
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-@theme {
+@theme inline {
   --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 8px;
@@ -51,7 +51,8 @@
   --color-sidebar-background: hsl(var(--sidebar-background));
 }
 
-:root {
+:root,
+[data-theme="light"] {
   --background: 218 42% 98%;
   --foreground: 225 38% 9%;
   --card: 0 0% 100%;

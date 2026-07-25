@@ -12,12 +12,13 @@ interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: (user: AuthUser) => void;
+  appearance?: "inherit" | "light";
 }
 
-export function LoginDialog({ open, onOpenChange, onSuccess }: LoginDialogProps) {
+export function LoginDialog({ open, onOpenChange, onSuccess, appearance = "inherit" }: LoginDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent data-theme={appearance === "light" ? "light" : undefined} className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>登录到 AI Blog</DialogTitle>
           <DialogDescription>输入你的用户名和密码以继续。</DialogDescription>

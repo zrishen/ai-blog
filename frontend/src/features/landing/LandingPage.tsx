@@ -289,6 +289,7 @@ export function LandingPage() {
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}
         onSuccess={handleLoginSuccess}
+        appearance="light"
       />
     </div>
   );
