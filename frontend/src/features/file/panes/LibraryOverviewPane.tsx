@@ -9,6 +9,7 @@ import {
   Files,
   Folders,
 } from "lucide-react";
+import { Surface } from "@/components/ui/surface";
 import { formatDate, getDocumentIcon } from "./filePaneUtils";
 
 export function LibraryOverviewPane() {
@@ -63,7 +64,7 @@ export function LibraryOverviewPane() {
         </div>
 
         {state.fileDocuments.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-border/70 bg-card/86 p-10 text-center shadow-sm">
+          <Surface variant="card" className="flex flex-1 flex-col items-center justify-center rounded-panel p-10 text-center shadow-sm">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-primary/10 text-primary ring-1 ring-primary/15">
               <Sparkles className="w-7 h-7" />
             </div>
@@ -73,7 +74,7 @@ export function LibraryOverviewPane() {
             <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
               在左侧栏「全部分类」上右键即可上传文件，或先新建一个分类。
             </p>
-          </div>
+          </Surface>
         ) : (
           <SectionCard title="最近文件" icon={<Database className="w-4 h-4" />}>
             <div className="flex flex-col">
@@ -111,7 +112,7 @@ function StatCard({
   value: number;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border/70 bg-card/86 p-3 shadow-sm">
+    <Surface variant="card" className="flex items-center gap-3 rounded-panel p-3 shadow-sm">
       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
         {icon}
       </div>
@@ -121,7 +122,7 @@ function StatCard({
         </div>
         <div className="text-lg font-bold text-foreground">{value}</div>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -135,13 +136,13 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border/70 bg-card/86 shadow-sm">
+    <Surface variant="card" className="flex flex-1 flex-col overflow-hidden rounded-panel shadow-sm">
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5 text-[13px] font-semibold text-foreground">
         <span className="text-primary">{icon}</span>
         {title}
       </div>
       <div className="flex-1 overflow-y-auto p-1">{children}</div>
-    </div>
+    </Surface>
   );
 }
 

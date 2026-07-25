@@ -64,6 +64,7 @@ describe("NavBar subscription entry", () => {
     await user.click(await screen.findByText("订阅"));
 
     const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveClass("rounded-surface", "border-border/70", "shadow-surface-raised");
     expect(within(dialog).getByRole("heading", { name: "订阅" })).toBeInTheDocument();
     expect(await within(dialog).findByText("本周用量")).toBeInTheDocument();
     expect(within(dialog).queryByText("AI API")).not.toBeInTheDocument();

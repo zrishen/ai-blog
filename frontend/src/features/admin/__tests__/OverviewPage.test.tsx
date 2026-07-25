@@ -27,7 +27,7 @@ describe("OverviewPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("smoke: 渲染标题、4 张 KPI 卡与本周用量进度条的关键数据", async () => {
+  it("smoke: 渲染标题、4 张 KPI 卡与全站本周累计用量", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(mockResponse(overviewBody));
 
     render(<OverviewPage />);
@@ -39,28 +39,12 @@ describe("OverviewPage", () => {
     expect(await screen.findByText("1,234")).toBeTruthy(); // 用户总数
     expect(await screen.findByText("7")).toBeTruthy(); // 活跃订阅
     expect(await screen.findByText("5 / 10")).toBeTruthy(); // 兑换码 已用/共
-    // 本周 token KPI（值 25.0M 也出现在用量行"已用 25.0M"，用 findAllByText 容忍多匹配）
-    expect((await screen.findAllByText("25.0M")).length).toBeGreaterThanOrEqual(1);
-
-    // 本周用量进度条文案（"剩余"/"占比"仅出现于用量卡，唯一）
-    expect(await screen.findByText(/剩余/)).toBeTruthy();
-    expect(await screen.findByText(/占比 25.0%/)).toBeTruthy();
+    // 本周 token 仅在顶部 KPI 中展示
+    expect(await screen.findByText("25.0M")).toBeTruthy();
+    expect(screen.queryByText("全站本周用量")).toBeNull();
     expect(await screen.findByText("invite-2026")).toBeTruthy();
     expect(screen.getByText("注册开放")).toBeTruthy();
 
-    // 接近上限警示此时不应出现（25%）
-    expect(screen.queryByText(/接近上限/)).toBeNull();
-  });
-
-  it("接近上限(>80%)时显示警示色文案", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockResponse({ ...overviewBody, this_week_tokens: 90_000_000 }),
-    );
-
-    render(<OverviewPage />);
-
-    expect(await screen.findByText(/占比 90.0%/)).toBeTruthy();
-    expect(await screen.findByText(/接近上限/)).toBeTruthy();
   });
 
   it("请求失败时展示错误卡片与重试按钮，点击重试重新请求", async () => {

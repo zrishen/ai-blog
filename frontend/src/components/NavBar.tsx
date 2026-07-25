@@ -47,6 +47,7 @@ import type { AuthUser } from "../stores/authStore";
 import { getLLMSettings, updateLLMSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";
 import { cn } from "@/lib/utils";
+import { navItemVariants } from "@/lib/visualVariants";
 
 interface NavBarProps {
   onOpenNavigation?: () => void;
@@ -55,12 +56,15 @@ interface NavBarProps {
   aiButtonRef?: React.Ref<HTMLButtonElement>;
 }
 
+type LoginDestination = "files" | "research";
+
 export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButtonRef }: NavBarProps = {}) {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [pendingLoginDestination, setPendingLoginDestination] = useState<LoginDestination | null>(null);
   const [trashDialogOpen, setTrashDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
@@ -91,6 +95,11 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
   };
 
+  const openLoginDialog = (destination: LoginDestination | null = null) => {
+    setPendingLoginDestination(destination);
+    setLoginDialogOpen(true);
+  };
+
   const handleLandingHome = () => {
     resetBlogList();
     if (user?.username) {
@@ -110,7 +119,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
 
   const handleWritePost = () => {
     if (!isAuthenticated || !user?.username) {
-      setLoginDialogOpen(true);
+      openLoginDialog();
       return;
     }
     dispatch({ type: "SET_PAGE", payload: "blog" });
@@ -120,11 +129,19 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
   };
 
   const handleFiles = () => {
+    if (!isAuthenticated) {
+      openLoginDialog("files");
+      return;
+    }
     dispatch({ type: "SET_PAGE", payload: "files" });
     navigate("/files");
   };
 
   const handleResearch = () => {
+    if (!isAuthenticated) {
+      openLoginDialog("research");
+      return;
+    }
     dispatch({ type: "SET_PAGE", payload: "research" });
     navigate("/research");
   };
@@ -189,6 +206,21 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
   };
 
   const handleLoginSuccess = (loggedInUser: AuthUser) => {
+    const destination = pendingLoginDestination;
+    setPendingLoginDestination(null);
+
+    if (destination === "files") {
+      dispatch({ type: "SET_PAGE", payload: "files" });
+      navigate("/files");
+      return;
+    }
+
+    if (destination === "research") {
+      dispatch({ type: "SET_PAGE", payload: "research" });
+      navigate("/research");
+      return;
+    }
+
     dispatch({ type: "SET_PAGE", payload: "blog" });
     dispatch({ type: "SET_BLOG_VIEW", payload: "list" });
     dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
@@ -259,10 +291,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               onClick={onClick}
               aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex h-9 min-w-[92px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all duration-200",
-                isActive
-                  ? "bg-primary/8 text-primary shadow-sm shadow-primary/8"
-                  : "text-muted-foreground hover:bg-accent/55 hover:text-foreground",
+                navItemVariants({ layout: "top", state: isActive ? "active" : "idle" }),
               )}
             >
               <Icon className="h-4 w-4" />
@@ -321,6 +350,12 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               <Home className="w-4 h-4 text-muted-foreground" />
               我的主页
             </DropdownMenuItem>
+            {(user?.is_admin || user?.is_super_admin) && (
+              <DropdownMenuItem onClick={handleAdmin}>
+                <Shield className="w-4 h-4 text-muted-foreground" />
+                管理后台
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={handleWritePost}>
               <PenLine className="w-4 h-4 text-muted-foreground" />
               写文章
@@ -329,12 +364,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               <CreditCard className="w-4 h-4 text-muted-foreground" />
               订阅
             </DropdownMenuItem>
-            {(user?.is_admin || user?.is_super_admin) && (
-              <DropdownMenuItem onClick={handleAdmin}>
-                <Shield className="w-4 h-4 text-muted-foreground" />
-                管理后台
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem onClick={openSettingsDialog}>
               <Settings className="w-4 h-4 text-muted-foreground" />
               设置
@@ -356,7 +385,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
           size="icon"
           className="rounded-full hover:bg-secondary"
           onClick={() => {
-                  setLoginDialogOpen(true);
+                  openLoginDialog();
           }}
           title="用户"
         >
@@ -480,14 +509,14 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
         </DialogContent>
       </Dialog>
       <Dialog open={subscriptionDialogOpen} onOpenChange={setSubscriptionDialogOpen}>
-        <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b border-border px-5 py-4">
+        <DialogContent className="max-w-[calc(100%-2rem)] gap-0 overflow-hidden p-0 sm:max-w-[480px]">
+          <DialogHeader className="border-b border-border/60 px-6 py-5">
             <DialogTitle className="text-[18px]">订阅</DialogTitle>
             <DialogDescription className="text-[13px]">
               查看订阅权益、本周用量，或使用兑换码激活订阅。
             </DialogDescription>
           </DialogHeader>
-          <div className="px-5 py-4">
+          <div className="px-6 py-5">
             {subscriptionDialogOpen && <SubscriptionPanel />}
           </div>
         </DialogContent>

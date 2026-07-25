@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useChat } from "../../../stores/chatStore";
 import { Tags } from "lucide-react";
+import { WorkspacePanel } from "@/components/ui/workspace-panel";
+import { Surface } from "@/components/ui/surface";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 
 export function BlogOverviewPanel() {
@@ -30,29 +32,29 @@ export function BlogOverviewPanel() {
   }, [state.blogPosts, introTags, location.pathname]);
 
   return (
-    <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
+    <WorkspacePanel className="overflow-y-auto select-none">
       <div className="p-4 flex flex-col gap-4">
-        <section className="rounded-[1.4rem] border border-border/70 bg-card/80 p-3 shadow-sm">
+        <Surface variant="card" className="rounded-panel bg-card/80 p-3 shadow-sm">
           <div className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
             Overview
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-2xl border border-border/60 bg-background/62 px-2 py-3">
+            <Surface variant="inset" className="rounded-control bg-background/62 px-2 py-3">
               <div className="text-xl font-black tracking-[-0.04em] text-foreground">{state.blogPosts.length}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">文章</div>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-background/62 px-2 py-3">
+            </Surface>
+            <Surface variant="inset" className="rounded-control bg-background/62 px-2 py-3">
               <div className="text-xl font-black tracking-[-0.04em] text-primary">{publishedCount}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">已发布</div>
-            </div>
-            <div className="rounded-2xl border border-border/60 bg-background/62 px-2 py-3">
+            </Surface>
+            <Surface variant="inset" className="rounded-control bg-background/62 px-2 py-3">
               <div className="text-xl font-black tracking-[-0.04em] text-amber-600 dark:text-amber-300">{draftCount}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">草稿</div>
-            </div>
+            </Surface>
           </div>
-        </section>
+        </Surface>
 
-        <section className="rounded-[1.4rem] border border-border/70 bg-card/80 p-3 shadow-sm">
+        <Surface variant="card" className="rounded-panel bg-card/80 p-3 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
               <Tags className="h-3.5 w-3.5 text-primary" />
@@ -73,9 +75,9 @@ export function BlogOverviewPanel() {
             </div>
           </div>
           {tagEntries.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/80 bg-secondary/45 px-3 py-5 text-center text-xs text-muted-foreground">
+            <Surface variant="dashed" className="rounded-control bg-secondary/45 px-3 py-5 text-center text-xs">
               暂无标签
-            </div>
+            </Surface>
           ) : (
             <div className="flex flex-wrap gap-2">
               {tagEntries.map(([tag, count]) => {
@@ -94,8 +96,8 @@ export function BlogOverviewPanel() {
               })}
             </div>
           )}
-        </section>
+        </Surface>
       </div>
-    </aside>
+    </WorkspacePanel>
   );
 }

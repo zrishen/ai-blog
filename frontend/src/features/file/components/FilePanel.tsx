@@ -31,6 +31,7 @@ import {
   ContextMenuItem,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
+import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import {
   groupByCategory,
   isDescOf,
@@ -384,7 +385,7 @@ export function FilePanel() {
 
   if (!isAuthenticated) {
     return (
-      <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]" />
+      <WorkspacePanel className="overflow-y-auto select-none" />
     );
   }
 
@@ -397,7 +398,7 @@ export function FilePanel() {
     moveTarget?.kind === "category" ? moveTarget.id : undefined;
 
   return (
-    <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-hidden select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
+    <WorkspacePanel className="overflow-hidden select-none">
       <div className="p-3 flex flex-col gap-2">
         <div className="grid grid-cols-2 gap-2 md:hidden">
           <Button variant="outline" size="sm" className="rounded-full" onClick={() => setNewRootOpen(true)}>
@@ -741,6 +742,6 @@ export function FilePanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </aside>
+    </WorkspacePanel>
   );
 }

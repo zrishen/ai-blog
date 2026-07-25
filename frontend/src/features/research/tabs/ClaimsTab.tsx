@@ -1,7 +1,8 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
+import { surfaceVariants } from "@/lib/visualVariants";
+import { cn } from "@/lib/utils";
 import { useChat } from "../../../stores/chatStore";
 import type { ResearchTopicDetail } from "../../../api/client";
 import type { ResearchTopicActions } from "../hooks/useResearchTopicActions";
@@ -30,7 +31,13 @@ export function ClaimsTab({ topic, actions }: ClaimsTabProps) {
         const evidence = evidenceForClaim(claim.id);
         const selected = state.researchSelectedClaimId === claim.id;
         return (
-          <div key={claim.id} className={`rounded-[1.6rem] border p-5 transition ${selected ? SOFT_SELECTED_SURFACE : "border-border/70 bg-background/55"}`}>
+          <div
+            key={claim.id}
+            className={cn(
+              surfaceVariants({ variant: selected ? "selected" : "inset" }),
+              "rounded-[1.6rem] p-5",
+            )}
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="mb-2 flex flex-wrap items-center gap-2">

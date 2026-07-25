@@ -1,5 +1,6 @@
 import { ExternalLink, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Surface } from "@/components/ui/surface";
 import type { ResearchTopicDetail } from "../../../api/client";
 import { formatDate, sourceTypeLabel, statusLabel, trustLabel } from "../utils/researchFormat";
 
@@ -10,16 +11,16 @@ interface SourcesTabProps {
 export function SourcesTab({ topic }: SourcesTabProps) {
   if (!topic.sources.length) {
     return (
-      <div className="rounded-[1.6rem] border border-dashed border-border/80 bg-background/45 p-8 text-center text-sm text-muted-foreground lg:col-span-2">
+      <Surface variant="dashed" className="rounded-surface p-8 text-center text-sm lg:col-span-2">
         暂无来源。搜索摘要只能作为线索，最终来源需要可追溯正文或知识库原文。
-      </div>
+      </Surface>
     );
   }
 
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       {topic.sources.map((source) => (
-        <div key={source.id} className="rounded-[1.6rem] border border-border/70 bg-background/55 p-5">
+        <Surface key={source.id} variant="inset" className="rounded-surface p-5">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <div className="flex flex-wrap gap-2">
@@ -37,7 +38,7 @@ export function SourcesTab({ topic }: SourcesTabProps) {
             <span>状态：{statusLabel(source.status)}</span>
           </div>
           {source.raw_excerpt && <p className="mt-3 line-clamp-3 rounded-2xl bg-card/70 p-3 text-sm leading-relaxed text-muted-foreground">{source.raw_excerpt}</p>}
-        </div>
+        </Surface>
       ))}
     </div>
   );

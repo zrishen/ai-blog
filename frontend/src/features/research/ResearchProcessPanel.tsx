@@ -8,6 +8,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Surface } from "@/components/ui/surface";
 import { useResearchRuns } from "./hooks/useResearchRuns";
 import { RunHistoryList } from "./process/RunHistoryList";
 import { RunDetail } from "./process/RunDetail";
@@ -36,7 +37,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
 
   if (loading) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-[1.6rem] border border-dashed border-primary/20 bg-primary/6 p-5 text-center">
+      <Surface variant="dashed" className="flex min-h-[360px] items-center justify-center rounded-surface border-primary/20 bg-primary/6 p-5 text-center text-foreground">
         <div>
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-[1.25rem] bg-primary/10 text-primary ring-1 ring-primary/15">
             <RefreshCw className="h-6 w-6 animate-spin" />
@@ -44,7 +45,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
           <p className="text-base font-black tracking-[-0.04em] text-foreground">加载研究过程</p>
           <p className="mt-2 max-w-[220px] text-xs leading-relaxed text-muted-foreground">正在读取研究运行记录...</p>
         </div>
-      </div>
+      </Surface>
     );
   }
 
@@ -90,7 +91,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
       )}
 
       {runs.length === 0 ? (
-        <div className="flex min-h-[280px] items-center justify-center rounded-[1.6rem] border border-dashed border-border/80 bg-background/45 p-8 text-center">
+        <Surface variant="dashed" className="flex min-h-[280px] items-center justify-center rounded-surface p-8 text-center text-foreground">
           <div>
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
               <Clock className="h-5 w-5" />
@@ -98,7 +99,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
             <h2 className="text-lg font-black tracking-[-0.03em] text-foreground">暂无研究运行记录</h2>
             <p className="mt-2 text-sm text-muted-foreground">点击上方「启动研究」按钮开始新一轮研究。</p>
           </div>
-        </div>
+        </Surface>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
           <RunHistoryList
@@ -108,9 +109,9 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
           />
 
           {!selectedRun ? (
-            <div className="flex min-h-[200px] items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/45 text-sm text-muted-foreground">
+            <Surface variant="dashed" className="flex min-h-[200px] items-center justify-center rounded-panel text-sm">
               选择左侧运行记录查看详情
-            </div>
+            </Surface>
           ) : (
             <RunDetail
               run={selectedRun}

@@ -27,7 +27,9 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
+import { WorkspacePanel } from "@/components/ui/workspace-panel";
+import { surfaceVariants } from "@/lib/visualVariants";
+import { cn } from "@/lib/utils";
 import { statusLabel as researchStatusLabel } from "./utils/researchFormat";
 
 export function ResearchPanel() {
@@ -129,12 +131,12 @@ export function ResearchPanel() {
 
   if (!isAuthenticated) {
     return (
-      <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]" />
+      <WorkspacePanel className="overflow-y-auto select-none" />
     );
   }
 
   return (
-    <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
+    <WorkspacePanel className="overflow-y-auto select-none">
       <div className="p-4 flex flex-col gap-3">
         <div className="flex gap-2">
           <Input
@@ -157,7 +159,7 @@ export function ResearchPanel() {
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {state.researchTopics.length === 0 && !researchLoading ? (
-            <div className="rounded-2xl border border-dashed border-border/80 bg-secondary/50 px-3 py-4 text-center text-[13px] text-muted-foreground">
+            <div className={cn(surfaceVariants({ variant: "inset" }), "px-3 py-4 text-center text-[13px] text-muted-foreground")}>
               暂无研究主题，先创建一个主题开始收集来源和事实。
             </div>
           ) : state.researchTopics.map((topic) => {
@@ -173,11 +175,12 @@ export function ResearchPanel() {
                   <motion.button
                     whileHover={{ x: researchDeletingId === topic.id ? 0 : 3 }}
                     transition={{ duration: 0.15 }}
-                    className={`group w-full rounded-[1.25rem] border p-3 text-left transition-colors ${
-                      isActive
-                        ? SOFT_SELECTED_SURFACE
-                        : "border-border/60 bg-card/70 hover:border-primary/18 hover:bg-accent/50"
-                    } ${researchDeletingId === topic.id ? "opacity-60" : ""}`}
+                    className={cn(
+                      surfaceVariants({ variant: isActive ? "selected" : "interactive" }),
+                      "group w-full rounded-[1.25rem] p-3 text-left",
+                      !isActive && "bg-card/70",
+                      researchDeletingId === topic.id && "opacity-60",
+                    )}
                     onClick={() => selectResearchTopic(topic.id)}
                     disabled={researchDeletingId === topic.id}
                   >
@@ -242,6 +245,6 @@ export function ResearchPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </aside>
+    </WorkspacePanel>
   );
 }

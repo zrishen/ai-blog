@@ -14,7 +14,6 @@ import {
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -23,9 +22,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getAdminOverview, type AdminOverview } from "@/api/client";
 import { AdminPage, AdminPageHeader } from "./AdminPage";
-
-// 周额度上限固定 100M tokens
-const WEEKLY_LIMIT = 100_000_000;
 
 function formatM(n: number): string {
   return `${(n / 1e6).toFixed(1)}M`;
@@ -182,8 +178,6 @@ export function OverviewPage() {
             loading={loading}
             inviteCode={data?.registration_invite_code ?? null}
           />
-
-          <WeeklyUsageCard loading={loading} data={data} />
         </>
       )}
     </AdminPage>
@@ -220,9 +214,6 @@ function InviteCodeCard({
             </span>
             注册邀请码
           </CardTitle>
-          <CardDescription>
-            新用户注册时需要填写，邀请码未配置时注册入口关闭。
-          </CardDescription>
         </div>
         {!loading && (
           <Badge
@@ -257,70 +248,6 @@ function InviteCodeCard({
           <div className="rounded-2xl border border-dashed border-border/70 bg-muted/25 px-4 py-5 text-sm text-muted-foreground">
             当前未配置邀请码，新用户暂时无法注册。
           </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function WeeklyUsageCard({
-  loading,
-  data,
-}: {
-  loading: boolean;
-  data: AdminOverview | null;
-}) {
-  const used = data?.this_week_tokens ?? 0;
-  const pct = Math.min(100, (used / WEEKLY_LIMIT) * 100);
-  const remaining = Math.max(0, WEEKLY_LIMIT - used);
-  const nearLimit = pct > 80;
-
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader>
-        <CardTitle>本周用量</CardTitle>
-        <CardDescription>
-          全站本周 token 消耗占周额度（{formatM(WEEKLY_LIMIT)}）的占比。
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {loading || !data ? (
-          <div className="space-y-3">
-            <div className="h-3 w-full animate-pulse rounded-full bg-muted" />
-            <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-          </div>
-        ) : (
-          <>
-            <div className="h-3 w-full overflow-hidden rounded-full bg-muted/80 shadow-inner">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all duration-500",
-                  nearLimit
-                    ? "bg-destructive shadow-[0_0_16px_hsl(var(--destructive)/0.25)]"
-                    : "bg-primary shadow-[0_0_16px_hsl(var(--primary)/0.25)]",
-                )}
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <div
-              className={cn(
-                "flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm",
-                nearLimit ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              <span>
-                已用 <span className="font-medium text-foreground tabular-nums">{formatM(used)}</span>
-                {" "}/ {formatM(WEEKLY_LIMIT)}
-              </span>
-              <span>
-                剩余 <span className="font-medium text-foreground tabular-nums">{formatM(remaining)}</span>
-              </span>
-              <span className="tabular-nums">
-                占比 {pct.toFixed(1)}%
-                {nearLimit ? " · 接近上限" : ""}
-              </span>
-            </div>
-          </>
         )}
       </CardContent>
     </Card>

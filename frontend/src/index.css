@@ -6,6 +6,11 @@
   --radius-md: 12px;
   --radius-sm: 8px;
   --radius-full: 9999px;
+  --radius-surface: 1.6rem;
+  --radius-panel: 1.25rem;
+  --radius-control: 0.75rem;
+  --shadow-surface: 0 18px 42px hsl(var(--foreground) / 0.05);
+  --shadow-surface-raised: 0 22px 48px hsl(var(--foreground) / 0.08);
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));

@@ -2,6 +2,8 @@ import type { BlogPost } from "../../../stores/chatStore";
 import { useChat } from "../../../stores/chatStore";
 import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
+import { surfaceVariants } from "@/lib/visualVariants";
+import { cn } from "@/lib/utils";
 import { User, Eye, Calendar, Tags, FileText } from "lucide-react";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 
@@ -84,7 +86,10 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
       <motion.article
         whileHover={{ y: -6, scale: 1.005 }}
         transition={{ duration: 0.22 }}
-        className={`group relative h-[11rem] w-full cursor-pointer overflow-hidden rounded-[2rem] border border-border/70 shadow-xl shadow-foreground/5 bg-card/94 md:h-[16rem]`}
+        className={cn(
+          surfaceVariants({ variant: "featured" }),
+          "group relative h-[11rem] w-full cursor-pointer overflow-hidden rounded-[2rem] bg-card/94 md:h-[16rem]",
+        )}
         onClick={() => onClick(post.id)}
       >
         {hasCover && (
@@ -129,7 +134,10 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
       <motion.article
         whileHover={{ y: -5 }}
         transition={{ duration: 0.2 }}
-        className="group flex h-[9rem] w-full cursor-pointer overflow-hidden rounded-[2rem] border border-border/70 bg-card/94 shadow-xl shadow-foreground/5 transition-all duration-200 hover:border-primary/25 md:h-[13rem]"
+        className={cn(
+          surfaceVariants({ variant: "interactive" }),
+          "group flex h-[9rem] w-full cursor-pointer overflow-hidden rounded-[2rem] bg-card/94 md:h-[13rem]",
+        )}
         onClick={() => onClick(post.id)}
       >
         {hasCover ? (
@@ -172,7 +180,10 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
     <motion.article
       whileHover={{ y: -4 }}
       transition={{ duration: 0.18 }}
-      className="group flex h-auto min-h-[5rem] w-full cursor-pointer overflow-hidden rounded-[1.55rem] border border-border/70 bg-card/92 shadow-sm transition-all duration-200 hover:border-primary/25 hover:shadow-xl hover:shadow-foreground/5 md:min-h-[7rem]"
+      className={cn(
+        surfaceVariants({ variant: "interactive" }),
+        "group flex h-auto min-h-[5rem] w-full cursor-pointer overflow-hidden rounded-[1.55rem] bg-card/92 shadow-sm md:min-h-[7rem]",
+      )}
       onClick={() => onClick(post.id)}
     >
       <div className="flex min-w-0 flex-1 flex-col p-3 md:p-4">

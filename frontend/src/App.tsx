@@ -282,11 +282,12 @@ function AuthenticatedApp() {
   const [initialLayout] = useState(loadPanelLayout);
   const lastOpenAiSizeRef = useRef(initialLayout.aiOpenSize);
   const leftSizeRef = useRef(initialLayout.leftSize);
+
   useEffect(() => {
     if (!groupApi || isMobileWorkspace) return;
-    const aiSize = state.aiSidebarOpen ? lastOpenAiSizeRef.current : 4;
+    const aiPanelSize = state.aiSidebarOpen ? lastOpenAiSizeRef.current : 4;
     const leftSize = leftSizeRef.current;
-    groupApi.setLayout({ left: leftSize, main: 100 - leftSize - aiSize, ai: aiSize });
+    groupApi.setLayout({ left: leftSize, main: 100 - leftSize - aiPanelSize, ai: aiPanelSize });
   }, [groupApi, isMobileWorkspace, state.aiSidebarOpen]);
 
   const panelGroupValue = groupApi ?? null;
@@ -307,11 +308,13 @@ function AuthenticatedApp() {
               onLayoutChanged={(layout) => {
                 const leftSize = layout.left;
                 const aiSize = layout.ai;
-                leftSizeRef.current = leftSize;
+                if (typeof leftSize === "number") {
+                  leftSizeRef.current = leftSize;
+                }
                 if (aiSize > 5) {
                   lastOpenAiSizeRef.current = aiSize;
                 }
-                savePanelLayout(leftSize, lastOpenAiSizeRef.current);
+                savePanelLayout(leftSizeRef.current, lastOpenAiSizeRef.current);
               }}
             >
               <Panel id="left" defaultSize={`${initialLayout.leftSize}%`} minSize="10%" maxSize="40%">

@@ -10,8 +10,9 @@ describe("admin visual system", () => {
     render(<Card data-testid="admin-card">内容</Card>);
 
     expect(screen.getByTestId("admin-card")).toHaveClass(
+      "rounded-surface",
       "border-border/70",
-      "shadow-foreground/5",
+      "shadow-surface",
       "bg-card/86",
     );
   });

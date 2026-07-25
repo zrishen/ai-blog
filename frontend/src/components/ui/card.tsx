@@ -1,6 +1,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { surfaceVariants } from "@/lib/visualVariants"
 
 const Card = React.forwardRef<
   HTMLDivElement,
@@ -9,7 +10,7 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-[1.6rem] border border-border/70 bg-card/86 text-card-foreground shadow-xl shadow-foreground/5 backdrop-blur-xl",
+      surfaceVariants({ variant: "card" }),
       className
     )}
     {...props}

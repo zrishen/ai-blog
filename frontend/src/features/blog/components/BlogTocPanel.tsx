@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useChat } from "../../../stores/chatStore";
 import { ChevronRight } from "lucide-react";
+import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { extractHeadings, type TocItem } from "../utils/blogToc";
 
 function getParentSlug(headings: TocItem[], slug: string): string {
@@ -59,7 +60,7 @@ function BlogTocView({ content, title }: { content: string; title?: string }) {
   }, []);
 
   return (
-    <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
+    <WorkspacePanel className="overflow-y-auto select-none">
       <div className="p-4 flex flex-col gap-3">
         <div className="text-[13px] text-muted-foreground leading-relaxed pb-2">
           当前文章
@@ -95,7 +96,7 @@ function BlogTocView({ content, title }: { content: string; title?: string }) {
           </nav>
         )}
       </div>
-    </aside>
+    </WorkspacePanel>
   );
 }
 
@@ -157,7 +158,7 @@ function BlogTocEdit({ title }: { title?: string }) {
   };
 
   return (
-    <aside className="w-full h-full bg-card/82 backdrop-blur-xl border-r border-border/80 flex flex-col overflow-y-auto select-none shadow-[12px_0_35px_hsl(var(--foreground)/0.03)]">
+    <WorkspacePanel className="overflow-y-auto select-none">
       <div className="p-4 flex flex-col gap-3">
         <div className="text-[13px] text-muted-foreground leading-relaxed pb-2">
           编辑中
@@ -204,6 +205,6 @@ function BlogTocEdit({ title }: { title?: string }) {
           <span className="text-[13px] text-muted-foreground/50 px-1 pt-2">输入标题后显示目录</span>
         )}
       </div>
-    </aside>
+    </WorkspacePanel>
   );
 }

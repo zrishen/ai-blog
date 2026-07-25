@@ -1,5 +1,8 @@
 import { ExternalLink, Network } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Surface } from "@/components/ui/surface";
+import { surfaceVariants } from "@/lib/visualVariants";
+import { cn } from "@/lib/utils";
 import type { ResearchEntity, ResearchTopicDetail } from "@/api/client";
 
 function statusLabel(status: string) {
@@ -52,7 +55,7 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
   ));
 
   return (
-    <aside className="h-full min-h-[420px] overflow-hidden rounded-[1.6rem] border border-border/70 bg-background/75 shadow-sm">
+    <aside className={cn(surfaceVariants({ variant: "inset" }), "h-full min-h-[420px] overflow-hidden rounded-surface bg-background/75 shadow-sm")}>
       <div className="border-b border-border/70 p-5">
         <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground"><Network className="h-3.5 w-3.5" />实体详情</div>
         <h2 className="text-xl font-black tracking-[-0.03em] text-foreground">{entity.name}</h2>
@@ -69,14 +72,14 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
           <h3 className="mb-2 text-sm font-black text-foreground">相关事实</h3>
           <div className="space-y-2">
             {relatedClaims.length ? relatedClaims.map((claim) => (
-              <div key={claim.id} className="rounded-2xl border border-border/60 bg-card/60 p-3">
+              <Surface key={claim.id} variant="card" className="rounded-control bg-card/60 p-3 shadow-sm">
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   <Badge variant="outline" className="rounded-full text-[10px]">{statusLabel(claim.status)}</Badge>
                   <Badge variant="outline" className="rounded-full text-[10px]">{claim.confidence}%</Badge>
                 </div>
                 <p className="text-xs font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
-              </div>
-            )) : <div className="rounded-2xl border border-dashed border-border/80 p-3 text-xs text-muted-foreground">暂无直接绑定的事实。</div>}
+              </Surface>
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无直接绑定的事实。</Surface>}
           </div>
         </section>
 
@@ -84,7 +87,7 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
           <h3 className="mb-2 text-sm font-black text-foreground">相关来源</h3>
           <div className="space-y-2">
             {relatedSources.length ? relatedSources.map((source) => (
-              <div key={source.id} className="rounded-2xl border border-border/60 bg-card/60 p-3">
+              <Surface key={source.id} variant="card" className="rounded-control bg-card/60 p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 text-xs font-semibold leading-relaxed text-foreground">{source.title}</div>
                   {(source.url || source.canonical_url) && (
@@ -94,8 +97,8 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
                   )}
                 </div>
                 <div className="mt-2 text-[11px] text-muted-foreground">{source.source_type} · {source.trust_level}</div>
-              </div>
-            )) : <div className="rounded-2xl border border-dashed border-border/80 p-3 text-xs text-muted-foreground">暂无可追溯来源。</div>}
+              </Surface>
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无可追溯来源。</Surface>}
           </div>
         </section>
 
@@ -108,7 +111,7 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
                 <div className="my-1 font-bold text-destructive">conflicts_with</div>
                 <div className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.to_type, relation.to_id)}</div>
               </div>
-            )) : <div className="rounded-2xl border border-dashed border-border/80 p-3 text-xs text-muted-foreground">暂无关联冲突。</div>}
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无关联冲突。</Surface>}
           </div>
         </section>
 
@@ -116,12 +119,12 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
           <h3 className="mb-2 text-sm font-black text-foreground">关系</h3>
           <div className="space-y-2">
             {relatedRelations.length ? relatedRelations.map((relation) => (
-              <div key={relation.id} className="rounded-2xl border border-border/60 bg-card/60 p-3 text-xs leading-relaxed text-muted-foreground">
+              <Surface key={relation.id} variant="card" className="rounded-control bg-card/60 p-3 text-xs leading-relaxed shadow-sm">
                 <span className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.from_type, relation.from_id)}</span>
                 <span className="mx-1.5 text-primary">{relation.relation_type}</span>
                 <span className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.to_type, relation.to_id)}</span>
-              </div>
-            )) : <div className="rounded-2xl border border-dashed border-border/80 p-3 text-xs text-muted-foreground">暂无关系。</div>}
+              </Surface>
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无关系。</Surface>}
           </div>
         </section>
       </div>

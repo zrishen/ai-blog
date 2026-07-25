@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/ui/page-header";
 
 export const ADMIN_DIALOG_CLASS =
   "rounded-[1.6rem] border-border/70 bg-card/95 shadow-2xl shadow-foreground/10 backdrop-blur-xl";
@@ -32,20 +33,5 @@ export function AdminPageHeader({
   description: string;
   actions?: ReactNode;
 }) {
-  return (
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div className="space-y-1.5">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/75">
-          Admin console
-        </p>
-        <h1 className="text-2xl font-semibold tracking-[-0.035em] text-foreground">
-          {title}
-        </h1>
-        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
-      </div>
-      {actions ? <div className="shrink-0">{actions}</div> : null}
-    </header>
-  );
+  return <PageHeader title={title} description={description} eyebrow="Admin console" actions={actions} />;
 }

@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Surface } from "@/components/ui/surface";
 import type { ResearchTopicActions } from "../hooks/useResearchTopicActions";
 
 interface ConflictsTabProps {
@@ -12,9 +13,9 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
 
   if (!conflictPairs.length) {
     return (
-      <div className="rounded-[1.6rem] border border-dashed border-border/80 bg-background/45 p-8 text-center text-sm text-muted-foreground">
+      <Surface variant="dashed" className="rounded-surface p-8 text-center text-sm">
         暂无冲突关系。
-      </div>
+      </Surface>
     );
   }
 
@@ -31,14 +32,14 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
               {resolved && <Badge className="rounded-full bg-emerald-600 text-white">已解决</Badge>}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-border/70 bg-card/75 p-4">
+              <Surface variant="card" className="rounded-control bg-card/75 p-4 shadow-sm">
                 <Badge variant="outline" className="mb-2 rounded-full">事实 A</Badge>
                 <p className="text-sm font-semibold leading-relaxed text-foreground">{fromClaim?.claim_text ?? `Claim #${relation.from_id}`}</p>
-              </div>
-              <div className="rounded-2xl border border-border/70 bg-card/75 p-4">
+              </Surface>
+              <Surface variant="card" className="rounded-control bg-card/75 p-4 shadow-sm">
                 <Badge variant="outline" className="mb-2 rounded-full">事实 B</Badge>
                 <p className="text-sm font-semibold leading-relaxed text-foreground">{toClaim?.claim_text ?? `Claim #${relation.to_id}`}</p>
-              </div>
+              </Surface>
             </div>
             {resolved ? (
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">

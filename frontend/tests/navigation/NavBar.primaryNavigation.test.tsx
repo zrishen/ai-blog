@@ -11,6 +11,16 @@ vi.mock("../../src/api/client", () => ({
   getAccessToken: vi.fn(() => null),
 }));
 
+vi.mock("../../src/features/auth/LoginDialog", () => ({
+  LoginDialog: ({ open, onSuccess }: { open: boolean; onSuccess?: (user: { username: string }) => void }) => (
+    open ? (
+      <div role="dialog">
+        <button type="button" onClick={() => onSuccess?.({ username: "alice" })}>完成登录</button>
+      </div>
+    ) : null
+  ),
+}));
+
 import { NavBar } from "../../src/components/NavBar";
 import { FileProcessingProvider } from "../../src/features/file-processing/FileProcessingProvider";
 import { AuthProvider } from "../../src/stores/authStore";
@@ -60,21 +70,43 @@ describe("NavBar 一级导航", () => {
     const researchButton = within(navigation).getByRole("button", { name: "研究图谱" });
 
     expect(navigation).not.toHaveClass("border");
-    expect(homeButton).toHaveClass("h-9", "min-w-[92px]", "rounded-xl");
+    expect(homeButton).toHaveClass("h-9", "min-w-[92px]", "rounded-control");
     expect(filesButton).toHaveAttribute("aria-current", "page");
     expect(homeButton).not.toHaveAttribute("aria-current");
     expect(researchButton).not.toHaveAttribute("aria-current");
-
-    await user.click(researchButton);
-    await waitFor(() => {
-      expect(screen.getByLabelText("当前路径")).toHaveTextContent("/research");
-      expect(researchButton).toHaveAttribute("aria-current", "page");
-    });
 
     await user.click(homeButton);
     await waitFor(() => {
       expect(screen.getByLabelText("当前路径")).toHaveTextContent("/");
       expect(homeButton).toHaveAttribute("aria-current", "page");
+    });
+  });
+
+  it.each([
+    ["文件库", "/files"],
+    ["研究图谱", "/research"],
+  ])("未登录点击%s时打开登录框而不跳转", async (label) => {
+    const user = userEvent.setup();
+    renderNav("/");
+
+    await user.click(screen.getByRole("button", { name: label }));
+
+    expect(screen.getByLabelText("当前路径")).toHaveTextContent("/");
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["文件库", "/files"],
+    ["研究图谱", "/research"],
+  ])("从%s登录成功后进入目标页面", async (label, destination) => {
+    const user = userEvent.setup();
+    renderNav("/");
+
+    await user.click(screen.getByRole("button", { name: label }));
+    await user.click(await screen.findByRole("button", { name: "完成登录" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("当前路径")).toHaveTextContent(destination);
     });
   });
 

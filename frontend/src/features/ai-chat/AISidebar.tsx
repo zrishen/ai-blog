@@ -5,6 +5,7 @@ import type { AISidebarConversationKey, Conversation, ToolEvent } from "../../st
 import { fetchConversations } from "../../api/client";
 import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { AISidebarHeader } from "./ai-sidebar/AISidebarHeader";
 import {
   loadAISidebarSession,
@@ -175,13 +176,13 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
 
   if (mode === "pending" || readyScope !== currentScope) {
     return (
-      <aside className="relative flex h-full w-full flex-col border-l border-border/80 bg-card/82 shadow-[-12px_0_35px_hsl(var(--foreground)/0.04)] backdrop-blur-xl" />
+      <WorkspacePanel side="right" className="relative" />
     );
   }
 
   if (!state.aiSidebarOpen && !forceExpanded) {
     return (
-      <aside className="relative flex h-full w-full flex-col items-center border-l border-border/80 bg-card/82 pt-3 shadow-[-12px_0_35px_hsl(var(--foreground)/0.03)] backdrop-blur-xl">
+      <WorkspacePanel side="right" className="relative items-center pt-3">
         <Button
           variant="ghost"
           size="icon"
@@ -191,12 +192,12 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         >
           <MessageSquare className="h-4 w-4" />
         </Button>
-      </aside>
+      </WorkspacePanel>
     );
   }
 
   return (
-    <aside className="relative flex h-full w-full flex-col border-l border-border/80 bg-card/82 shadow-[-12px_0_35px_hsl(var(--foreground)/0.04)] backdrop-blur-xl">
+    <WorkspacePanel side="right" className="relative">
       <AISidebarRuntimeContext.Provider value={runtime}>
       <AISidebarHeader
         isPrivate={isPrivate}
@@ -230,6 +231,6 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         />
       )}
       </AISidebarRuntimeContext.Provider>
-    </aside>
+    </WorkspacePanel>
   );
 }

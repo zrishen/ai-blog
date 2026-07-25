@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertCircle, BrainCircuit, CheckCircle2, FileSearch, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { surfaceVariants } from "@/lib/visualVariants";
 import { useAuth } from "../../stores/authStore";
 import { useChat } from "../../stores/chatStore";
 import { getResearchTopic } from "../../api/client";
@@ -163,13 +165,13 @@ export function ResearchGraphPage() {
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
           {!selectedTopic ? (
-            <div className="flex h-full min-h-[360px] items-center justify-center rounded-[1.6rem] border border-dashed border-border/80 bg-background/45 p-8 text-center">
+            <section className={cn(surfaceVariants({ variant: "inset" }), "flex h-full min-h-[360px] items-center justify-center rounded-surface bg-card/62 p-8 text-center")}>
               <div>
                 <GitBranch className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
                 <h2 className="text-xl font-black tracking-[-0.03em] text-foreground">暂无可审核主题</h2>
                 <p className="mt-2 text-sm text-muted-foreground">创建主题后，这里会展示来源、事实、冲突和提案。</p>
               </div>
-            </div>
+            </section>
           ) : activeTab === "overview" ? (
             <OverviewTab topic={selectedTopic} />
           ) : activeTab === "process" ? (

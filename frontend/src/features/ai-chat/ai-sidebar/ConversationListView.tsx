@@ -7,7 +7,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
+import { surfaceVariants } from "@/lib/visualVariants";
+import { cn } from "@/lib/utils";
 import type { AISidebarConversationKey } from "../../../stores/chatStore";
 import { formatDate } from "./messageHelpers";
 
@@ -76,11 +77,12 @@ export function ConversationListView({
           conversations.map((conv) => (
             <motion.div
               key={conv.key}
-              className={`group flex w-full cursor-pointer items-center gap-3 rounded-2xl border px-3.5 py-3 transition-all duration-150 ${
-                conv.selected
-                  ? SOFT_SELECTED_SURFACE
-                  : "border-border/60 bg-background/58 hover:border-primary/18 hover:bg-accent/70"
-              } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20`}
+              className={cn(
+                surfaceVariants({ variant: conv.selected ? "selected" : "interactive" }),
+                "group flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3.5 py-3",
+                !conv.selected && "bg-background/58",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
+              )}
               onClick={() => onSelect(conv)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") onSelect(conv);

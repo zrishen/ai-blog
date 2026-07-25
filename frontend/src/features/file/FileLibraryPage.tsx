@@ -5,6 +5,7 @@ import { useChatHooks } from "../../hooks/useChat";
 import { listFileCategories } from "../../api/client";
 import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Surface } from "@/components/ui/surface";
 import { LoginDialog } from "../auth/LoginDialog";
 import { FilePreviewPane } from "./panes/FilePreviewPane";
 import { LibraryOverviewPane } from "./panes/LibraryOverviewPane";
@@ -37,7 +38,7 @@ export function FileLibraryPage() {
     return (
       <div className="flex flex-col flex-1 h-full overflow-y-auto bg-background px-8 py-6">
         <div className="mx-auto flex min-h-[60vh] w-full max-w-[760px] items-center justify-center">
-          <div className="relative w-full overflow-hidden rounded-[2rem] border border-border/70 bg-card/86 p-8 text-center shadow-xl shadow-foreground/5 backdrop-blur-xl">
+          <Surface variant="featured" className="relative w-full overflow-hidden rounded-[2rem] p-8 text-center">
             <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-primary/12 blur-3xl" />
             <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-primary/10 text-primary ring-1 ring-primary/15">
               <Database className="w-7 h-7" />
@@ -57,7 +58,7 @@ export function FileLibraryPage() {
             >
               登录到 AI Blog
             </Button>
-          </div>
+          </Surface>
         </div>
         <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} />
       </div>

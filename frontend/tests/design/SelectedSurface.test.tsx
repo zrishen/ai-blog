@@ -49,7 +49,7 @@ describe("soft selected surfaces", () => {
     const activeItem = document.querySelector('a[href="/admin/usage"]');
     expect(activeItem).toHaveClass(
       "border-border/80",
-      "bg-primary/6",
+      "bg-primary/8",
       "shadow-foreground/5",
     );
     expect(activeItem).not.toHaveClass(

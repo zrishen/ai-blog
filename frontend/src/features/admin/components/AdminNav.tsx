@@ -6,7 +6,7 @@ import {
   Users as UsersIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
+import { navItemVariants, workspacePanelVariants } from "@/lib/visualVariants";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "概览", icon: LayoutDashboard, end: true },
@@ -18,7 +18,7 @@ const NAV_ITEMS = [
 /** 管理后台左侧导航：4 个子页（概览/用户/兑换码/用量），NavLink 高亮当前路由。 */
 export function AdminNav() {
   return (
-    <nav className="flex h-full flex-col gap-1 border-r border-border/80 bg-card/82 p-3 shadow-[12px_0_35px_hsl(var(--foreground)/0.03)] backdrop-blur-xl">
+    <nav className={cn(workspacePanelVariants({ side: "left" }), "gap-1 p-3")}>
       {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}
@@ -26,10 +26,8 @@ export function AdminNav() {
           end={end}
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition-all",
-              isActive
-                ? `${SOFT_SELECTED_SURFACE} font-medium text-primary`
-                : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-accent/55 hover:text-foreground",
+              navItemVariants({ layout: "side", state: isActive ? "active" : "idle" }),
+              "gap-2.5",
             )
           }
         >

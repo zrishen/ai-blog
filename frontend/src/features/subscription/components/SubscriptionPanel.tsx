@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { surfaceVariants } from "@/lib/visualVariants";
 
 // 周额度展示用 M 单位（÷1e6 保留 1 位）。
 const fmtM = (n: number): string => (n / 1e6).toFixed(1);
@@ -61,14 +62,14 @@ export function SubscriptionPanel() {
 
   if (loading) {
     return (
-      <div className="rounded-lg border bg-muted/30 px-3 py-3 text-[13px] text-muted-foreground">
+      <div className={cn(surfaceVariants({ variant: "inset" }), "px-4 py-3 text-[13px] text-muted-foreground")}>
         订阅状态加载中…
       </div>
     );
   }
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-[13px] text-destructive">
+      <div className={cn(surfaceVariants({ variant: "inset" }), "border-destructive/20 bg-destructive/8 px-4 py-3 text-[13px] text-destructive")}>
         {error}
       </div>
     );
@@ -79,7 +80,10 @@ export function SubscriptionPanel() {
   const overWarn = pct > 80;
 
   return (
-    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+    <section
+      data-testid="subscription-status-surface"
+      className={cn(surfaceVariants({ variant: "inset" }), "space-y-4 p-4")}
+    >
       <div className="flex items-center justify-between">
         <span className="text-sm font-semibold text-foreground">订阅</span>
         <Badge variant={status.active ? "default" : "secondary"}>
@@ -94,7 +98,7 @@ export function SubscriptionPanel() {
       </div>
 
       {/* 本周 token 配额进度条 */}
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <div className="flex items-baseline justify-between text-[13px]">
           <span className="text-foreground">本周用量</span>
           <span>
@@ -102,7 +106,7 @@ export function SubscriptionPanel() {
             <span className="text-muted-foreground"> / {fmtM(status.limit)}M</span>
           </span>
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted/75">
           <div
             className={cn(
               "h-full rounded-full transition-all",
@@ -123,7 +127,7 @@ export function SubscriptionPanel() {
       </div>
 
       {/* 兑换码激活 */}
-      <div className="space-y-1.5 border-t pt-3">
+      <div className="space-y-2 border-t border-border/60 pt-3.5">
         <span className="text-sm font-medium text-foreground">兑换码</span>
         <div className="flex gap-2">
           <Input
@@ -131,8 +135,13 @@ export function SubscriptionPanel() {
             onChange={(e) => setCode(e.target.value)}
             placeholder="输入兑换码"
             disabled={submitting}
+            className="h-10 rounded-control border-border/70 bg-background/70 shadow-sm"
           />
-          <Button onClick={handleRedeem} disabled={submitting || !code.trim()}>
+          <Button
+            className="h-10 rounded-control px-4 shadow-sm shadow-primary/10"
+            onClick={handleRedeem}
+            disabled={submitting || !code.trim()}
+          >
             {submitting ? "兑换中…" : "兑换"}
           </Button>
         </div>
@@ -147,6 +156,6 @@ export function SubscriptionPanel() {
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

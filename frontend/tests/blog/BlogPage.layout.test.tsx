@@ -35,6 +35,7 @@ describe("BlogPage 空状态布局", () => {
 
     expect(emptyCard).toHaveClass("min-h-0", "flex-1", "items-center", "justify-center");
     expect(emptyCard).not.toHaveClass("min-h-[58vh]");
+    expect(emptyCard).not.toHaveClass("border-dashed");
     expect(middleColumn).toHaveClass("flex", "h-full", "min-h-0", "flex-col", "p-2");
   });
 });

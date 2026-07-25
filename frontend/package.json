@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-design-system.mjs",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:design": "node scripts/check-design-system.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
