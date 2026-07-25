@@ -1,7 +1,7 @@
 """研究 prompt 构建测试。"""
 
 from src.database.models import ResearchTopic
-from src.services.research_service import _build_research_prompt
+from src.services.research import _build_research_prompt
 
 
 def test_build_research_prompt_with_special_chars():

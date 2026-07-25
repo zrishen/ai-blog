@@ -158,7 +158,7 @@ async def save_chat_turn(
                 claimed_attachments = [by_id[item] for item in ordered_attachment_ids]
                 user_image_url = next(
                     (
-                        f"/api/chat/attachments/{item.attachment_id}/content"
+                        f"/api/v1/chat/attachments/{item.attachment_id}/content"
                         for item in claimed_attachments
                         if item.media_type.startswith("image/")
                     ),
@@ -166,7 +166,7 @@ async def save_chat_turn(
                 )
                 user_file_url = next(
                     (
-                        f"/api/chat/attachments/{item.attachment_id}/content"
+                        f"/api/v1/chat/attachments/{item.attachment_id}/content"
                         for item in claimed_attachments
                         if not item.media_type.startswith("image/")
                     ),

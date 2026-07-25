@@ -1,6 +1,6 @@
 """Markdown AST 解析服务测试。"""
 
-from src.services.markdown_ast_service import (
+from src.services.markdown.markdown_ast_service import (
     parse_to_blocks,
     extract_outline,
     get_section_text,

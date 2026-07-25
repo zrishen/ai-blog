@@ -14,10 +14,10 @@ async def test_mcp_endpoints_require_authentication(client: AsyncClient):
     saved_override = app.dependency_overrides.pop(get_current_user, None)
     try:
         responses = [
-            await client.get("/api/mcp/servers"),
-            await client.post("/api/mcp/servers", json={"name": "x", "server_type": "stdio"}),
-            await client.put("/api/mcp/servers/1/toggle", json={"is_active": True}),
-            await client.delete("/api/mcp/servers/1"),
+            await client.get("/api/v1/mcp/servers"),
+            await client.post("/api/v1/mcp/servers", json={"name": "x", "server_type": "stdio"}),
+            await client.put("/api/v1/mcp/servers/1/toggle", json={"is_active": True}),
+            await client.delete("/api/v1/mcp/servers/1"),
         ]
         assert all(response.status_code == 401 for response in responses)
     finally:
@@ -27,7 +27,7 @@ async def test_mcp_endpoints_require_authentication(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_list_mcp_servers(client: AsyncClient):
-    resp = await client.get("/api/mcp/servers")
+    resp = await client.get("/api/v1/mcp/servers")
     assert resp.status_code == 200
     data = resp.json()
     assert "servers" in data
@@ -36,7 +36,7 @@ async def test_list_mcp_servers(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_add_mcp_server(client: AsyncClient):
-    resp = await client.post("/api/mcp/servers", json={
+    resp = await client.post("/api/v1/mcp/servers", json={
         "name": "测试MCP服务",
         "server_type": "stdio",
         "command": "python",
@@ -59,7 +59,7 @@ async def test_add_mcp_server_keeps_config_when_discovery_crashes(client: AsyncC
 
     monkeypatch.setattr(mcp_config, "discover_server_tools", boom)
 
-    resp = await client.post("/api/mcp/servers", json={
+    resp = await client.post("/api/v1/mcp/servers", json={
         "name": "崩溃MCP",
         "server_type": "stdio",
         "command": "python",
@@ -79,7 +79,7 @@ async def test_mcp_server_response_does_not_expose_env_vars(client: AsyncClient,
 
     monkeypatch.setattr(mcp_config, "discover_server_tools", fake_discover_server_tools, raising=False)
 
-    create_resp = await client.post("/api/mcp/servers", json={
+    create_resp = await client.post("/api/v1/mcp/servers", json={
         "name": "带环境变量的MCP服务",
         "server_type": "stdio",
         "command": "python",
@@ -91,7 +91,7 @@ async def test_mcp_server_response_does_not_expose_env_vars(client: AsyncClient,
     assert "env_vars" not in created
     assert "fake-token-for-test" not in create_resp.text
 
-    list_resp = await client.get("/api/mcp/servers")
+    list_resp = await client.get("/api/v1/mcp/servers")
     assert list_resp.status_code == 200
     assert "env_vars" not in list_resp.text
     assert "fake-token-for-test" not in list_resp.text
@@ -113,7 +113,7 @@ def test_build_stdio_env_excludes_host_only_values(monkeypatch):
 @pytest.mark.asyncio
 async def test_toggle_mcp_server(client: AsyncClient):
     # 创建
-    create_resp = await client.post("/api/mcp/servers", json={
+    create_resp = await client.post("/api/v1/mcp/servers", json={
         "name": "待切换",
         "server_type": "stdio",
         "command": "python",
@@ -121,7 +121,7 @@ async def test_toggle_mcp_server(client: AsyncClient):
     server_id = create_resp.json()["id"]
 
     # 切换状态
-    resp = await client.put(f"/api/mcp/servers/{server_id}/toggle", json={
+    resp = await client.put(f"/api/v1/mcp/servers/{server_id}/toggle", json={
         "is_active": False,
     })
     assert resp.status_code == 200
@@ -131,7 +131,7 @@ async def test_toggle_mcp_server(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_delete_mcp_server(client: AsyncClient):
     # 创建
-    create_resp = await client.post("/api/mcp/servers", json={
+    create_resp = await client.post("/api/v1/mcp/servers", json={
         "name": "待删除",
         "server_type": "stdio",
         "command": "python",
@@ -139,14 +139,14 @@ async def test_delete_mcp_server(client: AsyncClient):
     server_id = create_resp.json()["id"]
 
     # 删除
-    resp = await client.delete(f"/api/mcp/servers/{server_id}")
+    resp = await client.delete(f"/api/v1/mcp/servers/{server_id}")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
 
 
 @pytest.mark.asyncio
 async def test_delete_nonexistent_mcp_server(client: AsyncClient):
-    resp = await client.delete("/api/mcp/servers/99999")
+    resp = await client.delete("/api/v1/mcp/servers/99999")
     assert resp.status_code == 404
 
 
@@ -190,7 +190,7 @@ async def test_enable_mcp_server_discovers_tools_when_empty(client: AsyncClient,
     monkeypatch.setattr(mcp_config, "discover_server_tools", fake_discover_server_tools, raising=False)
     server = await _create_mcp_server(db_session, tools=[], is_active=False)
 
-    resp = await client.put(f"/api/mcp/servers/{server.id}/toggle", json={"is_active": True})
+    resp = await client.put(f"/api/v1/mcp/servers/{server.id}/toggle", json={"is_active": True})
 
     assert resp.status_code == 200
     data = resp.json()
@@ -212,7 +212,7 @@ async def test_enable_mcp_server_fails_when_no_tools_discovered(client: AsyncCli
     monkeypatch.setattr(mcp_config, "discover_server_tools", fake_discover_server_tools, raising=False)
     server = await _create_mcp_server(db_session, tools=[], is_active=False)
 
-    resp = await client.put(f"/api/mcp/servers/{server.id}/toggle", json={"is_active": True})
+    resp = await client.put(f"/api/v1/mcp/servers/{server.id}/toggle", json={"is_active": True})
 
     assert resp.status_code == 400
     assert "未发现可用工具" in resp.json()["detail"]
@@ -238,7 +238,7 @@ async def test_enable_mcp_server_with_existing_tools_does_not_rediscover(client:
     monkeypatch.setattr(mcp_config, "discover_server_tools", discover_should_not_run, raising=False)
     server = await _create_mcp_server(db_session, tools=existing_tools, is_active=False)
 
-    resp = await client.put(f"/api/mcp/servers/{server.id}/toggle", json={"is_active": True})
+    resp = await client.put(f"/api/v1/mcp/servers/{server.id}/toggle", json={"is_active": True})
 
     assert resp.status_code == 200
     data = resp.json()

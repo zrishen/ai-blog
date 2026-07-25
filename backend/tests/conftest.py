@@ -105,21 +105,21 @@ async def _fake_get_user_llm_settings(db, user_id):
 def mock_external_services():
     """自动 mock 所有外部服务。"""
     with patch("src.api.chat.stream_chat", side_effect=mock_stream_chat), \
-         patch("src.services.file_processing_service.async_session", TestSessionLocal), \
-         patch("src.services.llm_settings_service.get_user_llm_settings", new=_fake_get_user_llm_settings), \
-         patch("src.services.chat_service.get_user_llm_settings", new=_fake_get_user_llm_settings), \
+         patch("src.services.file.file_processing_service.async_session", TestSessionLocal), \
+         patch("src.services.llm.llm_settings_service.get_user_llm_settings", new=_fake_get_user_llm_settings), \
+         patch("src.services.chat.orchestrator.get_user_llm_settings", new=_fake_get_user_llm_settings), \
          patch("src.api.files.schedule_job", return_value=None), \
          patch("src.api.trash.schedule_job", return_value=None, create=True), \
-         patch("src.services.file_processing_service.schedule_job", return_value=None), \
-         patch("src.services.trash_service.schedule_job", return_value=None), \
-         patch("src.services.file_processing_service.vectorize_and_store", return_value=[]), \
+         patch("src.services.file.file_processing_service.schedule_job", return_value=None), \
+         patch("src.services.trash.trash_service.schedule_job", return_value=None), \
+         patch("src.services.file.file_processing_service.vectorize_and_store", return_value=[]), \
          patch("src.api.files.delete_document_chunks", return_value=True), \
-         patch("src.services.vector_store.list_collections", return_value=[]), \
-         patch("src.services.vector_store.search", return_value=[]), \
-         patch("src.services.vector_store.delete_document_chunks", return_value=True), \
-         patch("src.services.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
-         patch("src.services.trash_service.delete_document_chunks", return_value=True), \
-         patch("src.services.trash_service.delete_post_file", return_value=True):
+         patch("src.services.rag.vector_store.list_collections", return_value=[]), \
+         patch("src.services.rag.vector_store.search", return_value=[]), \
+         patch("src.services.rag.vector_store.delete_document_chunks", return_value=True), \
+         patch("src.services.rag.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
+         patch("src.services.trash.trash_service.delete_document_chunks", return_value=True), \
+         patch("src.services.trash.trash_service.delete_post_file", return_value=True):
         yield
 
 

@@ -20,7 +20,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setError("");
     setLoading(true);
 
-    const endpoint = mode === "login" ? "/api/auth/login" : "/api/auth/register";
+    const endpoint = mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/register";
     try {
       const res = await fetch(endpoint, {
         method: "POST",

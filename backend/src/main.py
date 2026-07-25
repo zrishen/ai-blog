@@ -1,46 +1,15 @@
-from contextlib import asynccontextmanager
-import logging
+"""FastAPI 应用入口：仅 app 装配（实例 + 中间件 + 路由）。启动逻辑见 bootstrap.py。"""
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.api.routes import router
+from src.bootstrap import startup
 from src.config import settings
-from src.logging_config import setup_logging
-from src.database.migrations import init_db
-from src.database.session import async_session
-
-logger = logging.getLogger(__name__)
-
-async def startup():
-    setup_logging()
-    await init_db()
-
-    from src.services.file_processing_service import reconcile_jobs
-    await reconcile_jobs()
-
-    from src.services.user_service import ensure_system_user
-    from src.services.official_intro_service import build_intro_post_payload
-    from src.services.blog_service import ensure_intro_post
-
-    async with async_session() as session:
-        user = await ensure_system_user(session)
-        intro_payload = build_intro_post_payload()
-        await ensure_intro_post(session, intro_payload, user.id)
-
-    # 本地 embedding 模型后台预热：provider=local 时启动即起后台线程下载加载，不阻塞 startup；
-    # 下载期间若来 RAG 请求，_get_local_model 的锁会等加载完，避免重复下载。
-    if settings.embedding_provider == "local":
-        import threading
-        from src.services.embedding_service import _get_local_model
-
-        def _preload_local_model() -> None:
-            try:
-                _get_local_model()
-            except Exception:
-                logger.exception("Failed to preload local embedding model; will retry on first use.")
-
-        threading.Thread(target=_preload_local_model, daemon=True, name="embedding-preload").start()
+from src.core.exceptions import DomainError
 
 
 @asynccontextmanager
@@ -62,7 +31,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(router, prefix="/api")
+app.include_router(router, prefix="/api/v1")
+
+
+@app.exception_handler(DomainError)
+async def _domain_error_handler(_: Request, exc: DomainError) -> JSONResponse:
+    """领域异常统一翻译为 JSON 响应（{code, message}）。
+
+    service 层抛 DomainError 时无需 api 层 try/except；现有 HTTPException 行为不变。
+    """
+    return JSONResponse(status_code=exc.status, content=exc.to_payload())
 
 
 @app.get("/health")

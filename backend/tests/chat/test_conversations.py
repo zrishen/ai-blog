@@ -14,7 +14,7 @@ from src.utils.auth import get_current_user
 
 @pytest.mark.asyncio
 async def test_create_conversation(client: AsyncClient):
-    resp = await client.post("/api/conversations", json={"title": "测试对话"})
+    resp = await client.post("/api/v1/conversations", json={"title": "测试对话"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["title"] == "测试对话"
@@ -25,9 +25,9 @@ async def test_create_conversation(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_list_conversations(client: AsyncClient):
     # 先创建一个
-    await client.post("/api/conversations", json={"title": "对话1"})
+    await client.post("/api/v1/conversations", json={"title": "对话1"})
 
-    resp = await client.get("/api/conversations")
+    resp = await client.get("/api/v1/conversations")
     assert resp.status_code == 200
     data = resp.json()
     assert "conversations" in data
@@ -37,11 +37,11 @@ async def test_list_conversations(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_delete_conversation(client: AsyncClient):
     # 创建
-    create_resp = await client.post("/api/conversations", json={"title": "待删除"})
+    create_resp = await client.post("/api/v1/conversations", json={"title": "待删除"})
     conv_id = create_resp.json()["id"]
 
     # 删除
-    resp = await client.delete(f"/api/conversations/{conv_id}")
+    resp = await client.delete(f"/api/v1/conversations/{conv_id}")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
 
@@ -49,11 +49,11 @@ async def test_delete_conversation(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_get_messages(client: AsyncClient):
     # 创建对话
-    create_resp = await client.post("/api/conversations", json={"title": "有消息"})
+    create_resp = await client.post("/api/v1/conversations", json={"title": "有消息"})
     conv_id = create_resp.json()["id"]
 
     # 获取消息（应该为空）
-    resp = await client.get(f"/api/conversations/{conv_id}/messages")
+    resp = await client.get(f"/api/v1/conversations/{conv_id}/messages")
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
 
@@ -69,20 +69,20 @@ async def test_conversations_are_scoped_by_current_user(client: AsyncClient):
     original_override = app.dependency_overrides.get(get_current_user)
     try:
         app.dependency_overrides[get_current_user] = user_a
-        create_resp = await client.post("/api/conversations", json={"title": "A 用户对话"})
+        create_resp = await client.post("/api/v1/conversations", json={"title": "A 用户对话"})
         assert create_resp.status_code == 200
         conv_id = create_resp.json()["id"]
 
-        list_a_resp = await client.get("/api/conversations")
+        list_a_resp = await client.get("/api/v1/conversations")
         assert list_a_resp.status_code == 200
         assert any(c["id"] == conv_id for c in list_a_resp.json()["conversations"])
 
         app.dependency_overrides[get_current_user] = user_b
-        list_b_resp = await client.get("/api/conversations")
+        list_b_resp = await client.get("/api/v1/conversations")
         assert list_b_resp.status_code == 200
         assert all(c["id"] != conv_id for c in list_b_resp.json()["conversations"])
 
-        messages_b_resp = await client.get(f"/api/conversations/{conv_id}/messages")
+        messages_b_resp = await client.get(f"/api/v1/conversations/{conv_id}/messages")
         assert messages_b_resp.status_code == 200
         assert messages_b_resp.json() == []
     finally:
@@ -97,7 +97,7 @@ async def test_get_messages_hides_tool_messages_but_keeps_db_history(
     client: AsyncClient,
     db_session: AsyncSession,
 ):
-    create_resp = await client.post("/api/conversations", json={"title": "工具调用历史"})
+    create_resp = await client.post("/api/v1/conversations", json={"title": "工具调用历史"})
     assert create_resp.status_code == 200
     conv_id = create_resp.json()["id"]
 
@@ -136,7 +136,7 @@ async def test_get_messages_hides_tool_messages_but_keeps_db_history(
     ])
     await db_session.commit()
 
-    resp = await client.get(f"/api/conversations/{conv_id}/messages")
+    resp = await client.get(f"/api/v1/conversations/{conv_id}/messages")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -159,7 +159,7 @@ async def test_get_messages_keeps_regular_user_and_assistant_history(
     client: AsyncClient,
     db_session: AsyncSession,
 ):
-    create_resp = await client.post("/api/conversations", json={"title": "普通历史"})
+    create_resp = await client.post("/api/v1/conversations", json={"title": "普通历史"})
     assert create_resp.status_code == 200
     conv_id = create_resp.json()["id"]
 
@@ -182,7 +182,7 @@ async def test_get_messages_keeps_regular_user_and_assistant_history(
     ])
     await db_session.commit()
 
-    resp = await client.get(f"/api/conversations/{conv_id}/messages")
+    resp = await client.get(f"/api/v1/conversations/{conv_id}/messages")
 
     assert resp.status_code == 200
     data = resp.json()
@@ -195,7 +195,7 @@ async def test_get_messages_returns_ordered_chat_attachments(
     client: AsyncClient,
     db_session: AsyncSession,
 ):
-    create_resp = await client.post("/api/conversations", json={"title": "附件历史"})
+    create_resp = await client.post("/api/v1/conversations", json={"title": "附件历史"})
     conv_id = create_resp.json()["id"]
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     message = Message(
@@ -241,7 +241,7 @@ async def test_get_messages_returns_ordered_chat_attachments(
     ])
     await db_session.commit()
 
-    response = await client.get(f"/api/conversations/{conv_id}/messages")
+    response = await client.get(f"/api/v1/conversations/{conv_id}/messages")
 
     assert response.status_code == 200
     attachments = response.json()[0]["attachments"]

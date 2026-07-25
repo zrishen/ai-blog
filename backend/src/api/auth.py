@@ -3,6 +3,7 @@
 - access token：短期 JWT，通过响应体返回，客户端存内存。
 - refresh token：不透明随机串，通过 HttpOnly cookie 下发，仅随 /api/auth/* 请求携带；
   /refresh 用它换新 access；/logout 吊销服务端记录并清 cookie。
+  路由前缀 /api/v1/auth。
 """
 
 import logging
@@ -17,8 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.engine import get_db
 from src.database.models import User
-
-logger = logging.getLogger(__name__)
 from src.utils.auth import (
     create_access_token,
     create_refresh_token,
@@ -29,10 +28,12 @@ from src.utils.auth import (
     verify_refresh_token,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _REFRESH_COOKIE = settings.refresh_cookie_name
-_REFRESH_PATH = "/api/auth"
+_REFRESH_PATH = "/api/v1/auth"
 
 
 class AuthRequest(BaseModel):
@@ -104,8 +105,8 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
 
 async def _seed_intro_article(db: AsyncSession, user_id: int):
     """为新注册用户创建一篇入门文章（来自官方介绍模板）。"""
-    from src.services.blog_service import create_post
-    from src.services.official_intro_service import build_intro_post_payload
+    from src.services.blog.blog_service import create_post
+    from src.services.user.official_intro_service import build_intro_post_payload
 
     intro_data = build_intro_post_payload()
     await create_post(db, intro_data, user_id)

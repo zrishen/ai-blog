@@ -19,7 +19,7 @@ from src.database.models import (
     User,
 )
 from src.main import app
-from src.services import research_service
+from src.services import research as research_service
 from src.utils.auth import get_current_user
 
 
@@ -27,12 +27,13 @@ def _disable_background_research(monkeypatch):
     async def fake_execute_research_run(run_id, topic_id, user_id):
         return None
 
-    monkeypatch.setattr(research_service, "_execute_research_run", fake_execute_research_run)
+    from src.services.research import run
+    monkeypatch.setattr(run, "_execute_research_run", fake_execute_research_run)
 
 
 @pytest.mark.asyncio
 async def test_create_and_list_research_topics(client: AsyncClient):
-    create_resp = await client.post("/api/research/topics", json={
+    create_resp = await client.post("/api/v1/research/topics", json={
         "title": "AI 模型发展",
         "description": "跟踪模型发布时间、能力和争议信息。",
     })
@@ -44,7 +45,7 @@ async def test_create_and_list_research_topics(client: AsyncClient):
     assert created["claim_count"] == 0
     assert created["conflict_count"] == 0
 
-    list_resp = await client.get("/api/research/topics")
+    list_resp = await client.get("/api/v1/research/topics")
     assert list_resp.status_code == 200
     topics = list_resp.json()
     assert len(topics) == 1
@@ -54,12 +55,12 @@ async def test_create_and_list_research_topics(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_run_research_topic_is_idempotent(client: AsyncClient, monkeypatch):
     _disable_background_research(monkeypatch)
-    topic_resp = await client.post("/api/research/topics", json={"title": "可信写作"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "可信写作"})
     topic_id = topic_resp.json()["id"]
 
     headers = {"Idempotency-Key": "same-run"}
-    first_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers=headers)
-    second_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers=headers)
+    first_resp = await client.post(f"/api/v1/research/topics/{topic_id}/run", headers=headers)
+    second_resp = await client.post(f"/api/v1/research/topics/{topic_id}/run", headers=headers)
 
     assert first_resp.status_code == 202
     assert second_resp.status_code == 202
@@ -73,12 +74,12 @@ async def test_run_research_topic_is_idempotent(client: AsyncClient, monkeypatch
 @pytest.mark.asyncio
 async def test_list_research_runs_returns_latest_first_for_owned_topic(client: AsyncClient, monkeypatch):
     _disable_background_research(monkeypatch)
-    topic_resp = await client.post("/api/research/topics", json={"title": "运行历史"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "运行历史"})
     topic_id = topic_resp.json()["id"]
-    first_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers={"Idempotency-Key": "run-a"})
-    second_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers={"Idempotency-Key": "run-b"})
+    first_resp = await client.post(f"/api/v1/research/topics/{topic_id}/run", headers={"Idempotency-Key": "run-a"})
+    second_resp = await client.post(f"/api/v1/research/topics/{topic_id}/run", headers={"Idempotency-Key": "run-b"})
 
-    runs_resp = await client.get(f"/api/research/topics/{topic_id}/runs")
+    runs_resp = await client.get(f"/api/v1/research/topics/{topic_id}/runs")
 
     assert runs_resp.status_code == 200
     runs = runs_resp.json()
@@ -89,13 +90,13 @@ async def test_list_research_runs_returns_latest_first_for_owned_topic(client: A
 @pytest.mark.asyncio
 async def test_run_research_topic_starts_with_queued_progress(client: AsyncClient, monkeypatch):
     _disable_background_research(monkeypatch)
-    topic_resp = await client.post("/api/research/topics", json={
+    topic_resp = await client.post("/api/v1/research/topics", json={
         "title": "可信 AI 写作",
         "description": "研究 RAG 如何降低 AI 幻觉。",
     })
     topic_id = topic_resp.json()["id"]
 
-    run_resp = await client.post(f"/api/research/topics/{topic_id}/run", headers={"Idempotency-Key": "complete-run"})
+    run_resp = await client.post(f"/api/v1/research/topics/{topic_id}/run", headers={"Idempotency-Key": "complete-run"})
 
     assert run_resp.status_code == 202
     run = run_resp.json()
@@ -106,7 +107,7 @@ async def test_run_research_topic_starts_with_queued_progress(client: AsyncClien
 
 @pytest.mark.asyncio
 async def test_generate_research_draft_preview_returns_stable_fields(client: AsyncClient, db_session: AsyncSession):
-    topic_resp = await client.post("/api/research/topics", json={"title": "可信写作草稿"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "可信写作草稿"})
     topic_id = topic_resp.json()["id"]
     claim = ResearchClaim(
         topic_id=topic_id,
@@ -119,7 +120,7 @@ async def test_generate_research_draft_preview_returns_stable_fields(client: Asy
     db_session.add(claim)
     await db_session.commit()
 
-    draft_resp = await client.post(f"/api/research/topics/{topic_id}/draft-preview")
+    draft_resp = await client.post(f"/api/v1/research/topics/{topic_id}/draft-preview")
 
     assert draft_resp.status_code == 200
     draft = draft_resp.json()
@@ -143,10 +144,10 @@ async def test_attach_topic_to_post_creates_research_snapshot(client: AsyncClien
     await db_session.commit()
     await db_session.refresh(post)
 
-    topic_resp = await client.post("/api/research/topics", json={"title": "文章依据"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "文章依据"})
     topic_id = topic_resp.json()["id"]
 
-    attach_resp = await client.post(f"/api/blog/posts/{post.id}/research-topics", json={"topic_id": topic_id})
+    attach_resp = await client.post(f"/api/v1/blog/posts/{post.id}/research-topics", json={"topic_id": topic_id})
     assert attach_resp.status_code == 201
     link = attach_resp.json()
     assert link["post_id"] == post.id
@@ -154,7 +155,7 @@ async def test_attach_topic_to_post_creates_research_snapshot(client: AsyncClien
     assert link["snapshot"]["version"] == 1
     assert link["snapshot"]["topic"]["id"] == topic_id
 
-    summary_resp = await client.get(f"/api/blog/posts/{post.id}/research-summary")
+    summary_resp = await client.get(f"/api/v1/blog/posts/{post.id}/research-summary")
     assert summary_resp.status_code == 200
     summary = summary_resp.json()
     assert summary["post_id"] == post.id
@@ -164,10 +165,10 @@ async def test_attach_topic_to_post_creates_research_snapshot(client: AsyncClien
 
 @pytest.mark.asyncio
 async def test_missing_evidence_claim_cannot_be_supported(client: AsyncClient):
-    topic_resp = await client.post("/api/research/topics", json={"title": "证据约束"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "证据约束"})
     topic_id = topic_resp.json()["id"]
 
-    claim_resp = await client.post(f"/api/research/topics/{topic_id}/claims", json={
+    claim_resp = await client.post(f"/api/v1/research/topics/{topic_id}/claims", json={
         "claim_text": "某模型已经发布。",
         "status": "supported",
     })
@@ -178,7 +179,7 @@ async def test_missing_evidence_claim_cannot_be_supported(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_other_user_cannot_read_or_modify_research_topic(client: AsyncClient, db_session: AsyncSession):
-    topic_resp = await client.post("/api/research/topics", json={"title": "私有主题"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "私有主题"})
     topic_id = topic_resp.json()["id"]
 
     other = User(username="other", password_hash="mock")
@@ -193,8 +194,8 @@ async def test_other_user_cannot_read_or_modify_research_topic(client: AsyncClie
 
     app.dependency_overrides[get_current_user] = override_other_user
     try:
-        get_resp = await client.get(f"/api/research/topics/{topic_id}")
-        patch_resp = await client.patch(f"/api/research/topics/{topic_id}", json={"title": "越权修改"})
+        get_resp = await client.get(f"/api/v1/research/topics/{topic_id}")
+        patch_resp = await client.patch(f"/api/v1/research/topics/{topic_id}", json={"title": "越权修改"})
     finally:
         app.dependency_overrides[get_current_user] = previous_override
 
@@ -204,7 +205,7 @@ async def test_other_user_cannot_read_or_modify_research_topic(client: AsyncClie
 
 @pytest.mark.asyncio
 async def test_ai_generated_note_evidence_cannot_support_claim(client: AsyncClient, db_session: AsyncSession):
-    topic_resp = await client.post("/api/research/topics", json={"title": "证据类型"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "证据类型"})
     topic_id = topic_resp.json()["id"]
 
     evidence = ResearchEvidence(
@@ -217,7 +218,7 @@ async def test_ai_generated_note_evidence_cannot_support_claim(client: AsyncClie
     await db_session.commit()
     await db_session.refresh(evidence)
 
-    claim_resp = await client.post(f"/api/research/topics/{topic_id}/claims", json={
+    claim_resp = await client.post(f"/api/v1/research/topics/{topic_id}/claims", json={
         "claim_text": "这个结论来自 AI note。",
         "status": "supported",
         "evidence_ids": [evidence.id],
@@ -240,7 +241,7 @@ async def test_post_research_snapshot_freezes_claim_text(client: AsyncClient, db
     await db_session.commit()
     await db_session.refresh(post)
 
-    topic_resp = await client.post("/api/research/topics", json={"title": "快照主题"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "快照主题"})
     topic_id = topic_resp.json()["id"]
     claim = ResearchClaim(
         topic_id=topic_id,
@@ -254,7 +255,7 @@ async def test_post_research_snapshot_freezes_claim_text(client: AsyncClient, db
     await db_session.commit()
     await db_session.refresh(claim)
 
-    attach_resp = await client.post(f"/api/blog/posts/{post.id}/research-topics", json={"topic_id": topic_id})
+    attach_resp = await client.post(f"/api/v1/blog/posts/{post.id}/research-topics", json={"topic_id": topic_id})
     assert attach_resp.status_code == 201
     assert attach_resp.json()["snapshot"]["claims"][0]["claim_text"] == "原始事实"
 
@@ -268,10 +269,10 @@ async def test_post_research_snapshot_freezes_claim_text(client: AsyncClient, db
 
 @pytest.mark.asyncio
 async def test_research_entity_crud_updates_topic_detail(client: AsyncClient):
-    topic_resp = await client.post("/api/research/topics", json={"title": "实体 CRUD"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "实体 CRUD"})
     topic_id = topic_resp.json()["id"]
 
-    create_resp = await client.post(f"/api/research/topics/{topic_id}/entities", json={
+    create_resp = await client.post(f"/api/v1/research/topics/{topic_id}/entities", json={
         "name": "RAG",
         "entity_type": "technology",
         "description": "检索增强生成",
@@ -285,17 +286,17 @@ async def test_research_entity_crud_updates_topic_detail(client: AsyncClient):
     assert entity["confidence"] == 91
     assert entity["aliases_json"] == ["Retrieval-Augmented Generation"]
 
-    detail_resp = await client.get(f"/api/research/topics/{topic_id}")
+    detail_resp = await client.get(f"/api/v1/research/topics/{topic_id}")
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     assert detail["entity_count"] == 1
     assert detail["entities"][0]["id"] == entity["id"]
 
-    list_resp = await client.get(f"/api/research/topics/{topic_id}/entities")
+    list_resp = await client.get(f"/api/v1/research/topics/{topic_id}/entities")
     assert list_resp.status_code == 200
     assert list_resp.json()[0]["id"] == entity["id"]
 
-    patch_resp = await client.patch(f"/api/research/entities/{entity['id']}", json={
+    patch_resp = await client.patch(f"/api/v1/research/entities/{entity['id']}", json={
         "description": "通过检索外部资料增强生成结果",
         "confidence": 96,
         "status": "active",
@@ -305,10 +306,10 @@ async def test_research_entity_crud_updates_topic_detail(client: AsyncClient):
     assert patched["description"] == "通过检索外部资料增强生成结果"
     assert patched["confidence"] == 96
 
-    delete_resp = await client.delete(f"/api/research/entities/{entity['id']}")
+    delete_resp = await client.delete(f"/api/v1/research/entities/{entity['id']}")
     assert delete_resp.status_code == 204
 
-    after_delete_resp = await client.get(f"/api/research/topics/{topic_id}")
+    after_delete_resp = await client.get(f"/api/v1/research/topics/{topic_id}")
     assert after_delete_resp.status_code == 200
     after_delete = after_delete_resp.json()
     assert after_delete["entity_count"] == 0
@@ -317,10 +318,10 @@ async def test_research_entity_crud_updates_topic_detail(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_claim_entity_names_create_links_and_mentions_relation(client: AsyncClient):
-    topic_resp = await client.post("/api/research/topics", json={"title": "Claim 实体绑定"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "Claim 实体绑定"})
     topic_id = topic_resp.json()["id"]
 
-    claim_resp = await client.post(f"/api/research/topics/{topic_id}/claims", json={
+    claim_resp = await client.post(f"/api/v1/research/topics/{topic_id}/claims", json={
         "claim_text": "RAG 可以通过检索外部资料降低 AI 幻觉风险。",
         "entity_names": ["RAG", "AI 幻觉"],
     })
@@ -328,7 +329,7 @@ async def test_claim_entity_names_create_links_and_mentions_relation(client: Asy
     claim = claim_resp.json()
     assert len(claim["entity_ids"]) == 2
 
-    detail_resp = await client.get(f"/api/research/topics/{topic_id}")
+    detail_resp = await client.get(f"/api/v1/research/topics/{topic_id}")
     assert detail_resp.status_code == 200
     detail = detail_resp.json()
     entity_by_name = {entity["name"]: entity for entity in detail["entities"]}
@@ -349,7 +350,7 @@ async def test_claim_entity_names_create_links_and_mentions_relation(client: Asy
 
 @pytest.mark.asyncio
 async def test_applied_proposals_create_entities_and_claim_entity_links(client: AsyncClient, db_session: AsyncSession):
-    topic_resp = await client.post("/api/research/topics", json={"title": "实体提案"})
+    topic_resp = await client.post("/api/v1/research/topics", json={"title": "实体提案"})
     topic_id = topic_resp.json()["id"]
 
     entity_proposal = ResearchProposal(
@@ -370,7 +371,7 @@ async def test_applied_proposals_create_entities_and_claim_entity_links(client: 
     await db_session.commit()
     await db_session.refresh(entity_proposal)
 
-    apply_entity_resp = await client.patch(f"/api/research/proposals/{entity_proposal.id}", json={"status": "applied"})
+    apply_entity_resp = await client.patch(f"/api/v1/research/proposals/{entity_proposal.id}", json={"status": "applied"})
     assert apply_entity_resp.status_code == 200
 
     entity_result = await db_session.execute(
@@ -396,7 +397,7 @@ async def test_applied_proposals_create_entities_and_claim_entity_links(client: 
     await db_session.commit()
     await db_session.refresh(claim_proposal)
 
-    apply_claim_resp = await client.patch(f"/api/research/proposals/{claim_proposal.id}", json={"status": "applied"})
+    apply_claim_resp = await client.patch(f"/api/v1/research/proposals/{claim_proposal.id}", json={"status": "applied"})
     assert apply_claim_resp.status_code == 200
 
     claim_result = await db_session.execute(
@@ -425,7 +426,7 @@ async def test_applied_proposals_create_entities_and_claim_entity_links(client: 
 
 @pytest.mark.asyncio
 async def test_attach_adopted_claims_for_topic_to_post_links_only_adopted_claims(db_session: AsyncSession):
-    from src.services.research_service import attach_adopted_claims_for_topic_to_post, get_blog_research_summary
+    from src.services.research import attach_adopted_claims_for_topic_to_post, get_blog_research_summary
 
     post = BlogPost(title="可信写作草稿", slug="trusted-draft", content="内容", status="draft", user_id=1)
     topic = ResearchTopic(title="可信写作主题", status="draft", user_id=1)
@@ -472,8 +473,8 @@ async def test_attach_adopted_claims_for_topic_to_post_links_only_adopted_claims
 @pytest.mark.asyncio
 async def test_chat_blog_tool_end_auto_links_research_context(monkeypatch, db_session: AsyncSession):
     from tests.conftest import TestSessionLocal
-    from src.services import chat_service
-    from src.services.research_service import get_blog_research_summary
+    from src.services.chat import references as chat_service
+    from src.services.research import get_blog_research_summary
 
     post = BlogPost(title="AI 生成文章", slug="ai-generated-post", content="内容", status="draft", user_id=1)
     topic = ResearchTopic(title="AI 写作主题", status="draft", user_id=1)
@@ -599,7 +600,7 @@ async def _create_conflict_fixture(db_session: AsyncSession):
 async def test_resolve_conflict_accepts_from_claim_and_rejects_to_claim(client: AsyncClient, db_session: AsyncSession):
     _, from_claim, to_claim, conflict = await _create_conflict_fixture(db_session)
 
-    resolve_resp = await client.post(f"/api/research/conflicts/{conflict.id}/resolve", json={
+    resolve_resp = await client.post(f"/api/v1/research/conflicts/{conflict.id}/resolve", json={
         "accepted_claim_id": from_claim.id,
         "rejected_claim_id": to_claim.id,
     })
@@ -622,7 +623,7 @@ async def test_resolve_conflict_accepts_from_claim_and_rejects_to_claim(client: 
 async def test_resolve_conflict_accepts_to_claim_and_rejects_from_claim(client: AsyncClient, db_session: AsyncSession):
     _, from_claim, to_claim, conflict = await _create_conflict_fixture(db_session)
 
-    resolve_resp = await client.post(f"/api/research/conflicts/{conflict.id}/resolve", json={
+    resolve_resp = await client.post(f"/api/v1/research/conflicts/{conflict.id}/resolve", json={
         "accepted_claim_id": to_claim.id,
         "rejected_claim_id": from_claim.id,
     })
@@ -654,7 +655,7 @@ async def test_resolve_conflict_requires_evidence_for_accepted_claim(client: Asy
         await db_session.delete(relation)
     await db_session.commit()
 
-    resolve_resp = await client.post(f"/api/research/conflicts/{conflict.id}/resolve", json={
+    resolve_resp = await client.post(f"/api/v1/research/conflicts/{conflict.id}/resolve", json={
         "accepted_claim_id": from_claim.id,
         "rejected_claim_id": to_claim.id,
     })
@@ -685,7 +686,7 @@ async def test_resolve_conflict_rejects_claim_ids_outside_relation(client: Async
     await db_session.commit()
     await db_session.refresh(unrelated_claim)
 
-    resolve_resp = await client.post(f"/api/research/conflicts/{conflict.id}/resolve", json={
+    resolve_resp = await client.post(f"/api/v1/research/conflicts/{conflict.id}/resolve", json={
         "accepted_claim_id": from_claim.id,
         "rejected_claim_id": unrelated_claim.id,
     })
@@ -709,7 +710,7 @@ async def test_other_user_cannot_resolve_research_conflict(client: AsyncClient, 
 
     app.dependency_overrides[get_current_user] = override_other_user
     try:
-        resolve_resp = await client.post(f"/api/research/conflicts/{conflict.id}/resolve", json={
+        resolve_resp = await client.post(f"/api/v1/research/conflicts/{conflict.id}/resolve", json={
             "accepted_claim_id": from_claim.id,
             "rejected_claim_id": to_claim.id,
         })

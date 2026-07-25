@@ -21,8 +21,8 @@ from src.config import settings
 from src.database.engine import get_db
 from src.database.models import RefreshToken, User
 
-_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-_optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+_optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 def hash_password(password: str) -> str:

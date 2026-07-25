@@ -10,7 +10,7 @@ from src.database.models import BlogPost, User
 
 @pytest.mark.asyncio
 async def test_public_chat_does_not_send_invalid_reasoning_effort(monkeypatch):
-    from src.services import public_chat_service
+    from src.services.public_chat import public_chat_service
 
     captured = {}
 
@@ -36,7 +36,7 @@ async def test_public_chat_does_not_send_invalid_reasoning_effort(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_public_chat_strips_protocol_reasoning_markers(monkeypatch):
-    from src.services import public_chat_service
+    from src.services.public_chat import public_chat_service
 
     class FakeLLM:
         async def astream(self, messages):
@@ -64,7 +64,7 @@ async def test_public_chat_strips_protocol_reasoning_markers(monkeypatch):
 
 
 def test_public_strip_keeps_remainder_for_marker_split_across_chunks():
-    from src.services.public_chat_service import _strip_public_protocol_markers
+    from src.services.public_chat.public_chat_service import _strip_public_protocol_markers
 
     # chunk 切在标记 JSON 中间：不截断，保留为 remainder 等下一 chunk
     clean, remainder = _strip_public_protocol_markers('TOOLDONE{"stat')
@@ -78,7 +78,7 @@ def test_public_strip_keeps_remainder_for_marker_split_across_chunks():
 
 
 def test_public_strip_final_does_not_truncate_incomplete_marker():
-    from src.services.public_chat_service import _strip_public_protocol_markers
+    from src.services.public_chat.public_chat_service import _strip_public_protocol_markers
 
     # 流结束仍不完整的标记：作为普通文本输出，绝不丢弃后续内容
     clean, _ = _strip_public_protocol_markers('前文TOOLDONE{"不完整', final=True)
@@ -88,7 +88,7 @@ def test_public_strip_final_does_not_truncate_incomplete_marker():
 
 @pytest.mark.asyncio
 async def test_public_chat_context_excludes_deleted_posts(db_session: AsyncSession):
-    from src.services.public_chat_service import _user_public_context
+    from src.services.public_chat.public_chat_service import _user_public_context
 
     owner = User(username="public-context-user", password_hash="mock")
     db_session.add(owner)

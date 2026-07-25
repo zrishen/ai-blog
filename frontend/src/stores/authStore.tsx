@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 启动恢复：access token 在内存（刷新页面即丢失），用 HttpOnly cookie 里的 refresh token 换新 access。
     (async () => {
       try {
-        const resp = await fetch("/api/auth/refresh", { method: "POST", credentials: "include" });
+        const resp = await fetch("/api/v1/auth/refresh", { method: "POST", credentials: "include" });
         if (resp.ok) {
           const data = (await resp.json()) as { access_token?: string; user?: AuthUser };
           if (data.access_token && data.user && !cancelled) {
@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     // 通知后端吊销 refresh token 记录并清除 cookie；即便请求失败也立即清前端登录态。
-    void fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    void fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     setAccessToken(null);
     setState(UNAUTHENTICATED);
   };

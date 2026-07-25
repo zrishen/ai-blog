@@ -1,13 +1,10 @@
 """文件库检索 LangChain 工具 + RAG 辅助函数。"""
 
 import asyncio
-import logging
 
 from langchain_core.tools import tool
 
 from src.config import settings
-
-logger = logging.getLogger(__name__)
 
 RAG_MAX_CONTEXT_CHARS = 6000
 
@@ -45,7 +42,7 @@ async def _search_collections(
     query: str,
     query_embedding: list[float],
 ) -> list[tuple[str, object]]:
-    from src.services.vector_store import search
+    from src.services.rag.vector_store import search
 
     async def search_one(name: str, stored_names: set[str]) -> list[tuple[str, object]]:
         try:
@@ -147,7 +144,7 @@ def _format_empty_rag_context(reason: str) -> str:
 async def base_search_file(query: str) -> str:
     """搜索文件库中的文件内容。当需要查找已上传的文件、文件库文档时使用此工具。
     参数 query: 搜索查询字符串。"""
-    from src.services.embedding_service import get_embeddings
+    from src.services.rag.embedding_service import get_embeddings
     from src.tools.blog import current_user_id_cv
 
     user_id = current_user_id_cv.get()

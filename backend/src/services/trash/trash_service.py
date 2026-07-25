@@ -43,15 +43,15 @@ from src.schemas.trash import (
     TrashFailedItem,
     TrashItem,
 )
-from src.services.chat_attachment_service import _resolve_stored_path
-from src.services.file_processing_service import (
+from src.services.chat.chat_attachment_service import _resolve_stored_path
+from src.services.file.file_processing_service import (
     create_or_reuse_restore_job,
     has_active_restore,
     schedule_job,
 )
-from src.services.file_service import get_user_upload_dir
-from src.services.markdown_blog_service import delete_post_file
-from src.services.vector_store import delete_document_chunks
+from src.services.file.file_service import get_user_upload_dir
+from src.services.blog.markdown_blog_service import delete_post_file
+from src.services.rag.vector_store import delete_document_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -100,12 +100,13 @@ def _is_external_or_empty(value: Optional[str]) -> bool:
     return False
 
 
-_UPLOAD_REF_RE = re.compile(r"^/api/(?:public/)?uploads/(?:([^/]+)/)?([^/]+)$")
-_COVER_REF_RE = re.compile(r"^/api/blog/cover/([^/]+)$")
+# 兼容 /api/ 与 /api/v1/ 两种前缀：API 版本化迁移后，历史 markdown 内可能仍存旧前缀引用。
+_UPLOAD_REF_RE = re.compile(r"^/api(?:/v1)?/(?:public/)?uploads/(?:([^/]+)/)?([^/]+)$")
+_COVER_REF_RE = re.compile(r"^/api(?:/v1)?/blog/cover/([^/]+)$")
 
 
 def _extract_local_filename(value: str) -> Optional[str]:
-    """从 /api/uploads/{name}、/api/public/uploads/{user}/{name}、/api/blog/cover/{name}
+    """从 /api/[v1/]uploads/{name}、/api/[v1/]public/uploads/{user}/{name}、/api/[v1/]blog/cover/{name}
     或纯文件名中提取并校验最终的 stored filename。
 
     返回 None 表示该引用不是用户本地文件，不应被删除。
@@ -265,10 +266,6 @@ def _not_found_error() -> HTTPException:
 
 def _conflict_error(code: str, message: str) -> HTTPException:
     return HTTPException(status_code=409, detail=f"{code}: {message}")
-
-
-def _purge_error(message: str) -> HTTPException:
-    return HTTPException(status_code=500, detail=f"PURGE_FAILED: {message}")
 
 
 async def _restore_conversation(db: AsyncSession, *, item_id: int, user_id: int) -> TrashItem:

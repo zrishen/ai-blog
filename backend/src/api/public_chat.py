@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.engine import get_db
-from src.services.public_chat_service import public_stream_chat
-from src.services.public_chat_rate_limit_service import consume_public_chat_request
+from src.services.public_chat.public_chat_service import public_stream_chat
+from src.services.public_chat.public_chat_rate_limit_service import consume_public_chat_request
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

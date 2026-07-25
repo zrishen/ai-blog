@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.models import BlogPost, User
-from src.services.chat_service import _create_llm
-from src.services.llm_settings_service import build_llm_model_kwargs
-from src.services.official_intro_service import build_intro_post_payload
+from src.services.chat.llm_factory import _create_llm
+from src.services.llm.llm_settings_service import build_llm_model_kwargs
+from src.services.user.official_intro_service import build_intro_post_payload
 
 logger = logging.getLogger(__name__)
 

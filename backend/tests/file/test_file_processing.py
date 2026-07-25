@@ -15,8 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.files import upload_to_file_library
 from src.database.models import FileCategory, FileDocument, FileProcessingJob, User
 from src.main import app
-from src.services import file_processing_service, file_service
-from src.services.file_processing_service import (
+from src.services.file import file_processing_service, file_service
+from src.services.file.file_processing_service import (
     PROGRESS_MODELS,
     STALE_RUNNING_AFTER,
     _claim_job,
@@ -68,7 +68,7 @@ async def test_upload_returns_202_before_document_is_visible(
     db_session: AsyncSession,
 ):
     response = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("queued.pdf", io.BytesIO(b"%PDF-1.4 queued"), "application/pdf")},
         headers=_request_headers(),
     )
@@ -90,20 +90,20 @@ async def test_upload_returns_202_before_document_is_visible(
 @pytest.mark.asyncio
 async def test_upload_requires_uuid_header_and_rejects_empty_file(client: AsyncClient):
     missing = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("x.pdf", io.BytesIO(b"x"), "application/pdf")},
     )
     assert missing.status_code == 422
 
     invalid = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("x.pdf", io.BytesIO(b"x"), "application/pdf")},
         headers={"X-File-Request-Id": "not-a-uuid"},
     )
     assert invalid.status_code == 400
 
     empty = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("empty.pdf", io.BytesIO(b""), "application/pdf")},
         headers=_request_headers(),
     )
@@ -116,7 +116,7 @@ async def test_upload_enforces_actual_chunked_size_limit(client: AsyncClient, mo
     monkeypatch.setattr(file_service, "MAX_FILE_SIZE", 3)
     monkeypatch.setattr("src.api.files.MAX_FILE_SIZE", 3)
     response = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("large.pdf", io.BytesIO(b"1234"), "application/pdf")},
         headers=_request_headers(),
     )
@@ -175,12 +175,12 @@ async def test_upload_request_id_is_idempotent_and_job_list_filters(client: Asyn
     request_id = str(uuid.uuid4())
     headers = {"X-File-Request-Id": request_id}
     first = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("first.pdf", io.BytesIO(b"%PDF-1.4 first"), "application/pdf")},
         headers=headers,
     )
     second = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("second.pdf", io.BytesIO(b"%PDF-1.4 second"), "application/pdf")},
         headers=headers,
     )
@@ -189,14 +189,14 @@ async def test_upload_request_id_is_idempotent_and_job_list_filters(client: Asyn
     assert second.json()["id"] == first.json()["id"]
 
     filtered = await client.get(
-        "/api/files/processing-jobs",
+        "/api/v1/files/processing-jobs",
         params={"active_only": "true", "client_request_id": request_id},
     )
     assert filtered.status_code == 200
     assert [job["id"] for job in filtered.json()] == [first.json()["id"]]
 
     conflict = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("other.pdf", io.BytesIO(b"%PDF-1.4 other"), "application/pdf")},
         headers=_request_headers(),
     )
@@ -207,7 +207,7 @@ async def test_upload_request_id_is_idempotent_and_job_list_filters(client: Asyn
 @pytest.mark.asyncio
 async def test_processing_job_query_is_user_isolated(client: AsyncClient):
     response = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("private.pdf", io.BytesIO(b"%PDF-1.4 private"), "application/pdf")},
         headers=_request_headers(),
     )
@@ -219,8 +219,8 @@ async def test_processing_job_query_is_user_isolated(client: AsyncClient):
     original = app.dependency_overrides.get(get_current_user)
     try:
         app.dependency_overrides[get_current_user] = other_user
-        assert (await client.get(f"/api/files/processing-jobs/{job_id}")).status_code == 404
-        assert (await client.get("/api/files/processing-jobs")).json() == []
+        assert (await client.get(f"/api/v1/files/processing-jobs/{job_id}")).status_code == 404
+        assert (await client.get("/api/v1/files/processing-jobs")).json() == []
     finally:
         if original is None:
             app.dependency_overrides.pop(get_current_user, None)
@@ -234,7 +234,7 @@ async def test_claim_job_only_claims_queued_job_once(
     db_session: AsyncSession,
 ):
     response = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("claim.pdf", io.BytesIO(b"%PDF-1.4 claim"), "application/pdf")},
         headers=_request_headers(),
     )
@@ -339,7 +339,7 @@ async def test_upload_failure_cleans_document_chunks_and_file(
     monkeypatch,
 ):
     response = await client.post(
-        "/api/files/documents",
+        "/api/v1/files/documents",
         files={"file": ("failure.pdf", io.BytesIO(b"%PDF-1.4 failure"), "application/pdf")},
         headers=_request_headers(),
     )
@@ -395,7 +395,7 @@ async def test_deleted_category_does_not_block_restore_finalize(
     await db_session.commit()
     category_id, doc_id = category.id, doc.id
 
-    deleted = await client.delete(f"/api/files/categories/{category_id}")
+    deleted = await client.delete(f"/api/v1/files/categories/{category_id}")
     assert deleted.status_code == 200
     db_session.expire_all()
     uncategorized = await db_session.get(FileDocument, doc_id)
@@ -403,7 +403,7 @@ async def test_deleted_category_does_not_block_restore_finalize(
     # 由恢复 finalize 阶段检测分类不存在时清空。
     assert uncategorized.category_id == category_id
 
-    restored = await client.post(f"/api/trash/file_document/{doc_id}/restore")
+    restored = await client.post(f"/api/v1/trash/file_document/{doc_id}/restore")
     assert restored.status_code == 202
     await _run_job(restored.json()["id"])
     db_session.expire_all()
@@ -433,15 +433,15 @@ async def test_active_restore_blocks_purge_and_empty_trash_is_partial(
     await db_session.commit()
     await db_session.refresh(doc)
 
-    restore = await client.post(f"/api/trash/file_document/{doc.id}/restore")
+    restore = await client.post(f"/api/v1/trash/file_document/{doc.id}/restore")
     assert restore.status_code == 202
     assert restore.json()["job_type"] == "restore"
 
-    purge = await client.delete(f"/api/trash/file_document/{doc.id}")
+    purge = await client.delete(f"/api/v1/trash/file_document/{doc.id}")
     assert purge.status_code == 409
     assert purge.json()["detail"].startswith("FILE_PROCESSING_ACTIVE:")
 
-    empty = await client.delete("/api/trash")
+    empty = await client.delete("/api/v1/trash")
     assert empty.status_code == 200
     assert empty.json()["status"] == "partial"
     assert any(item["code"] == "FILE_PROCESSING_ACTIVE" for item in empty.json()["failed"])

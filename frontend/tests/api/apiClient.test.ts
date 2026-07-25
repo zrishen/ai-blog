@@ -458,7 +458,7 @@ describe("简单 API 函数：URL 与 payload", () => {
     );
     await createConversation("New Chat");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/conversations",
+      "/api/v1/conversations",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ title: "New Chat" }),
@@ -470,7 +470,7 @@ describe("简单 API 函数：URL 与 payload", () => {
     fetchMock.mockResolvedValueOnce(new Response("", { status: 200 }));
     await deleteConversation(123);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/conversations/123",
+      "/api/v1/conversations/123",
       expect.objectContaining({ method: "DELETE" }),
     );
   });
@@ -481,7 +481,7 @@ describe("简单 API 函数：URL 与 payload", () => {
     );
     await getMessages(42);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/conversations/42/messages",
+      "/api/v1/conversations/42/messages",
       expect.objectContaining({}),
     );
   });

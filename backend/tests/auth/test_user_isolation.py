@@ -10,8 +10,8 @@ from sqlalchemy import select
 from src.config import settings
 from src.database.models import BlogPost as BlogPostModel
 from src.main import app
-from src.services import file_service
-from src.services.file_service import get_user_upload_dir
+from src.services.file import file_service
+from src.services.file.file_service import get_user_upload_dir
 from src.utils.auth import get_current_user, get_optional_user
 
 
@@ -42,7 +42,7 @@ def isolated_dirs(tmp_path, monkeypatch):
 
 
 async def _register(client: AsyncClient, username: str) -> tuple[str, int]:
-    resp = await client.post("/api/auth/register", json={
+    resp = await client.post("/api/v1/auth/register", json={
         "username": username,
         "password": "test1234",
         "invite_code": settings.registration_invite_code,
@@ -53,7 +53,7 @@ async def _register(client: AsyncClient, username: str) -> tuple[str, int]:
 
 
 async def _login(client: AsyncClient, username: str) -> str:
-    resp = await client.post("/api/auth/login", json={
+    resp = await client.post("/api/v1/auth/login", json={
         "username": username,
         "password": "test1234",
     })
@@ -68,7 +68,7 @@ async def test_draft_post_is_hidden_from_other_user(client: AsyncClient):
     owner_token, owner_id = await _register(client, "owner_user")
     headers = {"Authorization": f"Bearer {owner_token}"}
 
-    create_resp = await client.post("/api/blog/posts", headers=headers, json={
+    create_resp = await client.post("/api/v1/blog/posts", headers=headers, json={
         "title": "私有草稿",
         "content": "不可见",
         "status": "draft",
@@ -79,11 +79,11 @@ async def test_draft_post_is_hidden_from_other_user(client: AsyncClient):
     other_token, _ = await _register(client, "other_user")
     other_headers = {"Authorization": f"Bearer {other_token}"}
 
-    resp = await client.get(f"/api/blog/posts/{post_id}", headers=other_headers)
+    resp = await client.get(f"/api/v1/blog/posts/{post_id}", headers=other_headers)
     assert resp.status_code == 404
 
     # 匿名访问同样不可见
-    anon_resp = await client.get(f"/api/blog/posts/{post_id}")
+    anon_resp = await client.get(f"/api/v1/blog/posts/{post_id}")
     assert anon_resp.status_code == 404
 
 
@@ -92,7 +92,7 @@ async def test_other_user_cannot_update_or_delete_post(client: AsyncClient, db_s
     owner_token, _ = await _register(client, "owner_user2")
     headers = {"Authorization": f"Bearer {owner_token}"}
 
-    create_resp = await client.post("/api/blog/posts", headers=headers, json={
+    create_resp = await client.post("/api/v1/blog/posts", headers=headers, json={
         "title": "原标题",
         "content": "原内容",
     })
@@ -102,13 +102,13 @@ async def test_other_user_cannot_update_or_delete_post(client: AsyncClient, db_s
     other_headers = {"Authorization": f"Bearer {other_token}"}
 
     # 尝试更新他人文章
-    update_resp = await client.put(f"/api/blog/posts/{post_id}", headers=other_headers, json={
+    update_resp = await client.put(f"/api/v1/blog/posts/{post_id}", headers=other_headers, json={
         "title": "篡改标题",
     })
     assert update_resp.status_code == 404
 
     # 尝试删除他人文章
-    delete_resp = await client.delete(f"/api/blog/posts/{post_id}", headers=other_headers)
+    delete_resp = await client.delete(f"/api/v1/blog/posts/{post_id}", headers=other_headers)
     assert delete_resp.status_code == 404
 
     # 数据未受影响
@@ -122,7 +122,7 @@ async def test_other_user_cannot_publish_or_unpublish_post(client: AsyncClient):
     owner_token, _ = await _register(client, "owner_pub")
     headers = {"Authorization": f"Bearer {owner_token}"}
 
-    create_resp = await client.post("/api/blog/posts", headers=headers, json={
+    create_resp = await client.post("/api/v1/blog/posts", headers=headers, json={
         "title": "待发布",
         "content": "内容",
         "status": "draft",
@@ -133,7 +133,7 @@ async def test_other_user_cannot_publish_or_unpublish_post(client: AsyncClient):
     other_headers = {"Authorization": f"Bearer {other_token}"}
 
     resp = await client.put(
-        f"/api/blog/posts/{post_id}/publish",
+        f"/api/v1/blog/posts/{post_id}/publish",
         headers=other_headers,
         json={"publish": True},
     )
@@ -149,11 +149,11 @@ async def test_blog_markdown_files_are_separated_per_user(client: AsyncClient):
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
-    resp_a = await client.post("/api/blog/posts", headers=headers_a, json={
+    resp_a = await client.post("/api/v1/blog/posts", headers=headers_a, json={
         "title": "A 的文章",
         "content": "a",
     })
-    resp_b = await client.post("/api/blog/posts", headers=headers_b, json={
+    resp_b = await client.post("/api/v1/blog/posts", headers=headers_b, json={
         "title": "B 的文章",
         "content": "b",
     })
@@ -191,11 +191,11 @@ async def test_same_slug_can_coexist_across_users(client: AsyncClient, db_sessio
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
     # 两用户分别创建相同标题，slug 应一致
-    resp_a = await client.post("/api/blog/posts", headers=headers_a, json={
+    resp_a = await client.post("/api/v1/blog/posts", headers=headers_a, json={
         "title": "重复标题",
         "content": "a",
     })
-    resp_b = await client.post("/api/blog/posts", headers=headers_b, json={
+    resp_b = await client.post("/api/v1/blog/posts", headers=headers_b, json={
         "title": "重复标题",
         "content": "b",
     })
@@ -222,7 +222,7 @@ async def test_uploaded_files_are_isolated_per_user(client: AsyncClient):
 
     files_a = {"file": ("a.pdf", io.BytesIO(b"%PDF-1.4 a"), "application/pdf")}
     resp_a = await client.post(
-        "/api/upload",
+        "/api/v1/upload",
         headers={"Authorization": f"Bearer {token_a}"},
         files=files_a,
     )
@@ -231,7 +231,7 @@ async def test_uploaded_files_are_isolated_per_user(client: AsyncClient):
 
     files_b = {"file": ("b.pdf", io.BytesIO(b"%PDF-1.4 b"), "application/pdf")}
     resp_b = await client.post(
-        "/api/upload",
+        "/api/v1/upload",
         headers={"Authorization": f"Bearer {token_b}"},
         files=files_b,
     )
@@ -247,7 +247,7 @@ async def test_uploaded_files_are_isolated_per_user(client: AsyncClient):
 
     # B 用户无法通过 /api/uploads/{filename} 访问 A 的文件
     leak_resp = await client.get(
-        f"/api/uploads/{stored_a}",
+        f"/api/v1/uploads/{stored_a}",
         headers={"Authorization": f"Bearer {token_b}"},
     )
     assert leak_resp.status_code == 404

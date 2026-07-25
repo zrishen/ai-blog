@@ -32,7 +32,7 @@ def isolated_blog_dir(tmp_path, monkeypatch):
 
 
 async def _register(client: AsyncClient, username: str) -> tuple[str, int]:
-    resp = await client.post("/api/auth/register", json={
+    resp = await client.post("/api/v1/auth/register", json={
         "username": username,
         "password": "test1234",
         "invite_code": settings.registration_invite_code,
@@ -46,7 +46,7 @@ async def test_unknown_protocol_falls_back_to_openai(client: AsyncClient):
     token, _ = await _register(client, "unknown_proto")
     headers = {"Authorization": f"Bearer {token}"}
 
-    resp = await client.put("/api/settings/llm", headers=headers, json={
+    resp = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "gemini",
         "model": "some-model",
     })
@@ -60,7 +60,7 @@ async def test_empty_api_key_does_not_overwrite_existing(client: AsyncClient, db
     headers = {"Authorization": f"Bearer {token}"}
 
     # 首次设置 api_key
-    resp = await client.put("/api/settings/llm", headers=headers, json={
+    resp = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "openai",
         "api_key": "first-key",
         "model": "m",
@@ -69,7 +69,7 @@ async def test_empty_api_key_does_not_overwrite_existing(client: AsyncClient, db
     assert resp.json()["has_api_key"] is True
 
     # 再次更新其他字段但传空 api_key，原 api_key 应保留
-    resp2 = await client.put("/api/settings/llm", headers=headers, json={
+    resp2 = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "openai",
         "api_key": "",
         "model": "new-model",
@@ -92,13 +92,13 @@ async def test_settings_are_isolated_per_user(client: AsyncClient, db_session):
     headers_a = {"Authorization": f"Bearer {token_a}"}
     headers_b = {"Authorization": f"Bearer {token_b}"}
 
-    await client.put("/api/settings/llm", headers=headers_a, json={
+    await client.put("/api/v1/settings/llm", headers=headers_a, json={
         "protocol": "anthropic",
         "base_url": "https://a.example.com",
         "api_key": "key-a",
         "model": "model-a",
     })
-    await client.put("/api/settings/llm", headers=headers_b, json={
+    await client.put("/api/v1/settings/llm", headers=headers_b, json={
         "protocol": "openai",
         "base_url": "https://b.example.com",
         "api_key": "key-b",
@@ -118,8 +118,8 @@ async def test_settings_are_isolated_per_user(client: AsyncClient, db_session):
     assert rec_a.protocol == "anthropic"
     assert rec_b.protocol == "openai"
 
-    resp_a = await client.get("/api/settings/llm", headers=headers_a)
-    resp_b = await client.get("/api/settings/llm", headers=headers_b)
+    resp_a = await client.get("/api/v1/settings/llm", headers=headers_a)
+    resp_b = await client.get("/api/v1/settings/llm", headers=headers_b)
     assert resp_a.json()["api_key"] == "key-a"
     assert resp_b.json()["api_key"] == "key-b"
 
@@ -129,7 +129,7 @@ async def test_get_settings_returns_default_for_new_user(client: AsyncClient):
     token, _ = await _register(client, "fresh_user")
     headers = {"Authorization": f"Bearer {token}"}
 
-    resp = await client.get("/api/settings/llm", headers=headers)
+    resp = await client.get("/api/v1/settings/llm", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["protocol"] == "openai"
@@ -141,10 +141,10 @@ async def test_get_settings_returns_default_for_new_user(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_settings_requires_auth(client: AsyncClient):
-    resp = await client.get("/api/settings/llm")
+    resp = await client.get("/api/v1/settings/llm")
     assert resp.status_code in (401, 403)
 
-    resp = await client.put("/api/settings/llm", json={"protocol": "openai"})
+    resp = await client.put("/api/v1/settings/llm", json={"protocol": "openai"})
     assert resp.status_code in (401, 403)
 
 
@@ -153,7 +153,7 @@ async def test_whitespace_in_inputs_is_trimmed(client: AsyncClient, db_session):
     token, user_id = await _register(client, "trim_user")
     headers = {"Authorization": f"Bearer {token}"}
 
-    resp = await client.put("/api/settings/llm", headers=headers, json={
+    resp = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "  OpenAI  ",
         "base_url": "   https://spaced.example.com   ",
         "api_key": "  key-with-spaces  ",

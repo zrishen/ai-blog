@@ -15,10 +15,10 @@ from src.schemas.conversation import (
     ConversationResponse,
     MessageResponse,
 )
-from src.database.engine import (
+from src.services.conversation.conversation_service import (
     delete_conversation,
-    list_conversations,
     get_messages,
+    list_conversations,
 )
 from src.utils.auth import get_current_user
 

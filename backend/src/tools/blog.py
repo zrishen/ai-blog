@@ -1,22 +1,16 @@
 """博客 LangChain 工具 — 文章 CRUD + 精准替换。"""
 
-import contextvars
 import logging
 from datetime import datetime, timezone
 
 from langchain_core.tools import tool
 from sqlalchemy import select
 
+from src.core.context import current_user_id_cv
 from src.database.session import async_session
 from src.database.models import BlogPost as BlogPostModel
 
 logger = logging.getLogger(__name__)
-
-# 用户上下文:由 chat_service 在执行 Agent 前设置。
-# file.py / research.py 也从此导入,保持单一来源。
-current_user_id_cv: contextvars.ContextVar[int | None] = contextvars.ContextVar(
-    "current_user_id", default=None
-)
 
 
 @tool
@@ -27,7 +21,7 @@ async def blog_create_post(title: str, tags: str = "", excerpt: str = "") -> str
     参数 title: 文章标题（必填）。标题会单独显示在页面顶部。
     参数 tags: 标签，逗号分隔，如 "ai, agent"。
     参数 excerpt: 文章摘要（可选）。"""
-    from src.services.markdown_blog_service import (
+    from src.services.blog.markdown_blog_service import (
         slug_from_title,
         ensure_unique_slug,
         write_post,
@@ -88,7 +82,7 @@ async def blog_write_post(
     参数 tags: 新标签，逗号分隔（可选）。
     参数 status: 新状态 draft/published（可选）。
     参数 excerpt: 新摘要（可选）。"""
-    from src.services.markdown_blog_service import (
+    from src.services.blog.markdown_blog_service import (
         read_post_by_slug,
         write_post,
         sync_file_to_db,
@@ -141,7 +135,7 @@ async def blog_write_post(
         if updated is None:
             return f"文章更新失败: id={post_id}"
         if stale_slug:
-            from src.services.markdown_blog_service import delete_post_file
+            from src.services.blog.markdown_blog_service import delete_post_file
 
             delete_post_file(stale_slug, user_id)
         return (
@@ -163,8 +157,8 @@ async def blog_edit_post(
     参数 target_text: 需要被替换的原文片段（必填），必须与正文中完全一致。
     参数 replacement_text: 替换后的新文本（必填）。
     参数 section_index: 章节序号（可选，从 1 开始，来自 outline 或上下文）。传入后只在该章节范围内匹配 target_text，章节内唯一即可替换，避免全文重复时被拒绝。"""
-    from src.services.markdown_ast_service import get_section_char_range, parse_to_blocks
-    from src.services.markdown_blog_service import read_post_by_slug, write_post, sync_file_to_db
+    from src.services.markdown.markdown_ast_service import get_section_char_range, parse_to_blocks
+    from src.services.blog.markdown_blog_service import read_post_by_slug, write_post, sync_file_to_db
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -240,7 +234,7 @@ async def blog_delete_post(post_id: int) -> str:
     """将指定的博客文章移入回收站。
     当用户要求删除、移除博客文章时优先使用此工具。
     参数 post_id: 文章的数据库 ID（必填）。"""
-    from src.services.blog_service import delete_post, get_owned_post
+    from src.services.blog.blog_service import delete_post, get_owned_post
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -265,8 +259,8 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
     参数 post_id: 文章 ID；大于 0 时只搜索该文章正文，默认 0 表示搜索文章列表。
     参数 status: 搜索文章列表时按状态筛选，draft（草稿）或 published（发布），留空则全部搜索。
     参数 page: 搜索文章列表时的页码，默认第 1 页，每页 20 篇。"""
-    from src.services.markdown_ast_service import extract_outline, get_section_text, parse_to_blocks
-    from src.services.markdown_blog_service import read_post_by_slug
+    from src.services.markdown.markdown_ast_service import extract_outline, get_section_text, parse_to_blocks
+    from src.services.blog.markdown_blog_service import read_post_by_slug
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -377,7 +371,7 @@ def _search_snippets(text: str, keyword: str, radius: int = 60) -> list[str]:
 
 
 async def _read_post_full(post_id: int) -> str:
-    from src.services.markdown_blog_service import read_post_by_slug
+    from src.services.blog.markdown_blog_service import read_post_by_slug
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -423,7 +417,7 @@ async def _get_post_blocks(post_id: int) -> tuple[BlogPostModel | None, list[dic
         blocks = post.blocks_json or []
         if not blocks and post.content:
             # 旧文章无缓存,即时解析
-            from src.services.markdown_ast_service import parse_to_blocks
+            from src.services.markdown.markdown_ast_service import parse_to_blocks
 
             blocks = parse_to_blocks(post.content)
             # 异步回填缓存(不阻塞返回)
@@ -437,7 +431,7 @@ async def _get_post_blocks(post_id: int) -> tuple[BlogPostModel | None, list[dic
 
 
 async def _read_post_outline(post_id: int) -> str:
-    from src.services.markdown_ast_service import extract_outline
+    from src.services.markdown.markdown_ast_service import extract_outline
 
     post, blocks = await _get_post_blocks(post_id)
     if post is None:
@@ -465,7 +459,7 @@ async def _read_post_outline(post_id: int) -> str:
 
 
 async def _read_post_section(post_id: int, section_index: int) -> str:
-    from src.services.markdown_ast_service import get_section_text
+    from src.services.markdown.markdown_ast_service import get_section_text
 
     post, blocks = await _get_post_blocks(post_id)
     if post is None:

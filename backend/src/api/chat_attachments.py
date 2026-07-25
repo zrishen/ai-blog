@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.engine import get_db
 from src.database.models import User
 from src.schemas.chat_attachment import ChatAttachmentResponse
-from src.services.chat_attachment_service import (
+from src.services.chat.chat_attachment_service import (
     ChatAttachmentNotFoundError,
     ChatAttachmentStateError,
     ChatAttachmentTooLargeError,

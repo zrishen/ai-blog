@@ -229,7 +229,7 @@ async def sync_file_to_db(
     post.content = normalize_post_body(post.title, body)
     # 顺带缓存 AST(供 AI 章节定位使用);解析失败降级为 null,不阻断主流程
     try:
-        from src.services.markdown_ast_service import parse_to_blocks
+        from src.services.markdown.markdown_ast_service import parse_to_blocks
         post.blocks_json = parse_to_blocks(post.content)
     except Exception:
         logger.warning("blocks_json 解析失败,跳过缓存 slug=%s", slug, exc_info=True)

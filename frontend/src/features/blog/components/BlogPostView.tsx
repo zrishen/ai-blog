@@ -73,7 +73,7 @@ function resolveMarkdownImageSrc(src?: string) {
 
   const filename = value.replace(/^\.?\//, "");
   if (/^[^/?#]+\.(?:png|jpe?g|webp|gif|svg)$/i.test(filename)) {
-    return `/api/uploads/${encodeURIComponent(filename)}`;
+    return `/api/v1/uploads/${encodeURIComponent(filename)}`;
   }
   return value;
 }

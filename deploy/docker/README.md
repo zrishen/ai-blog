@@ -87,7 +87,7 @@ docker compose logs --tail=200 backend
 docker compose logs --tail=200 frontend
 ```
 
-Compose 为两个服务配置了健康检查、自动重启和日志轮转。后端健康检查为 `/health`；包含数据库、上传目录和向量库状态的诊断接口为 `/api/status`。
+Compose 为两个服务配置了健康检查、自动重启和日志轮转。后端健康检查为 `/health`；包含数据库、上传目录和向量库状态的诊断接口为 `/api/v1/status`。
 
 ## 备份与恢复
 

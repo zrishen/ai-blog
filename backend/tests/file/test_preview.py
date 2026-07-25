@@ -10,7 +10,7 @@ from src.database.models import Conversation, FileDocument, Message
 
 from src.config import settings
 from src.main import app
-from src.services import file_service
+from src.services.file import file_service
 from src.utils.auth import get_current_user, get_optional_user
 
 
@@ -39,7 +39,7 @@ def isolated_dirs(tmp_path, monkeypatch):
 
 
 async def _register_and_upload(client: AsyncClient, filename: str, content: bytes, content_type: str):
-    reg = await client.post("/api/auth/register", json={
+    reg = await client.post("/api/v1/auth/register", json={
         "username": "preview_user",
         "password": "test1234",
         "invite_code": settings.registration_invite_code,
@@ -49,21 +49,21 @@ async def _register_and_upload(client: AsyncClient, filename: str, content: byte
     headers = {"Authorization": f"Bearer {token}"}
 
     files = {"file": (filename, io.BytesIO(content), content_type)}
-    resp = await client.post("/api/upload", headers=headers, files=files)
+    resp = await client.post("/api/v1/upload", headers=headers, files=files)
     assert resp.status_code == 200, resp.text
     return token, user_id, resp.json()["stored_name"]
 
 
 @pytest.mark.asyncio
 async def test_preview_requires_authentication(client: AsyncClient):
-    resp = await client.get("/api/preview/whatever.pdf")
+    resp = await client.get("/api/v1/preview/whatever.pdf")
     assert resp.status_code == 401
 
 
 @pytest.mark.asyncio
 async def test_preview_rejects_invalid_token(client: AsyncClient):
     resp = await client.get(
-        "/api/preview/file.pdf",
+        "/api/v1/preview/file.pdf",
         headers={"Authorization": "Bearer invalid-token"},
     )
     assert resp.status_code == 401
@@ -76,7 +76,7 @@ async def test_preview_pdf_returns_inline_file(client: AsyncClient):
     )
 
     resp = await client.get(
-        f"/api/preview/{stored}",
+        f"/api/v1/preview/{stored}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
@@ -100,7 +100,7 @@ async def test_preview_rejects_soft_deleted_file_library_document(client: AsyncC
     await db_session.commit()
 
     resp = await client.get(
-        f"/api/preview/{stored}",
+        f"/api/v1/preview/{stored}",
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -128,7 +128,7 @@ async def test_preview_keeps_shared_chat_attachment_visible(client: AsyncClient,
             conversation_id=conversation.id,
             role="user",
             content="附件",
-            file_url=f"/api/uploads/{stored}",
+            file_url=f"/api/v1/uploads/{stored}",
             token_count=1,
             created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         ),
@@ -136,7 +136,7 @@ async def test_preview_keeps_shared_chat_attachment_visible(client: AsyncClient,
     await db_session.commit()
 
     resp = await client.get(
-        f"/api/preview/{stored}",
+        f"/api/v1/preview/{stored}",
         headers={"Authorization": f"Bearer {token}"},
     )
 
@@ -150,13 +150,13 @@ async def test_preview_token_via_query_param_works(client: AsyncClient):
     )
 
     # 通过 ?token= 也能通过认证（前端预览窗口直接打开 URL）
-    resp = await client.get(f"/api/preview/{stored}?token={token}")
+    resp = await client.get(f"/api/v1/preview/{stored}?token={token}")
     assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
 async def test_preview_returns_404_for_missing_file(client: AsyncClient):
-    reg = await client.post("/api/auth/register", json={
+    reg = await client.post("/api/v1/auth/register", json={
         "username": "preview_missing",
         "password": "test1234",
         "invite_code": settings.registration_invite_code,
@@ -164,25 +164,25 @@ async def test_preview_returns_404_for_missing_file(client: AsyncClient):
     token = reg.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    resp = await client.get("/api/preview/non-existent.pdf", headers=headers)
+    resp = await client.get("/api/v1/preview/non-existent.pdf", headers=headers)
     assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_preview_rejects_unsupported_extension(client: AsyncClient):
-    from src.services.file_service import get_user_upload_dir
+    from src.services.file.file_service import get_user_upload_dir
 
     token, _user_id, _stored = await _register_and_upload(
         client, "real.pdf", b"%PDF-1.4 ok", "application/pdf"
     )
     headers = {"Authorization": f"Bearer {token}"}
 
-    me = await client.get("/api/auth/me", headers=headers)
+    me = await client.get("/api/v1/auth/me", headers=headers)
     user_id = me.json()["id"]
     user_dir = get_user_upload_dir(user_id)
     (user_dir / "notes.txt").write_bytes(b"plain text")
 
-    resp = await client.get("/api/preview/notes.txt", headers=headers)
+    resp = await client.get("/api/v1/preview/notes.txt", headers=headers)
     assert resp.status_code == 400
 
 
@@ -194,6 +194,6 @@ async def test_preview_path_traversal_blocked(client: AsyncClient):
     headers = {"Authorization": f"Bearer {token}"}
 
     # 尝试目录穿越访问其他用户文件
-    resp = await client.get("/api/preview/../2/secret.pdf", headers=headers)
+    resp = await client.get("/api/v1/preview/../2/secret.pdf", headers=headers)
     # 路径解析后超出 user_dir，应被拒绝（403/404，不能 200）
     assert resp.status_code in (403, 404, 400)

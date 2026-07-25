@@ -1,8 +1,8 @@
-const API_BASE = "/api";
+const API_BASE = "/api/v1";
 const REFRESH_ENDPOINT = `${API_BASE}/auth/refresh`;
 
 // access token 只存内存（不写 localStorage，防 XSS 窃取）；refresh token 在 HttpOnly cookie 里，
-// 由浏览器随 /api/auth/* 请求自动携带。authStore 在登录/刷新成功时调用 setAccessToken。
+// 由浏览器随 /api/v1/auth/* 请求自动携带。authStore 在登录/刷新成功时调用 setAccessToken。
 let accessToken: string | null = null;
 
 export function getAccessToken(): string | null {

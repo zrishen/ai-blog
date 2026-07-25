@@ -5,7 +5,7 @@ from src.config import settings
 from src.database.engine import get_db
 from src.database.models import LLMSettings, User
 from src.schemas.settings import LLMSettingsResponse, LLMSettingsUpdate
-from src.services.llm_settings_service import get_user_llm_settings, model_supports_thinking, normalize_llm_protocol
+from src.services.llm.llm_settings_service import get_user_llm_settings, model_supports_thinking, normalize_llm_protocol
 from src.utils.auth import get_current_user
 from src.utils.secret_crypto import decrypt_secret, encrypt_secret
 

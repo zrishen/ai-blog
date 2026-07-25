@@ -3,12 +3,12 @@
 import pytest
 
 from src.prompts import SYSTEM_TOOL_RULES
-from src.services.llm_settings_service import (
+from src.services.llm.llm_settings_service import (
     SUPPORTED_LLM_PROTOCOLS,
     build_llm_model_kwargs,
     normalize_llm_protocol,
 )
-from src.services.markdown_blog_service import normalize_post_body
+from src.services.blog.markdown_blog_service import normalize_post_body
 from src.tools.blog import BLOG_TOOLS
 from src.utils.slug import slugify
 

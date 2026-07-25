@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 
 from src.config import settings
 from src.database.models import BlogPost
-from src.services.file_service import get_user_upload_dir
+from src.services.file.file_service import get_user_upload_dir
 
 
 def _plain_text(value: str | None, limit: int) -> str:
@@ -47,4 +47,4 @@ async def generate_cover_image(post: BlogPost) -> str:
     stored_name = f"blog-cover-{post.id}-{uuid.uuid4().hex}.png"
     user_dir = get_user_upload_dir(post.user_id)
     (user_dir / stored_name).write_bytes(image_bytes)
-    return f"/api/blog/cover/{stored_name}"
+    return f"/api/v1/blog/cover/{stored_name}"

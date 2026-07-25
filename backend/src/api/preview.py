@@ -1,7 +1,5 @@
 """文件预览路由（docx/xlsx → HTML，PDF → inline）。"""
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -9,13 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import get_db
 from src.database.models import User
-from src.services.file_service import convert_to_html, get_user_upload_dir, is_hidden_soft_deleted_file
+from src.services.file.file_service import convert_to_html, get_user_upload_dir, is_hidden_soft_deleted_file
 from src.utils.auth import decode_access_token
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter()
-_preview_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+_preview_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 async def get_preview_user(

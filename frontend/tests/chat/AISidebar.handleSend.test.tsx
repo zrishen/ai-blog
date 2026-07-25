@@ -169,7 +169,7 @@ describe("AISidebar handleSend 心脏分支", () => {
       size_bytes: 4,
       status: "pending",
       position: 0,
-      download_url: "/api/chat/attachments/attachment-1/content",
+      download_url: "/api/v1/chat/attachments/attachment-1/content",
     };
     attachmentApi.uploadChatAttachment.mockImplementation(() => ({
       promise: Promise.resolve(uploaded),

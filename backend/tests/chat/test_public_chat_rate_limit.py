@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from src.config import settings
 from src.main import app
-from src.services.public_chat_rate_limit_service import CHINA_TIMEZONE, consume_public_chat_request
+from src.services.public_chat.public_chat_rate_limit_service import CHINA_TIMEZONE, consume_public_chat_request
 
 
 async def _fake_public_stream_chat(*args, **kwargs):
@@ -21,22 +21,22 @@ async def test_public_chat_endpoints_share_daily_quota_per_ip(monkeypatch):
 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         for _ in range(5):
-            response = await client.post("/api/public/chat/stream", json={"content": "hello"})
+            response = await client.post("/api/v1/public/chat/stream", json={"content": "hello"})
             assert response.status_code == 200
         for _ in range(5):
             response = await client.post(
-                "/api/public/users/alice/chat/stream",
+                "/api/v1/public/users/alice/chat/stream",
                 json={"content": "hello"},
             )
             assert response.status_code == 200
 
-        rejected = await client.post("/api/public/chat/stream", json={"content": "hello"})
+        rejected = await client.post("/api/v1/public/chat/stream", json={"content": "hello"})
         assert rejected.status_code == 429
         assert str(settings.public_chat_daily_ip_limit) in rejected.json()["detail"]
 
     other_transport = ASGITransport(app=app, client=("203.0.113.11", 12345))
     async with AsyncClient(transport=other_transport, base_url="http://test") as other_client:
-        accepted = await other_client.post("/api/public/chat/stream", json={"content": "hello"})
+        accepted = await other_client.post("/api/v1/public/chat/stream", json={"content": "hello"})
         assert accepted.status_code == 200
 
 

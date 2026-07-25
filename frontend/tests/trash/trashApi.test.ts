@@ -36,7 +36,7 @@ describe("trash API", () => {
       }),
     );
     const result = await listTrash();
-    expect(fetchMock).toHaveBeenCalledWith("/api/trash", expect.objectContaining({}));
+    expect(fetchMock).toHaveBeenCalledWith("/api/v1/trash", expect.objectContaining({}));
     expect(result.total).toBe(1);
     expect(result.items[0].type).toBe("conversation");
   });
@@ -45,7 +45,7 @@ describe("trash API", () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
     await restoreTrashItem("blog_post", 42);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/trash/blog_post/42/restore",
+      "/api/v1/trash/blog_post/42/restore",
       expect.objectContaining({ method: "POST" }),
     );
   });
@@ -54,7 +54,7 @@ describe("trash API", () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 200 }));
     await purgeTrashItem("file_document", 7);
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/trash/file_document/7",
+      "/api/v1/trash/file_document/7",
       expect.objectContaining({ method: "DELETE" }),
     );
   });
@@ -75,7 +75,7 @@ describe("trash API", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(partial));
     const result = await emptyTrash();
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/trash",
+      "/api/v1/trash",
       expect.objectContaining({ method: "DELETE" }),
     );
     expect(result.status).toBe("partial");

@@ -4,7 +4,7 @@ import pytest
 
 from src.database import engine as db_engine_module
 from src.database.models import ResearchRun, ResearchTopic
-from src.services import research_service
+from src.services import research as research_service
 from tests.conftest import TestSessionLocal
 
 
@@ -43,11 +43,12 @@ class _FakeAgent:
 
 
 def _patch_agent(monkeypatch, events):
-    from src.services import chat_service
+    from src.services.chat import llm_factory as chat_service
     monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode, llm_settings=None: {"api_key": "test-key"})
     monkeypatch.setattr(chat_service, "_create_llm", lambda kw, mode: object())
+    from src.services.research import run
     monkeypatch.setattr(
-        research_service,
+        run,
         "create_react_agent",
         lambda llm, tools, prompt: _FakeAgent(events),
     )
@@ -101,11 +102,12 @@ async def test_stage_fails_when_agent_stream_raises(monkeypatch):
             raise RuntimeError("agent crashed")
             yield  # pragma: no cover - 让 astream_events 成为 async generator
 
-    from src.services import chat_service
+    from src.services.chat import llm_factory as chat_service
     monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode, llm_settings=None: {"api_key": "test-key"})
     monkeypatch.setattr(chat_service, "_create_llm", lambda kw, mode: object())
+    from src.services.research import run
     monkeypatch.setattr(
-        research_service,
+        run,
         "create_react_agent",
         lambda llm, tools, prompt: _RaisingAgent(),
     )

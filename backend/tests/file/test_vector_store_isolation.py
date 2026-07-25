@@ -1,6 +1,6 @@
 """vector_store 集合隔离测试。
 
-conftest 把 src.services.vector_store 的高层函数全部 mock 掉，
+conftest 把 src.services.rag.vector_store 的高层函数全部 mock 掉，
 这里通过直接调用 chromadb 客户端来验证：不同集合之间的数据互不串扰，
 delete_collection / delete_document_chunks 也只影响目标集合。
 
@@ -15,7 +15,7 @@ import pytest
 import chromadb
 from chromadb.api.types import EmbeddingFunction, Embeddings
 
-from src.services.vector_store import SearchResult  # 仅作类型/字段断言
+from src.services.rag.vector_store import SearchResult  # 仅作类型/字段断言
 
 
 class _ZeroEmbeddingFunction(EmbeddingFunction):

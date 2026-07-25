@@ -16,7 +16,7 @@ async def test_upload_file(client: AsyncClient):
     file_content = b"%PDF-1.4 fake test content"
     files = {"file": ("test.pdf", io.BytesIO(file_content), "application/pdf")}
 
-    resp = await client.post("/api/upload", files=files)
+    resp = await client.post("/api/v1/upload", files=files)
     assert resp.status_code == 200
     data = resp.json()
     assert "stored_name" in data
@@ -27,7 +27,7 @@ async def test_upload_file(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_get_uploaded_file_not_found(client: AsyncClient):
-    resp = await client.get("/api/uploads/nonexistent.pdf")
+    resp = await client.get("/api/v1/uploads/nonexistent.pdf")
     assert resp.status_code == 404
 
 
@@ -37,11 +37,11 @@ async def test_soft_deleted_library_file_stays_downloadable_when_chat_references
     db_session: AsyncSession,
 ):
     uploaded = await client.post(
-        "/api/upload",
+        "/api/v1/upload",
         files={"file": ("shared.pdf", io.BytesIO(b"%PDF-1.4 shared"), "application/pdf")},
     )
     stored_name = uploaded.json()["stored_name"]
-    conversation = (await client.post("/api/conversations", json={"title": "共享附件"})).json()
+    conversation = (await client.post("/api/v1/conversations", json={"title": "共享附件"})).json()
     db_session.add_all([
         FileDocument(
             collection_name="user_1_file",
@@ -55,13 +55,13 @@ async def test_soft_deleted_library_file_stays_downloadable_when_chat_references
             conversation_id=conversation["id"],
             role="user",
             content="附件",
-            file_url=f"/api/uploads/{stored_name}",
+            file_url=f"/api/v1/uploads/{stored_name}",
             token_count=1,
             created_at=datetime.now(timezone.utc).replace(tzinfo=None),
         ),
     ])
     await db_session.commit()
 
-    response = await client.get(f"/api/uploads/{stored_name}")
+    response = await client.get(f"/api/v1/uploads/{stored_name}")
 
     assert response.status_code == 200

@@ -10,7 +10,6 @@
 """
 
 import json
-import logging
 from datetime import datetime, timezone
 
 from langchain_core.tools import tool
@@ -28,7 +27,7 @@ from src.database.models import (
 )
 from src.database.session import async_session
 from src.tools.blog import current_user_id_cv
-from src.services.research_service import (
+from src.services.research import (
     ENTITY_TYPES,
     SUPPORTED_EVIDENCE_KINDS,
     VALID_RELATION_NODE_TYPES,
@@ -40,8 +39,6 @@ from src.services.research_service import (
     create_entity,
     create_relation,
 )
-
-logger = logging.getLogger(__name__)
 
 # Evidence kind 说明（供 Agent 参考）
 EVIDENCE_KIND_HELP = {

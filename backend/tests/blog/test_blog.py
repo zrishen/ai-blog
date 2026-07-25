@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.models import BlogPost as BlogPostModel, User as UserModel
-from src.services.markdown_blog_service import read_post_by_slug
+from src.services.blog.markdown_blog_service import read_post_by_slug
 from src.tools.blog import (
     blog_create_post,
     blog_delete_post,
@@ -45,7 +45,7 @@ def _read_markdown(slug: str, user_id: int = TEST_USER_ID) -> tuple[dict, str]:
 
 @pytest.mark.asyncio
 async def test_create_blog_post(client: AsyncClient, db_session: AsyncSession):
-    resp = await client.post("/api/blog/posts", json={
+    resp = await client.post("/api/v1/blog/posts", json={
         "title": "测试文章",
         "content": "这是测试内容。",
         "status": "draft",
@@ -123,13 +123,13 @@ async def test_ai_create_post_creates_empty_draft_then_write_fills_same_post(
 
 @pytest.mark.asyncio
 async def test_list_blog_posts(client: AsyncClient):
-    await client.post("/api/blog/posts", json={
+    await client.post("/api/v1/blog/posts", json={
         "title": "文章1",
         "content": "内容1",
         "status": "published",
     })
 
-    resp = await client.get("/api/blog/posts")
+    resp = await client.get("/api/v1/blog/posts")
     assert resp.status_code == 200
     data = resp.json()
     assert "posts" in data
@@ -141,47 +141,47 @@ async def test_list_blog_posts(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_get_blog_post(client: AsyncClient):
-    create_resp = await client.post("/api/blog/posts", json={
+    create_resp = await client.post("/api/v1/blog/posts", json={
         "title": "详情文章",
         "content": "详情内容。",
         "status": "published",
     })
     post_id = create_resp.json()["id"]
 
-    resp = await client.get(f"/api/blog/posts/{post_id}")
+    resp = await client.get(f"/api/v1/blog/posts/{post_id}")
     assert resp.status_code == 200
     assert resp.json()["title"] == "详情文章"
 
 
 @pytest.mark.asyncio
 async def test_get_draft_blog_post_is_hidden_from_anonymous_viewer(client: AsyncClient):
-    create_resp = await client.post("/api/blog/posts", json={
+    create_resp = await client.post("/api/v1/blog/posts", json={
         "title": "草稿详情",
         "content": "草稿内容。",
         "status": "draft",
     })
     post_id = create_resp.json()["id"]
 
-    resp = await client.get(f"/api/blog/posts/{post_id}")
+    resp = await client.get(f"/api/v1/blog/posts/{post_id}")
     assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_get_nonexistent_blog_post(client: AsyncClient):
-    resp = await client.get("/api/blog/posts/99999")
+    resp = await client.get("/api/v1/blog/posts/99999")
     assert resp.status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_update_blog_post(client: AsyncClient, db_session: AsyncSession):
-    create_resp = await client.post("/api/blog/posts", json={
+    create_resp = await client.post("/api/v1/blog/posts", json={
         "title": "待更新",
         "content": "原内容",
     })
     post_id = create_resp.json()["id"]
     old_slug = create_resp.json()["slug"]
 
-    resp = await client.put(f"/api/blog/posts/{post_id}", json={
+    resp = await client.put(f"/api/v1/blog/posts/{post_id}", json={
         "title": "已更新",
         "content": "新内容",
         "tags": "updated",
@@ -492,7 +492,7 @@ async def test_blog_search_posts_finds_text_inside_post(db_session: AsyncSession
 
 @pytest.mark.asyncio
 async def test_delete_blog_post(client: AsyncClient, db_session: AsyncSession):
-    create_resp = await client.post("/api/blog/posts", json={
+    create_resp = await client.post("/api/v1/blog/posts", json={
         "title": "待删除",
         "content": "内容",
     })
@@ -500,7 +500,7 @@ async def test_delete_blog_post(client: AsyncClient, db_session: AsyncSession):
     slug = create_resp.json()["slug"]
     assert _post_file(slug).exists()
 
-    resp = await client.delete(f"/api/blog/posts/{post_id}")
+    resp = await client.delete(f"/api/v1/blog/posts/{post_id}")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
     # 软删除：md 文件保留以便恢复；DB 行保留但 deleted_at 已置位
@@ -509,13 +509,13 @@ async def test_delete_blog_post(client: AsyncClient, db_session: AsyncSession):
     assert row is not None
     assert row.deleted_at is not None
     # 不再出现在文章列表中
-    listing = await client.get("/api/blog/posts")
+    listing = await client.get("/api/v1/blog/posts")
     assert all(p["id"] != post_id for p in listing.json()["posts"])
 
 
 @pytest.mark.asyncio
 async def test_deleted_blog_post_is_rejected_by_all_api_boundaries(client: AsyncClient):
-    create_resp = await client.post("/api/blog/posts", json={
+    create_resp = await client.post("/api/v1/blog/posts", json={
         "title": "软删除边界",
         "content": "不可见内容",
         "status": "published",
@@ -523,21 +523,21 @@ async def test_deleted_blog_post_is_rejected_by_all_api_boundaries(client: Async
     post_id = create_resp.json()["id"]
     slug = create_resp.json()["slug"]
 
-    assert (await client.delete(f"/api/blog/posts/{post_id}")).status_code == 200
+    assert (await client.delete(f"/api/v1/blog/posts/{post_id}")).status_code == 200
 
     responses = [
-        await client.get(f"/api/blog/posts/{post_id}"),
-        await client.put(f"/api/blog/posts/{post_id}", json={"title": "不应更新"}),
-        await client.put(f"/api/blog/posts/{post_id}/publish", json={"publish": True}),
-        await client.delete(f"/api/blog/posts/{post_id}"),
-        await client.post(f"/api/blog/posts/{post_id}/generate-cover"),
-        await client.post(f"/api/blog/posts/{post_id}/suggest-tags"),
-        await client.get(f"/api/public/users/testuser/posts/{slug}"),
+        await client.get(f"/api/v1/blog/posts/{post_id}"),
+        await client.put(f"/api/v1/blog/posts/{post_id}", json={"title": "不应更新"}),
+        await client.put(f"/api/v1/blog/posts/{post_id}/publish", json={"publish": True}),
+        await client.delete(f"/api/v1/blog/posts/{post_id}"),
+        await client.post(f"/api/v1/blog/posts/{post_id}/generate-cover"),
+        await client.post(f"/api/v1/blog/posts/{post_id}/suggest-tags"),
+        await client.get(f"/api/v1/public/users/testuser/posts/{slug}"),
     ]
 
     assert all(resp.status_code == 404 for resp in responses)
-    owner_listing = await client.get("/api/blog/posts")
-    public_listing = await client.get("/api/public/users/testuser/posts")
+    owner_listing = await client.get("/api/v1/blog/posts")
+    public_listing = await client.get("/api/v1/public/users/testuser/posts")
     assert all(post["id"] != post_id for post in owner_listing.json()["posts"])
     assert all(post["id"] != post_id for post in public_listing.json()["posts"])
 
@@ -593,7 +593,7 @@ async def test_deleted_blog_post_is_rejected_by_ai_tools(db_session: AsyncSessio
 
 @pytest.mark.asyncio
 async def test_publish_blog_post(client: AsyncClient):
-    create_resp = await client.post("/api/blog/posts", json={
+    create_resp = await client.post("/api/v1/blog/posts", json={
         "title": "待发布",
         "content": "内容",
         "status": "draft",
@@ -601,7 +601,7 @@ async def test_publish_blog_post(client: AsyncClient):
     post_id = create_resp.json()["id"]
     slug = create_resp.json()["slug"]
 
-    resp = await client.put(f"/api/blog/posts/{post_id}/publish", json={
+    resp = await client.put(f"/api/v1/blog/posts/{post_id}/publish", json={
         "publish": True,
     })
     assert resp.status_code == 200
@@ -611,7 +611,7 @@ async def test_publish_blog_post(client: AsyncClient):
     assert meta["status"] == "published"
     assert meta["published_at"] is not None
 
-    unpublish_resp = await client.put(f"/api/blog/posts/{post_id}/publish", json={"publish": False})
+    unpublish_resp = await client.put(f"/api/v1/blog/posts/{post_id}/publish", json={"publish": False})
     assert unpublish_resp.status_code == 200
     assert unpublish_resp.json()["status"] == "draft"
     assert unpublish_resp.json()["published_at"] is None
@@ -622,18 +622,18 @@ async def test_publish_blog_post(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_list_blog_posts_with_filter(client: AsyncClient):
-    await client.post("/api/blog/posts", json={
+    await client.post("/api/v1/blog/posts", json={
         "title": "草稿",
         "content": "内容",
         "status": "draft",
     })
-    await client.post("/api/blog/posts", json={
+    await client.post("/api/v1/blog/posts", json={
         "title": "已发布",
         "content": "内容",
         "status": "published",
     })
 
-    resp = await client.get("/api/blog/posts", params={"status": "published"})
+    resp = await client.get("/api/v1/blog/posts", params={"status": "published"})
     assert resp.status_code == 200
     posts = resp.json()["posts"]
     assert posts
@@ -643,7 +643,7 @@ async def test_list_blog_posts_with_filter(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_recreate_after_soft_delete_keeps_trash_and_derivates_slug(client: AsyncClient):
     """软删后用同标题重建：保留回收站原记录，新文章派生 -1 后缀，不撞 uq_blog_posts_user_slug。"""
-    create_resp = await client.post("/api/blog/posts", json={
+    create_resp = await client.post("/api/v1/blog/posts", json={
         "title": "同标题文章",
         "content": "原文",
         "status": "draft",
@@ -654,16 +654,16 @@ async def test_recreate_after_soft_delete_keeps_trash_and_derivates_slug(client:
     slug = original["slug"]
 
     # 软删
-    del_resp = await client.delete(f"/api/blog/posts/{original_id}")
+    del_resp = await client.delete(f"/api/v1/blog/posts/{original_id}")
     assert del_resp.status_code == 200
-    trash_after_delete = await client.get("/api/trash")
+    trash_after_delete = await client.get("/api/v1/trash")
     assert any(
         i["type"] == "blog_post" and i["id"] == original_id
         for i in trash_after_delete.json()["items"]
     )
 
     # 同标题重建 —— slug 被回收站记录占用，派生 -1 后缀
-    recreate_resp = await client.post("/api/blog/posts", json={
+    recreate_resp = await client.post("/api/v1/blog/posts", json={
         "title": "同标题文章",
         "content": "新文",
         "status": "published",
@@ -674,16 +674,16 @@ async def test_recreate_after_soft_delete_keeps_trash_and_derivates_slug(client:
     assert recreated["id"] != original_id
 
     # 回收站里旧软删记录仍保留（未被物理清除、未被复活）
-    trash_final = await client.get("/api/trash")
+    trash_final = await client.get("/api/v1/trash")
     assert any(
         i["type"] == "blog_post" and i["id"] == original_id
         for i in trash_final.json()["items"]
     ), "回收站原记录应保留"
 
     # active 列表只看到新行
-    listing = await client.get("/api/blog/posts")
+    listing = await client.get("/api/v1/blog/posts")
     assert all(p["id"] != original_id for p in listing.json()["posts"])
-    detail = await client.get(f"/api/blog/posts/{recreated['id']}")
+    detail = await client.get(f"/api/v1/blog/posts/{recreated['id']}")
     assert detail.status_code == 200
     assert detail.json()["content"] == "新文"
 
@@ -693,7 +693,7 @@ async def test_ensure_intro_post_does_not_revive_or_collide_when_soft_deleted(
     client: AsyncClient, db_session: AsyncSession
 ):
     """用户软删 ai-blog-intro 后，ensure_intro_post 不复活、不创建、不抛唯一键错误。"""
-    from src.services.blog_service import delete_post, ensure_intro_post
+    from src.services.blog.blog_service import delete_post, ensure_intro_post
 
     intro_data = {
         "title": "官方介绍",
@@ -716,7 +716,7 @@ async def test_ensure_intro_post_does_not_revive_or_collide_when_soft_deleted(
     assert second.deleted_at is not None  # 仍在回收站，未被复活
 
     # 回收站可见，active 列表不可见
-    trash = await client.get("/api/trash")
+    trash = await client.get("/api/v1/trash")
     assert any(i["type"] == "blog_post" and i["id"] == first_id for i in trash.json()["items"])
-    listing = await client.get("/api/blog/posts")
+    listing = await client.get("/api/v1/blog/posts")
     assert all(p["id"] != first_id for p in listing.json()["posts"])

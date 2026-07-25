@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import BlogPost as BlogPostModel
 from src.database.models import User
-from src.services.markdown_blog_service import (
+from src.services.blog.markdown_blog_service import (
     delete_post_file,
     ensure_unique_slug,
     read_post_by_slug,

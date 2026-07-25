@@ -1,7 +1,7 @@
 import pytest
 
 from src.tools.file import _filter_and_dedupe_rag_results, _format_rag_context, _search_collections
-from src.services.vector_store import SearchResult
+from src.services.rag.vector_store import SearchResult
 
 
 def test_rag_filter_dedupe_and_format():
@@ -42,7 +42,7 @@ async def test_search_collections_only_returns_active_stored_names(monkeypatch):
             SearchResult(content="legacy", metadata={"source": "legacy.pdf"}, distance=0.1),
         ]
 
-    monkeypatch.setattr("src.services.vector_store.search", fake_search)
+    monkeypatch.setattr("src.services.rag.vector_store.search", fake_search)
 
     results = await _search_collections(
         {"user_1_file": {"active.pdf"}},

@@ -15,7 +15,7 @@ from src.config import settings
 from src.database.models import ChatAttachment, Conversation, Message, User
 from src.main import app
 from src.schemas.conversation import MessageRequest
-from src.services.chat_attachment_service import (
+from src.services.chat.chat_attachment_service import (
     ChatAttachmentNotFoundError,
     ChatAttachmentStateError,
     claim_attachments,
@@ -63,7 +63,7 @@ async def test_upload_attachment_returns_complete_dto_and_stores_file(
     attachment_id = str(uuid.uuid4())
 
     response = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": attachment_id},
         data={"draft_key": "draft-1"},
         files={"file": ("notes.md", io.BytesIO(b"# Notes\nhello"), "text/markdown")},
@@ -71,7 +71,7 @@ async def test_upload_attachment_returns_complete_dto_and_stores_file(
 
     assert response.status_code == 201
     data = response.json()
-    content_url = f"/api/chat/attachments/{attachment_id}/content"
+    content_url = f"/api/v1/chat/attachments/{attachment_id}/content"
     assert data == {
         "id": attachment_id,
         "kind": "file",
@@ -120,7 +120,7 @@ async def test_upload_rejects_unsupported_or_mismatched_type(
     expected_status: int,
 ):
     response = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": str(uuid.uuid4())},
         files={"file": (filename, io.BytesIO(content), content_type)},
     )
@@ -136,7 +136,7 @@ async def test_upload_enforces_streamed_size_limit(
     monkeypatch.setattr(settings, "chat_attachment_max_file_size_bytes", 16)
 
     response = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": str(uuid.uuid4())},
         files=_pdf_file(b"%PDF-1.4\n" + b"x" * 20),
     )
@@ -153,12 +153,12 @@ async def test_upload_is_idempotent_per_user(
 ):
     attachment_id = str(uuid.uuid4())
     first = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": attachment_id},
         files=_pdf_file(),
     )
     second = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": attachment_id},
         data={"draft_key": "ignored-on-replay"},
         files={"file": ("ignored.txt", io.BytesIO(b"different"), "text/plain")},
@@ -178,23 +178,23 @@ async def test_upload_is_idempotent_per_user(
 async def test_read_and_delete_pending_attachment(client: AsyncClient, db_session: AsyncSession):
     attachment_id = str(uuid.uuid4())
     uploaded = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": attachment_id},
         files=_pdf_file(),
     )
     assert uploaded.status_code == 201
 
-    content = await client.get(f"/api/chat/attachments/{attachment_id}/content")
+    content = await client.get(f"/api/v1/chat/attachments/{attachment_id}/content")
     assert content.status_code == 200
     assert content.content == b"%PDF-1.4\nchat attachment"
     assert content.headers["content-type"].startswith("application/pdf")
 
-    deleted = await client.delete(f"/api/chat/attachments/{attachment_id}")
+    deleted = await client.delete(f"/api/v1/chat/attachments/{attachment_id}")
     assert deleted.status_code == 204
     assert await db_session.scalar(
         select(func.count(ChatAttachment.id)).where(ChatAttachment.attachment_id == attachment_id)
     ) == 0
-    assert (await client.get(f"/api/chat/attachments/{attachment_id}/content")).status_code == 404
+    assert (await client.get(f"/api/v1/chat/attachments/{attachment_id}/content")).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -204,7 +204,7 @@ async def test_attachment_content_and_delete_are_user_scoped(
 ):
     attachment_id = str(uuid.uuid4())
     uploaded = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": attachment_id},
         files=_pdf_file(),
     )
@@ -222,10 +222,10 @@ async def test_attachment_content_and_delete_are_user_scoped(
 
     app.dependency_overrides[get_current_user] = override_other_user
     try:
-        assert (await client.get(f"/api/chat/attachments/{attachment_id}/content")).status_code == 404
-        assert (await client.delete(f"/api/chat/attachments/{attachment_id}")).status_code == 404
+        assert (await client.get(f"/api/v1/chat/attachments/{attachment_id}/content")).status_code == 404
+        assert (await client.delete(f"/api/v1/chat/attachments/{attachment_id}")).status_code == 404
         other_upload = await client.post(
-            "/api/chat/attachments",
+            "/api/v1/chat/attachments",
             headers={"X-Attachment-Id": attachment_id},
             files={"file": ("other.txt", io.BytesIO(b"other user"), "text/plain")},
         )
@@ -249,7 +249,7 @@ async def test_attached_attachment_cannot_be_deleted(
 ):
     attachment_id = str(uuid.uuid4())
     uploaded = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": attachment_id},
         files=_pdf_file(),
     )
@@ -274,10 +274,10 @@ async def test_attached_attachment_cannot_be_deleted(
     attachment.attached_at = now
     await db_session.commit()
 
-    response = await client.delete(f"/api/chat/attachments/{attachment_id}")
+    response = await client.delete(f"/api/v1/chat/attachments/{attachment_id}")
 
     assert response.status_code == 409
-    assert (await client.get(f"/api/chat/attachments/{attachment_id}/content")).status_code == 200
+    assert (await client.get(f"/api/v1/chat/attachments/{attachment_id}/content")).status_code == 200
 
 
 @pytest.mark.asyncio
@@ -299,7 +299,7 @@ async def test_upload_runs_bounded_expired_pending_cleanup(
     await db_session.commit()
 
     response = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": str(uuid.uuid4())},
         files={"file": ("new.txt", io.BytesIO(b"new"), "text/plain")},
     )
@@ -411,12 +411,12 @@ async def test_upload_enforces_per_user_pending_quota(
 ):
     monkeypatch.setattr(settings, "chat_attachment_max_pending_count_per_user", 1)
     first = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": str(uuid.uuid4())},
         files={"file": ("first.txt", io.BytesIO(b"first"), "text/plain")},
     )
     second = await client.post(
-        "/api/chat/attachments",
+        "/api/v1/chat/attachments",
         headers={"X-Attachment-Id": str(uuid.uuid4())},
         files={"file": ("second.txt", io.BytesIO(b"second"), "text/plain")},
     )

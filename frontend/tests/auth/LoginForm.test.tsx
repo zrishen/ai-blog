@@ -116,7 +116,7 @@ describe("LoginForm", () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        "/api/auth/register",
+        "/api/v1/auth/register",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ username: "alice", password: "secret", invite_code: "invite-123" }),

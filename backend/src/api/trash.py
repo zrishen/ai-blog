@@ -1,9 +1,9 @@
 """统一回收站路由。
 
-GET    /api/trash                            -> {items, total}  按 deleted_at 倒序
-POST   /api/trash/{type}/{id}/restore        -> {status, item}
-DELETE /api/trash/{type}/{id}                永久删除（仅作用于回收站内记录）
-DELETE /api/trash                            -> {status, deleted, failed, remaining}
+GET    /api/v1/trash                            -> {items, total}  按 deleted_at 倒序
+POST   /api/v1/trash/{type}/{id}/restore        -> {status, item}
+DELETE /api/v1/trash/{type}/{id}                永久删除（仅作用于回收站内记录）
+DELETE /api/v1/trash                            -> {status, deleted, failed, remaining}
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -17,7 +17,7 @@ from src.schemas.trash import (
     TrashListResponse,
     TrashRestoreResponse,
 )
-from src.services.trash_service import (
+from src.services.trash.trash_service import (
     SUPPORTED_TYPES,
     empty_trash,
     list_trash,

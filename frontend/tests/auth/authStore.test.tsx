@@ -54,7 +54,7 @@ describe("authStore", () => {
     expect(result.current.isAuthenticated).toBe(false);
     expect(getAccessToken()).toBeNull();
     await waitFor(() =>
-      expect(fetchFn).toHaveBeenCalledWith("/api/auth/logout", expect.objectContaining({ method: "POST" })),
+      expect(fetchFn).toHaveBeenCalledWith("/api/v1/auth/logout", expect.objectContaining({ method: "POST" })),
     );
   });
 

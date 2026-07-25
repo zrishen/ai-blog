@@ -12,7 +12,7 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_chat(client: AsyncClient):
-    resp = await client.post("/api/chat", json={
+    resp = await client.post("/api/v1/chat", json={
         "content": "你好",
         "conversation_id": None,
     })
@@ -26,7 +26,7 @@ async def test_chat(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_chat_stream(client: AsyncClient):
-    resp = await client.post("/api/chat/stream", json={
+    resp = await client.post("/api/v1/chat/stream", json={
         "content": "你好",
         "conversation_id": None,
     })
@@ -36,7 +36,8 @@ async def test_chat_stream(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_build_messages_uses_empty_history_for_invalid_conversation(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import messages
+    from src.services.chat import orchestrator as chat_service
 
     async def missing_conversation(conversation_id: int, user_id: int):
         return None
@@ -44,8 +45,8 @@ async def test_build_messages_uses_empty_history_for_invalid_conversation(monkey
     async def get_messages_should_not_run(conversation_id: int, user_id: int):
         raise AssertionError("无效会话不应该继续读取消息历史")
 
-    monkeypatch.setattr(chat_service, "get_conversation", missing_conversation)
-    monkeypatch.setattr(chat_service, "get_messages", get_messages_should_not_run)
+    monkeypatch.setattr(messages, "get_conversation", missing_conversation)
+    monkeypatch.setattr(messages, "get_messages", get_messages_should_not_run)
 
     messages, full_user_message, user_token_count = await chat_service._build_messages(
         "你好",
@@ -61,12 +62,13 @@ async def test_build_messages_uses_empty_history_for_invalid_conversation(monkey
 
 @pytest.mark.asyncio
 async def test_build_messages_has_no_rag_context_parameter(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import messages
+    from src.services.chat import orchestrator as chat_service
 
     async def missing_conversation(conversation_id: int, user_id: int):
         return None
 
-    monkeypatch.setattr(chat_service, "get_conversation", missing_conversation)
+    monkeypatch.setattr(messages, "get_conversation", missing_conversation)
 
     signature = inspect.signature(chat_service._build_messages)
     assert "rag_context" not in signature.parameters
@@ -85,7 +87,7 @@ async def test_build_messages_has_no_rag_context_parameter(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     captured = {}
 
@@ -154,7 +156,7 @@ async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_normal_chat_context_excludes_research_tool_rules(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     captured = {}
 
@@ -223,7 +225,7 @@ async def test_normal_chat_context_excludes_research_tool_rules(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_trust_writing_context_includes_choice_protocol(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     captured = {}
 
@@ -303,7 +305,7 @@ async def test_trust_writing_context_includes_choice_protocol(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     class FakeScalars:
         def all(self):
@@ -349,7 +351,7 @@ async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
     monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
 
-    caplog.set_level(logging.DEBUG, logger="src.services.chat_service")
+    caplog.set_level(logging.DEBUG, logger="src.services.chat.orchestrator")
 
     chunks = [
         chunk async for chunk in chat_service.stream_chat(
@@ -371,7 +373,7 @@ async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
 
 @pytest.mark.asyncio
 async def test_selected_blog_context_is_injected_into_prompt_and_user_message(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     captured = {}
 
@@ -449,7 +451,7 @@ async def test_selected_blog_context_is_injected_into_prompt_and_user_message(mo
     (0.6, 0.9),
 ])
 async def test_blog_edit_patch_streams_from_model_tool_arguments(monkeypatch, split_positions):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     tool_input = {
         "post_id": 1,
@@ -552,7 +554,7 @@ async def test_blog_edit_patch_streams_from_model_tool_arguments(monkeypatch, sp
 
 
 def test_partial_int_waits_for_json_number_delimiter():
-    from src.services.chat_service import _extract_partial_int
+    from src.services.chat.streaming import _extract_partial_int
 
     assert _extract_partial_int('{"post_id": 4', "post_id") is None
     assert _extract_partial_int('{"post_id": 42, "content": "', "post_id") == 42
@@ -561,7 +563,7 @@ def test_partial_int_waits_for_json_number_delimiter():
 
 @pytest.mark.asyncio
 async def test_blog_write_stream_carries_post_and_stream_identity(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     tool_input = {
         "post_id": 42,
@@ -651,7 +653,7 @@ async def test_blog_write_stream_carries_post_and_stream_identity(monkeypatch):
 @pytest.mark.asyncio
 async def test_tool_prep_emitted_and_stream_id_propagated(monkeypatch):
     from langchain_core.messages import AIMessage
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     tool_input = {"post_id": 42, "content": "正文"}
 
@@ -723,7 +725,7 @@ async def test_tool_prep_emitted_and_stream_id_propagated(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     tool_input = {
         "post_id": 1,
@@ -812,7 +814,7 @@ async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monke
 @pytest.mark.asyncio
 async def test_round_protocol_streams_structured_text_and_confirms_final(monkeypatch):
     from langchain_core.messages import AIMessage
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     class FakeScalars:
         def all(self):
@@ -874,7 +876,7 @@ async def test_round_protocol_streams_structured_text_and_confirms_final(monkeyp
 @pytest.mark.asyncio
 async def test_vision_fallback_retries_without_images():
     from langchain_core.messages import AIMessage
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     calls: list[list[dict]] = []
 
@@ -926,8 +928,8 @@ async def test_vision_fallback_retries_without_images():
 
 
 def test_build_current_user_content_formats_provider_images_and_documents():
-    from src.services import chat_service
-    from src.services.chat_attachment_service import PreparedChatAttachment
+    from src.services.chat import orchestrator as chat_service
+    from src.services.chat.chat_attachment_service import PreparedChatAttachment
 
     image = SimpleNamespace(
         attachment_id="image-id",
@@ -989,7 +991,7 @@ def test_build_current_user_content_formats_provider_images_and_documents():
 @pytest.mark.asyncio
 async def test_empty_final_is_confirmed_and_saved(monkeypatch):
     from langchain_core.messages import AIMessage
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     class FakeScalars:
         def all(self):
@@ -1041,7 +1043,7 @@ async def test_empty_final_is_confirmed_and_saved(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_empty_agent_stream_emits_error_and_does_not_save(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     class FakeScalars:
         def all(self):
@@ -1085,7 +1087,7 @@ async def test_empty_agent_stream_emits_error_and_does_not_save(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_stream_error_discards_unconfirmed_round_and_does_not_save(monkeypatch):
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     class FakeScalars:
         def all(self):
@@ -1134,7 +1136,7 @@ async def test_stream_error_discards_unconfirmed_round_and_does_not_save(monkeyp
 @pytest.mark.asyncio
 async def test_parallel_tool_events_use_stable_call_ids(monkeypatch):
     from langchain_core.messages import AIMessage
-    from src.services import chat_service
+    from src.services.chat import orchestrator as chat_service
 
     class FakeScalars:
         def all(self):

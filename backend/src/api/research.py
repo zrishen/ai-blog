@@ -4,8 +4,6 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
-
 from src.database.engine import get_db
 from src.database.models import User
 from src.schemas.research import (
@@ -31,8 +29,10 @@ from src.schemas.research import (
     ResearchTopicRead,
     ResearchTopicUpdate,
 )
-from src.services import research_service
+from src.services import research as research_service
 from src.utils.auth import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

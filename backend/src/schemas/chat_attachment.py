@@ -35,7 +35,7 @@ class ChatAttachmentResponse(BaseModel):
 
     @classmethod
     def from_attachment(cls, attachment: ChatAttachment) -> "ChatAttachmentResponse":
-        content_url = f"/api/chat/attachments/{attachment.attachment_id}/content"
+        content_url = f"/api/v1/chat/attachments/{attachment.attachment_id}/content"
         return cls(
             id=attachment.attachment_id,
             kind="image" if attachment.media_type.startswith("image/") else "file",

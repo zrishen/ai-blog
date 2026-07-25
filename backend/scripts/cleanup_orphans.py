@@ -32,8 +32,8 @@ from src.database.models import (
     Message as MessageModel,
 )
 from src.database.session import async_session
-from src.services.trash_service import _extract_local_filename
-from src.services.vector_store import _get_client, delete_document_chunks, list_collections
+from src.services.trash.trash_service import _extract_local_filename
+from src.services.rag.vector_store import _get_client, delete_document_chunks, list_collections
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cleanup_orphans")

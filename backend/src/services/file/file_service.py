@@ -121,9 +121,9 @@ async def is_hidden_soft_deleted_file(
 
     references = {
         filename,
-        f"/api/uploads/{filename}",
-        f"/api/public/uploads/{username}/{filename}",
-        f"/api/blog/cover/{filename}",
+        f"/api/v1/uploads/{filename}",
+        f"/api/v1/public/uploads/{username}/{filename}",
+        f"/api/v1/blog/cover/{filename}",
     }
     message_ref = await db.execute(
         select(Message.id)
@@ -161,8 +161,8 @@ async def vectorize_and_store(
     Returns:
         List of chunk contents that were stored.
     """
-    from src.services.embedding_service import get_embeddings
-    from src.services.vector_store import add_documents
+    from src.services.rag.embedding_service import get_embeddings
+    from src.services.rag.vector_store import add_documents
 
     from src.utils.chunker import chunk_text
 

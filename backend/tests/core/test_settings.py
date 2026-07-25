@@ -13,7 +13,7 @@ def isolated_blog_dir(tmp_path, monkeypatch):
 
 
 async def _auth_headers(client: AsyncClient) -> dict[str, str]:
-    resp = await client.post("/api/auth/register", json={
+    resp = await client.post("/api/v1/auth/register", json={
         "username": "settings-user",
         "password": "test1234",
         "invite_code": settings.registration_invite_code,
@@ -26,14 +26,14 @@ async def _auth_headers(client: AsyncClient) -> dict[str, str]:
 async def test_get_and_update_llm_settings(client: AsyncClient):
     headers = await _auth_headers(client)
 
-    resp = await client.get("/api/settings/llm", headers=headers)
+    resp = await client.get("/api/v1/settings/llm", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["protocol"] == "openai"
     assert data["has_api_key"] is False
     assert data["api_key"] is None
 
-    resp = await client.put("/api/settings/llm", headers=headers, json={
+    resp = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "anthropic",
         "base_url": "https://api.anthropic.com",
         "api_key": "secret-key",
@@ -47,7 +47,7 @@ async def test_get_and_update_llm_settings(client: AsyncClient):
     assert data["has_api_key"] is True
     assert data["api_key"] == "secret-key"
 
-    resp = await client.put("/api/settings/llm", headers=headers, json={
+    resp = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "openai",
         "base_url": "https://api.openai.com/v1",
         "api_key": "",

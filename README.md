@@ -119,7 +119,7 @@ cd backend
 uv run uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir src
 ```
 
-或双击 `start_backend.bat`。后端运行在 http://127.0.0.1:8000，健康检查 `GET /api/health`。
+或双击 `start_backend.bat`。后端运行在 http://127.0.0.1:8000，健康检查 `GET /health`。
 
 启动时会自动：
 - 执行 DB 迁移（含历史数据目录从 `user_id` 改为 `username` 命名的一次性迁移）
@@ -229,26 +229,26 @@ ai-blog/
 
 | 分类 | 方法 | 路径 | 说明 |
 |---|---|---|---|
-| 系统 | GET | `/api/health` | 健康检查 |
-| 认证 | POST | `/api/auth/register` `/api/auth/login` | 注册 / 登录 |
-| 用户设置 | GET/PUT | `/api/settings/llm` | 读取/更新当前用户的 LLM 配置 |
-| 博客 | CRUD | `/api/blog/posts` | 文章列表/详情/创建/更新/删除 |
-| 博客 | PUT | `/api/blog/posts/{id}/publish` | 发布/取消发布 |
-| 博客 | POST | `/api/blog/posts/{id}/generate-cover` | AI 生成封面 |
-| 博客 | CRUD | `/api/blog/categories` | 分类管理 |
-| 研究 | CRUD | `/api/research/topics` | 研究主题 |
-| 研究 | CRUD | `/api/research/topics/{id}/sources` `/evidence` `/claims` `/entities` `/relations` `/proposals` | 图谱各维度 |
-| 研究 | GET | `/api/research/topics/{id}/runs` | 运行记录 |
-| 研究 | POST | `/api/research/topics/{id}/draft-preview` | 生成博客草稿预览 |
-| 研究 | GET | `/api/research/graph` | 完整图谱数据 |
-| 对话 | POST | `/api/chat/stream` | 私有 SSE 流式对话 |
-| 对话 | POST | `/api/public/chat/stream` | 公开 SSE 流式对话（匿名、限额） |
-| 对话 | CRUD | `/api/conversations` | 会话管理 |
-| 知识库 | CRUD | `/api/kb/documents` `/api/kb/categories` | 文档与分类 |
-| 文件 | POST | `/api/files/upload` | 上传文件 |
-| 文件 | GET | `/api/public/uploads/{username}/{filename}` | 公开访问上传文件 |
-| 文件 | GET | `/api/preview/...` | 文件预览 |
-| MCP | CRUD | `/api/mcp/servers` | MCP 服务管理 |
+| 系统 | GET | `/health` | 健康检查（根级，不在 /api/v1 下） |
+| 认证 | POST | `/api/v1/auth/register` `/api/v1/auth/login` | 注册 / 登录 |
+| 用户设置 | GET/PUT | `/api/v1/settings/llm` | 读取/更新当前用户的 LLM 配置 |
+| 博客 | CRUD | `/api/v1/blog/posts` | 文章列表/详情/创建/更新/删除 |
+| 博客 | PUT | `/api/v1/blog/posts/{id}/publish` | 发布/取消发布 |
+| 博客 | POST | `/api/v1/blog/posts/{id}/generate-cover` | AI 生成封面 |
+| 博客 | CRUD | `/api/v1/blog/categories` | 分类管理 |
+| 研究 | CRUD | `/api/v1/research/topics` | 研究主题 |
+| 研究 | CRUD | `/api/v1/research/topics/{id}/sources` `/evidence` `/claims` `/entities` `/relations` `/proposals` | 图谱各维度 |
+| 研究 | GET | `/api/v1/research/topics/{id}/runs` | 运行记录 |
+| 研究 | POST | `/api/v1/research/topics/{id}/draft-preview` | 生成博客草稿预览 |
+| 研究 | GET | `/api/v1/research/graph` | 完整图谱数据 |
+| 对话 | POST | `/api/v1/chat/stream` | 私有 SSE 流式对话 |
+| 对话 | POST | `/api/v1/public/chat/stream` | 公开 SSE 流式对话（匿名、限额） |
+| 对话 | CRUD | `/api/v1/conversations` | 会话管理 |
+| 文件库 | CRUD | `/api/v1/files/documents` `/api/v1/files/categories` | 文档与分类 |
+| 文件 | POST | `/api/v1/upload` | 上传文件 |
+| 文件 | GET | `/api/v1/public/uploads/{username}/{filename}` | 公开访问上传文件 |
+| 文件 | GET | `/api/v1/preview/...` | 文件预览 |
+| MCP | CRUD | `/api/v1/mcp/servers` | MCP 服务管理 |
 
 完整接口见 `backend/src/api/` 下各路由文件。
 

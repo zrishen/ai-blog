@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.services.file_service import vectorize_and_store
+from src.services.file.file_service import vectorize_and_store
 
 
 async def _fake_embeddings(texts, progress_callback=None):
@@ -35,8 +35,8 @@ async def test_vectorize_reports_black_box_stages_before_first_completed_unit():
 
     with patch("src.utils.file_parser.parse_path", side_effect=fake_parse), \
          patch("src.utils.chunker.chunk_text", return_value=["第一片段", "第二片段"]), \
-         patch("src.services.embedding_service.get_embeddings", side_effect=fake_embeddings), \
-         patch("src.services.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.rag.embedding_service.get_embeddings", side_effect=fake_embeddings), \
+         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
         await vectorize_and_store(
             "stored.pdf",
             "kb_progress",
@@ -64,8 +64,8 @@ async def test_vectorize_and_store_writes_rich_metadata():
         captured["metadata_list"] = metadata_list
 
     with patch("src.utils.file_parser.parse_path", return_value="第一段内容。\n第二段内容。"), \
-         patch("src.services.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
-         patch("src.services.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
         chunks = await vectorize_and_store(
             "stored.pdf",
             "kb_doc",
@@ -104,8 +104,8 @@ async def test_vectorize_and_store_omits_empty_category_metadata():
         captured["metadata_list"] = metadata_list
 
     with patch("src.utils.file_parser.parse_path", return_value="测试内容"), \
-         patch("src.services.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
-         patch("src.services.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
         await vectorize_and_store("stored.docx", "doc_collection")
 
     metadata = captured["metadata_list"][0]
@@ -130,8 +130,8 @@ async def test_vectorize_and_store_metadata_matches_multiple_chunks():
 
     long_text = "这是一个用于测试递归字符分割的句子。" * 80
     with patch("src.utils.file_parser.parse_path", return_value=long_text), \
-         patch("src.services.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
-         patch("src.services.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
         chunks = await vectorize_and_store("stored.pdf", "kb_long", original_name="long.pdf")
 
     assert len(chunks) > 1

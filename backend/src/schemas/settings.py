@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from src.services.llm_settings_service import SUPPORTED_LLM_PROTOCOLS
+from src.services.llm.llm_settings_service import SUPPORTED_LLM_PROTOCOLS
 
 
 class LLMSettingsResponse(BaseModel):

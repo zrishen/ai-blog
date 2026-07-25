@@ -6,7 +6,7 @@ from fastapi import APIRouter
 
 from src.config import settings
 from src.schemas.status import StatusComponents, StatusResponse
-from src.services.file_service import UPLOAD_DIR
+from src.services.file.file_service import UPLOAD_DIR
 
 router = APIRouter()
 
@@ -46,7 +46,7 @@ async def check_status():
 
     # Check vector store
     try:
-        from src.services.vector_store import list_collections
+        from src.services.rag.vector_store import list_collections
 
         collections = await list_collections()
         vector_status = f"ok ({len(collections)} collections)"

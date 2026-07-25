@@ -85,7 +85,7 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
         fieldName: "file",
         max: 20 * 1024 * 1024,
         multiple: false,
-        url: "/api/upload",
+        url: "/api/v1/upload",
         setHeaders: () => {
           const token = getAccessToken();
           return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
@@ -99,7 +99,7 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
           const username = authUser?.username;
           const filename = response.original_name || files[0]?.name || response.stored_name || "image";
           const imageUrl = username && response.stored_name
-            ? `/api/public/uploads/${encodeURIComponent(username)}/${encodeURIComponent(response.stored_name)}`
+            ? `/api/v1/public/uploads/${encodeURIComponent(username)}/${encodeURIComponent(response.stored_name)}`
             : response.download_url;
           return JSON.stringify({
             code: 0,
