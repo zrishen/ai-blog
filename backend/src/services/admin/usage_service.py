@@ -46,7 +46,7 @@ async def get_user_weekly_usage(db: AsyncSession, user_id: int) -> dict:
 
 
 async def get_overview(db: AsyncSession) -> dict:
-    """全局指标：用户数 / 活跃订阅 / 兑换码 / 本周 token 汇总。"""
+    """全局指标与注册状态：用户、订阅、兑换码、本周 token、邀请码。"""
     period = current_period_yw()
     now = _naive_utc_now()
 
@@ -89,4 +89,5 @@ async def get_overview(db: AsyncSession) -> dict:
         "codes_total": codes_total,
         "codes_used": codes_used,
         "this_week_tokens": this_week_tokens,
+        "registration_invite_code": settings.registration_invite_code.strip() or None,
     }

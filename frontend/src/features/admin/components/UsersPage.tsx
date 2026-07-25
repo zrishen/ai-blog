@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableHeader,
@@ -26,6 +27,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/stores/authStore";
+import {
+  ADMIN_DIALOG_CLASS,
+  AdminPage,
+  AdminPageHeader,
+} from "./AdminPage";
 
 const PAGE_SIZE = 20;
 
@@ -177,52 +183,60 @@ export function UsersPage() {
     total > 0 ? `第 ${rangeFrom}-${rangeTo} 条 / 共 ${total} 条` : "共 0 条";
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">用户管理</h1>
+    <AdminPage>
+      <AdminPageHeader
+        title="用户管理"
+        description="查找用户、维护订阅有效期，并管理后台访问权限。"
+      />
 
       {success && (
-        <div className="rounded-md border border-primary/30 bg-primary/10 px-4 py-2 text-sm text-primary">
+        <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary shadow-sm shadow-primary/5">
           {success}
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="搜索用户名"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-8"
-            aria-label="搜索用户名"
-          />
-        </div>
-      </div>
+      <Card className="shadow-sm">
+        <CardContent className="p-3">
+          <div className="relative w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="搜索用户名"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="rounded-xl border-border/70 bg-background/60 pl-9 shadow-none"
+              aria-label="搜索用户名"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {error ? (
         <div className="space-y-2">
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-2xl border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
             {error}
           </div>
-          <Button variant="outline" size="sm" onClick={handleRetry}>
+          <Button className="rounded-full" variant="outline" size="sm" onClick={handleRetry}>
             重试
           </Button>
         </div>
       ) : loading ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> 加载中...
-        </div>
+        <Card>
+          <CardContent className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> 加载中...
+          </CardContent>
+        </Card>
       ) : (
         <>
-          <div className="overflow-hidden rounded-md border">
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>用户名</TableHead>
+                  <TableHead className="pl-5">用户名</TableHead>
                   <TableHead>角色</TableHead>
                   <TableHead>订阅到期</TableHead>
                   <TableHead>创建时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead className="pr-5 text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -238,12 +252,12 @@ export function UsersPage() {
                 ) : (
                   users.map((u) => (
                     <TableRow key={u.id}>
-                      <TableCell className="font-medium">{u.username}</TableCell>
+                      <TableCell className="pl-5 font-medium">{u.username}</TableCell>
                       <TableCell>
                         {u.is_super_admin ? (
-                          <Badge variant="secondary">超级管理员</Badge>
+                          <Badge variant="secondary" className="rounded-full">超级管理员</Badge>
                         ) : u.is_admin ? (
-                          <Badge>管理员</Badge>
+                          <Badge className="rounded-full">管理员</Badge>
                         ) : (
                           <span className="text-muted-foreground">普通</span>
                         )}
@@ -258,11 +272,12 @@ export function UsersPage() {
                           ? new Date(u.created_at).toLocaleString()
                           : "—"}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <TableCell className="pr-5 text-right">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <Button
                             variant="outline"
                             size="sm"
+                            className="rounded-full"
                             onClick={() => handleOpenExtend(u.id)}
                           >
                             延期订阅
@@ -271,7 +286,7 @@ export function UsersPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-destructive hover:text-destructive"
+                              className="rounded-full text-destructive hover:text-destructive"
                               disabled={adminToggling === u.id}
                               onClick={() => handleToggleAdmin(u)}
                             >
@@ -282,6 +297,7 @@ export function UsersPage() {
                             <Button
                               variant="outline"
                               size="sm"
+                              className="rounded-full"
                               disabled={adminToggling === u.id}
                               onClick={() => handleToggleAdmin(u)}
                             >
@@ -296,7 +312,8 @@ export function UsersPage() {
                 )}
               </TableBody>
             </Table>
-          </div>
+            </CardContent>
+          </Card>
 
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">{rangeText}</div>
@@ -304,6 +321,7 @@ export function UsersPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-full"
                 disabled={!hasPrev}
                 onClick={handlePrev}
               >
@@ -312,6 +330,7 @@ export function UsersPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-full"
                 disabled={!hasNext}
                 onClick={handleNext}
               >
@@ -328,7 +347,7 @@ export function UsersPage() {
           if (!open) handleCloseExtend();
         }}
       >
-        <DialogContent>
+        <DialogContent className={ADMIN_DIALOG_CLASS}>
           <DialogHeader>
             <DialogTitle>延期订阅</DialogTitle>
             <DialogDescription>
@@ -370,6 +389,6 @@ export function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPage>
   );
 }

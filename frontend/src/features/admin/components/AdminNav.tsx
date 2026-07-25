@@ -1,5 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users as UsersIcon, Ticket, Activity } from "lucide-react";
+import {
+  Activity,
+  LayoutDashboard,
+  Ticket,
+  Users as UsersIcon,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -12,10 +17,7 @@ const NAV_ITEMS = [
 /** 管理后台左侧导航：4 个子页（概览/用户/兑换码/用量），NavLink 高亮当前路由。 */
 export function AdminNav() {
   return (
-    <nav className="flex h-full flex-col gap-1 p-3">
-      <div className="px-2 pb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        管理后台
-      </div>
+    <nav className="flex h-full flex-col gap-1 border-r border-border/80 bg-card/82 p-3 shadow-[12px_0_35px_hsl(var(--foreground)/0.03)] backdrop-blur-xl">
       {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
         <NavLink
           key={to}
@@ -23,14 +25,14 @@ export function AdminNav() {
           end={end}
           className={({ isActive }) =>
             cn(
-              "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+              "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition-all",
               isActive
-                ? "bg-primary/10 font-medium text-primary"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? "border-primary/18 bg-primary/10 font-medium text-primary shadow-sm shadow-primary/8"
+                : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-accent/55 hover:text-foreground",
             )
           }
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-4 w-4 shrink-0" />
           {label}
         </NavLink>
       ))}

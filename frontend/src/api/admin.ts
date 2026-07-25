@@ -17,6 +17,7 @@ export interface AdminOverview {
   codes_total: number;
   codes_used: number;
   this_week_tokens: number;
+  registration_invite_code: string | null;
 }
 
 export interface AdminUserWeeklyUsage {

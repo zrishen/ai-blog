@@ -18,6 +18,7 @@ import {
   type AdminUserItem,
   type AdminUserWeeklyUsage,
 } from "@/api/client";
+import { AdminPage, AdminPageHeader } from "./AdminPage";
 
 // 周额度固定上限 100M tokens（展示用 M 单位，÷1e6 保留 1 位）。
 const WEEKLY_LIMIT = 100_000_000;
@@ -60,23 +61,22 @@ export function UsagePage() {
   }, [users, search]);
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">用量</h1>
-        <p className="text-sm text-muted-foreground">
-          查看用户本周 token 用量与订阅状态
-        </p>
-      </div>
+    <AdminPage>
+      <AdminPageHeader
+        title="用量"
+        description="按用户查看本周 token 消耗、剩余额度与订阅状态。"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
         {/* ---- 左：用户列表 ---- */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col overflow-hidden">
           <CardHeader className="pb-3 space-y-3">
             <CardTitle className="text-base">用户</CardTitle>
             <Input
               placeholder="搜索用户名"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="rounded-xl border-border/70 bg-background/60 shadow-none"
             />
           </CardHeader>
           <CardContent className="min-h-0">
@@ -97,8 +97,10 @@ export function UsagePage() {
                       variant="ghost"
                       onClick={() => setSelectedUserId(u.id)}
                       className={cn(
-                        "w-full justify-start h-auto py-2 px-3 font-normal",
-                        selectedUserId === u.id && "bg-primary/10",
+                        "h-auto w-full justify-start rounded-xl border border-transparent px-3 py-2 font-normal",
+                        selectedUserId === u.id
+                          ? "border-primary/18 bg-primary/10 text-primary shadow-sm shadow-primary/8"
+                          : "hover:border-border/60 hover:bg-accent/55",
                       )}
                     >
                       <span className="flex flex-col items-start gap-0.5">
@@ -121,7 +123,7 @@ export function UsagePage() {
         </Card>
 
         {/* ---- 右：详情 ---- */}
-        <div>
+        <div className="min-w-0">
           {selectedUserId == null ? (
             <Card className="flex h-full min-h-[60vh] items-center justify-center">
               <CardContent className="py-20 text-center text-sm text-muted-foreground">
@@ -133,7 +135,7 @@ export function UsagePage() {
           )}
         </div>
       </div>
-    </div>
+    </AdminPage>
   );
 }
 
@@ -163,7 +165,7 @@ function UsageDetail({ userId }: { userId: number }) {
 
   if (loading) {
     return (
-      <Card>
+      <Card className="min-h-[60vh]">
         <CardContent className="py-20 text-center text-sm text-muted-foreground">
           加载中…
         </CardContent>
@@ -172,7 +174,7 @@ function UsageDetail({ userId }: { userId: number }) {
   }
   if (error) {
     return (
-      <Card>
+      <Card className="min-h-[60vh] border-destructive/20 bg-destructive/5 shadow-none">
         <CardContent className="py-20 text-center text-sm text-destructive">
           {error}
         </CardContent>
@@ -185,7 +187,7 @@ function UsageDetail({ userId }: { userId: number }) {
   const overWarn = pct > 80;
 
   return (
-    <Card>
+    <Card className="min-h-[60vh]">
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-lg">{usage.username}</CardTitle>
@@ -210,7 +212,7 @@ function UsageDetail({ userId }: { userId: number }) {
             </span>
           </div>
           <div
-            className="h-2 w-full overflow-hidden rounded-full bg-muted"
+            className="h-2.5 w-full overflow-hidden rounded-full bg-muted/80 shadow-inner"
             role="progressbar"
             aria-valuenow={Math.round(pct)}
             aria-valuemin={0}
@@ -218,8 +220,10 @@ function UsageDetail({ userId }: { userId: number }) {
           >
             <div
               className={cn(
-                "h-full rounded-full transition-all",
-                overWarn ? "bg-destructive" : "bg-primary",
+                "h-full rounded-full transition-all duration-500",
+                overWarn
+                  ? "bg-destructive shadow-[0_0_14px_hsl(var(--destructive)/0.24)]"
+                  : "bg-primary shadow-[0_0_14px_hsl(var(--primary)/0.24)]",
               )}
               style={{ width: `${Math.min(pct, 100)}%` }}
             />

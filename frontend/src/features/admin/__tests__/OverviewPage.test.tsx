@@ -17,6 +17,7 @@ const overviewBody = {
   codes_total: 10,
   codes_used: 5,
   this_week_tokens: 25_000_000,
+  registration_invite_code: "invite-2026",
 };
 
 import { OverviewPage } from "../components/OverviewPage";
@@ -32,7 +33,7 @@ describe("OverviewPage", () => {
     render(<OverviewPage />);
 
     // 标题
-    expect(await screen.findByText("管理后台 · 概览")).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "概览" })).toBeTruthy();
 
     // KPI 卡片
     expect(await screen.findByText("1,234")).toBeTruthy(); // 用户总数
@@ -44,6 +45,8 @@ describe("OverviewPage", () => {
     // 本周用量进度条文案（"剩余"/"占比"仅出现于用量卡，唯一）
     expect(await screen.findByText(/剩余/)).toBeTruthy();
     expect(await screen.findByText(/占比 25.0%/)).toBeTruthy();
+    expect(await screen.findByText("invite-2026")).toBeTruthy();
+    expect(screen.getByText("注册开放")).toBeTruthy();
 
     // 接近上限警示此时不应出现（25%）
     expect(screen.queryByText(/接近上限/)).toBeNull();
@@ -88,9 +91,20 @@ describe("OverviewPage", () => {
 
     await waitFor(() => {
       // 标题已渲染
-      expect(screen.getByText("管理后台 · 概览")).toBeTruthy();
+      expect(screen.getByRole("heading", { name: "概览" })).toBeTruthy();
     });
     // 数据文案尚未出现
     expect(screen.queryByText("1,234")).toBeNull();
+  });
+
+  it("邀请码未配置时显示注册关闭", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockResponse({ ...overviewBody, registration_invite_code: null }),
+    );
+
+    render(<OverviewPage />);
+
+    expect(await screen.findByText("注册关闭")).toBeTruthy();
+    expect(screen.getByText("当前未配置邀请码，新用户暂时无法注册。")).toBeTruthy();
   });
 });

@@ -26,6 +26,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  ADMIN_DIALOG_CLASS,
+  AdminPage,
+  AdminPageHeader,
+} from "./AdminPage";
 
 const PAGE_SIZE = 20;
 
@@ -202,19 +207,23 @@ export function CodesPage() {
   const hasNext = items.length >= PAGE_SIZE;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-foreground">兑换码管理</h1>
-        <Button onClick={openGenerate}>
-          <Plus />
-          生成兑换码
-        </Button>
-      </div>
+    <AdminPage>
+      <AdminPageHeader
+        title="兑换码管理"
+        description="生成、筛选与作废订阅兑换码，状态和使用记录集中查看。"
+        actions={
+          <Button className="rounded-full shadow-md shadow-primary/15" onClick={openGenerate}>
+            <Plus />
+            生成兑换码
+          </Button>
+        }
+      />
 
-      <div className="flex items-center gap-2">
+      <div className="flex w-fit items-center gap-1 rounded-full border border-border/70 bg-card/75 p-1 shadow-sm shadow-foreground/5 backdrop-blur-xl">
         <Button
           size="sm"
           variant={filter === undefined ? "default" : "outline"}
+          className="rounded-full border-transparent shadow-none"
           onClick={() => changeFilter(undefined)}
         >
           全部
@@ -222,6 +231,7 @@ export function CodesPage() {
         <Button
           size="sm"
           variant={filter === false ? "default" : "outline"}
+          className="rounded-full border-transparent shadow-none"
           onClick={() => changeFilter(false)}
         >
           未使用
@@ -229,13 +239,14 @@ export function CodesPage() {
         <Button
           size="sm"
           variant={filter === true ? "default" : "outline"}
+          className="rounded-full border-transparent shadow-none"
           onClick={() => changeFilter(true)}
         >
           已使用
         </Button>
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">加载中…</div>
@@ -247,19 +258,19 @@ export function CodesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>兑换码</TableHead>
+                  <TableHead className="pl-5">兑换码</TableHead>
                   <TableHead>时长</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>使用人</TableHead>
                   <TableHead>创建时间</TableHead>
                   <TableHead>备注</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
+                  <TableHead className="pr-5 text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="font-mono text-xs break-all">
+                    <TableCell className="break-all pl-5 font-mono text-xs">
                       {c.code}
                     </TableCell>
                     <TableCell>{c.duration_days}天</TableCell>
@@ -277,11 +288,12 @@ export function CodesPage() {
                     <TableCell className="max-w-[12rem] truncate">
                       {c.note ?? "—"}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="pr-5 text-right">
                       {!c.is_used && (
                         <Button
                           size="sm"
                           variant="destructive"
+                          className="rounded-full"
                           onClick={() => openRevoke(c)}
                         >
                           <Trash2 />
@@ -307,6 +319,7 @@ export function CodesPage() {
           <Button
             size="sm"
             variant="outline"
+            className="rounded-full"
             disabled={!hasPrev || loading}
             onClick={goPrev}
           >
@@ -315,6 +328,7 @@ export function CodesPage() {
           <Button
             size="sm"
             variant="outline"
+            className="rounded-full"
             disabled={!hasNext || loading}
             onClick={goNext}
           >
@@ -325,7 +339,7 @@ export function CodesPage() {
 
       {/* 生成兑换码 */}
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
-        <DialogContent>
+        <DialogContent className={ADMIN_DIALOG_CLASS}>
           <DialogHeader>
             <DialogTitle>生成兑换码</DialogTitle>
             <DialogDescription>
@@ -397,7 +411,7 @@ export function CodesPage() {
 
       {/* 生成结果（明文仅一次）*/}
       <Dialog open={resultOpen} onOpenChange={setResultOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className={`${ADMIN_DIALOG_CLASS} sm:max-w-lg`}>
           <DialogHeader>
             <DialogTitle>兑换码已生成</DialogTitle>
             <DialogDescription className="flex items-center gap-2 text-destructive">
@@ -414,7 +428,7 @@ export function CodesPage() {
               {copiedAll ? "已复制" : "全部复制"}
             </Button>
           </div>
-          <div className="max-h-80 overflow-auto rounded-md border bg-muted/30 p-2">
+          <div className="max-h-80 overflow-auto rounded-2xl border border-border/70 bg-muted/30 p-2">
             <ul className="space-y-1">
               {resultCodes.map((code, idx) => (
                 <li
@@ -448,7 +462,7 @@ export function CodesPage() {
           if (!o) setRevokeTarget(null);
         }}
       >
-        <DialogContent>
+        <DialogContent className={ADMIN_DIALOG_CLASS}>
           <DialogHeader>
             <DialogTitle>作废兑换码</DialogTitle>
             <DialogDescription>
@@ -480,6 +494,6 @@ export function CodesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPage>
   );
 }

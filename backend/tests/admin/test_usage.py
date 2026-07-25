@@ -132,6 +132,7 @@ async def test_get_overview_counts(db_session):
     assert result["codes_total"] == 4
     assert result["codes_used"] == 2
     assert result["this_week_tokens"] == 3500
+    assert result["registration_invite_code"] == settings.registration_invite_code
 
 
 @pytest.mark.asyncio
@@ -143,6 +144,7 @@ async def test_get_overview_empty_db(db_session):
         "codes_total": 0,
         "codes_used": 0,
         "this_week_tokens": 0,
+        "registration_invite_code": settings.registration_invite_code,
     }
 
 
