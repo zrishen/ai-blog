@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Badge } from "@/components/ui/badge";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import type { ResearchClaim, ResearchEntity } from "@/api/client";
 
 function statusTone(status: string) {
@@ -22,7 +23,7 @@ export function ClaimNode({ data, selected }: NodeProps) {
   const { claim, entities } = data as { claim: ResearchClaim; entities: ResearchEntity[] };
 
   return (
-    <div className={`w-[300px] rounded-[1.3rem] border bg-card/95 p-4 shadow-sm transition ${selected ? "border-primary shadow-primary/20" : "border-primary/20"}`}>
+    <div className={`w-[300px] rounded-[1.3rem] border bg-card/95 p-4 shadow-sm transition ${selected ? SOFT_SELECTED_SURFACE : "border-primary/20"}`}>
       <Handle type="target" position={Position.Left} className="!bg-primary" />
       <div className="mb-2 flex flex-wrap gap-1.5">
         <Badge variant="outline" className={`rounded-full text-[10px] ${statusTone(claim.status)}`}>{statusLabel(claim.status)}</Badge>

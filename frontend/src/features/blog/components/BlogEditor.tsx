@@ -12,6 +12,7 @@ import { ArrowLeft, Save, FileText, Tags, FolderOpen, Trash2, Archive, AlertCirc
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import { generateExcerpt } from "../utils/blogExcerpt";
 import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
 import {
@@ -644,7 +645,7 @@ export function BlogEditor() {
                 <button
                   key={cover}
                   type="button"
-                  className={`h-16 w-28 flex-shrink-0 overflow-hidden rounded-2xl border bg-card transition-all hover:border-primary/50 ${coverImage === cover ? "border-primary ring-2 ring-primary/20" : "border-border/70"}`}
+                  className={`h-16 w-28 flex-shrink-0 overflow-hidden rounded-2xl border bg-card transition-all ${coverImage === cover ? `${SOFT_SELECTED_SURFACE} ring-2 ring-foreground/10` : "border-border/70 hover:border-primary/50"}`}
                   onClick={() => setCoverImage(cover)}
                   aria-label={`选择默认封面 ${index + 1}`}
                 >

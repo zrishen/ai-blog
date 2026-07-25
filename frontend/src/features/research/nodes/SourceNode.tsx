@@ -1,6 +1,7 @@
 import { FileText } from "lucide-react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Badge } from "@/components/ui/badge";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import type { ResearchSource } from "@/api/client";
 
 function trustLabel(level: string) {
@@ -17,7 +18,7 @@ export function SourceNode({ data, selected }: NodeProps) {
   const source = (data as { source: ResearchSource }).source;
 
   return (
-    <div className={`w-[240px] rounded-[1.2rem] border bg-card/95 p-4 shadow-sm transition ${selected ? "border-primary shadow-primary/20" : "border-amber-500/25"}`}>
+    <div className={`w-[240px] rounded-[1.2rem] border bg-card/95 p-4 shadow-sm transition ${selected ? SOFT_SELECTED_SURFACE : "border-amber-500/25"}`}>
       <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
         <FileText className="h-3.5 w-3.5" /> 来源
       </div>

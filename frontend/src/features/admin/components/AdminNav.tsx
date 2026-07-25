@@ -6,6 +6,7 @@ import {
   Users as UsersIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 
 const NAV_ITEMS = [
   { to: "/admin", label: "概览", icon: LayoutDashboard, end: true },
@@ -27,7 +28,7 @@ export function AdminNav() {
             cn(
               "flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition-all",
               isActive
-                ? "border-primary/18 bg-primary/10 font-medium text-primary shadow-sm shadow-primary/8"
+                ? `${SOFT_SELECTED_SURFACE} font-medium text-primary`
                 : "border-transparent text-muted-foreground hover:border-border/60 hover:bg-accent/55 hover:text-foreground",
             )
           }

@@ -1,12 +1,13 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Badge } from "@/components/ui/badge";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import type { ResearchEvidence, ResearchSource } from "@/api/client";
 
 export function EvidenceNode({ data, selected }: NodeProps) {
   const { evidence, source } = data as { evidence: ResearchEvidence; source: ResearchSource | null };
 
   return (
-    <div className={`w-[260px] rounded-[1.2rem] border bg-card/95 p-4 shadow-sm transition ${selected ? "border-primary shadow-primary/20" : "border-sky-500/25"}`}>
+    <div className={`w-[260px] rounded-[1.2rem] border bg-card/95 p-4 shadow-sm transition ${selected ? SOFT_SELECTED_SURFACE : "border-sky-500/25"}`}>
       <Handle type="target" position={Position.Left} className="!bg-sky-500" />
       <div className="mb-2 flex flex-wrap gap-1.5">
         <Badge variant="outline" className="rounded-full border-sky-500/25 bg-sky-500/10 text-[10px] text-sky-700 dark:text-sky-300">{evidence.kind}</Badge>

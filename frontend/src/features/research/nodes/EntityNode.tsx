@@ -1,5 +1,6 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { Badge } from "@/components/ui/badge";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import type { ResearchEntity } from "@/api/client";
 
 function entityTypeLabel(type?: string | null) {
@@ -20,7 +21,7 @@ export function EntityNode({ data, selected }: NodeProps) {
   const entity = (data as { entity: ResearchEntity }).entity;
 
   return (
-    <div className={`w-[220px] rounded-[1.4rem] border bg-card/95 p-4 shadow-sm transition ${selected ? "border-primary shadow-primary/20" : "border-emerald-500/25"}`}>
+    <div className={`w-[220px] rounded-[1.4rem] border bg-card/95 p-4 shadow-sm transition ${selected ? SOFT_SELECTED_SURFACE : "border-emerald-500/25"}`}>
       <Handle type="target" position={Position.Left} className="!bg-emerald-500" />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">

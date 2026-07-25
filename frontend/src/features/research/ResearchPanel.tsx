@@ -27,6 +27,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import { statusLabel as researchStatusLabel } from "./utils/researchFormat";
 
 export function ResearchPanel() {
@@ -174,7 +175,7 @@ export function ResearchPanel() {
                     transition={{ duration: 0.15 }}
                     className={`group w-full rounded-[1.25rem] border p-3 text-left transition-colors ${
                       isActive
-                        ? "border-primary/30 bg-primary/8 shadow-sm shadow-primary/8"
+                        ? SOFT_SELECTED_SURFACE
                         : "border-border/60 bg-card/70 hover:border-primary/18 hover:bg-accent/50"
                     } ${researchDeletingId === topic.id ? "opacity-60" : ""}`}
                     onClick={() => selectResearchTopic(topic.id)}

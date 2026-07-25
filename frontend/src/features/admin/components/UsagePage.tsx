@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import {
   getAdminUserUsage,
   listAdminUsers,
@@ -99,7 +100,7 @@ export function UsagePage() {
                       className={cn(
                         "h-auto w-full justify-start rounded-xl border border-transparent px-3 py-2 font-normal",
                         selectedUserId === u.id
-                          ? "border-primary/18 bg-primary/10 text-primary shadow-sm shadow-primary/8"
+                          ? `${SOFT_SELECTED_SURFACE} text-primary`
                           : "hover:border-border/60 hover:bg-accent/55",
                       )}
                     >

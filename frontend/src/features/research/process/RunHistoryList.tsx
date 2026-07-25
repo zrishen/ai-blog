@@ -1,5 +1,6 @@
 import { Clock } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { SOFT_SELECTED_SURFACE } from "@/lib/selectionStyles";
 import type { ResearchRun } from "@/api/research";
 import { formatTime } from "../utils/researchRunHelpers";
 import { RunStatusBadge } from "./RunStatusBadge";
@@ -24,7 +25,7 @@ export function RunHistoryList({ runs, selectedRunId, onSelect }: RunHistoryList
               type="button"
               className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
                 isActive
-                  ? "border-primary/30 bg-primary/8"
+                  ? SOFT_SELECTED_SURFACE
                   : "border-border/60 bg-background/55 hover:border-border hover:bg-accent/50"
               }`}
               onClick={() => onSelect(run.id)}
