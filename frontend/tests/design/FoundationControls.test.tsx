@@ -43,4 +43,17 @@ describe("foundation controls", () => {
     expect(screen.getByRole("tab", { name: "概览" })).toHaveClass("rounded-control", "data-[state=active]:bg-card/92");
     expect(screen.getByRole("status")).toHaveClass("rounded-panel", "border-warning/25", "bg-warning/10");
   });
+
+  it("provides an underline variant for compact contextual tabs", () => {
+    render(
+      <Tabs variant="underline" defaultValue="login">
+        <TabsList aria-label="登录方式">
+          <TabsTrigger value="login">登录</TabsTrigger>
+        </TabsList>
+      </Tabs>,
+    );
+
+    expect(screen.getByRole("tablist", { name: "登录方式" })).toHaveClass("border-b", "bg-transparent");
+    expect(screen.getByRole("tab", { name: "登录" })).toHaveClass("border-b-2", "data-[state=active]:border-primary");
+  });
 });

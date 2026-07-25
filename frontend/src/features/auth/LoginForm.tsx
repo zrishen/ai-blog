@@ -51,6 +51,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
   return (
     <>
       <Tabs
+        variant="underline"
         value={mode}
         onValueChange={(value) => {
           if (value === "login" || value === "register") {
@@ -63,7 +64,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           <TabsTrigger value="login">登录</TabsTrigger>
           <TabsTrigger value="register">注册</TabsTrigger>
         </TabsList>
-        <TabsContent value={mode} className="mt-4">
+        <TabsContent value={mode} className="mt-5">
           <form onSubmit={submit} className="space-y-4">
         <div>
           <label htmlFor="auth-username" className="block text-sm font-medium text-foreground mb-1">用户名</label>
