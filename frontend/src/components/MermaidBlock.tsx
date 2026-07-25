@@ -18,23 +18,23 @@ function loadMermaid(): Promise<MermaidApi> {
 // 记录已 initialize 的主题，避免重复初始化
 let initializedTheme: string | null = null;
 
-// 柔和配色（明/暗两套），覆盖 mermaid 默认主题，让图与博客风格协调
+// 配色（明/暗两套）：base 主题 + themeVariables，复刻早期手绘示例的观感
 const LIGHT_VARS = {
-  primaryColor: "#dbeafe",
-  primaryTextColor: "#1e3a5f",
-  primaryBorderColor: "#60a5fa",
-  lineColor: "#64748b",
-  secondaryColor: "#f1f5f9",
-  tertiaryColor: "#fafafa",
+  primaryColor: "#fde68a",
+  primaryTextColor: "#78350f",
+  primaryBorderColor: "#b45309",
+  lineColor: "#92400e",
+  secondaryColor: "#fef3c7",
+  tertiaryColor: "#fffbeb",
   fontFamily: "inherit",
 };
 const DARK_VARS = {
-  primaryColor: "#1e3a5f",
-  primaryTextColor: "#cbd5e1",
-  primaryBorderColor: "#3b82f6",
-  lineColor: "#94a3b8",
-  secondaryColor: "#1e293b",
-  tertiaryColor: "#0f172a",
+  primaryColor: "#3d2817",
+  primaryTextColor: "#fde68a",
+  primaryBorderColor: "#b45309",
+  lineColor: "#d97706",
+  secondaryColor: "#291a0d",
+  tertiaryColor: "#1f1208",
   fontFamily: "inherit",
 };
 
@@ -70,17 +70,17 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
       const seq = ++seqRef.current;
       try {
         const mermaid = await loadMermaid();
-        const theme = isDark ? "dark" : "default";
-        if (initializedTheme !== theme) {
+        const key = isDark ? "base-dark" : "base-light";
+        if (initializedTheme !== key) {
           mermaid.initialize({
             startOnLoad: false,
-            theme,
+            theme: "base",
             look: "handDrawn",
             handDrawnSeed: 1,
             themeVariables: isDark ? DARK_VARS : LIGHT_VARS,
             securityLevel: "strict",
           });
-          initializedTheme = theme;
+          initializedTheme = key;
         }
         const { svg: rendered } = await mermaid.render(renderId, trimmed);
         if (seqRef.current !== seq) return;
