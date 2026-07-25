@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useChat, toggleTheme } from "../stores/chatStore";
 import { useAuth } from "../stores/authStore";
 import { motion } from "motion/react";
@@ -17,6 +17,9 @@ import {
   Menu,
   MessageSquare,
   Shield,
+  FolderOpen,
+  Network,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +46,7 @@ import { TrashDialog } from "@/features/file/components/TrashDialog";
 import type { AuthUser } from "../stores/authStore";
 import { getLLMSettings, updateLLMSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";
+import { cn } from "@/lib/utils";
 
 interface NavBarProps {
   onOpenNavigation?: () => void;
@@ -55,9 +59,11 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
   const { state, dispatch } = useChat();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const [trashDialogOpen, setTrashDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
@@ -111,6 +117,16 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     dispatch({ type: "SET_BLOG_VIEW", payload: "edit" });
     dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
     navigate(`/u/${encodeURIComponent(user.username)}`);
+  };
+
+  const handleFiles = () => {
+    dispatch({ type: "SET_PAGE", payload: "files" });
+    navigate("/files");
+  };
+
+  const handleResearch = () => {
+    dispatch({ type: "SET_PAGE", payload: "research" });
+    navigate("/research");
   };
 
   const handleLogout = () => {
@@ -179,8 +195,25 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
   };
 
+  const activePrimaryPage = location.pathname === "/files"
+    ? "files"
+    : location.pathname.startsWith("/research")
+      ? "research"
+      : location.pathname === "/" || location.pathname.startsWith("/u/")
+        ? "home"
+        : null;
+
+  const primaryNavigation = [
+    { key: "home", label: "首页", icon: Home, onClick: handleLandingHome },
+    { key: "files", label: "文件库", icon: FolderOpen, onClick: handleFiles },
+    { key: "research", label: "研究图谱", icon: Network, onClick: handleResearch },
+  ] as const;
+
   return (
-    <nav className="h-13 flex-shrink-0 flex items-center bg-card/78 backdrop-blur-xl border-b border-border/80 px-2.5 sm:px-4 gap-1.5 sm:gap-3 z-100 relative shadow-[0_10px_35px_hsl(var(--foreground)/0.05)] select-none">
+    <nav
+      aria-label="应用顶栏"
+      className="h-13 relative z-100 flex flex-shrink-0 select-none items-center gap-1.5 border-b border-border/80 bg-card/78 px-2.5 shadow-[0_10px_35px_hsl(var(--foreground)/0.05)] backdrop-blur-xl sm:gap-3 sm:px-4"
+    >
       {onOpenNavigation && (
         <Button
           ref={navigationButtonRef}
@@ -196,6 +229,8 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       )}
 
       <button
+        type="button"
+        aria-label="返回首页"
         className="group mr-1 flex min-w-0 cursor-pointer items-center gap-2 border-none bg-transparent sm:mr-3 sm:gap-2.5"
         onClick={handleLandingHome}
       >
@@ -209,6 +244,33 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
           把想法写成体系
         </span>
       </button>
+
+      <div
+        role="group"
+        aria-label="主导航"
+        className="hidden items-center gap-1.5 md:flex lg:absolute lg:left-1/2 lg:-translate-x-1/2"
+      >
+        {primaryNavigation.map(({ key, label, icon: Icon, onClick }) => {
+          const isActive = activePrimaryPage === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={onClick}
+              aria-current={isActive ? "page" : undefined}
+              className={cn(
+                "flex h-9 min-w-[92px] items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all duration-200",
+                isActive
+                  ? "bg-primary/8 text-primary shadow-sm shadow-primary/8"
+                  : "text-muted-foreground hover:bg-accent/55 hover:text-foreground",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </div>
 
       <div className="flex-1" />
 
@@ -263,6 +325,10 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               <PenLine className="w-4 h-4 text-muted-foreground" />
               写文章
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setSubscriptionDialogOpen(true)}>
+              <CreditCard className="w-4 h-4 text-muted-foreground" />
+              订阅
+            </DropdownMenuItem>
             {(user?.is_admin || user?.is_super_admin) && (
               <DropdownMenuItem onClick={handleAdmin}>
                 <Shield className="w-4 h-4 text-muted-foreground" />
@@ -315,8 +381,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
           </DialogHeader>
 
           <div className="space-y-4 px-5 py-4">
-            <SubscriptionPanel />
-
             <div>
               <h3 className="text-sm font-semibold text-foreground">AI API</h3>
               <p className="mt-1 text-[13px] text-muted-foreground">保存后会用于后端 LLM 调用。</p>
@@ -413,6 +477,19 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               {settingsSaving ? "保存中..." : "保存设置"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={subscriptionDialogOpen} onOpenChange={setSubscriptionDialogOpen}>
+        <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-border px-5 py-4">
+            <DialogTitle className="text-[18px]">订阅</DialogTitle>
+            <DialogDescription className="text-[13px]">
+              查看订阅权益、本周用量，或使用兑换码激活订阅。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-5 py-4">
+            {subscriptionDialogOpen && <SubscriptionPanel />}
+          </div>
         </DialogContent>
       </Dialog>
     </nav>

@@ -72,7 +72,7 @@ export function CategoryDetailPane({ categoryId }: CategoryDetailPaneProps) {
 
   return (
     <div className="flex flex-col flex-1 h-full overflow-y-auto bg-background px-2 py-2">
-      <div className="mx-auto w-full max-w-[1040px] flex flex-col flex-1 min-h-0">
+      <div className="w-full flex flex-col flex-1 min-h-0">
         <div className="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <StatCard
             icon={<Files className="w-4 h-4" />}
