@@ -43,8 +43,8 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
             </div>
             {resolved ? (
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline" className="rounded-full border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">已采用 Claim #{acceptedClaimId ?? "-"}</Badge>
-                <Badge variant="outline" className="rounded-full border-destructive/25 bg-destructive/10 text-destructive">已拒绝 Claim #{rejectedClaimId ?? "-"}</Badge>
+                <Badge variant="success" className="rounded-full">已采用 Claim #{acceptedClaimId ?? "-"}</Badge>
+                <Badge variant="destructive" className="rounded-full">已拒绝 Claim #{rejectedClaimId ?? "-"}</Badge>
               </div>
             ) : (
               <div className="mt-4 flex flex-wrap items-center gap-2">

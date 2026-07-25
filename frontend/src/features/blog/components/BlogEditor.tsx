@@ -12,6 +12,7 @@ import { ArrowLeft, Save, FileText, Tags, FolderOpen, Trash2, Archive, AlertCirc
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Alert } from "@/components/ui/alert";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import { generateExcerpt } from "../utils/blogExcerpt";
@@ -741,10 +742,10 @@ export function BlogEditor() {
       )}
 
       {error && (
-        <div className="m-3 flex items-center gap-2 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <Alert variant="destructive" className="m-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
           {error}
-        </div>
+        </Alert>
       )}
 
       <div

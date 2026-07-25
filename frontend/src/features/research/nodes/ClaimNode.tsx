@@ -4,10 +4,10 @@ import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import type { ResearchClaim, ResearchEntity } from "@/api/client";
 
-function statusTone(status: string) {
-  if (["supported", "approved", "applied"].includes(status)) return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-  if (["conflicting", "rejected", "failed"].includes(status)) return "border-destructive/25 bg-destructive/10 text-destructive";
-  return "border-primary/20 bg-primary/10 text-primary";
+function statusVariant(status: string): "default" | "success" | "destructive" {
+  if (["supported", "approved", "applied"].includes(status)) return "success";
+  if (["conflicting", "rejected", "failed"].includes(status)) return "destructive";
+  return "default";
 }
 
 function statusLabel(status: string) {
@@ -33,9 +33,9 @@ export function ClaimNode({ data, selected }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} className="!bg-primary" />
       <div className="mb-2 flex flex-wrap gap-1.5">
-        <Badge variant="outline" className={`rounded-full text-[10px] ${statusTone(claim.status)}`}>{statusLabel(claim.status)}</Badge>
+        <Badge variant={statusVariant(claim.status)} className="rounded-full text-[10px]">{statusLabel(claim.status)}</Badge>
         <Badge variant="outline" className="rounded-full text-[10px]">置信度 {claim.confidence}%</Badge>
-        {claim.adopted && <Badge variant="outline" className="rounded-full border-emerald-500/25 bg-emerald-500/10 text-[10px] text-emerald-700 dark:text-emerald-300">已采用</Badge>}
+        {claim.adopted && <Badge variant="success" className="rounded-full text-[10px]">已采用</Badge>}
       </div>
       <p className="line-clamp-4 text-sm font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
       {entities.length > 0 && (

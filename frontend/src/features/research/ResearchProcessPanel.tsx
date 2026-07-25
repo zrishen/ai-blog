@@ -8,6 +8,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { Surface } from "@/components/ui/surface";
 import { useResearchRuns } from "./hooks/useResearchRuns";
 import { RunHistoryList } from "./process/RunHistoryList";
@@ -84,10 +85,10 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <Alert variant="destructive" className="flex items-center gap-2">
           <AlertCircle className="h-4 w-4 flex-shrink-0" />
           {error}
-        </div>
+        </Alert>
       )}
 
       {runs.length === 0 ? (

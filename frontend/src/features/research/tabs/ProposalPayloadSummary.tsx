@@ -37,7 +37,7 @@ export function ProposalPayloadSummary({ payload, topic }: ProposalPayloadSummar
         {sourceIds.length > 0 && <Badge variant="outline" className="rounded-full">新增来源 {sourceIds.length} 个</Badge>}
         {claimIds.length > 0 && <Badge variant="outline" className="rounded-full">新增事实 {claimIds.length} 条</Badge>}
         {relationCount !== null && <Badge variant="outline" className="rounded-full">新增关系 {relationCount} 条</Badge>}
-        {conflicts.length > 0 && <Badge variant="outline" className="rounded-full border-destructive/25 bg-destructive/10 text-destructive">发现冲突 {conflicts.length} 个</Badge>}
+        {conflicts.length > 0 && <Badge variant="destructive" className="rounded-full">发现冲突 {conflicts.length} 个</Badge>}
         {(totalSources !== null || totalClaims !== null) && (
           <Badge variant="outline" className="rounded-full">
             当前总量：{totalSources ?? topic.source_count} 个来源 / {totalClaims ?? topic.claim_count} 条事实

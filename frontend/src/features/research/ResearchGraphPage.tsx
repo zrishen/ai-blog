@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AlertCircle, BrainCircuit, CheckCircle2, FileSearch, GitBranch } from "lucide-react";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { surfaceVariants } from "@/lib/visualVariants";
@@ -121,31 +122,31 @@ export function ResearchGraphPage() {
           </div>
 
           {error && (
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <Alert variant="destructive" role="alert" className="mt-4 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
               {error}
-            </div>
+            </Alert>
           )}
 
           {proposalNote && (
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+            <Alert variant="success" className="mt-4 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
               {proposalNote}
-            </div>
+            </Alert>
           )}
 
           {conflictNote && (
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+            <Alert variant="success" className="mt-4 flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
               {conflictNote}
-            </div>
+            </Alert>
           )}
 
           {runNote && (
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+            <Alert variant="info" className="mt-4 flex items-center gap-2">
               <FileSearch className="h-4 w-4" />
               {runNote}
-            </div>
+            </Alert>
           )}
         </div>
 

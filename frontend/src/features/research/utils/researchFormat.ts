@@ -46,10 +46,10 @@ export function trustLabel(level: string) {
   return labels[level] ?? level;
 }
 
-export function statusTone(status: string) {
-  if (["supported", "ready", "approved", "applied"].includes(status)) return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-  if (["conflicting", "stale", "rejected", "failed"].includes(status)) return "border-destructive/25 bg-destructive/10 text-destructive";
-  return "border-primary/20 bg-primary/10 text-primary";
+export function statusBadgeVariant(status: string): "default" | "success" | "destructive" {
+  if (["supported", "ready", "approved", "applied"].includes(status)) return "success";
+  if (["conflicting", "stale", "rejected", "failed"].includes(status)) return "destructive";
+  return "default";
 }
 
 export const RESEARCH_TABS = [

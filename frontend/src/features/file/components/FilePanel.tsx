@@ -31,6 +31,8 @@ import {
   ContextMenuItem,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
+import { Select } from "@/components/ui/select";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import {
   groupByCategory,
@@ -411,9 +413,9 @@ export function FilePanel() {
           </Button>
         </div>
         {fileActionError && (
-          <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-[13px] leading-relaxed text-destructive">
+          <Alert variant="destructive" className="px-3 py-2 text-[13px] leading-relaxed">
             {fileActionError}
-          </div>
+          </Alert>
         )}
         <ContextMenu>
           <ContextMenuTrigger asChild>
@@ -685,8 +687,8 @@ export function FilePanel() {
               {moveTarget?.kind === "file" ? "分类" : "父分类"}。
             </DialogDescription>
           </DialogHeader>
-          <select
-            className="h-10 rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none transition-colors hover:border-primary focus:border-primary"
+          <Select
+            className="h-10"
             value={moveTargetParentId === null ? "" : String(moveTargetParentId)}
             onChange={(e) =>
               setMoveTargetParentId(e.target.value ? Number(e.target.value) : null)
@@ -709,7 +711,7 @@ export function FilePanel() {
                   {c.name}
                 </option>
               ))}
-          </select>
+          </Select>
           <DialogFooter>
             <DialogClose asChild>
               <Button variant="outline">取消</Button>

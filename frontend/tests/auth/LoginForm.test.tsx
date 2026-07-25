@@ -111,7 +111,7 @@ describe("LoginForm", () => {
     );
 
     render(<LoginForm />, { wrapper });
-    await user.click(screen.getByRole("button", { name: "注册" }));
+    await user.click(screen.getByRole("tab", { name: "注册" }));
     await fillAndSubmit(user, "invite-123");
 
     await waitFor(() => {

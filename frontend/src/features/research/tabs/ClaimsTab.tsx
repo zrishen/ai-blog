@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useChat } from "../../../stores/chatStore";
 import type { ResearchTopicDetail } from "../../../api/client";
 import type { ResearchTopicActions } from "../hooks/useResearchTopicActions";
-import { statusLabel, statusTone } from "../utils/researchFormat";
+import { statusBadgeVariant, statusLabel } from "../utils/researchFormat";
 
 interface ClaimsTabProps {
   topic: ResearchTopicDetail;
@@ -41,7 +41,7 @@ export function ClaimsTab({ topic, actions }: ClaimsTabProps) {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={`rounded-full ${statusTone(claim.status)}`}>{statusLabel(claim.status)}</Badge>
+                  <Badge variant={statusBadgeVariant(claim.status)} className="rounded-full">{statusLabel(claim.status)}</Badge>
                   <Badge variant="outline" className="rounded-full">置信度 {claim.confidence}%</Badge>
                   {claim.adopted && <Badge className="rounded-full bg-emerald-600 text-white">已采用</Badge>}
                 </div>

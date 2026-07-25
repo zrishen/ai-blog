@@ -10,6 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { ResearchRun } from "@/api/research";
 import {
@@ -59,10 +60,10 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
         </div>
 
         {run.error_message && (
-          <div className="mt-3 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-xs text-destructive">
+          <Alert variant="destructive" className="mt-3 flex items-start gap-2 py-2.5 text-xs">
             <XCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <span>{run.error_message}</span>
-          </div>
+          </Alert>
         )}
       </div>
 

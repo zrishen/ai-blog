@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { SelectableSurface, Surface } from "@/components/ui/surface";
 import { useChatDispatch } from "../../../stores/chatStore";
 import type { ResearchTopicDetail } from "../../../api/client";
-import { statusLabel, statusTone } from "../utils/researchFormat";
+import { statusBadgeVariant, statusLabel } from "../utils/researchFormat";
 
 interface OverviewTabProps {
   topic: ResearchTopicDetail;
@@ -39,7 +39,7 @@ export function OverviewTab({ topic }: OverviewTabProps) {
               <SelectableSurface key={claim.id} className="w-full rounded-control bg-card/70 p-3 text-left" onClick={() => dispatch({ type: "SET_RESEARCH_SELECTED_CLAIM_ID", payload: claim.id })}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="line-clamp-2 text-[15px] font-semibold text-foreground">{claim.claim_text}</span>
-                  <Badge variant="outline" className={`shrink-0 rounded-full ${statusTone(claim.status)}`}>{statusLabel(claim.status)}</Badge>
+                  <Badge variant={statusBadgeVariant(claim.status)} className="shrink-0 rounded-full">{statusLabel(claim.status)}</Badge>
                 </div>
               </SelectableSurface>
             )) : <Surface variant="dashed" className="rounded-control p-4 text-sm">暂无事实，点击更新图谱后会在这里展示可审核事实。</Surface>}
@@ -52,7 +52,7 @@ export function OverviewTab({ topic }: OverviewTabProps) {
               <Surface key={proposal.id} variant="card" className="rounded-control bg-card/70 p-3 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-semibold text-foreground">{proposal.title}</div>
-                  <Badge variant="outline" className={`rounded-full ${statusTone(proposal.status)}`}>{statusLabel(proposal.status)}</Badge>
+                  <Badge variant={statusBadgeVariant(proposal.status)} className="rounded-full">{statusLabel(proposal.status)}</Badge>
                 </div>
                 {proposal.description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{proposal.description}</p>}
               </Surface>

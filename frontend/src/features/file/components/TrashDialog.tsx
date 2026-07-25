@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
 import { Trash2, RotateCcw, Loader2, MessageSquare, FileText, PenLine, Search } from "lucide-react";
 import { listTrash, restoreTrashItem, purgeTrashItem, emptyTrash } from "../../../api/trash";
 import type { TrashItem, TrashItemType, TrashPurgeResponse } from "../../../api/trash";
@@ -236,14 +237,14 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
 
         <div className="px-5 py-3 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
           {error && (
-            <div className="rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-[13px] text-destructive">
+            <Alert variant="destructive" className="text-[13px]">
               {error}
-            </div>
+            </Alert>
           )}
           {partialNotice && !emptyConfirmOpen && !purgeTarget && (
-            <div className="rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-[13px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
+            <Alert variant="warning" className="text-[13px]">
               {partialNotice}
-            </div>
+            </Alert>
           )}
 
           {showSearch && (

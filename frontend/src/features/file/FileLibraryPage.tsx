@@ -5,6 +5,7 @@ import { useChatHooks } from "../../hooks/useChat";
 import { listFileCategories } from "../../api/client";
 import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 import { Surface } from "@/components/ui/surface";
 import { LoginDialog } from "../auth/LoginDialog";
 import { FilePreviewPane } from "./panes/FilePreviewPane";
@@ -68,9 +69,9 @@ export function FileLibraryPage() {
   if (loadError && state.fileDocuments.length === 0) {
     return (
       <div className="flex flex-col flex-1 h-full items-center justify-center bg-background p-8 text-center">
-        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <Alert variant="destructive" className="max-w-md">
           {loadError}
-        </div>
+        </Alert>
         <Button
           variant="outline"
           className="mt-3 rounded-full"

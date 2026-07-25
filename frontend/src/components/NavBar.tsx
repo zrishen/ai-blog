@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Alert } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -416,27 +418,27 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
             </div>
 
             {settingsError && (
-              <div className="rounded-lg border border-destructive/20 bg-destructive/8 px-3 py-2 text-[13px] text-destructive">
+              <Alert variant="destructive" className="text-[13px]">
                 {settingsError}
-              </div>
+              </Alert>
             )}
             {settingsSaved && (
-              <div className="rounded-lg border border-emerald-200/70 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-700">
+              <Alert variant="success" className="text-[13px]">
                 设置已保存，下一次 AI 调用会使用新配置。
-              </div>
+              </Alert>
             )}
 
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-foreground">协议</span>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <Select
+                className="text-sm"
                 value={llmProtocol}
                 onChange={(event) => setLlmProtocol(event.target.value as LLMProtocol)}
                 disabled={settingsLoading || settingsSaving}
               >
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
-              </select>
+              </Select>
             </label>
 
             <label className="block space-y-1.5">

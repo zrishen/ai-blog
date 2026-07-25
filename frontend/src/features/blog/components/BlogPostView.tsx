@@ -343,10 +343,10 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
               {isOwner && (
                 <div className="flex flex-wrap items-center gap-1.5">
                   {error && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-destructive/20 bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+                    <Badge variant="destructive" className="gap-1 rounded-full px-2 py-1 text-[11px]">
                       <AlertCircle className="w-3 h-3" />
                       {error}
-                    </span>
+                    </Badge>
                   )}
                   <Button variant="outline" className="h-7 rounded-full bg-background/70 px-2.5 text-xs" onClick={handleEdit}>
                     <Pencil className="w-3 h-3" />

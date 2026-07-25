@@ -11,7 +11,7 @@ import {
   proposalOneLineSummary,
   sourceTypeLabel,
   statusLabel,
-  statusTone,
+  statusBadgeVariant,
   trustLabel,
 } from "../utils/researchFormat";
 import { ProposalPayloadSummary } from "./ProposalPayloadSummary";
@@ -86,7 +86,7 @@ export function ProposalsTab({ topic, actions }: ProposalsTabProps) {
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap gap-2">
                 <Badge variant="outline" className="rounded-full">{proposal.proposal_type}</Badge>
-                <Badge variant="outline" className={`rounded-full ${statusTone(proposal.status)}`}>{statusLabel(proposal.status)}</Badge>
+                <Badge variant={statusBadgeVariant(proposal.status)} className="rounded-full">{statusLabel(proposal.status)}</Badge>
               </div>
               <h2 className="line-clamp-2 text-base font-black text-foreground">{proposal.title}</h2>
             </div>
@@ -150,7 +150,7 @@ function ProposalDetail({
           </Button>
           <div className="mb-2 flex flex-wrap gap-2">
             <Badge variant="outline" className="rounded-full">{proposal.proposal_type}</Badge>
-            <Badge variant="outline" className={`rounded-full ${statusTone(proposal.status)}`}>{statusLabel(proposal.status)}</Badge>
+            <Badge variant={statusBadgeVariant(proposal.status)} className="rounded-full">{statusLabel(proposal.status)}</Badge>
           </div>
           <h2 className="text-xl font-black tracking-[-0.03em] text-foreground">{proposal.title}</h2>
         </div>
@@ -216,10 +216,10 @@ function ProposalDetail({
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant="outline" className={`rounded-full ${statusTone(claim.status)}`}>{statusLabel(claim.status)}</Badge>
+                        <Badge variant={statusBadgeVariant(claim.status)} className="rounded-full">{statusLabel(claim.status)}</Badge>
                         <Badge variant="outline" className="rounded-full">置信度 {claim.confidence}%</Badge>
-                        <Badge variant="outline" className={`rounded-full ${claim.adopted ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : ""}`}>{claim.adopted ? "已采用" : "未采用"}</Badge>
-                        {riskNotes.map((note) => <Badge key={note} variant="outline" className="rounded-full border-destructive/25 bg-destructive/10 text-destructive">{note}</Badge>)}
+                        <Badge variant={claim.adopted ? "success" : "outline"} className="rounded-full">{claim.adopted ? "已采用" : "未采用"}</Badge>
+                        {riskNotes.map((note) => <Badge key={note} variant="destructive" className="rounded-full">{note}</Badge>)}
                       </div>
                       <p className="mt-3 text-sm font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
                       {claim.reasoning && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{claim.reasoning}</p>}
@@ -288,7 +288,7 @@ function ProposalDetail({
               应用提案
             </Button>
           )}
-          <Button variant="outline" size="sm" className="rounded-full border-destructive/30 text-destructive hover:bg-destructive/10" onClick={() => handleUpdateProposal(proposal.id, "rejected")}>
+          <Button variant="destructive" size="sm" className="rounded-full" onClick={() => handleUpdateProposal(proposal.id, "rejected")}>
             <XCircle className="h-3.5 w-3.5" />
             拒绝提案
           </Button>

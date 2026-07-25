@@ -6,6 +6,7 @@ import {
 } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { surfaceVariants } from "@/lib/visualVariants";
@@ -69,9 +70,9 @@ export function SubscriptionPanel() {
   }
   if (error) {
     return (
-      <div className={cn(surfaceVariants({ variant: "inset" }), "border-destructive/20 bg-destructive/8 px-4 py-3 text-[13px] text-destructive")}>
+      <Alert variant="destructive" className="text-[13px]">
         {error}
-      </div>
+      </Alert>
     );
   }
   if (!status) return null;

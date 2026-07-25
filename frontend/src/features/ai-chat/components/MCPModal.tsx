@@ -6,6 +6,8 @@ import { X, Wrench, Globe, Terminal, Trash2, Plus, AlertCircle, ArrowLeft, Eye, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface MCPServerFormData {
@@ -227,10 +229,12 @@ export function MCPModal() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="mx-4 mt-2 flex items-center gap-2 bg-destructive/10 text-destructive py-2 px-3.5 rounded-lg text-[13px] overflow-hidden"
+              className="mx-4 mt-2 overflow-hidden"
             >
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span className="flex-1">{error}</span>
+              <Alert variant="destructive" className="flex items-center gap-2 py-2 text-[13px]">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1">{error}</span>
+              </Alert>
               <Button variant="ghost" size="icon" className="w-5 h-5 text-destructive" onClick={() => setError(null)}>
                 <X className="w-4 h-4" />
               </Button>
@@ -354,8 +358,8 @@ export function MCPModal() {
                           </div>
 
                           {/* JSON 配置 */}
-                          <textarea
-                            className="w-full min-h-[200px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          <Textarea
+                            className="min-h-[200px] resize-y font-mono leading-relaxed"
                             placeholder={`{
   "type": "stdio",
   "command": "uvx",
@@ -409,17 +413,15 @@ export function MCPModal() {
                         <label className="text-sm text-muted-foreground">类型</label>
                         <div className="flex gap-2">
                           {(["stdio", "streamable-http"] as const).map((t) => (
-                            <button
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={formData.server_type === t ? "default" : "outline"}
                               key={t}
-                              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors cursor-pointer ${
-                                formData.server_type === t
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "bg-card text-foreground border-border hover:border-primary/50"
-                              }`}
                               onClick={() => setFormData({ ...formData, server_type: t })}
                             >
                               {t === "stdio" ? "stdio" : "http"}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       </div>
@@ -449,8 +451,8 @@ export function MCPModal() {
                           {/* 参数 */}
                           <div className="flex flex-col gap-1.5">
                             <label className="text-sm text-muted-foreground">参数</label>
-                            <textarea
-                              className="w-full min-h-[70px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          <Textarea
+                            className="min-h-[70px] resize-y leading-relaxed"
                               placeholder={"arg1\narg2"}
                               value={formData.args}
                               onChange={(e) => setFormData({ ...formData, args: e.target.value })}
@@ -460,8 +462,8 @@ export function MCPModal() {
                           {/* 环境变量 */}
                           <div className="flex flex-col gap-1.5">
                             <label className="text-sm text-muted-foreground">环境变量</label>
-                            <textarea
-                              className="w-full min-h-[70px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground/50 resize-y focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          <Textarea
+                            className="min-h-[70px] resize-y leading-relaxed"
                               placeholder={"KEY1=value1\nKEY2=value2"}
                               value={formData.env_vars}
                               onChange={(e) => setFormData({ ...formData, env_vars: e.target.value })}

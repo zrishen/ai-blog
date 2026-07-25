@@ -27,6 +27,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
@@ -152,9 +153,9 @@ export function ResearchPanel() {
         </div>
 
         {researchActionError && (
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/8 px-3 py-2 text-[13px] text-destructive">
+          <Alert variant="destructive" className="px-3 py-2 text-[13px]">
             {researchActionError}
-          </div>
+          </Alert>
         )}
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">

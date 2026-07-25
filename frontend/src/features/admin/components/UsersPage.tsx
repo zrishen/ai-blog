@@ -8,6 +8,7 @@ import {
 } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -212,9 +213,9 @@ export function UsersPage() {
 
       {error ? (
         <div className="space-y-2">
-          <div className="rounded-2xl border border-destructive/20 bg-destructive/8 px-4 py-3 text-sm text-destructive">
+          <Alert variant="destructive">
             {error}
-          </div>
+          </Alert>
           <Button className="rounded-full" variant="outline" size="sm" onClick={handleRetry}>
             重试
           </Button>

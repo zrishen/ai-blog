@@ -16,6 +16,7 @@ import { UsersPage } from "./features/admin/components/UsersPage";
 import { CodesPage } from "./features/admin/components/CodesPage";
 import { UsagePage } from "./features/admin/components/UsagePage";
 import { MCPModal } from "./features/ai-chat/components/MCPModal";
+import { VisualRegressionRoute } from "./components/VisualRegressionRoute";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
 import "./App.css";
@@ -118,6 +119,7 @@ function MainContent() {
         <Route path="codes" element={<CodesPage />} />
         <Route path="usage" element={<UsagePage />} />
       </Route>
+      {import.meta.env.DEV && <Route path="/__visual-regression" element={<VisualRegressionRoute />} />}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
