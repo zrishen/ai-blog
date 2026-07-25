@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useChat, toggleTheme } from "../stores/chatStore";
 import { useAuth } from "../stores/authStore";
 import { motion } from "motion/react";
@@ -17,8 +17,6 @@ import {
   Menu,
   MessageSquare,
   Shield,
-  FolderOpen,
-  Network,
   CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,11 +43,11 @@ import { LoginDialog } from "@/features/auth/LoginDialog";
 import { SubscriptionPanel } from "@/features/subscription/components/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
 import { TrashDialog } from "@/features/file/components/TrashDialog";
-import type { AuthUser } from "../stores/authStore";
 import { getLLMSettings, updateLLMSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";
 import { cn } from "@/lib/utils";
 import { navItemVariants } from "@/lib/visualVariants";
+import { useWorkspacePrimaryNavigation } from "@/components/useWorkspacePrimaryNavigation";
 
 interface NavBarProps {
   onOpenNavigation?: () => void;
@@ -58,15 +56,19 @@ interface NavBarProps {
   aiButtonRef?: React.Ref<HTMLButtonElement>;
 }
 
-type LoginDestination = "files" | "research";
-
 export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButtonRef }: NavBarProps = {}) {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [pendingLoginDestination, setPendingLoginDestination] = useState<LoginDestination | null>(null);
+  const {
+    activePrimaryPage,
+    primaryNavigation,
+    loginDialogOpen,
+    setLoginDialogOpen,
+    openLoginDialog,
+    handleHome,
+    handleLoginSuccess,
+  } = useWorkspacePrimaryNavigation();
   const [trashDialogOpen, setTrashDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
@@ -91,34 +93,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       .catch(() => {});
   }, [isAuthenticated, dispatch]);
 
-  const resetBlogList = () => {
-    dispatch({ type: "SET_PAGE", payload: "blog" });
-    dispatch({ type: "SET_BLOG_VIEW", payload: "list" });
-    dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
-  };
-
-  const openLoginDialog = (destination: LoginDestination | null = null) => {
-    setPendingLoginDestination(destination);
-    setLoginDialogOpen(true);
-  };
-
-  const handleLandingHome = () => {
-    resetBlogList();
-    if (user?.username) {
-      navigate(`/u/${encodeURIComponent(user.username)}`);
-      return;
-    }
-    navigate("/");
-  };
-
-  const handleMyHome = () => {
-    if (!user?.username) return;
-    dispatch({ type: "SET_PAGE", payload: "blog" });
-    dispatch({ type: "SET_BLOG_VIEW", payload: "list" });
-    dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
-    navigate(`/u/${encodeURIComponent(user.username)}`);
-  };
-
   const handleWritePost = () => {
     if (!isAuthenticated || !user?.username) {
       openLoginDialog();
@@ -128,24 +102,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     dispatch({ type: "SET_BLOG_VIEW", payload: "edit" });
     dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
     navigate(`/u/${encodeURIComponent(user.username)}`);
-  };
-
-  const handleFiles = () => {
-    if (!isAuthenticated) {
-      openLoginDialog("files");
-      return;
-    }
-    dispatch({ type: "SET_PAGE", payload: "files" });
-    navigate("/files");
-  };
-
-  const handleResearch = () => {
-    if (!isAuthenticated) {
-      openLoginDialog("research");
-      return;
-    }
-    dispatch({ type: "SET_PAGE", payload: "research" });
-    navigate("/research");
   };
 
   const handleLogout = () => {
@@ -207,42 +163,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     }
   };
 
-  const handleLoginSuccess = (loggedInUser: AuthUser) => {
-    const destination = pendingLoginDestination;
-    setPendingLoginDestination(null);
-
-    if (destination === "files") {
-      dispatch({ type: "SET_PAGE", payload: "files" });
-      navigate("/files");
-      return;
-    }
-
-    if (destination === "research") {
-      dispatch({ type: "SET_PAGE", payload: "research" });
-      navigate("/research");
-      return;
-    }
-
-    dispatch({ type: "SET_PAGE", payload: "blog" });
-    dispatch({ type: "SET_BLOG_VIEW", payload: "list" });
-    dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
-    navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
-  };
-
-  const activePrimaryPage = location.pathname === "/files"
-    ? "files"
-    : location.pathname.startsWith("/research")
-      ? "research"
-      : location.pathname === "/" || location.pathname.startsWith("/u/")
-        ? "home"
-        : null;
-
-  const primaryNavigation = [
-    { key: "home", label: "首页", icon: Home, onClick: handleLandingHome },
-    { key: "files", label: "文件库", icon: FolderOpen, onClick: handleFiles },
-    { key: "research", label: "研究图谱", icon: Network, onClick: handleResearch },
-  ] as const;
-
   return (
     <nav
       aria-label="应用顶栏"
@@ -266,7 +186,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
         type="button"
         aria-label="返回首页"
         className="group mr-1 flex min-w-0 cursor-pointer items-center gap-2 border-none bg-transparent sm:mr-3 sm:gap-2.5"
-        onClick={handleLandingHome}
+        onClick={handleHome}
       >
         <span className="flex h-8 w-8 -rotate-6 items-center justify-center text-[#1E2A3A] transition-transform group-hover:-rotate-3 group-hover:scale-105 dark:text-foreground">
           <ProjectMark className="h-7 w-7" />
@@ -348,7 +268,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
           <DropdownMenuContent align="end" className="w-44">
             <DropdownMenuLabel>{user?.username}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleMyHome}>
+            <DropdownMenuItem onClick={handleHome}>
               <Home className="w-4 h-4 text-muted-foreground" />
               我的主页
             </DropdownMenuItem>

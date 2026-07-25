@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   state: {
     aiSidebarOpen: true,
     mcpModalOpen: false,
+    currentPage: "files",
     blogCurrentPostId: null,
     blogPosts: [],
     researchCurrentTopic: null,
@@ -208,6 +209,19 @@ describe("App 手机端工作台外壳", () => {
       expect(document.body.style.overflow).toBe("");
       expect(aiTrigger).toHaveFocus();
     });
+  });
+
+  it("未登录时移动导航仍提供文件库与研究图谱入口，而不是空白抽屉", async () => {
+    const user = userEvent.setup();
+    mocks.auth = { isAuthenticated: false, isInitializing: false, user: null };
+    renderApp();
+
+    await user.click(screen.getByRole("button", { name: "打开工作区导航" }));
+
+    expect(screen.getByRole("navigation", { name: "工作区主导航" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "文件库" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "研究图谱" })).toBeVisible();
+    expect(screen.queryByText("左侧业务面板")).not.toBeInTheDocument();
   });
 
   it("按 Escape 关闭当前抽屉", async () => {

@@ -5,6 +5,7 @@ import { useAuth } from "./stores/authStore";
 import { NavBar } from "./components/NavBar";
 import { LeftSidebar } from "./components/LeftSidebar";
 import { MobileDrawer } from "./components/MobileDrawer";
+import { useWorkspacePrimaryNavigation } from "./components/useWorkspacePrimaryNavigation";
 import { AISidebar } from "./features/ai-chat/AISidebar";
 import { SiteBlogRoute } from "./features/blog/components/SiteBlogRoute";
 import { SitePostRoute } from "./features/blog/components/SitePostRoute";
@@ -20,6 +21,9 @@ import { VisualRegressionRoute } from "./components/VisualRegressionRoute";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
 import "./App.css";
+import { LoginDialog } from "./features/auth/LoginDialog";
+import { cn } from "./lib/utils";
+import { navItemVariants } from "./lib/visualVariants";
 
 const LAYOUT_STORAGE_KEY = "app-panel-layout";
 const MOBILE_WORKSPACE_QUERY = "(max-width: 767px)";
@@ -232,6 +236,50 @@ function App() {
 
 type AISidebarRouteContext = ReturnType<typeof useAISidebarRouteContext>;
 
+function MobileWorkspaceNavigation({ onNavigate }: { onNavigate: () => void }) {
+  const state = useChatState();
+  const { isAuthenticated } = useAuth();
+  const {
+    activePrimaryPage,
+    primaryNavigation,
+    loginDialogOpen,
+    setLoginDialogOpen,
+    handleLoginSuccess,
+  } = useWorkspacePrimaryNavigation();
+  const showContextPanel = isAuthenticated || state.currentPage === "blog";
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <nav aria-label="工作区主导航" className="shrink-0 border-b border-border/70 p-3">
+        <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">主导航</p>
+        <div className="space-y-1">
+          {primaryNavigation.map(({ key, label, icon: Icon, onClick }) => (
+            <button
+              key={key}
+              type="button"
+              aria-current={activePrimaryPage === key ? "page" : undefined}
+              className={cn(navItemVariants({ layout: "side", state: activePrimaryPage === key ? "active" : "idle" }))}
+              onClick={() => {
+                onClick();
+                onNavigate();
+              }}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
+      </nav>
+      {showContextPanel && (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <LeftSidebar />
+        </div>
+      )}
+      <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} onSuccess={handleLoginSuccess} />
+    </div>
+  );
+}
+
 function MobileWorkspace({ aiContext }: { aiContext: AISidebarRouteContext }) {
   const [mobileDrawer, setMobileDrawer] = useState<"navigation" | "ai" | null>(null);
   const openNavigationButtonRef = useRef<HTMLButtonElement>(null);
@@ -259,7 +307,7 @@ function MobileWorkspace({ aiContext }: { aiContext: AISidebarRouteContext }) {
         returnFocusRef={openNavigationButtonRef}
         swipeEnabled={mobileDrawer === null || mobileDrawer === "navigation"}
       >
-        <LeftSidebar />
+        <MobileWorkspaceNavigation onNavigate={closeMobileDrawer} />
       </MobileDrawer>
       <MobileDrawer
         open={mobileDrawer === "ai"}
