@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
   },
   dispatch: vi.fn(),
   setLayout: vi.fn(),
+  auth: {
+    isAuthenticated: true,
+    isInitializing: false,
+    user: { id: 1, username: "alice", is_admin: false, is_super_admin: false },
+  },
 }));
 
 vi.mock("../../src/stores/chatStore", () => ({
@@ -23,7 +28,7 @@ vi.mock("../../src/stores/chatStore", () => ({
 }));
 
 vi.mock("../../src/stores/authStore", () => ({
-  useAuth: () => ({ isAuthenticated: true, user: { id: 1, username: "alice" } }),
+  useAuth: () => mocks.auth,
 }));
 
 vi.mock("../../src/components/NavBar", () => ({
@@ -76,6 +81,18 @@ vi.mock("../../src/features/research/ResearchGraphPage", () => ({
 vi.mock("../../src/features/ai-chat/components/MCPModal", () => ({
   MCPModal: () => <div>MCP</div>,
 }));
+vi.mock("../../src/features/admin/components/OverviewPage", () => ({
+  OverviewPage: () => <div>管理员概览</div>,
+}));
+vi.mock("../../src/features/admin/components/UsersPage", () => ({
+  UsersPage: () => <div>管理员用户</div>,
+}));
+vi.mock("../../src/features/admin/components/CodesPage", () => ({
+  CodesPage: () => <div>管理员兑换码</div>,
+}));
+vi.mock("../../src/features/admin/components/UsagePage", () => ({
+  UsagePage: () => <div>管理员用量</div>,
+}));
 
 vi.mock("react-resizable-panels", () => ({
   Group: ({ children }: { children: React.ReactNode }) => <div data-testid="desktop-panel-group">{children}</div>,
@@ -114,9 +131,9 @@ function setMediaMatches(matches: boolean) {
   mediaListeners.forEach((listener) => listener(event));
 }
 
-function renderApp() {
+function renderApp(route = "/files") {
   return render(
-    <MemoryRouter initialEntries={["/files"]}>
+    <MemoryRouter initialEntries={[route]}>
       <App />
     </MemoryRouter>,
   );
@@ -127,7 +144,36 @@ describe("App 手机端工作台外壳", () => {
     mocks.dispatch.mockClear();
     mocks.setLayout.mockClear();
     mocks.state.aiSidebarOpen = true;
+    mocks.auth = {
+      isAuthenticated: true,
+      isInitializing: false,
+      user: { id: 1, username: "alice", is_admin: false, is_super_admin: false },
+    };
     installMatchMedia(true);
+  });
+
+  it("恢复管理员会话期间保留当前管理页 URL", async () => {
+    installMatchMedia(false);
+    mocks.auth = { isAuthenticated: false, isInitializing: true, user: null };
+    const view = renderApp("/admin");
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByText("落地页")).not.toBeInTheDocument();
+
+    mocks.auth = {
+      isAuthenticated: true,
+      isInitializing: false,
+      user: { id: 1, username: "admin", is_admin: true, is_super_admin: false },
+    };
+    view.rerender(
+      <MemoryRouter initialEntries={["/admin"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("管理员概览")).toBeInTheDocument();
   });
 
   it("手机端只渲染单栏主内容，不挂载桌面 PanelGroup", () => {
