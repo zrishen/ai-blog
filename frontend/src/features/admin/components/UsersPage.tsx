@@ -56,12 +56,13 @@ export function UsersPage() {
   // 搜索输入防抖 ~300ms 后提交，并重置分页。
   useEffect(() => {
     const handle = setTimeout(() => {
+      if (searchInput === search) return;
       setLoading(true);
       setSearch(searchInput);
       setOffset(0);
     }, 300);
     return () => clearTimeout(handle);
-  }, [searchInput]);
+  }, [searchInput, search]);
 
   // 拉取用户列表：await 前不 setState，避免 effect 内同步 setState。
   useEffect(() => {
