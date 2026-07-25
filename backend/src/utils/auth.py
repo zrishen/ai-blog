@@ -142,3 +142,10 @@ async def get_optional_user(
     if user is None:
         return None
     return user
+
+
+async def require_admin(user: User = Depends(get_current_user)) -> User:
+    """管理员守卫：依赖 get_current_user，非管理员抛 403。"""
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+    return user

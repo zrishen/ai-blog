@@ -27,6 +27,9 @@ class Conversation(Base):
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
     deleted_at = Column(DateTime, nullable=True)
+    # compact 上下文摘要：更早的历史被压成 summary，summary_until_message_id 标记已摘要到的消息 id（增量）
+    summary = Column(Text, nullable=True)
+    summary_until_message_id = Column(Integer, nullable=True)
 
 
 class Message(Base):

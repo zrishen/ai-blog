@@ -5,6 +5,7 @@ import { setAccessToken } from "../api/client";
 export interface AuthUser {
   id: number;
   username: string;
+  is_admin: boolean;
 }
 
 interface AuthState {

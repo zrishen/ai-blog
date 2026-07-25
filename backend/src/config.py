@@ -91,6 +91,22 @@ class Settings(BaseSettings):
     public_chat_max_output_tokens: int = 800
     public_chat_daily_ip_limit: int = 10
 
+    # ---- 订阅（平台 key 共享模式）----
+    # 兑换码激活订阅：订阅期用平台 key（固定 MODEL_NAME），按 token 周额度限制，超额/到期回退 BYOK
+    subscription_duration_days: int = 30
+    # 周额度（token），周一 00:00 UTC+8 重置；100M ≈ 防滥用天花板（实际用不到）
+    subscription_weekly_token_limit: int = 100_000_000
+    # 单次请求 input token 上限（模型上下文口径：system+历史+当前+RAG+附件，防单条+附件爆炸）
+    subscription_per_request_token_limit: int = 100_000
+    # 初始管理员：部署时指定已存在的用户名，启动自动幂等提升为 admin（首个 admin 引导）。留空不处理。
+    initial_admin_username: str | None = None
+
+    # ---- 上下文压缩（compact 摘要）----
+    # 历史原文 token 超过 budget*ratio 时触发：保留最近 recent_count 条原文，更早的 LLM 摘要
+    compact_context_budget: int = 20000
+    compact_trigger_ratio: float = 0.7
+    compact_recent_count: int = 12
+
     # ---- LLM 思考强度 ----
     # 三档思考强度: fast(low) / balanced(medium) / smart(high)
     smart_thinking_model_name: str | None = None

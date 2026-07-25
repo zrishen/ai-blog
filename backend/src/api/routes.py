@@ -18,6 +18,11 @@ from src.api.auth import router as auth_router
 from src.api.public_chat import router as public_chat_router
 from src.api.settings import router as settings_router
 from src.api.trash import router as trash_router
+from src.api.admin import router as admin_router
+from src.api.admin_codes import router as admin_codes_router
+from src.api.admin_usage import router as admin_usage_router
+from src.api.admin_users import router as admin_users_router
+from src.api.subscription import router as subscription_router
 
 router = APIRouter()
 
@@ -51,3 +56,12 @@ router.include_router(preview_router)
 
 # 回收站
 router.include_router(trash_router)
+
+# 管理员后台
+router.include_router(admin_router)
+router.include_router(admin_codes_router)
+router.include_router(admin_users_router)
+router.include_router(admin_usage_router)
+
+# 订阅
+router.include_router(subscription_router)

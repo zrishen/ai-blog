@@ -24,10 +24,17 @@ function loadHighlightJs() {
 
   const loadScript = (src: string, id: string) => new Promise<void>((resolve, reject) => {
     const existing = document.getElementById(id) as HTMLScriptElement | null;
+    // 超时兜底:脚本既不 load 也不 error(被 CSP 阻止/跨域/返回非脚本等)时,避免永久挂起卡住调用方
+    const timeoutId = window.setTimeout(() => reject(new Error(`Timeout loading ${src}`)), 8000);
+    const settle = (ok: boolean) => {
+      window.clearTimeout(timeoutId);
+      if (ok) resolve();
+      else reject(new Error(`Failed to load ${src}`));
+    };
     if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
-      if ((window as typeof window & { hljs?: unknown }).hljs) resolve();
+      existing.addEventListener("load", () => settle(true), { once: true });
+      existing.addEventListener("error", () => settle(false), { once: true });
+      if ((window as typeof window & { hljs?: unknown }).hljs) settle(true);
       return;
     }
 
@@ -35,8 +42,8 @@ function loadHighlightJs() {
     script.id = id;
     script.src = src;
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    script.onload = () => settle(true);
+    script.onerror = () => settle(false);
     document.head.appendChild(script);
   });
 
@@ -724,8 +731,9 @@ export function installCodeLanguageMenu(editor: Vditor) {
 
   const handleDocumentMouseDown = (event: MouseEvent) => {
     const target = event.target as Node | null;
-    if (target && (menu.contains(target) || editorElement.contains(target))) return;
-    // 点击在任一 trigger 上也不关闭(trigger 各自处理)
+    // 仅当点击落在语言下拉菜单内、或某个语言标签按钮上时保持打开(由各自处理);
+    // 点击编辑器正文/代码块/页面其他位置一律收起菜单,避免只能再点一次按钮才消失
+    if (target && menu.contains(target)) return;
     for (const ui of codeBlockUIs.values()) {
       if (ui.trigger.contains(target as Node)) return;
     }
@@ -739,7 +747,15 @@ export function installCodeLanguageMenu(editor: Vditor) {
       const codeElement = getCodeElement(block);
       if (codeElement) positionHighlightOverlay(block, codeElement);
     }
-    if (menuOpen) positionMenu();
+    if (!menuOpen) return;
+    // 菜单跟随代码块:代码块在可视区(trigger 可见)→ 跟随定位并显示;
+    // 代码块滚出可视区(trigger 被收起)→ 仅视觉隐藏(保持打开状态),滑回来由 positionMenu 自动重现
+    const activeUI = activeCodeBlock ? codeBlockUIs.get(activeCodeBlock) : null;
+    if (!activeUI || activeUI.trigger.style.display === "none") {
+      menu.style.display = "none";
+      return;
+    }
+    positionMenu();
   };
 
   // 编辑器内任何输入都可能改动代码块内容/结构 → 全量同步
@@ -770,12 +786,13 @@ export function installCodeLanguageMenu(editor: Vditor) {
   });
   mutationObserver.observe(editorElement, { childList: true, subtree: true });
 
-  // 初始化:等 hljs 加载完成后挂载所有块。
-  // Vditor 代码块是异步渲染的,且首次进入编辑页时序不确定
-  // (HMR/组件重建/Hljs 首次下载都可能让代码块晚于 initAll 出现)。
-  // 用轮询兜底:持续检查直到所有代码块都挂载了 UI,或达到最大轮询次数。
-  const initAll = async () => {
-    await loadHighlightJs();
+  // 初始化:挂载所有代码块的 UI(trigger 语言标签按钮 + 高亮覆盖层)。
+  // Vditor 代码块是异步渲染的,首次进入编辑页时序不确定
+  // (HMR/组件重建都可能让代码块晚于 initAll 出现),用轮询兜底直到全部挂载或达到上限。
+  // 关键:不在此处 await loadHighlightJs——trigger 的挂载不依赖高亮库,高亮由
+  // renderHighlightOverlay 内部按需异步加载。预先等待会让 hljs 脚本加载挂起(不触发
+  // load/error)时永久卡住 poll,导致语言按钮间歇性丢失(刷新几次就不出现)。
+  const initAll = () => {
     const maxAttempts = 20; // 约 4 秒(20 × 200ms)
     let attempt = 0;
     const poll = () => {

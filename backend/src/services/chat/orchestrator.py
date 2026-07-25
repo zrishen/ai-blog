@@ -18,6 +18,7 @@ from langgraph.prebuilt import create_react_agent
 from src.config import settings
 from src.database.session import async_session
 from src.prompts import (
+    COMPACT_SUMMARY_PROMPT,
     CTX_ABOUT,
     CTX_FILES,
     CTX_HOME,
@@ -44,6 +45,11 @@ from src.services.conversation.conversation_service import (
     update_conversation_title,
 )
 from src.services.llm.llm_settings_service import get_user_llm_settings, has_usable_api_key
+from src.services.subscription import (
+    compute_charge_tokens,
+    consume_tokens,
+    should_use_platform_key,
+)
 from src.tools.blog import BLOG_TOOLS, current_user_id_cv
 from src.tools.file import base_search_file
 from src.tools.mcp import build_mcp_call_tool, format_mcp_capabilities, normalize_mcp_capabilities
@@ -246,13 +252,16 @@ async def stream_chat(
     """Stream a chat response via LangGraph ReAct Agent."""
     # 1. Load MCP metadata
     from sqlalchemy import select
-    from src.database.models import MCPServer
+    from src.database.models import MCPServer, User
 
     mcp_servers = []
     user_llm_settings = None
+    use_platform_key = False
     try:
         async with async_session() as db:
             user_llm_settings = await get_user_llm_settings(db, user_id)
+            user_obj = await db.get(User, user_id)
+            use_platform_key = await should_use_platform_key(db, user_obj)
             result = await db.execute(
                 select(MCPServer).where(MCPServer.user_id == user_id, MCPServer.is_active)
             )
@@ -282,6 +291,30 @@ async def stream_chat(
     requested_attachment_ids = attachment_ids or []
     provider = str(getattr(user_llm_settings, "protocol", "openai") or "openai").lower()
 
+    # 上下文压缩摘要器：订阅用平台 key，否则 BYOK；统一用 fast 模式（不深思，省时省 token）
+    async def compact_summarizer(old_summary, msgs):
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        mk = (
+            _chat_model_kwargs("fast", None, allow_official_fallback=True)
+            if use_platform_key
+            else _chat_model_kwargs("fast", user_llm_settings)
+        )
+        llm = _create_llm(mk, "fast")
+        parts: list[str] = []
+        if old_summary:
+            parts.append(f"[已有摘要]\n{old_summary}\n\n[新增对话]\n")
+        for m in msgs:
+            content = m.content
+            if not isinstance(content, str):
+                content = _extract_text_content(content)
+            parts.append(f"{m.role}: {content}\n")
+        resp = await llm.ainvoke([
+            SystemMessage(content=COMPACT_SUMMARY_PROMPT),
+            HumanMessage(content="".join(parts)),
+        ])
+        return resp.content, getattr(resp, "usage_metadata", None)
+
     # 2. Claim and build messages. Attachment failures are never silently ignored.
     try:
         if requested_attachment_ids:
@@ -298,13 +331,14 @@ async def stream_chat(
             claim_heartbeat_task = asyncio.create_task(
                 _keep_attachment_claim_alive(attachment_claim_token, user_id)
             )
-        api_messages, full_user_message, user_token_count = await _build_messages(
+        api_messages, full_user_message, user_token_count, compact_usage = await _build_messages(
             user_message,
             conversation_id,
             user_id,
             user_image_url,
             prepared_attachments,
             provider,
+            compact_summarizer=compact_summarizer,
         )
     except asyncio.CancelledError:
         await _stop_claim_heartbeat(claim_heartbeat_task)
@@ -332,6 +366,25 @@ async def stream_chat(
         })
         return
 
+    # 单次 input 上限（仅平台 key：防超长上下文烧平台 key）
+    if use_platform_key:
+        input_tokens = sum(estimate_tokens(m.get("content", "")) for m in api_messages)
+        if input_tokens > settings.subscription_per_request_token_limit:
+            await _stop_claim_heartbeat(claim_heartbeat_task)
+            await _release_claim_best_effort(
+                attachment_claim_token, user_id, reason="per-request input limit"
+            )
+            attachment_claim_token = None
+            yield f"{_STREAMERROR_MARKER}{json.dumps({'round_id': 1, 'message': f'本次对话过长（约 {input_tokens} token），超出单次上限 {settings.subscription_per_request_token_limit}，请减少历史或附件后重试。'})}"
+            yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps({
+                "type": "done",
+                "conversation_id": conversation_id,
+                "message_id": 0,
+                "user_message_id": 0,
+                "attachments": [],
+            })
+            return
+
     # 3. Build agent
     agent_tools = list(BLOG_TOOLS)
     agent_tools.append(base_search_file)
@@ -344,7 +397,12 @@ async def stream_chat(
     if trust_writing or research_topic_id:
         agent_tools.extend(RESEARCH_TOOLS)
 
-    model_kwargs = _chat_model_kwargs(thinking_mode, user_llm_settings)
+    if use_platform_key:
+        # 订阅有效：用平台 key（固定 MODEL_NAME，allow_official_fallback 走 .env）+ 开 stream_usage 拿真实 usage
+        model_kwargs = _chat_model_kwargs(thinking_mode, None, allow_official_fallback=True)
+        model_kwargs["stream_usage"] = True
+    else:
+        model_kwargs = _chat_model_kwargs(thinking_mode, user_llm_settings)
     logger.info(
         ">>> Chat start: preview='%s', conv=%s, user=%s, msg=%d, mode=%s, model=%s, max_tokens=%s, tools=%d, api_msgs=%d, mcp=%d",
         user_message[:100].replace("\n", " "),
@@ -372,6 +430,7 @@ async def stream_chat(
     _round_id = 1
     _loop_step_index = 0
     _collected_agent_msgs: list[AIMessage | ToolMessage] = []
+    _collected_usage: dict | None = None
     _tool_calls_by_id: dict[str, dict[str, Any]] = {}
     _tool_call_ids_by_name: dict[str, list[str]] = {}
     _tool_call_input_by_id: dict[str, dict[str, Any]] = {}
@@ -681,6 +740,9 @@ async def stream_chat(
                 elif kind == "on_chat_model_end":
                     ai_msg = event.get("data", {}).get("output")
                     if isinstance(ai_msg, AIMessage):
+                        usage = getattr(ai_msg, "usage_metadata", None)
+                        if usage:
+                            _collected_usage = usage
                         round_text = _extract_text_content(ai_msg.content)
                         # 工具调用前记录本轮 reasoning（与前端 timeline 一致：reasoning → 工具）
                         if len(reasoning_debug_parts) > _reasoning_logged_up_to:
@@ -783,6 +845,29 @@ async def stream_chat(
     user_message_id = 0
     response_attachments: list[dict[str, Any]] = []
     if final_confirmed:
+        # 事后扣配额（仅平台 key：真实 usage 优先，estimate 兜底）
+        if use_platform_key:
+            charge = compute_charge_tokens(
+                usage_metadata=_collected_usage,
+                fallback_input=sum(estimate_tokens(m.get("content", "")) for m in api_messages),
+                fallback_output=estimate_tokens(full_content),
+                fallback_reasoning=estimate_tokens(reasoning_content or ""),
+            )
+            if charge > 0:
+                try:
+                    async with async_session() as db:
+                        await consume_tokens(db, user_id, charge)
+                except Exception:
+                    logger.exception("Failed to charge subscription tokens")
+            # 上下文摘要的真实 usage 单独计入周配额（对话 charge 之外，仅 use_platform_key）
+            if compact_usage:
+                compact_charge = compute_charge_tokens(usage_metadata=compact_usage)
+                if compact_charge > 0:
+                    try:
+                        async with async_session() as db:
+                            await consume_tokens(db, user_id, compact_charge)
+                    except Exception:
+                        logger.exception("Failed to charge compact summary tokens")
         try:
             assistant_token_count = estimate_tokens(full_content)
             new_conv_id, saved_user_message, new_message = await save_chat_turn(

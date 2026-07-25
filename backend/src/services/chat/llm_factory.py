@@ -71,8 +71,15 @@ def _extra_body_for_mode(thinking_mode: str) -> dict[str, Any] | None:
     return extra_body
 
 
-def _chat_model_kwargs(thinking_mode: str, llm_settings=None) -> dict[str, Any]:
-    kwargs = build_llm_model_kwargs(thinking_mode, llm_settings)
+def _chat_model_kwargs(
+    thinking_mode: str,
+    llm_settings=None,
+    *,
+    allow_official_fallback: bool = False,
+) -> dict[str, Any]:
+    kwargs = build_llm_model_kwargs(
+        thinking_mode, llm_settings, allow_official_fallback=allow_official_fallback
+    )
     extra_body = _extra_body_for_mode(thinking_mode)
     if extra_body and kwargs.get("protocol") == "openai":
         reasoning_effort = extra_body.pop("reasoning_effort", None)
@@ -91,6 +98,7 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
     """
     protocol = model_kwargs.get("protocol", "openai")
     llm_kwargs = {k: v for k, v in model_kwargs.items() if k != "protocol"}
+    stream_usage = llm_kwargs.pop("stream_usage", False)
     sct = settings.langchain_stream_chunk_timeout
     if protocol == "anthropic":
         if not _HAS_ANTHROPIC or ChatAnthropic is None:
@@ -134,8 +142,12 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
             ds_kwargs["api_base"] = ds_kwargs.pop("base_url")
         if sct is not None:
             ds_kwargs["stream_chunk_timeout"] = sct
+        if stream_usage:
+            ds_kwargs["stream_usage"] = True
         return ChatDeepSeek(**ds_kwargs)
     oai_kwargs = {**llm_kwargs}
     if sct is not None:
         oai_kwargs["stream_chunk_timeout"] = sct
+    if stream_usage:
+        oai_kwargs["stream_usage"] = True
     return ChatOpenAI(**oai_kwargs)

@@ -90,3 +90,5 @@ export * from "./blog";
 export * from "./files";
 export * from "./chatAttachments";
 export * from "./trash";
+export * from "./admin";
+export * from "./subscription";

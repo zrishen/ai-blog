@@ -8,6 +8,7 @@
 import json
 import logging
 
+from src.config import settings
 from src.database.session import async_session
 from src.services.chat.chat_attachment_service import (
     ChatAttachmentError,
@@ -16,6 +17,7 @@ from src.services.chat.chat_attachment_service import (
 )
 from src.services.conversation.conversation_service import get_conversation, get_messages
 
+from .compact import compact_history
 from .token_estimate import estimate_tokens
 
 logger = logging.getLogger(__name__)
@@ -111,14 +113,23 @@ async def _build_messages(
     user_image_url: str | None,
     attachments: list[PreparedChatAttachment] | None = None,
     provider: str = "openai",
-) -> tuple[list[dict], str, int]:
+    *,
+    compact_summarizer=None,
+    compact_threshold: int | None = None,
+    compact_recent_count: int | None = None,
+) -> tuple[list[dict], str, int, dict | None]:
     """Load conversation history and build messages for the agent.
 
     正确处理 tool_calls / tool role 消息，确保发给 LLM 的历史消息符合 OpenAI 格式要求：
     - assistant 消息带 tool_calls 时必须有对应的 tool 消息回复每个 tool_call_id
     - 过滤掉不完整的 tool_calls 序列（防止 400 错误）
+
+    上下文压缩：传入 compact_summarizer 时，历史原文 token 超阈值则把较早消息摘要，
+    保留最近 compact_recent_count 条原文；摘要失败兜底回退全 raw，绝不阻塞。
+    返回第 4 个元素为本次摘要的真实 usage（未触发/失败时为 None）。
     """
 
+    conv = None
     if conversation_id:
         conv = await get_conversation(conversation_id, user_id)
         if not conv:
@@ -139,6 +150,24 @@ async def _build_messages(
     messages = []
     # 取最近 40 条（tool 调用会翻倍消息数）
     raw = list(db_messages[-40:])
+    # 上下文压缩：历史超阈值则把较早消息摘要，保留最近 N 条原文（失败兜底回退全 raw）
+    compact_usage: dict | None = None
+    if compact_summarizer and conv is not None and raw:
+        threshold = (
+            compact_threshold
+            if compact_threshold is not None
+            else int(settings.compact_context_budget * settings.compact_trigger_ratio)
+        )
+        rc = compact_recent_count or settings.compact_recent_count
+        try:
+            async with async_session() as cdb:
+                raw, compact_usage = await compact_history(
+                    cdb, conv, raw, compact_summarizer, threshold, rc
+                )
+        except Exception:
+            logger.exception("compact summarizer failed, fallback to full history")
+            raw = list(db_messages[-40:])
+            compact_usage = None
     history_attachments: dict[int, list[PreparedChatAttachment]] = {}
     history_user_ids = [message.id for message in raw if message.role == "user"]
     if history_user_ids:
@@ -226,4 +255,11 @@ async def _build_messages(
     messages.append({"role": "user", "content": current_content})
     user_token_count = estimate_tokens(current_content)
 
-    return messages, full_user_message, user_token_count
+    # 注入已有上下文摘要（compact 成功后 conv.summary 已更新；或之前会话遗留的摘要）
+    if conv is not None and getattr(conv, "summary", None):
+        messages.insert(0, {
+            "role": "system",
+            "content": "[之前对话的摘要，供你参考上下文]\n" + conv.summary,
+        })
+
+    return messages, full_user_message, user_token_count, compact_usage

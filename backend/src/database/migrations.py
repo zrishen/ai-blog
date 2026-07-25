@@ -16,13 +16,21 @@ logger = logging.getLogger(__name__)
 
 
 _IDEMPOTENT_COLUMNS = {
-    "conversations": [("deleted_at", "DATETIME")],
+    "conversations": [
+        ("deleted_at", "DATETIME"),
+        ("summary", "TEXT"),
+        ("summary_until_message_id", "INTEGER"),
+    ],
     "file_documents": [("deleted_at", "DATETIME")],
     "blog_posts": [("deleted_at", "DATETIME")],
     "chat_attachments": [
         ("position", "INTEGER"),
         ("extracted_text", "TEXT"),
         ("extraction_truncated", "BOOLEAN NOT NULL DEFAULT 0"),
+    ],
+    "users": [
+        ("is_admin", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("subscription_expires_at", "DATETIME"),
     ],
 }
 

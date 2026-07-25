@@ -29,6 +29,7 @@ async def test_register(client: AsyncClient):
     assert "access_token" in data
     assert data["user"]["username"] == "newuser"
     assert data["user"]["id"] > 0
+    assert data["user"]["is_admin"] is False  # 新注册用户默认非管理员
     # access token 必须带 type=access
     assert _decode_access(data["access_token"])["type"] == "access"
     # refresh token 通过 HttpOnly cookie 下发，不能出现在响应体里
@@ -203,3 +204,24 @@ async def test_register_is_closed_when_invite_code_is_not_configured(client: Asy
         "invite_code": "any-code",
     })
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_auth_responses_include_is_admin(client: AsyncClient):
+    """register / login / refresh 三处响应的 user 都带 is_admin 字段。"""
+    reg = await client.post("/api/v1/auth/register", json={
+        "username": "adminfield",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
+    assert reg.json()["user"]["is_admin"] is False
+
+    login_resp = await client.post("/api/v1/auth/login", json={
+        "username": "adminfield", "password": "pass1234",
+    })
+    assert login_resp.status_code == 200
+    assert login_resp.json()["user"]["is_admin"] is False
+
+    refresh_resp = await client.post("/api/v1/auth/refresh")
+    assert refresh_resp.status_code == 200
+    assert refresh_resp.json()["user"]["is_admin"] is False

@@ -100,7 +100,7 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
     _set_refresh_cookie(response, refresh)
-    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username})
+    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username, "is_admin": user.is_admin})
 
 
 async def _seed_intro_article(db: AsyncSession, user_id: int):
@@ -122,7 +122,7 @@ async def login(body: AuthRequest, response: Response, db: AsyncSession = Depend
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
     _set_refresh_cookie(response, refresh)
-    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username})
+    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username, "is_admin": user.is_admin})
 
 
 @router.post("/refresh")
@@ -137,7 +137,7 @@ async def refresh(
         _clear_refresh_cookie(response)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话已过期，请重新登录")
     access = create_access_token(user.id, user.username)
-    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username})
+    return AuthResponse(access_token=access, user={"id": user.id, "username": user.username, "is_admin": user.is_admin})
 
 
 @router.post("/logout")
@@ -154,4 +154,4 @@ async def logout(
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "username": user.username, "created_at": user.created_at.isoformat()}
+    return {"id": user.id, "username": user.username, "is_admin": user.is_admin, "created_at": user.created_at.isoformat()}

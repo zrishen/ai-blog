@@ -152,7 +152,7 @@ def _patch_deps(monkeypatch, *, conv=None, msgs=None, attachments=None) -> None:
 
 async def test_build_messages_new_conversation(monkeypatch) -> None:
     _patch_deps(monkeypatch)  # 无 conv / msgs
-    built, full, tokens = await _build_messages("hello", None, user_id=1, user_image_url=None)
+    built, full, tokens, _compact = await _build_messages("hello", None, user_id=1, user_image_url=None)
     assert built == [{"role": "user", "content": "hello"}]
     assert full == "hello"
     assert tokens > 0
@@ -163,7 +163,7 @@ async def test_build_messages_appends_history(monkeypatch) -> None:
         _msg(id=1, role="user", content="q"),
         _msg(id=2, role="assistant", content="a"),
     ])
-    built, _, _ = await _build_messages("now", 1, user_id=1, user_image_url=None)
+    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1, user_image_url=None)
     assert [m["role"] for m in built] == ["user", "assistant", "user"]
     assert built[0]["content"] == "q"
     assert built[2]["content"] == "now"
@@ -175,7 +175,7 @@ async def test_build_messages_tool_calls_complete_pair_emitted(monkeypatch) -> N
         _msg(id=2, role="assistant", content=None, tool_calls=[{"id": "tc1", "name": "search", "args": {"q": "x"}}]),
         _msg(id=3, role="tool", content="result", tool_call_id="tc1"),
     ])
-    built, _, _ = await _build_messages("now", 1, user_id=1, user_image_url=None)
+    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1, user_image_url=None)
     assert [m["role"] for m in built] == ["user", "assistant", "tool", "user"]
     assert built[1]["tool_calls"][0]["id"] == "tc1"
     assert built[1]["tool_calls"][0]["function"]["name"] == "search"
@@ -188,5 +188,5 @@ async def test_build_messages_tool_calls_incomplete_skipped(monkeypatch) -> None
         _msg(id=1, role="user", content="q"),
         _msg(id=2, role="assistant", content=None, tool_calls=[{"id": "tc1", "name": "search", "args": {}}]),
     ])
-    built, _, _ = await _build_messages("now", 1, user_id=1, user_image_url=None)
+    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1, user_image_url=None)
     assert [m["role"] for m in built] == ["user", "user"]  # 不完整 assistant 被跳过

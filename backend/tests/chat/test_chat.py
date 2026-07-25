@@ -48,7 +48,7 @@ async def test_build_messages_uses_empty_history_for_invalid_conversation(monkey
     monkeypatch.setattr(messages, "get_conversation", missing_conversation)
     monkeypatch.setattr(messages, "get_messages", get_messages_should_not_run)
 
-    messages, full_user_message, user_token_count = await chat_service._build_messages(
+    messages, full_user_message, user_token_count, compact_usage = await chat_service._build_messages(
         "你好",
         conversation_id=999,
         user_id=1,
@@ -58,6 +58,7 @@ async def test_build_messages_uses_empty_history_for_invalid_conversation(monkey
     assert messages == [{"role": "user", "content": "你好"}]
     assert full_user_message == "你好"
     assert user_token_count > 0
+    assert compact_usage is None
 
 
 @pytest.mark.asyncio
@@ -73,7 +74,7 @@ async def test_build_messages_has_no_rag_context_parameter(monkeypatch):
     signature = inspect.signature(chat_service._build_messages)
     assert "rag_context" not in signature.parameters
 
-    messages, full_user_message, user_token_count = await chat_service._build_messages(
+    messages, full_user_message, user_token_count, _compact_usage = await chat_service._build_messages(
         "根据MDCN论文重写这个博客",
         conversation_id=999,
         user_id=1,

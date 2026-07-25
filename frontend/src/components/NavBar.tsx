@@ -16,6 +16,7 @@ import {
   Trash2,
   Menu,
   MessageSquare,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LoginDialog } from "@/features/auth/LoginDialog";
+import { SubscriptionPanel } from "@/features/subscription/components/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
 import { TrashDialog } from "@/features/file/components/TrashDialog";
 import type { AuthUser } from "../stores/authStore";
@@ -116,6 +118,11 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     logout();
     dispatch({ type: "LOGOUT" });
     if (username) navigate(`/u/${encodeURIComponent(username)}`);
+  };
+
+  const handleAdmin = () => {
+    dispatch({ type: "SET_PAGE", payload: "admin" });
+    navigate("/admin");
   };
 
   const openSettingsDialog = async () => {
@@ -256,6 +263,12 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               <PenLine className="w-4 h-4 text-muted-foreground" />
               写文章
             </DropdownMenuItem>
+            {user?.is_admin && (
+              <DropdownMenuItem onClick={handleAdmin}>
+                <Shield className="w-4 h-4 text-muted-foreground" />
+                管理后台
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={openSettingsDialog}>
               <Settings className="w-4 h-4 text-muted-foreground" />
               设置
@@ -302,6 +315,8 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
           </DialogHeader>
 
           <div className="space-y-4 px-5 py-4">
+            <SubscriptionPanel />
+
             <div>
               <h3 className="text-sm font-semibold text-foreground">AI API</h3>
               <p className="mt-1 text-[13px] text-muted-foreground">保存后会用于后端 LLM 调用。</p>

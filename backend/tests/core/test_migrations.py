@@ -106,3 +106,41 @@ async def test_init_db_encrypts_legacy_llm_api_keys_idempotently(tmp_path, monke
     assert second_value == first_value
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_init_db_adds_subscription_fields_and_tables_idempotently(tmp_path, monkeypatch):
+    """Phase 1：users 补 is_admin/subscription_expires_at；新建 redemption_codes/subscription_weekly_usage 表。"""
+    database_path = tmp_path / "subscription.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
+    monkeypatch.setattr(migrations, "engine", engine)
+
+    # 旧 users 表（无 is_admin / subscription_expires_at）
+    async with engine.begin() as connection:
+        await connection.execute(
+            text(
+                "CREATE TABLE users ("
+                "id INTEGER PRIMARY KEY, "
+                "username VARCHAR(50) NOT NULL, "
+                "password_hash VARCHAR(200) NOT NULL, "
+                "created_at DATETIME)"
+            )
+        )
+
+    await migrations.init_db()
+    await migrations.init_db()  # 幂等
+
+    async with engine.connect() as connection:
+        def inspect_schema(sync_connection):
+            inspector = inspect(sync_connection)
+            return {
+                "users_columns": {c["name"] for c in inspector.get_columns("users")},
+                "tables": set(inspector.get_table_names()),
+            }
+
+        schema = await connection.run_sync(inspect_schema)
+
+    assert {"is_admin", "subscription_expires_at"}.issubset(schema["users_columns"])
+    assert {"redemption_codes", "subscription_weekly_usage"}.issubset(schema["tables"])
+
+    await engine.dispose()

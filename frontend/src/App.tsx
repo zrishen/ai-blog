@@ -1,5 +1,5 @@
 import { Component, createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Navigate, Route, Routes, matchPath, useLocation } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, matchPath, useLocation } from "react-router-dom";
 import { useChatState, useChatDispatch } from "./stores/chatStore";
 import { useAuth } from "./stores/authStore";
 import { NavBar } from "./components/NavBar";
@@ -11,6 +11,10 @@ import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
 import { FileLibraryPage } from "./features/file/FileLibraryPage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
+import { OverviewPage } from "./features/admin/components/OverviewPage";
+import { UsersPage } from "./features/admin/components/UsersPage";
+import { CodesPage } from "./features/admin/components/CodesPage";
+import { UsagePage } from "./features/admin/components/UsagePage";
 import { MCPModal } from "./features/ai-chat/components/MCPModal";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
@@ -85,6 +89,17 @@ function ResearchRoute() {
   return <ResearchGraphPage />;
 }
 
+function AdminLayout() {
+  const dispatch = useChatDispatch();
+  const { user } = useAuth();
+  useEffect(() => {
+    if (user?.is_admin) dispatch({ type: "SET_PAGE", payload: "admin" });
+  }, [dispatch, user?.is_admin]);
+  // 非 admin 直接进 /admin → 跳回首页
+  if (!user?.is_admin) return <Navigate to="/" replace />;
+  return <Outlet />;
+}
+
 function MainContent() {
   return (
     <Routes>
@@ -94,6 +109,12 @@ function MainContent() {
       <Route path="/research/:topicId" element={<ResearchRoute />} />
       <Route path="/u/:username" element={<SiteBlogRoute />} />
       <Route path="/u/:username/posts/:slug" element={<SitePostRoute />} />
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<OverviewPage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="codes" element={<CodesPage />} />
+        <Route path="usage" element={<UsagePage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
