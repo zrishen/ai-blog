@@ -158,6 +158,7 @@ function WorkspacePreview() {
         </section>
 
         <WorkspacePanel side="right" className="p-4">
+          <div className="-mx-4 -mt-4 mb-4 flex items-center gap-2 border-b border-primary/15 bg-[rgb(232_240_253)]/85 px-4 py-2 text-xs font-medium text-primary shadow-sm backdrop-blur-sm dark:bg-[rgb(34_42_60)]/85"><span className="size-2 shrink-0 rounded-full bg-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]" />当前上下文：个人 AI 工作流</div>
           <div className="flex items-center gap-2"><span className="flex size-8 items-center justify-center rounded-control bg-primary/10 text-primary"><MessageSquare className="size-4" /></span><div><p className="text-sm font-semibold">AI 助手</p><p className="text-xs text-muted-foreground">当前文章上下文</p></div></div>
           <div className="mt-6 space-y-3 text-sm"><div className="rounded-panel bg-muted/65 p-3">我可以帮你整理选题或继续写作。</div><div className="ml-6 rounded-panel border border-border/60 bg-background/65 p-3">帮我列一个可执行的大纲。</div></div>
           <div className="mt-auto rounded-shell border border-border/70 bg-background/78 p-2 text-sm text-muted-foreground">想写什么，尽管说</div>
