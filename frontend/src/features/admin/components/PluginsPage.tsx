@@ -7,7 +7,6 @@ import {
   setAdminPluginPublished,
   updateAdminPlugin,
   type AdminPlugin,
-  type AdminPluginDraft,
   type PluginPermissionLevel,
   type PluginTransport,
 } from "@/api/client";
@@ -24,46 +23,64 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminPage, AdminPageHeader } from "./AdminPage";
+import { parseMcpJsonPluginDrafts } from "../pluginMcpImport";
 
 type PluginForm = {
   slug: string;
   name: string;
   description: string;
-  transport: PluginTransport;
-  command: string;
-  args: string;
-  envVars: string;
-  url: string;
   permissionLevel: PluginPermissionLevel;
   isPublished: boolean;
+};
+
+type McpGuideForm = {
+  transport: PluginTransport;
+  name: string;
+  command: string;
+  url: string;
+  args: string;
+  envVars: string;
 };
 
 const EMPTY_FORM: PluginForm = {
   slug: "",
   name: "",
   description: "",
-  transport: "stdio",
-  command: "",
-  args: "[]",
-  envVars: "",
-  url: "",
   permissionLevel: "read",
   isPublished: false,
+};
+
+const EMPTY_MCP_GUIDE: McpGuideForm = {
+  transport: "stdio",
+  name: "",
+  command: "",
+  url: "",
+  args: "",
+  envVars: "",
 };
 
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
-function parseJson<T>(value: string, label: string, fallback: T): T {
-  if (!value.trim()) return fallback;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    throw new Error(`${label}必须是合法 JSON`);
+function parseLines(value: string): string[] {
+  return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function parseEnvLines(value: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const line of parseLines(value)) {
+    const separator = line.indexOf("=");
+    if (separator < 1) throw new Error("环境变量请按 KEY=value 每行填写");
+    const key = line.slice(0, separator).trim();
+    const envValue = line.slice(separator + 1).trim();
+    if (!key) throw new Error("环境变量名称不能为空");
+    env[key] = envValue;
   }
+  return env;
 }
 
 function formFromPlugin(plugin: AdminPlugin): PluginForm {
@@ -71,15 +88,16 @@ function formFromPlugin(plugin: AdminPlugin): PluginForm {
     slug: plugin.slug,
     name: plugin.name,
     description: plugin.description,
-    transport: plugin.transport,
-    command: plugin.command ?? "",
-    args: JSON.stringify(plugin.args, null, 2),
-    // 密钥从不回传到浏览器；留空代表编辑时保持原值。
-    envVars: "",
-    url: plugin.url ?? "",
     permissionLevel: plugin.permission_level,
     isPublished: plugin.is_published,
   };
+}
+
+function mcpJsonFromPlugin(plugin: AdminPlugin): string {
+  const config: Record<string, unknown> = plugin.transport === "stdio"
+    ? { type: "stdio", command: plugin.command ?? "", args: plugin.args }
+    : { type: "streamable-http", url: plugin.url ?? "" };
+  return JSON.stringify({ mcpServers: { [plugin.slug]: config } }, null, 2);
 }
 
 export function PluginsPage() {
@@ -94,6 +112,10 @@ export function PluginsPage() {
   const [deleting, setDeleting] = useState<AdminPlugin | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
   const [changingPublishId, setChangingPublishId] = useState<number | null>(null);
+  const [mcpJson, setMcpJson] = useState("");
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [guide, setGuide] = useState<McpGuideForm>(EMPTY_MCP_GUIDE);
+  const [guideError, setGuideError] = useState<string | null>(null);
 
   async function reload() {
     setLoading(true);
@@ -127,13 +149,27 @@ export function PluginsPage() {
   function openCreate() {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setMcpJson("");
     setFormError(null);
+    setFormOpen(true);
+  }
+
+  function openGuide() {
+    setGuide(EMPTY_MCP_GUIDE);
+    setGuideError(null);
+    setFormOpen(false);
+    setGuideOpen(true);
+  }
+
+  function closeGuide() {
+    setGuideOpen(false);
     setFormOpen(true);
   }
 
   function openEdit(plugin: AdminPlugin) {
     setEditing(plugin);
     setForm(formFromPlugin(plugin));
+    setMcpJson(mcpJsonFromPlugin(plugin));
     setFormError(null);
     setFormOpen(true);
   }
@@ -142,44 +178,59 @@ export function PluginsPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function syncPluginSlugFromMcpJson(value: string) {
+    if (editing) return;
+    try {
+      const raw: unknown = JSON.parse(value);
+      if (!raw || typeof raw !== "object" || Array.isArray(raw) || !("mcpServers" in raw)) return;
+      const configs = parseMcpJsonPluginDrafts(value);
+      if (configs.length === 1) setField("slug", configs[0].draft.slug);
+    } catch {
+      // JSON 尚未输入完整时不打断编辑；保存时再统一校验。
+    }
+  }
+
+  function updateMcpJson(value: string) {
+    setMcpJson(value);
+    syncPluginSlugFromMcpJson(value);
+  }
+
   async function savePlugin() {
     setSaving(true);
     setFormError(null);
     try {
-      const args = parseJson<string[]>(form.args, "参数", []);
-      if (!Array.isArray(args) || !args.every((arg) => typeof arg === "string")) {
-        throw new Error("参数必须是字符串数组");
+      const parsedConfigs = parseMcpJsonPluginDrafts(mcpJson);
+      if (parsedConfigs.length !== 1) {
+        throw new Error("一次只能保存一个插件，请只保留一个 MCP 配置");
       }
-      const envVars = form.envVars.trim() ? parseJson<Record<string, string>>(form.envVars, "环境变量", {}) : undefined;
-      if (envVars && Object.values(envVars).some((value) => typeof value !== "string")) {
-        throw new Error("环境变量的值必须是字符串");
-      }
+      const [{ draft, includesEnvironmentVariables }] = parsedConfigs;
+
       if (!editing) {
-        const draft: AdminPluginDraft = {
-          slug: form.slug.trim(),
+        await createAdminPlugin({
+          ...draft,
           name: form.name.trim(),
           description: form.description.trim(),
-          transport: form.transport,
-          command: form.transport === "stdio" ? form.command.trim() : undefined,
-          args,
-          env_vars: envVars ?? {},
-          url: form.transport === "streamable-http" ? form.url.trim() : undefined,
-          permission_level: form.permissionLevel,
-          is_published: form.isPublished,
-        };
-        await createAdminPlugin(draft);
-      } else {
-        await updateAdminPlugin(editing.id, {
-          name: form.name.trim(),
-          description: form.description.trim(),
-          command: editing.transport === "stdio" ? form.command.trim() : undefined,
-          args,
-          ...(envVars !== undefined ? { env_vars: envVars } : {}),
-          url: editing.transport === "streamable-http" ? form.url.trim() : undefined,
           permission_level: form.permissionLevel,
           is_published: form.isPublished,
         });
+        setFormOpen(false);
+        await reload();
+        return;
       }
+
+      if (draft.transport !== editing.transport) {
+        throw new Error("编辑时暂不支持更改 MCP 传输方式");
+      }
+      await updateAdminPlugin(editing.id, {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        command: draft.transport === "stdio" ? draft.command : undefined,
+        args: draft.args,
+        ...(includesEnvironmentVariables ? { env_vars: draft.env_vars } : {}),
+        url: draft.transport === "streamable-http" ? draft.url : undefined,
+        permission_level: form.permissionLevel,
+        is_published: form.isPublished,
+      });
       setFormOpen(false);
       await reload();
     } catch (cause) {
@@ -214,6 +265,46 @@ export function PluginsPage() {
       setDeleting(null);
     } finally {
       setDeletingBusy(false);
+    }
+  }
+
+  function formatMcpJson() {
+    try {
+      updateMcpJson(JSON.stringify(JSON.parse(mcpJson), null, 2));
+      setFormError(null);
+    } catch {
+      setFormError("JSON 格式错误，无法格式化");
+    }
+  }
+
+  function applyGuideConfig() {
+    const name = guide.name.trim();
+    if (!name) {
+      setGuideError("请填写 MCP 标题");
+      return;
+    }
+    if (guide.transport === "stdio" && !guide.command.trim()) {
+      setGuideError("请填写启动命令");
+      return;
+    }
+    if (guide.transport === "streamable-http" && !guide.url.trim()) {
+      setGuideError("请填写服务 URL");
+      return;
+    }
+    try {
+      const config: Record<string, unknown> = guide.transport === "stdio"
+        ? { type: "stdio", command: guide.command.trim() }
+        : { type: "streamable-http", url: guide.url.trim() };
+      const args = parseLines(guide.args);
+      const env = parseEnvLines(guide.envVars);
+      if (args.length) config.args = args;
+      if (Object.keys(env).length) config.env = env;
+      updateMcpJson(JSON.stringify({ mcpServers: { [name]: config } }, null, 2));
+      setFormError(null);
+      setGuideOpen(false);
+      setFormOpen(true);
+    } catch (cause) {
+      setGuideError(errorMessage(cause, "生成配置失败"));
     }
   }
 
@@ -272,56 +363,111 @@ export function PluginsPage() {
       )}
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="max-h-[min(760px,calc(100vh-2rem))] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-h-[min(820px,calc(100vh-2rem))] max-w-3xl overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>{editing ? "编辑平台插件" : "添加平台插件"}</DialogTitle>
-            <DialogDescription>此处保存的 MCP 命令、URL 和环境变量只由管理员配置，普通用户无法读取或提交。</DialogDescription>
+            <DialogDescription>填写插件信息后，可直接粘贴完整 MCP JSON，或通过配置向导生成并回填配置</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-medium">插件名称<Input value={form.name} onChange={(event) => setField("name", event.target.value)} /></label>
-            <label className="grid gap-1.5 text-sm font-medium">插件标识
-              <Input value={form.slug} disabled={Boolean(editing)} placeholder="web-search" onChange={(event) => setField("slug", event.target.value)} />
-            </label>
-            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">说明<Textarea value={form.description} onChange={(event) => setField("description", event.target.value)} /></label>
-            <label className="grid gap-1.5 text-sm font-medium">传输方式
-              <Select value={form.transport} disabled={Boolean(editing)} onChange={(event) => setField("transport", event.target.value as PluginTransport)}>
-                <option value="stdio">stdio（本地命令）</option>
-                <option value="streamable-http">streamable HTTP</option>
-              </Select>
-            </label>
+            <label className="grid gap-1.5 text-sm font-medium">插件名称<Input value={form.name} placeholder="例如：必应搜索" onChange={(event) => setField("name", event.target.value)} /></label>
+            <label className="grid gap-1.5 text-sm font-medium">插件标识<Input value={form.slug} readOnly placeholder="由 JSON 中的 MCP 服务名自动生成" /></label>
+            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">说明<Textarea value={form.description} placeholder="说明这个插件能帮写作助手做什么" onChange={(event) => setField("description", event.target.value)} /></label>
             <label className="grid gap-1.5 text-sm font-medium">权限级别
               <Select value={form.permissionLevel} onChange={(event) => setField("permissionLevel", event.target.value as PluginPermissionLevel)}>
                 <option value="read">只读</option>
                 <option value="write">可写入外部服务</option>
               </Select>
             </label>
-            {form.transport === "stdio" ? (
-              <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">启动命令<Input value={form.command} placeholder="npx" onChange={(event) => setField("command", event.target.value)} /></label>
-            ) : (
-              <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">服务 URL<Input value={form.url} placeholder="https://example.com/mcp" onChange={(event) => setField("url", event.target.value)} /></label>
-            )}
-            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">参数（JSON 字符串数组）<Textarea className="font-mono text-xs" value={form.args} onChange={(event) => setField("args", event.target.value)} /></label>
-            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">环境变量（JSON 对象）
-              <Textarea className="font-mono text-xs" value={form.envVars} placeholder={editing ? "留空保持原值；填写 {} 清空" : "{\n  \"API_KEY\": \"...\"\n}"} onChange={(event) => setField("envVars", event.target.value)} />
-            </label>
-            <div className="flex items-center justify-between gap-3 rounded-control border border-border/70 bg-muted/35 px-3 py-2 text-sm sm:col-span-2">
-              <span className="font-medium">立即发布给用户（需发现到可用工具）</span>
-              <Button
-                type="button"
-                size="sm"
-                variant={form.isPublished ? "default" : "outline"}
-                role="switch"
-                aria-checked={form.isPublished}
+            <div className="flex h-9 items-center justify-between gap-3 self-end rounded-control border border-border/70 bg-muted/35 px-3 text-sm">
+              <span className="font-medium">立即发布给用户</span>
+              <Switch
+                checked={form.isPublished}
+                aria-label="立即发布给用户"
                 onClick={() => setField("isPublished", !form.isPublished)}
-              >
-                {form.isPublished ? "已开启" : "未开启"}
-              </Button>
+              />
             </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm font-medium">完整的 JSON 配置</span>
+              <Button type="button" variant="link" className="h-auto p-0 text-primary" onClick={openGuide}>配置向导</Button>
+            </div>
+            <Textarea
+              className="min-h-64 font-mono text-xs leading-6"
+              value={mcpJson}
+              placeholder={'{\n  "mcpServers": {\n    "bing-search": {\n      "command": "npx",\n      "args": ["-y", "bing-cn-mcp"]\n    }\n  }\n}'}
+              onChange={(event) => updateMcpJson(event.target.value)}
+            />
+            <Button type="button" variant="ghost" className="-ml-2" onClick={formatMcpJson}>格式化</Button>
           </div>
           {formError && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{formError}</div>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
-            <Button disabled={saving} onClick={() => void savePlugin()}>{saving && <LoaderCircle className="animate-spin" />}{editing ? "保存修改" : "创建插件"}</Button>
+            <Button disabled={saving || !mcpJson.trim()} onClick={() => void savePlugin()}>{saving && <LoaderCircle className="animate-spin" />}{editing ? "保存修改" : "创建插件"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={guideOpen} onOpenChange={(open) => open ? setGuideOpen(true) : closeGuide()}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>MCP 配置向导</DialogTitle>
+            <DialogDescription>快速生成 JSON 配置，应用后会回填到完整配置中。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <span className="text-sm font-medium">类型</span>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={guide.transport === "stdio" ? "default" : "outline"}
+                  role="radio"
+                  aria-checked={guide.transport === "stdio"}
+                  onClick={() => setGuide((current) => ({ ...current, transport: "stdio" }))}
+                >
+                  stdio
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={guide.transport === "streamable-http" ? "default" : "outline"}
+                  role="radio"
+                  aria-checked={guide.transport === "streamable-http"}
+                  onClick={() => setGuide((current) => ({ ...current, transport: "streamable-http" }))}
+                >
+                  HTTP
+                </Button>
+              </div>
+            </div>
+            <label className="grid gap-1.5 text-sm font-medium">
+              MCP 标题（唯一）
+              <Input value={guide.name} placeholder="my-mcp-server" onChange={(event) => setGuide((current) => ({ ...current, name: event.target.value }))} />
+            </label>
+            {guide.transport === "stdio" ? (
+              <label className="grid gap-1.5 text-sm font-medium">
+                命令
+                <Input value={guide.command} placeholder="npx 或 uvx" onChange={(event) => setGuide((current) => ({ ...current, command: event.target.value }))} />
+              </label>
+            ) : (
+              <label className="grid gap-1.5 text-sm font-medium">
+                服务 URL
+                <Input value={guide.url} placeholder="https://example.com/mcp" onChange={(event) => setGuide((current) => ({ ...current, url: event.target.value }))} />
+              </label>
+            )}
+            <label className="grid gap-1.5 text-sm font-medium">
+              参数
+              <Textarea className="min-h-20 font-mono text-xs" value={guide.args} placeholder={'每行一个参数\n-y\nbing-cn-mcp'} onChange={(event) => setGuide((current) => ({ ...current, args: event.target.value }))} />
+            </label>
+            <label className="grid gap-1.5 text-sm font-medium">
+              环境变量
+              <Textarea className="min-h-20 font-mono text-xs" value={guide.envVars} placeholder={'每行一个变量\nKEY1=value1\nKEY2=value2'} onChange={(event) => setGuide((current) => ({ ...current, envVars: event.target.value }))} />
+            </label>
+          </div>
+          {guideError && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{guideError}</div>}
+          <DialogFooter>
+            <Button variant="outline" onClick={closeGuide}>取消</Button>
+            <Button onClick={applyGuideConfig}>应用配置</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

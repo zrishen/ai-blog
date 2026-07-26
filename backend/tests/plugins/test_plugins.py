@@ -162,7 +162,7 @@ async def test_admin_can_create_and_publish_platform_plugin(client, db_session, 
     app.dependency_overrides[require_admin] = override_admin
     try:
         created = await client.post("/api/v1/admin/plugins", json={
-            "slug": "api-search",
+            "slug": "12306-mcp",
             "name": "API Search",
             "description": "Search the web",
             "transport": "stdio",
@@ -182,6 +182,6 @@ async def test_admin_can_create_and_publish_platform_plugin(client, db_session, 
 
         listed = await client.get("/api/v1/admin/plugins")
         assert listed.status_code == 200
-        assert [plugin["slug"] for plugin in listed.json()["plugins"]] == ["api-search"]
+        assert [plugin["slug"] for plugin in listed.json()["plugins"]] == ["12306-mcp"]
     finally:
         app.dependency_overrides.pop(require_admin, None)

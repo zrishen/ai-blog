@@ -31,7 +31,7 @@ class UserPluginListResponse(BaseModel):
 
 
 class AdminPluginCreate(BaseModel):
-    slug: Annotated[str, Field(min_length=2, max_length=80, pattern=r"^[a-z][a-z0-9-]*$")]
+    slug: Annotated[str, Field(min_length=2, max_length=80, pattern=r"^[a-z0-9][a-z0-9-]*$")]
     name: Annotated[str, Field(min_length=1, max_length=100)]
     description: Annotated[str, Field(max_length=1000)] = ""
     icon: Annotated[str, Field(min_length=1, max_length=40)] = "Blocks"
