@@ -55,7 +55,7 @@ async def test_unknown_protocol_falls_back_to_openai(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_empty_api_key_does_not_overwrite_existing(client: AsyncClient, db_session):
+async def test_empty_api_key_clears_existing_value(client: AsyncClient, db_session):
     token, user_id = await _register(client, "key_preserve")
     headers = {"Authorization": f"Bearer {token}"}
 
@@ -68,7 +68,7 @@ async def test_empty_api_key_does_not_overwrite_existing(client: AsyncClient, db
     assert resp.status_code == 200
     assert resp.json()["has_api_key"] is True
 
-    # 再次更新其他字段但传空 api_key，原 api_key 应保留
+    # 明确传空 api_key 表示删除已保存的密钥
     resp2 = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "openai",
         "api_key": "",
@@ -76,7 +76,32 @@ async def test_empty_api_key_does_not_overwrite_existing(client: AsyncClient, db
     })
     assert resp2.status_code == 200
     assert resp2.json()["model"] == "new-model"
-    assert resp2.json()["has_api_key"] is True
+    assert resp2.json()["has_api_key"] is False
+    assert resp2.json()["api_key"] is None
+
+    record = (await db_session.execute(
+        select(LLMSettings).where(LLMSettings.user_id == user_id)
+    )).scalar_one()
+    assert record.api_key is None
+
+
+@pytest.mark.asyncio
+async def test_omitted_api_key_preserves_existing_value(client: AsyncClient, db_session):
+    token, user_id = await _register(client, "key_omitted")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    await client.put("/api/v1/settings/llm", headers=headers, json={
+        "protocol": "openai",
+        "api_key": "first-key",
+        "model": "m",
+    })
+
+    resp = await client.put("/api/v1/settings/llm", headers=headers, json={
+        "protocol": "openai",
+        "model": "new-model",
+    })
+    assert resp.status_code == 200
+    assert resp.json()["has_api_key"] is True
 
     record = (await db_session.execute(
         select(LLMSettings).where(LLMSettings.user_id == user_id)

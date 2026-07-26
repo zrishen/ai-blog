@@ -56,4 +56,5 @@ async def test_get_and_update_llm_settings(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["protocol"] == "openai"
-    assert data["has_api_key"] is True
+    assert data["has_api_key"] is False
+    assert data["api_key"] is None

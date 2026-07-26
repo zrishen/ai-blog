@@ -47,8 +47,10 @@ async def update_llm_settings(
     record.protocol = data.normalized_protocol()
     record.base_url = data.base_url.strip() if data.base_url else None
     record.model_name = data.model.strip() if data.model else None
-    if data.api_key and data.api_key.strip():
-        record.api_key = encrypt_secret(data.api_key.strip())
+    # 明确传入空值表示用户要删除 API Key；未传此字段才保留既有密钥。
+    if "api_key" in data.model_fields_set:
+        api_key = (data.api_key or "").strip()
+        record.api_key = encrypt_secret(api_key) if api_key else None
 
     await db.commit()
     await db.refresh(record)
