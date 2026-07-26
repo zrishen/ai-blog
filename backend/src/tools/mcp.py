@@ -1,10 +1,12 @@
+"""将管理员定义、用户已启用的平台插件包装为 AI 可调用 MCP 工具。"""
+
 import json
 from typing import Any
 
 from langchain_core.tools import BaseTool, StructuredTool
 
 from src.config import settings
-from src.services.mcp.tool_client import tool_manager
+from src.services.plugins.mcp_client import tool_manager
 
 
 def _parse_tools(raw_tools: Any) -> list[Any]:
@@ -19,15 +21,17 @@ def _parse_tools(raw_tools: Any) -> list[Any]:
     return raw_tools if isinstance(raw_tools, list) else []
 
 
-def normalize_mcp_capabilities(mcp_servers: list[dict]) -> list[dict[str, object]]:
+def normalize_mcp_capabilities(mcp_plugins: list[dict]) -> list[dict[str, object]]:
+    """只为已发布且已由调用方筛选为“用户启用”的插件生成能力。"""
     capabilities: list[dict[str, object]] = []
-    for server in mcp_servers:
-        if not server.get("is_active", True):
+    for plugin in mcp_plugins:
+        if not plugin.get("is_published", True):
             continue
-        server_name = str(server.get("name") or "").strip()
-        if not server_name:
+        plugin_slug = str(plugin.get("slug") or "").strip()
+        plugin_name = str(plugin.get("name") or "").strip()
+        if not plugin_slug or not plugin_name:
             continue
-        for tool_info in _parse_tools(server.get("tools")):
+        for tool_info in _parse_tools(plugin.get("tools")):
             if isinstance(tool_info, str):
                 tool_name = tool_info.strip()
                 description = ""
@@ -42,10 +46,11 @@ def normalize_mcp_capabilities(mcp_servers: list[dict]) -> list[dict[str, object
             if not tool_name:
                 continue
             capabilities.append({
-                "server_id": server.get("id"),
-                "server_name": server_name,
+                "plugin_id": plugin.get("id"),
+                "plugin_slug": plugin_slug,
+                "plugin_name": plugin_name,
                 "tool_name": tool_name,
-                "tool_ref": f"{server_name}/{tool_name}",
+                "tool_ref": f"{plugin_slug}/{tool_name}",
                 "description": description,
                 "input_schema": input_schema,
             })
@@ -64,32 +69,32 @@ def format_mcp_capabilities(capabilities: list[dict[str, object]], limit: int = 
     return text[:limit].rstrip() + "\n...（MCP 能力清单过长，已截断）"
 
 
-def build_mcp_call_tool(mcp_servers: list[dict], capabilities: list[dict[str, object]]) -> BaseTool:
-    server_by_name = {str(server.get("name")): server for server in mcp_servers if server.get("name")}
+def build_mcp_call_tool(mcp_plugins: list[dict], capabilities: list[dict[str, object]]) -> BaseTool:
+    plugin_by_slug = {str(plugin.get("slug")): plugin for plugin in mcp_plugins if plugin.get("slug")}
     capability_by_ref = {str(capability["tool_ref"]): capability for capability in capabilities}
     capabilities_text = format_mcp_capabilities(capabilities)
 
     async def _mcp_call_tool(tool_ref: str, arguments: dict[str, Any]) -> str:
         if tool_ref not in capability_by_ref:
             return f"MCP 工具不在当前可用清单中：{tool_ref}。请只使用已列出的 tool_ref。"
-        server_name, _, tool_name = tool_ref.partition("/")
-        if not server_name or not tool_name:
-            return f"MCP 工具引用格式错误：{tool_ref}。请使用 server_name/tool_name。"
-        server = server_by_name.get(server_name)
-        if not server:
-            return f"MCP 服务不存在或未启用：{server_name}。"
+        plugin_slug, _, tool_name = tool_ref.partition("/")
+        if not plugin_slug or not tool_name:
+            return f"MCP 工具引用格式错误：{tool_ref}。请使用 plugin_slug/tool_name。"
+        plugin = plugin_by_slug.get(plugin_slug)
+        if not plugin:
+            return f"MCP 插件不存在或未启用：{plugin_slug}。"
         safe_arguments = arguments if isinstance(arguments, dict) else {}
         return await tool_manager.call_tool_lazy(
-            server,
+            plugin,
             tool_name,
             safe_arguments,
             timeout=settings.mcp_call_timeout_seconds,
         )
 
     description = (
-        "调用当前用户已配置的外部 MCP 工具。只能使用下方清单中的 tool_ref，格式为 server_name/tool_name；"
-        "arguments 必须符合对应参数 schema。涉及外部实时信息、网页、第三方系统数据或清单中的能力时，"
-        "应调用此工具，不要编造结果；如果工具返回超时或失败，要如实告知用户。\n\n"
+        "调用当前用户已启用的平台 MCP 插件。只能使用下方清单中的 tool_ref，"
+        "格式为 plugin_slug/tool_name；arguments 必须符合对应参数 schema。"
+        "涉及外部实时信息、网页或第三方系统时，优先调用此工具，失败时如实说明。\n\n"
         f"当前可用 MCP 能力：\n{capabilities_text}"
     )
     return StructuredTool.from_function(

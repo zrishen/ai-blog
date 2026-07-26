@@ -13,8 +13,8 @@ export function uiReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, currentPage: action.payload, gearMenuOpen: false };
     case "TOGGLE_GEAR_MENU":
       return { ...state, gearMenuOpen: action.payload !== undefined ? action.payload : !state.gearMenuOpen };
-    case "TOGGLE_MCP_MODAL":
-      return { ...state, mcpModalOpen: action.payload !== undefined ? action.payload : !state.mcpModalOpen, gearMenuOpen: false };
+    case "TOGGLE_PLUGIN_CENTER":
+      return { ...state, pluginCenterOpen: action.payload !== undefined ? action.payload : !state.pluginCenterOpen, gearMenuOpen: false };
     default:
       return state;
   }

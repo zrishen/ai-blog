@@ -30,13 +30,6 @@ export function conversationReducer(state: ChatState, action: ChatAction): ChatS
       return { ...state, isLoading: action.payload };
     case "SET_STREAMING":
       return { ...state, isStreaming: action.payload };
-    case "SET_MCP_SERVERS":
-      return { ...state, mcpServers: action.payload };
-    case "REMOVE_MCP_SERVER":
-      return {
-        ...state,
-        mcpServers: state.mcpServers.filter((s) => s.id !== action.payload),
-      };
     default:
       return state;
   }

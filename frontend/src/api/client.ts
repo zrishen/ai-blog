@@ -84,7 +84,7 @@ export { API_BASE, apiFetch, readErrorDetail, refreshOnce };
 export * from "./auth";
 export * from "./conversations";
 export * from "./chat";
-export * from "./mcp";
+export * from "./plugins";
 export * from "./research";
 export * from "./blog";
 export * from "./files";

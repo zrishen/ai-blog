@@ -144,3 +144,28 @@ async def test_init_db_adds_subscription_fields_and_tables_idempotently(tmp_path
     assert {"redemption_codes", "subscription_weekly_usage"}.issubset(schema["tables"])
 
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_init_db_replaces_legacy_user_mcp_table_with_platform_plugin_tables(tmp_path, monkeypatch):
+    database_path = tmp_path / "legacy-mcp.db"
+    engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
+    monkeypatch.setattr(migrations, "engine", engine)
+
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("CREATE TABLE mcp_servers (id INTEGER PRIMARY KEY, command TEXT, env_vars TEXT)")
+        )
+        await connection.execute(
+            text("INSERT INTO mcp_servers (id, command, env_vars) VALUES (1, 'unsafe-command', 'secret')")
+        )
+
+    await migrations.init_db()
+
+    async with engine.connect() as connection:
+        tables = await connection.run_sync(lambda sync_connection: set(inspect(sync_connection).get_table_names()))
+
+    assert "mcp_servers" not in tables
+    assert {"platform_plugins", "user_plugins"}.issubset(tables)
+
+    await engine.dispose()

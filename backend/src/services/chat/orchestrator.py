@@ -45,6 +45,7 @@ from src.services.conversation.conversation_service import (
     update_conversation_title,
 )
 from src.services.llm.llm_settings_service import get_user_llm_settings, has_usable_api_key
+from src.services.plugins.plugin_service import list_enabled_plugin_runtime_configs
 from src.services.subscription import (
     compute_charge_tokens,
     consume_tokens,
@@ -250,11 +251,10 @@ async def stream_chat(
     context: dict | None = None,
 ) -> AsyncGenerator[str, None]:
     """Stream a chat response via LangGraph ReAct Agent."""
-    # 1. Load MCP metadata
-    from sqlalchemy import select
-    from src.database.models import MCPServer, User
+    # 1. Load MCP metadata from published platform plugins enabled by this user.
+    from src.database.models import User
 
-    mcp_servers = []
+    mcp_plugins = []
     user_llm_settings = None
     use_platform_key = False
     try:
@@ -262,25 +262,11 @@ async def stream_chat(
             user_llm_settings = await get_user_llm_settings(db, user_id)
             user_obj = await db.get(User, user_id)
             use_platform_key = await should_use_platform_key(db, user_obj)
-            result = await db.execute(
-                select(MCPServer).where(MCPServer.user_id == user_id, MCPServer.is_active)
-            )
-            for srv in result.scalars().all():
-                mcp_servers.append({
-                    "id": srv.id,
-                    "name": srv.name,
-                    "server_type": srv.server_type,
-                    "command": srv.command,
-                    "args": json.loads(srv.args) if isinstance(srv.args, str) else (srv.args or []),
-                    "env_vars": json.loads(srv.env_vars) if isinstance(srv.env_vars, str) else (srv.env_vars or {}),
-                    "url": srv.url,
-                    "is_active": srv.is_active,
-                    "tools": srv.tools or [],
-                })
+            mcp_plugins = await list_enabled_plugin_runtime_configs(db, user_id)
     except Exception as e:
-        logger.warning("Failed to load MCP servers from DB: %s", e)
+        logger.warning("Failed to load enabled platform plugins from DB: %s", e)
 
-    mcp_capabilities = normalize_mcp_capabilities(mcp_servers)
+    mcp_capabilities = normalize_mcp_capabilities(mcp_plugins)
     mcp_capabilities_text = format_mcp_capabilities(mcp_capabilities)
     chat_t0 = time.time()
 
@@ -389,7 +375,7 @@ async def stream_chat(
     agent_tools = list(BLOG_TOOLS)
     agent_tools.append(base_search_file)
     if mcp_capabilities:
-        agent_tools.append(build_mcp_call_tool(mcp_servers, mcp_capabilities))
+        agent_tools.append(build_mcp_call_tool(mcp_plugins, mcp_capabilities))
 
     # Research context
     trust_writing = context.get("trust_writing_enabled", False) if context else False
@@ -408,7 +394,7 @@ async def stream_chat(
         user_message[:100].replace("\n", " "),
         conversation_id, user_id, len(user_message), thinking_mode,
         model_kwargs.get("model"), model_kwargs.get("max_tokens"),
-        len(agent_tools), len(api_messages), len(mcp_servers),
+        len(agent_tools), len(api_messages), len(mcp_plugins),
     )
 
     # 6. Stream agent execution

@@ -154,10 +154,10 @@ describe("AISidebar handleSend 心脏分支", () => {
 
     renderSidebar();
     await user.click(await screen.findByRole("button", { name: "添加内容" }));
-    await user.click(await screen.findByText("MCP 服务"));
+    await user.click(await screen.findByText("插件"));
 
     expect(await screen.findByText("登录弹窗")).toBeInTheDocument();
-    expect(latestChat?.state.mcpModalOpen).toBe(false);
+    expect(latestChat?.state.pluginCenterOpen).toBe(false);
   });
 
   it("上传附件后发送 attachments，并让乐观用户消息携带附件", async () => {

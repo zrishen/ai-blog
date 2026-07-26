@@ -864,12 +864,12 @@ export function AISidebarChat({
     setHistoryReloadKey((key) => key + 1);
   }, [setHistoryReloadKey]);
 
-  const handleOpenMcp = useCallback(() => {
+  const handleOpenPlugins = useCallback(() => {
     if (!isAuthenticated) {
       setLoginDialogOpen(true);
       return;
     }
-    dispatch({ type: "TOGGLE_MCP_MODAL", payload: true });
+    dispatch({ type: "TOGGLE_PLUGIN_CENTER", payload: true });
   }, [dispatch, isAuthenticated, setLoginDialogOpen]);
 
   const handleJumpToLatest = useCallback(() => {
@@ -958,7 +958,7 @@ export function AISidebarChat({
         onStop={handleStop}
         onPickFiles={handleFiles}
         onPickResearch={handleResearch}
-        onOpenMcp={handleOpenMcp}
+        onOpenPlugins={handleOpenPlugins}
       />
 
       <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} onSuccess={handleLoginSuccess} />

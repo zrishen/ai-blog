@@ -8,9 +8,6 @@ import {
   sendChat,
   listFileDocuments,
   deleteFileDocument,
-  listMCPServers,
-  addMCPServer as addMCPServerAPI,
-  deleteMCPServer,
 } from "../api/client";
 
 export function useChatHooks() {
@@ -210,41 +207,6 @@ export function useChatHooks() {
     [state.currentConversationId, dispatch, loadConversations],
   );
 
-  const loadMCPServers = useCallback(async () => {
-    try {
-      const data = await listMCPServers();
-      dispatch({ type: "SET_MCP_SERVERS", payload: data.servers });
-    } catch (error) {
-      console.error("Failed to load MCP servers:", error);
-    }
-  }, [dispatch]);
-
-  const addMCPServer = useCallback(
-    async (data: {
-      name: string;
-      server_type: string;
-      command?: string;
-      args?: string[];
-      env_vars?: Record<string, string>;
-      url?: string;
-      tools?: string[];
-    }) => {
-      const server = await addMCPServerAPI(data);
-      const refreshed = await listMCPServers();
-      dispatch({ type: "SET_MCP_SERVERS", payload: refreshed.servers });
-      return server;
-    },
-    [dispatch],
-  );
-
-  const removeMCPServer = useCallback(
-    async (id: number) => {
-      await deleteMCPServer(id);
-      dispatch({ type: "REMOVE_MCP_SERVER", payload: id });
-    },
-    [dispatch],
-  );
-
   return {
     loadConversations,
     loadMessages,
@@ -254,8 +216,5 @@ export function useChatHooks() {
     sendMessage,
     loadFileDocuments,
     removeFileDocument,
-    loadMCPServers,
-    addMCPServer,
-    removeMCPServer,
   };
 }

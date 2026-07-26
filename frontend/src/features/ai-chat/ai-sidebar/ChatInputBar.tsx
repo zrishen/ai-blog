@@ -3,7 +3,7 @@ import {
   Plus,
   Library,
   GitBranch,
-  Wrench,
+  Blocks,
   ArrowUp,
   Square,
   Paperclip,
@@ -37,7 +37,7 @@ interface ChatInputBarProps {
   onRemoveAttachment: (localId: string) => void;
   onPickFiles: () => void;
   onPickResearch: () => void;
-  onOpenMcp: () => void;
+  onOpenPlugins: () => void;
 }
 
 export function ChatInputBar({
@@ -58,7 +58,7 @@ export function ChatInputBar({
   onRemoveAttachment,
   onPickFiles,
   onPickResearch,
-  onOpenMcp,
+  onOpenPlugins,
 }: ChatInputBarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,9 +125,9 @@ export function ChatInputBar({
               <GitBranch className="mr-2 h-4 w-4" />
               研究图谱
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onOpenMcp}>
-              <Wrench className="mr-2 h-4 w-4" />
-              MCP 服务
+            <DropdownMenuItem onClick={onOpenPlugins}>
+              <Blocks className="mr-2 h-4 w-4" />
+              插件
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

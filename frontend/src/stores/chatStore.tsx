@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
-import type { MCPServerConfig, ResearchTopicDetail, ResearchTopicSummary } from "../api/client";
+import type { ResearchTopicDetail, ResearchTopicSummary } from "../api/client";
 import type { TrustChoiceOption } from "../features/ai-chat/trustPrompts";
 import type { ThinkingMode } from "../api/chat";
 import type {
@@ -46,13 +46,12 @@ interface ChatState {
   isStreaming: boolean;
   theme: Theme;
   fileDocuments: FileDocument[];
-  mcpServers: MCPServerConfig[];
   activePanel: Panel;
 
   // Layout
   currentPage: Page;
   gearMenuOpen: boolean;
-  mcpModalOpen: boolean;
+  pluginCenterOpen: boolean;
 
   // AI Sidebar
   aiSidebarOpen: boolean;
@@ -115,13 +114,11 @@ type ChatAction =
   | { type: "SET_THEME"; payload: Theme }
   | { type: "SET_FILE_DOCUMENTS"; payload: FileDocument[] }
   | { type: "REMOVE_FILE_DOCUMENT"; payload: number }
-  | { type: "SET_MCP_SERVERS"; payload: MCPServerConfig[] }
-  | { type: "REMOVE_MCP_SERVER"; payload: number }
   | { type: "SET_ACTIVE_PANEL"; payload: Panel }
   // Layout
   | { type: "SET_PAGE"; payload: Page }
   | { type: "TOGGLE_GEAR_MENU"; payload?: boolean }
-  | { type: "TOGGLE_MCP_MODAL"; payload?: boolean }
+  | { type: "TOGGLE_PLUGIN_CENTER"; payload?: boolean }
   // AI Sidebar
   | { type: "SET_AI_SIDEBAR_OPEN"; payload: boolean }
   | { type: "SET_AI_SIDEBAR_CONV_ID"; payload: number | null }
@@ -229,7 +226,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         researchSelectedProposalId: null,
         trustWritingEnabled: false,
         pendingResearchPrompt: null,
-        mcpServers: [],
         fileLibraryRevision: state.fileLibraryRevision + 1,
         trashRevision: state.trashRevision + 1,
       };
@@ -255,13 +251,12 @@ const initialState: ChatState = {
   isStreaming: false,
   theme: savedTheme,
   fileDocuments: [],
-  mcpServers: [],
   activePanel: "conversations",
 
   // Layout
   currentPage: getInitialPage(),
   gearMenuOpen: false,
-  mcpModalOpen: false,
+  pluginCenterOpen: false,
 
   // AI Sidebar — default open, no conversation yet
   aiSidebarOpen: true,

@@ -23,7 +23,7 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInputBar
     onStop: vi.fn(),
     onPickFiles: vi.fn(),
     onPickResearch: vi.fn(),
-    onOpenMcp: vi.fn(),
+    onOpenPlugins: vi.fn(),
     ...overrides,
   };
   render(<ChatInputBar {...props} />);

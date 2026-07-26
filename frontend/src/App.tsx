@@ -16,7 +16,8 @@ import { OverviewPage } from "./features/admin/components/OverviewPage";
 import { UsersPage } from "./features/admin/components/UsersPage";
 import { CodesPage } from "./features/admin/components/CodesPage";
 import { UsagePage } from "./features/admin/components/UsagePage";
-import { MCPModal } from "./features/ai-chat/components/MCPModal";
+import { PluginsPage } from "./features/admin/components/PluginsPage";
+import { PluginCenterDialog } from "./features/plugins/PluginCenterDialog";
 import { VisualRegressionRoute } from "./components/VisualRegressionRoute";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
@@ -122,6 +123,7 @@ function MainContent() {
         <Route path="users" element={<UsersPage />} />
         <Route path="codes" element={<CodesPage />} />
         <Route path="usage" element={<UsagePage />} />
+        <Route path="plugins" element={<PluginsPage />} />
       </Route>
       {import.meta.env.DEV && <Route path="/__visual-regression" element={<VisualRegressionRoute />} />}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -396,7 +398,7 @@ function AuthenticatedApp() {
           </>
         )}
 
-        {isAuthenticated && state.mcpModalOpen && <MCPModal />}
+        {isAuthenticated && state.pluginCenterOpen && <PluginCenterDialog />}
       </div>
     </ErrorBoundary>
   );

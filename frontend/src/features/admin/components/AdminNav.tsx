@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
   Activity,
+  Blocks,
   LayoutDashboard,
   Ticket,
   Users as UsersIcon,
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { to: "/admin/users", label: "用户", icon: UsersIcon, end: false },
   { to: "/admin/codes", label: "兑换码", icon: Ticket, end: false },
   { to: "/admin/usage", label: "用量", icon: Activity, end: false },
+  { to: "/admin/plugins", label: "插件", icon: Blocks, end: false },
 ] as const;
 
 /** 管理后台左侧导航：4 个子页（概览/用户/兑换码/用量），NavLink 高亮当前路由。 */

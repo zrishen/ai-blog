@@ -10,7 +10,7 @@ from .base import Base, _utcnow
 from .blog import BlogCategory, BlogPost
 from .chat import ChatAttachment, Conversation, Message
 from .file import FileCategory, FileDocument, FileProcessingJob
-from .mcp import MCPServer
+from .plugin import PlatformPlugin, UserPlugin
 from .research import (
     BlogPostClaimLink,
     BlogPostResearchLink,

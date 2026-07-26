@@ -60,6 +60,10 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+        # 开发阶段不保留旧的“用户自定义 MCP”记录。新模型没有引用该表，
+        # 因而可幂等删除，避免任何用户旧配置再次成为可执行入口。
+        await conn.execute(text("DROP TABLE IF EXISTS mcp_servers"))
+
         def _apply_idempotent(conn_sync):
             insp = inspect(conn_sync)
             for table, columns in _IDEMPOTENT_COLUMNS.items():

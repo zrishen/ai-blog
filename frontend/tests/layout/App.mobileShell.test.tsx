@@ -8,7 +8,7 @@ import "@testing-library/jest-dom/vitest";
 const mocks = vi.hoisted(() => ({
   state: {
     aiSidebarOpen: true,
-    mcpModalOpen: false,
+    pluginCenterOpen: false,
     currentPage: "files",
     blogCurrentPostId: null,
     blogPosts: [],
@@ -79,8 +79,8 @@ vi.mock("../../src/features/file/FileLibraryPage", () => ({
 vi.mock("../../src/features/research/ResearchGraphPage", () => ({
   ResearchGraphPage: () => <div>研究图谱主内容</div>,
 }));
-vi.mock("../../src/features/ai-chat/components/MCPModal", () => ({
-  MCPModal: () => <div>MCP</div>,
+vi.mock("../../src/features/plugins/PluginCenterDialog", () => ({
+  PluginCenterDialog: () => <div>Plugins</div>,
 }));
 vi.mock("../../src/features/admin/components/OverviewPage", () => ({
   OverviewPage: () => <div>管理员概览</div>,
