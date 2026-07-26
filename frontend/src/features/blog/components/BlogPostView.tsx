@@ -332,7 +332,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
             } : undefined}
           >
             {post.cover_image && (
-              <div className={`absolute inset-0 ${isDark ? "bg-slate-950/75" : "bg-card/25 backdrop-blur-[1px]"}`} />
+              <div className={`absolute inset-0 ${isDark ? "bg-slate-950/75" : "bg-white/10"}`} />
             )}
 
             <div className={`relative mb-5 flex flex-wrap items-center justify-between gap-2 ${isDark && post.cover_image ? "[&_button]:text-white/85 [&_button]:border-white/25 [&_button:hover]:bg-white/10 [&_.text-muted-foreground]:text-white/70" : ""}`}>

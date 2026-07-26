@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { Badge } from "@/components/ui/badge";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
-import { User, Eye, Calendar, Tags, FileText } from "lucide-react";
+import { User, Eye, Calendar, Tags } from "lucide-react";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 
 interface Props {
@@ -64,14 +64,6 @@ function TagList({ tags, onDarkImage = false }: { tags: string[]; onDarkImage?: 
   );
 }
 
-function EmptyCover({ className = "" }: { className?: string }) {
-  return (
-    <div className={`flex items-center justify-center border border-dashed border-border/80 bg-secondary/55 text-muted-foreground ${className}`}>
-      <FileText className="h-7 w-7" />
-    </div>
-  );
-}
-
 export function BlogPostCard({ post, variant, onClick }: Props) {
   const { state } = useChat();
   const isDark = state.theme === "dark";
@@ -95,7 +87,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         {hasCover && (
           <>
             <img src={post.cover_image} alt={post.title} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-            <div className={`absolute inset-0 ${isDark ? "bg-foreground/75" : "bg-card/25 backdrop-blur-[1px]"}`} />
+            <div className={`absolute inset-0 ${isDark ? "bg-slate-950/55" : "bg-white/10"}`} />
           </>
         )}
 
@@ -140,13 +132,11 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         )}
         onClick={() => onClick(post.id)}
       >
-        {hasCover ? (
+        {hasCover && (
           <div className="relative h-full w-[42%] flex-shrink-0 overflow-hidden border-r border-border/70">
             <img src={post.cover_image} alt={post.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-            {isDark && <div className="absolute inset-0 bg-foreground/75" />}
+            {isDark && <div className="absolute inset-0 bg-slate-950/55" />}
           </div>
-        ) : (
-          <EmptyCover className="h-full w-[34%] flex-shrink-0 border-y-0 border-l-0 border-r border-border/70" />
         )}
         <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
           <div className="mb-2 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden">
