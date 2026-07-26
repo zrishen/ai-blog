@@ -1,6 +1,7 @@
 import base64
 import binascii
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic import field_validator
@@ -81,8 +82,11 @@ class Settings(BaseSettings):
     chat_attachment_cleanup_batch_size: int = 20
 
     # ---- 图像生成 ----
+    image_generation_provider: Literal["openai", "siliconflow"] = "openai"
     image_generation_model: str = "gpt-image-1"
     image_generation_size: str = "1536x1024"
+    image_generation_base_url: str | None = None
+    image_generation_api_key: str | None = None
 
     # ---- 公共聊天 ----
     public_chat_max_input_chars: int = 2000

@@ -133,7 +133,7 @@ try {
       await copyFile(paths.actualPath, paths.baselinePath);
       console.log(`视觉基线已更新：${paths.baselinePath}`);
     } else if (!(await pathExists(paths.baselinePath))) {
-      throw new Error(`缺少视觉基线。请先运行：pnpm test:visual -- --update`);
+      throw new Error(`缺少视觉基线。请先运行：npm run test:visual -- --update`);
     } else {
       await compareScreenshots(paths);
       console.log(`视觉截图回归通过：${scenario.key}`);

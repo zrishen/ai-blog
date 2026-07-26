@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import FileDocument, get_db
-from src.database.models import FileCategory as FileCategoryModel, User
+from src.database.models import BlogPost, FileCategory as FileCategoryModel, User
 from src.schemas.file_base import (
     FileCategoryCreate,
     FileCategoryUpdate,
@@ -59,6 +59,8 @@ MEDIA_TYPES = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".avif": "image/avif",
     ".svg": "image/svg+xml",
     ".pdf": "application/pdf",
 }
@@ -97,6 +99,37 @@ async def get_public_uploaded_image(username: str, filename: str):
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(
+        str(file_path),
+        filename=file_path.name,
+        media_type=MEDIA_TYPES.get(file_path.suffix.lower(), "application/octet-stream"),
+    )
+
+
+@router.get("/blog/cover/{filename}")
+async def get_blog_cover(filename: str, db: AsyncSession = Depends(get_db)):
+    """Serve a cover image that is still referenced by an active blog post."""
+    if Path(filename).name != filename:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    cover_urls = (f"/api/v1/blog/cover/{filename}", f"/api/blog/cover/{filename}")
+    result = await db.execute(
+        select(BlogPost).where(
+            BlogPost.cover_image.in_(cover_urls),
+            BlogPost.deleted_at.is_(None),
+        )
+    )
+    post = result.scalar_one_or_none()
+    if post is None:
+        raise HTTPException(status_code=404, detail="Cover image not found")
+
+    user_dir = get_user_upload_dir(post.user_id)
+    file_path = user_dir / filename
+    resolved = file_path.resolve()
+    if not str(resolved).startswith(str(user_dir.resolve())):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Cover image not found")
     return FileResponse(
         str(file_path),
         filename=file_path.name,
