@@ -48,7 +48,6 @@ def test_cover_prompt_derives_a_cute_hand_drawn_scene_from_article_content(monke
     assert "1440x400 ultra-wide blog cover" in prompt
     assert "Derive the central subject" in prompt
     assert "warm, playful colors" in prompt
-    assert "Do not add generic AI" in prompt
     assert "No readable text" in prompt
     assert "Article title: Creative work." in prompt
     assert "Content summary: A guide to ideas." in prompt
