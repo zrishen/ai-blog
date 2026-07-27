@@ -1,0 +1,68 @@
+name: CI
+
+# 每次 push 到主分支、或提 PR 时自动跑;同分支新推送会取消旧的,省额度
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend · lint + build + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint（含设计系统 checker：拦截硬编码色/裸控件/退役样式）
+        run: npm run lint
+
+      - name: Build（tsc 类型检查 + vite 打包）
+        run: npm run build
+
+      - name: Test（vitest）
+        run: npm run test
+
+  backend:
+    name: Backend · ruff + pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff（代码规范检查）
+        run: uv run ruff check
+
+      - name: Pytest（单元测试 + 覆盖率）
+        run: uv run pytest

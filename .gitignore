@@ -13,7 +13,8 @@ venv/
 
 # Environment variables
 .env
-.claude
+.claude/*
+!.claude/CLAUDE.md
 
 # Database
 *.db
