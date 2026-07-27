@@ -428,7 +428,7 @@ export function CodesPage() {
               {copiedAll ? "已复制" : "全部复制"}
             </Button>
           </div>
-          <div className="max-h-80 overflow-auto rounded-2xl border border-border/70 bg-muted/30 p-2">
+          <div className="max-h-80 overflow-auto rounded-panel border border-border/70 bg-muted/30 p-2">
             <ul className="space-y-1">
               {resultCodes.map((code, idx) => (
                 <li

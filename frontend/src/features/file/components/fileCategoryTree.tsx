@@ -126,7 +126,7 @@ export function CategoryTree({
                     e.stopPropagation();
                     onToggle(cat.id);
                   }}
-                  className="flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  className="flex-shrink-0 rounded-control p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   aria-label={isExpanded ? "折叠分类" : "展开分类"}
                   tabIndex={-1}
                 >
@@ -158,7 +158,7 @@ export function CategoryTree({
                       }
                     }}
                     onClick={(e) => e.stopPropagation()}
-                    className="h-[19px] flex-1 min-w-0 rounded-md border border-input bg-card px-1.5 py-0 text-[13px] font-medium leading-tight"
+                    className="h-[19px] flex-1 min-w-0 rounded-control border border-input bg-card px-1.5 py-0 text-meta font-medium leading-tight"
                     autoFocus
                   />
                 </div>
@@ -234,7 +234,7 @@ export function CategoryTree({
                     e.stopPropagation();
                     onToggle(cat.id);
                   }}
-                  className="flex-shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                  className="flex-shrink-0 rounded-control p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
                   aria-label={isExpanded ? "折叠分类" : "展开分类"}
                   tabIndex={-1}
                 >
@@ -247,7 +247,7 @@ export function CategoryTree({
                 <button
                   type="button"
                   onClick={() => onSelect(cat.id)}
-                  className="flex flex-1 min-w-0 items-center gap-2 px-1.5 py-1.5 text-left text-[13px] font-medium"
+                  className="flex flex-1 min-w-0 items-center gap-2 px-1.5 py-1.5 text-left text-meta font-medium"
                   tabIndex={-1}
                 >
                   <Folder
@@ -257,7 +257,7 @@ export function CategoryTree({
                   />
                   <span className="flex-1 truncate">{cat.name}</span>
                   {docsForCat.length > 0 && (
-                    <span className="ml-auto pl-2 text-[11px] text-muted-foreground">
+                    <span className="ml-auto pl-2 text-caption text-muted-foreground">
                       {docsForCat.length}
                     </span>
                   )}
@@ -351,7 +351,7 @@ export function CategoryTree({
                     }
                   }}
                   onClick={(e) => e.stopPropagation()}
-                  className="h-7 text-[13px] px-2 py-1"
+                  className="h-7 text-meta px-2 py-1"
                   autoFocus
                   placeholder="输入分类名称"
                 />
@@ -429,7 +429,7 @@ export function CategoryTree({
                 }
               }}
               onClick={(e) => e.stopPropagation()}
-              className="h-7 text-[13px] px-2 py-1"
+              className="h-7 text-meta px-2 py-1"
               autoFocus
               placeholder="输入分类名称"
             />
@@ -494,7 +494,7 @@ export function FileNode({
             else onEditingCancel();
           }}
           onClick={(e) => e.stopPropagation()}
-          className="h-[19px] flex-1 min-w-0 rounded-md border border-input bg-card px-1.5 py-0 text-[13px] leading-tight"
+          className="h-[19px] flex-1 min-w-0 rounded-control border border-input bg-card px-1.5 py-0 text-meta leading-tight"
           autoFocus
         />
       </div>
@@ -512,7 +512,7 @@ export function FileNode({
             e.dataTransfer.effectAllowed = "move";
           }}
           onClick={() => onSelectFile(doc.file_path)}
-          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-meta transition-colors ${
             isDocSelected
               ? "bg-primary/10 text-primary"
               : "text-muted-foreground hover:bg-secondary hover:text-foreground"

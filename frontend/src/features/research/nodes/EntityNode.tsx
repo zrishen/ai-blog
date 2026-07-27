@@ -33,7 +33,7 @@ export function EntityNode({ data, selected }: NodeProps) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="line-clamp-2 text-sm font-black leading-snug text-foreground">{entity.name}</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">{entityTypeLabel(entity.entity_type)}</div>
+          <div className="mt-1 text-caption text-muted-foreground">{entityTypeLabel(entity.entity_type)}</div>
         </div>
         <Badge variant="success" className="shrink-0 rounded-full text-[10px]">
           {entity.confidence}%

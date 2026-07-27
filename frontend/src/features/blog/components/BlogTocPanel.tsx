@@ -62,9 +62,9 @@ function BlogTocView({ content, title }: { content: string; title?: string }) {
   return (
     <WorkspacePanel className="overflow-y-auto select-none">
       <div className="p-4 flex flex-col gap-3">
-        <div className="text-[13px] text-muted-foreground leading-relaxed pb-2">
+        <div className="text-meta text-muted-foreground leading-relaxed pb-2">
           当前文章
-          <strong className="block text-[15px] text-foreground mt-1 truncate">
+          <strong className="block text-body-lg text-foreground mt-1 truncate">
             {title || "加载中..."}
           </strong>
         </div>
@@ -86,7 +86,7 @@ function BlogTocView({ content, title }: { content: string; title?: string }) {
                   )}
                   <button
                     onClick={() => scrollToHeading(h.slug)}
-                    className={`flex-1 text-left text-sm leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-md ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
+                    className={`flex-1 text-left text-sm leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-control ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
                   >
                     {h.text}
                   </button>
@@ -160,9 +160,9 @@ function BlogTocEdit({ title }: { title?: string }) {
   return (
     <WorkspacePanel className="overflow-y-auto select-none">
       <div className="p-4 flex flex-col gap-3">
-        <div className="text-[13px] text-muted-foreground leading-relaxed pb-2">
+        <div className="text-meta text-muted-foreground leading-relaxed pb-2">
           编辑中
-          <strong className="block text-[15px] text-foreground mt-1 truncate">
+          <strong className="block text-body-lg text-foreground mt-1 truncate">
             {title || "新文章"}
           </strong>
         </div>
@@ -192,7 +192,7 @@ function BlogTocEdit({ title }: { title?: string }) {
                       );
                       if (target) scrollToEl(target);
                     }}
-                    className={`flex-1 text-left text-sm leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-md ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
+                    className={`flex-1 text-left text-sm leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-control ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
                   >
                     {h.text}
                   </button>
@@ -202,7 +202,7 @@ function BlogTocEdit({ title }: { title?: string }) {
           </nav>
         )}
         {liveHeadings.length === 0 && (
-          <span className="text-[13px] text-muted-foreground/50 px-1 pt-2">输入标题后显示目录</span>
+          <span className="text-meta text-muted-foreground/50 px-1 pt-2">输入标题后显示目录</span>
         )}
       </div>
     </WorkspacePanel>

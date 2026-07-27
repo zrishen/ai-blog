@@ -1,6 +1,7 @@
 import { ExternalLink, Network } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
+import { SectionTitle } from "@/components/ui/section-title";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import type { ResearchEntity, ResearchTopicDetail } from "@/api/client";
@@ -58,7 +59,7 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
     <aside className={cn(surfaceVariants({ variant: "inset" }), "h-full min-h-[420px] overflow-hidden rounded-surface bg-background/75 shadow-sm")}>
       <div className="border-b border-border/70 p-5">
         <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground"><Network className="h-3.5 w-3.5" />实体详情</div>
-        <h2 className="text-xl font-black tracking-[-0.03em] text-foreground">{entity.name}</h2>
+        <SectionTitle size="xl">{entity.name}</SectionTitle>
         <div className="mt-3 flex flex-wrap gap-2">
           <Badge variant="outline" className="rounded-full">{entity.entity_type || "entity"}</Badge>
           <Badge variant="outline" className="rounded-full">置信度 {entity.confidence}%</Badge>
@@ -96,7 +97,7 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
                     </a>
                   )}
                 </div>
-                <div className="mt-2 text-[11px] text-muted-foreground">{source.source_type} · {source.trust_level}</div>
+                <div className="mt-2 text-caption text-muted-foreground">{source.source_type} · {source.trust_level}</div>
               </Surface>
             )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无可追溯来源。</Surface>}
           </div>
@@ -106,7 +107,7 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
           <h3 className="mb-2 text-sm font-black text-foreground">冲突</h3>
           <div className="space-y-2">
             {conflicts.length ? conflicts.map((relation) => (
-              <div key={relation.id} className="rounded-2xl border border-destructive/25 bg-destructive/5 p-3 text-xs leading-relaxed text-muted-foreground">
+              <div key={relation.id} className="rounded-panel border border-destructive/25 bg-destructive/5 p-3 text-xs leading-relaxed text-muted-foreground">
                 <div className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.from_type, relation.from_id)}</div>
                 <div className="my-1 font-bold text-destructive">conflicts_with</div>
                 <div className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.to_type, relation.to_id)}</div>

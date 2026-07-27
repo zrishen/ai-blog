@@ -209,7 +209,7 @@ export function MobileDrawer({
       <motion.button
         type="button"
         style={{ opacity: overlayOpacity }}
-        className="absolute inset-0 cursor-default bg-black/35 backdrop-blur-[1px]"
+        className="absolute inset-0 cursor-default bg-foreground/35 backdrop-blur-[1px]"
         aria-label={`关闭${title}`}
         aria-hidden={!open}
         tabIndex={open ? 0 : -1}

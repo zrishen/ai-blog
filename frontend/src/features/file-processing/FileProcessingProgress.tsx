@@ -73,7 +73,7 @@ export function FileProcessingProgress({ value }: { value: FileProcessingProgres
 
   return (
     <div className="min-w-0 space-y-1.5" data-testid="file-processing-progress">
-      <div className="flex items-center justify-between gap-3 text-[12px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-3 text-fine text-muted-foreground">
         <span className="truncate">{stageLabel}</span>
         {detailText && <span className="shrink-0 tabular-nums">{detailText}</span>}
       </div>

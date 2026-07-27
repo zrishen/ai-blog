@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Background, Controls, MiniMap, ReactFlow, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Badge } from "@/components/ui/badge";
+import { SectionTitle } from "@/components/ui/section-title";
 import type { ResearchTopicDetail } from "@/api/client";
 import { EntityDetailPanel } from "./EntityDetailPanel";
 import { ClaimNode } from "./nodes/ClaimNode";
@@ -35,7 +36,7 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
       <div className="overflow-hidden rounded-shell border border-border/70 bg-background/55 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-3 sm:p-4">
           <div>
-            <h2 className="text-lg font-black tracking-[-0.03em] text-foreground">研究图谱</h2>
+            <SectionTitle size="lg">研究图谱</SectionTitle>
             <p className="mt-1 text-sm text-muted-foreground">展示来源、证据、事实和实体之间的可追溯关系。</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -84,7 +85,7 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
         <aside className="rounded-surface border border-border/70 bg-background/55 p-5 shadow-sm">
           <div className="text-sm font-black text-foreground">图谱详情</div>
           {selectedClaim ? (
-            <div className="mt-4 rounded-2xl border border-border/60 bg-card/60 p-4">
+            <div className="mt-4 rounded-panel border border-border/60 bg-card/60 p-4">
               <div className="mb-2 flex flex-wrap gap-2">
                 <Badge variant="outline" className="rounded-full">{selectedClaim.status}</Badge>
                 <Badge variant="outline" className="rounded-full">置信度 {selectedClaim.confidence}%</Badge>
@@ -93,7 +94,7 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
               {selectedClaim.reasoning && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{selectedClaim.reasoning}</p>}
             </div>
           ) : (
-            <div className="mt-4 rounded-2xl border border-dashed border-border/80 p-4 text-sm leading-relaxed text-muted-foreground">
+            <div className="mt-4 rounded-panel border border-dashed border-border/80 p-4 text-sm leading-relaxed text-muted-foreground">
               点击实体节点查看相关事实、来源、冲突和关系；点击事实节点可查看事实摘要。
             </div>
           )}

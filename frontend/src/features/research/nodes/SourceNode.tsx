@@ -26,7 +26,7 @@ export function SourceNode({ data, selected }: NodeProps) {
         !selected && "border-amber-500/25 bg-card/95",
       )}
     >
-      <div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+      <div className="mb-2 flex items-center gap-2 text-caption font-bold uppercase tracking-[0.14em] text-muted-foreground">
         <FileText className="h-3.5 w-3.5" /> 来源
       </div>
       <div className="line-clamp-3 text-sm font-black leading-snug text-foreground">{source.title}</div>

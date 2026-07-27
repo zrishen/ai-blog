@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { SelectableSurface, Surface } from "@/components/ui/surface";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useChatDispatch } from "../../../stores/chatStore";
 import type { ResearchTopicDetail } from "../../../api/client";
 import { statusBadgeVariant, statusLabel } from "../utils/researchFormat";
@@ -15,30 +16,30 @@ export function OverviewTab({ topic }: OverviewTabProps) {
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-4">
         <Surface variant="inset" className="rounded-panel p-5">
-          <div className="text-[15px] text-muted-foreground">来源数量</div>
+          <div className="text-body-lg text-muted-foreground">来源数量</div>
           <div className="mt-2 text-3xl font-black text-foreground">{topic.source_count}</div>
         </Surface>
         <Surface variant="inset" className="rounded-panel p-5">
-          <div className="text-[15px] text-muted-foreground">事实数量</div>
+          <div className="text-body-lg text-muted-foreground">事实数量</div>
           <div className="mt-2 text-3xl font-black text-foreground">{topic.claim_count}</div>
         </Surface>
         <Surface variant="inset" className="rounded-panel p-5">
-          <div className="text-[15px] text-muted-foreground">冲突数量</div>
+          <div className="text-body-lg text-muted-foreground">冲突数量</div>
           <div className="mt-2 text-3xl font-black text-foreground">{topic.conflict_count}</div>
         </Surface>
         <Surface variant="inset" className="rounded-panel p-5">
-          <div className="text-[15px] text-muted-foreground">待审核提案</div>
+          <div className="text-body-lg text-muted-foreground">待审核提案</div>
           <div className="mt-2 text-3xl font-black text-foreground">{topic.proposals.filter((proposal) => proposal.status === "pending").length}</div>
         </Surface>
       </div>
       <div className="grid gap-3 lg:grid-cols-2">
         <Surface variant="inset" className="rounded-surface p-5">
-          <h2 className="text-lg font-black tracking-[-0.03em] text-foreground">最近事实</h2>
+          <SectionTitle size="lg">最近事实</SectionTitle>
           <div className="mt-3 space-y-2">
             {topic.claims.slice(0, 4).length ? topic.claims.slice(0, 4).map((claim) => (
               <SelectableSurface key={claim.id} className="w-full rounded-control bg-card/70 p-3 text-left" onClick={() => dispatch({ type: "SET_RESEARCH_SELECTED_CLAIM_ID", payload: claim.id })}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="line-clamp-2 text-[15px] font-semibold text-foreground">{claim.claim_text}</span>
+                  <span className="line-clamp-2 text-body-lg font-semibold text-foreground">{claim.claim_text}</span>
                   <Badge variant={statusBadgeVariant(claim.status)} className="shrink-0 rounded-full">{statusLabel(claim.status)}</Badge>
                 </div>
               </SelectableSurface>
@@ -46,7 +47,7 @@ export function OverviewTab({ topic }: OverviewTabProps) {
           </div>
         </Surface>
         <Surface variant="inset" className="rounded-surface p-5">
-          <h2 className="text-lg font-black tracking-[-0.03em] text-foreground">最近提案</h2>
+          <SectionTitle size="lg">最近提案</SectionTitle>
           <div className="mt-3 space-y-2">
             {topic.proposals.slice(0, 4).length ? topic.proposals.slice(0, 4).map((proposal) => (
               <Surface key={proposal.id} variant="card" className="rounded-control bg-card/70 p-3 shadow-sm">

@@ -884,7 +884,7 @@ export function AISidebarChat({
             initial={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
             animate={{ maxHeight: 120, opacity: 1, paddingTop: 8, paddingBottom: 8 }}
             exit={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-            className="pointer-events-auto absolute left-0 right-0 top-0 z-30 flex flex-col gap-1 overflow-hidden border-b border-primary/15 bg-[rgb(232_240_253)]/85 px-3 text-xs font-medium text-primary shadow-sm backdrop-blur-sm dark:bg-[rgb(34_42_60)]/85"
+            className="pointer-events-auto absolute left-0 right-0 top-0 z-30 flex flex-col gap-1 overflow-hidden border-b border-primary/15 bg-context-bar/85 px-3 text-xs font-medium text-primary shadow-sm backdrop-blur-sm"
           >
             {contextText && (
               <div className="flex items-center gap-2">
@@ -901,7 +901,7 @@ export function AISidebarChat({
                   {state.aiSelectionContext.selectedText.length > 60 ? "..." : ""}
                 </span>
                 <button
-                  className="flex-shrink-0 rounded px-1.5 text-[11px] hover:bg-primary/20"
+                  className="flex-shrink-0 rounded px-1.5 text-caption hover:bg-primary/20"
                   onClick={() => dispatch({ type: "CLEAR_AI_SELECTION_CONTEXT" })}
                 >
                   取消
@@ -918,7 +918,7 @@ export function AISidebarChat({
             initial={{ maxHeight: 0, opacity: 0 }}
             animate={{ maxHeight: 80, opacity: 1 }}
             exit={{ maxHeight: 0, opacity: 0 }}
-            className="relative z-20 flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-destructive/15 bg-destructive/10 px-3 py-2 text-[13px] text-destructive"
+            className="relative z-20 flex flex-shrink-0 items-center gap-2 overflow-hidden border-b border-destructive/15 bg-destructive/10 px-3 py-2 text-meta text-destructive"
           >
             <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
             <span className="min-w-0 flex-1 truncate">{selectedError}</span>

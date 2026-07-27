@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Search, ChevronLeft, ChevronRight, Loader2, Shield, ShieldOff } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Shield, ShieldOff } from "lucide-react";
 import {
   listAdminUsers,
   grantAdminSubscription,
   setAdminUser,
   type AdminUserItem,
 } from "@/api/client";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
@@ -191,7 +192,7 @@ export function UsersPage() {
       />
 
       {success && (
-        <div className="rounded-2xl border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary shadow-sm shadow-primary/5">
+        <div className="rounded-panel border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary shadow-sm shadow-primary/5">
           {success}
         </div>
       )}
@@ -223,7 +224,7 @@ export function UsersPage() {
       ) : loading ? (
         <Card>
           <CardContent className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> 加载中...
+            <Spinner className="h-4 w-4" /> 加载中...
           </CardContent>
         </Card>
       ) : (

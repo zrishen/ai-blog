@@ -1,6 +1,7 @@
 import { ExternalLink, ShieldCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { ResearchTopicDetail } from "../../../api/client";
 import { formatDate, sourceTypeLabel, statusLabel, trustLabel } from "../utils/researchFormat";
 
@@ -11,9 +12,11 @@ interface SourcesTabProps {
 export function SourcesTab({ topic }: SourcesTabProps) {
   if (!topic.sources.length) {
     return (
-      <Surface variant="dashed" className="rounded-surface p-8 text-center text-sm lg:col-span-2">
-        暂无来源。搜索摘要只能作为线索，最终来源需要可追溯正文或知识库原文。
-      </Surface>
+      <EmptyState
+        title="暂无来源"
+        description="搜索摘要只能作为线索，最终来源需要可追溯正文或知识库原文。"
+        className="rounded-surface p-8 lg:col-span-2"
+      />
     );
   }
 
@@ -37,7 +40,7 @@ export function SourcesTab({ topic }: SourcesTabProps) {
             <span>抓取时间：{formatDate(source.fetched_at)}</span>
             <span>状态：{statusLabel(source.status)}</span>
           </div>
-          {source.raw_excerpt && <p className="mt-3 line-clamp-3 rounded-2xl bg-card/70 p-3 text-sm leading-relaxed text-muted-foreground">{source.raw_excerpt}</p>}
+          {source.raw_excerpt && <p className="mt-3 line-clamp-3 rounded-panel bg-card/70 p-3 text-sm leading-relaxed text-muted-foreground">{source.raw_excerpt}</p>}
         </Surface>
       ))}
     </div>

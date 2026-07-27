@@ -21,7 +21,7 @@ export function EvidenceNode({ data, selected }: NodeProps) {
         {evidence.location && <Badge variant="outline" className="rounded-full text-[10px]">{evidence.location}</Badge>}
       </div>
       <p className="line-clamp-4 text-xs font-semibold leading-relaxed text-foreground">“{evidence.quote}”</p>
-      {source && <div className="mt-3 line-clamp-1 text-[11px] text-muted-foreground">来源：{source.title}</div>}
+      {source && <div className="mt-3 line-clamp-1 text-caption text-muted-foreground">来源：{source.title}</div>}
       <Handle type="source" position={Position.Right} className="!bg-sky-500" />
     </div>
   );

@@ -413,7 +413,7 @@ export function FilePanel() {
           </Button>
         </div>
         {fileActionError && (
-          <Alert variant="destructive" className="px-3 py-2 text-[13px] leading-relaxed">
+          <Alert variant="destructive" className="px-3 py-2 text-meta leading-relaxed">
             {fileActionError}
           </Alert>
         )}
@@ -421,7 +421,7 @@ export function FilePanel() {
           <ContextMenuTrigger asChild>
             <Button
               variant={rootSelected ? "secondary" : "ghost"}
-              className={`flex-1 justify-start text-[13px] px-3 py-2.5 rounded-xl h-auto font-semibold gap-2 transition-all hover:translate-x-0.5 ${
+              className={`flex-1 justify-start text-meta px-3 py-2.5 rounded-xl h-auto font-semibold gap-2 transition-all hover:translate-x-0.5 ${
                 rootSelected ? "bg-primary/10 text-primary shadow-sm" : ""
               } ${rootDropTarget ? "ring-2 ring-primary/60 bg-primary/12 shadow-md shadow-primary/10" : ""}`}
               onClick={() => handleCategorySelect(null)}
@@ -443,7 +443,7 @@ export function FilePanel() {
               <FolderOpen className="w-4 h-4 flex-shrink-0" />
               <span className="flex-1 truncate text-left">全部分类</span>
               {state.fileDocuments.length > 0 && (
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-caption text-muted-foreground">
                   {state.fileDocuments.length}
                 </span>
               )}

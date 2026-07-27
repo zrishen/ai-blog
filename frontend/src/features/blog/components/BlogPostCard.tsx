@@ -87,7 +87,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         {hasCover && (
           <>
             <img src={post.cover_image} alt={post.title} className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-            <div className={`absolute inset-0 ${isDark ? "bg-slate-950/55" : "bg-white/10"}`} />
+            <div className={`absolute inset-0 ${isDark ? "bg-black/55" : "bg-white/10"}`} />
           </>
         )}
 
@@ -111,7 +111,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
             {post.title}
           </h2>
           {excerpt && (
-            <p className={`mt-3 text-[15px] leading-relaxed line-clamp-2 ${coverDark ? "text-white/72" : "text-muted-foreground"}`}>
+            <p className={`mt-3 text-body-lg leading-relaxed line-clamp-2 ${coverDark ? "text-white/72" : "text-muted-foreground"}`}>
               {excerpt}{excerpt.length >= 128 ? "..." : ""}
             </p>
           )}
@@ -135,7 +135,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
         {hasCover && (
           <div className="relative h-full w-[42%] flex-shrink-0 overflow-hidden border-r border-border/70">
             <img src={post.cover_image} alt={post.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
-            {isDark && <div className="absolute inset-0 bg-slate-950/55" />}
+            {isDark && <div className="absolute inset-0 bg-black/55" />}
           </div>
         )}
         <div className="flex min-w-0 flex-1 flex-col p-5 sm:p-6">
@@ -154,7 +154,7 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
             {post.title}
           </h2>
           {excerpt && (
-            <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground line-clamp-2">
+            <p className="mt-2 text-body-lg leading-relaxed text-muted-foreground line-clamp-2">
               {excerpt}
             </p>
           )}
@@ -179,10 +179,10 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
       <div className="flex min-w-0 flex-1 flex-col p-3 md:p-4">
         <div className="flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden">
           {isAIWriting && (
-            <Badge className="rounded-full bg-primary/12 px-1.5 py-0 text-[11px] text-primary">AI 正在写作</Badge>
+            <Badge className="rounded-full bg-primary/12 px-1.5 py-0 text-caption text-primary">AI 正在写作</Badge>
           )}
           {post.status === "draft" && (
-            <Badge variant="warning" className="rounded-full px-1.5 py-0 text-[11px]">
+            <Badge variant="warning" className="rounded-full px-1.5 py-0 text-caption">
               草稿
             </Badge>
           )}
@@ -192,12 +192,12 @@ export function BlogPostCard({ post, variant, onClick }: Props) {
           {hasCover && (
             <img src={post.cover_image} alt={post.title} className="h-7 w-7 flex-shrink-0 rounded-full object-cover ring-1 ring-border/50" />
           )}
-          <h3 className="min-w-0 text-[15px] font-black leading-snug tracking-[-0.025em] text-foreground truncate">
+          <h3 className="min-w-0 text-body-lg font-black leading-snug tracking-[-0.025em] text-foreground truncate">
             {post.title}
           </h3>
         </div>
         {excerpt && (
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground line-clamp-2">
+          <p className="mt-1 text-meta leading-relaxed text-muted-foreground line-clamp-2">
             {excerpt}
           </p>
         )}

@@ -1,4 +1,5 @@
-import { AlertCircle, FileText, Image as ImageIcon, LoaderCircle, RotateCcw, X } from "lucide-react";
+import { AlertCircle, FileText, Image as ImageIcon, RotateCcw, X } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import type { DraftAttachment } from "../types";
 
@@ -53,8 +54,8 @@ export function AttachmentDraftList({
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-foreground" title={draft.file.name}>{draft.file.name}</p>
-              <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                {isBusy && <LoaderCircle className="h-3 w-3 animate-spin" />}
+              <div className="mt-1 flex items-center gap-1 text-caption text-muted-foreground">
+                {isBusy && <Spinner className="h-3 w-3" />}
                 {draft.status === "failed" && <AlertCircle className="h-3 w-3 text-destructive" />}
                 <span className={draft.status === "failed" ? "truncate text-destructive" : "truncate"}>
                   {draft.status === "queued" && "等待上传"}

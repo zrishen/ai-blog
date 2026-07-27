@@ -80,7 +80,7 @@ export function SitePostRoute() {
     return (
       <div className="flex h-full flex-1 items-center justify-center bg-background p-8">
         <div className="flex max-w-sm flex-col items-center rounded-feature border border-border/70 bg-card/80 px-8 py-8 text-center shadow-xl shadow-foreground/5">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-panel bg-destructive/10 text-destructive">
             <AlertCircle className="h-5 w-5" />
           </div>
           <h2 className="text-xl font-bold tracking-[-0.03em] text-foreground">无法打开文章</h2>

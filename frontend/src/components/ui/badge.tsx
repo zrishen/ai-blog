@@ -18,9 +18,34 @@ const badgeVariants = cva(
         warning: "border-warning/25 bg-warning/10 text-warning-foreground",
         outline: "border-border/70 bg-background/55 text-foreground",
       },
+      // solid 维度:在彩色 variant 上叠加实心填充(用于状态确认等强提示场景)
+      solid: {
+        true: "",
+        false: "",
+      },
     },
+    compoundVariants: [
+      {
+        variant: "destructive",
+        solid: true,
+        class:
+          "border-transparent bg-destructive text-destructive-foreground shadow-sm shadow-destructive/15",
+      },
+      {
+        variant: "success",
+        solid: true,
+        class: "border-transparent bg-success text-white shadow-sm shadow-success/15",
+      },
+      {
+        variant: "warning",
+        solid: true,
+        class:
+          "border-transparent bg-warning text-warning-foreground shadow-sm shadow-warning/15",
+      },
+    ],
     defaultVariants: {
       variant: "default",
+      solid: false,
     },
   }
 )
@@ -29,10 +54,15 @@ export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant, solid, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(badgeVariants({ variant, solid }), className)}
+      {...props}
+    />
   )
-}
+)
+Badge.displayName = "Badge"
 
 export { Badge }

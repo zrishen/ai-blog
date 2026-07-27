@@ -290,7 +290,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
     return (
       <div className="flex flex-1 items-center justify-center bg-background p-8">
         <div className="border border-border/70 bg-card/80 px-10 py-9 text-center shadow-xl shadow-foreground/5">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary">
             <FileText className="w-6 h-6" />
           </div>
           <h2 className="text-2xl font-bold tracking-[-0.03em] text-foreground">文章未找到</h2>
@@ -332,7 +332,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
             } : undefined}
           >
             {post.cover_image && (
-              <div className={`absolute inset-0 ${isDark ? "bg-slate-950/75" : "bg-white/10"}`} />
+              <div className={`absolute inset-0 ${isDark ? "bg-black/75" : "bg-white/10"}`} />
             )}
 
             <div className={`relative mb-5 flex flex-wrap items-center justify-between gap-2 ${isDark && post.cover_image ? "[&_button]:text-white/85 [&_button]:border-white/25 [&_button:hover]:bg-white/10 [&_.text-muted-foreground]:text-white/70" : ""}`}>
@@ -343,7 +343,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
               {isOwner && (
                 <div className="flex flex-wrap items-center gap-1.5">
                   {error && (
-                    <Badge variant="destructive" className="gap-1 rounded-full px-2 py-1 text-[11px]">
+                    <Badge variant="destructive" className="gap-1 rounded-full px-2 py-1 text-caption">
                       <AlertCircle className="w-3 h-3" />
                       {error}
                     </Badge>
@@ -369,7 +369,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
 
             <div className="relative mb-5 flex flex-wrap items-center gap-2">
               {isOwner && (
-                <Badge className={`rounded-full ${post.status === "published" ? "bg-emerald-500/12 text-emerald-600 hover:bg-emerald-500/16 dark:text-emerald-300" : "bg-amber-500/12 text-amber-600 hover:bg-amber-500/16 dark:text-amber-300"}`}>
+                <Badge variant={post.status === "published" ? "success" : "warning"} className="rounded-full">
                   {post.status === "published" ? "已发布" : "草稿"}
                 </Badge>
               )}
@@ -405,7 +405,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
             ref={articleRef}
             className="px-4 pb-10 sm:px-10"
           >
-            <div className="prose prose-slate dark:prose-invert mt-2 max-w-none text-foreground prose-headings:tracking-[-0.035em] prose-headings:text-foreground prose-p:mt-0 prose-p:mb-[0.92em] prose-p:leading-[1.86] prose-a:text-primary prose-strong:text-foreground prose-code:rounded-md prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none prose-pre:m-0 prose-pre:rounded-none prose-pre:border-0 prose-pre:bg-transparent prose-pre:p-0 prose-blockquote:rounded-r-2xl prose-blockquote:border-l-primary prose-blockquote:bg-primary/5 prose-blockquote:py-1 prose-img:rounded-2xl prose-img:shadow-lg prose-hr:border-border">
+            <div className="prose prose-slate dark:prose-invert mt-2 max-w-none text-foreground prose-headings:tracking-[-0.035em] prose-headings:text-foreground prose-p:mt-0 prose-p:mb-[0.92em] prose-p:leading-[1.86] prose-a:text-primary prose-strong:text-foreground prose-code:rounded-control prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none prose-pre:m-0 prose-pre:rounded-none prose-pre:border-0 prose-pre:bg-transparent prose-pre:p-0 prose-blockquote:rounded-r-2xl prose-blockquote:border-l-primary prose-blockquote:bg-primary/5 prose-blockquote:py-1 prose-img:rounded-panel prose-img:shadow-lg prose-hr:border-border">
               {patchRenderInfo ? (
                 <>
                   <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.before)}</Markdown>
@@ -451,7 +451,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-foreground hover:bg-accent/80 transition-colors"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-meta text-foreground hover:bg-accent/80 transition-colors"
             onClick={handleCopySelection}
           >
             <Copy className="h-3.5 w-3.5" />
@@ -459,7 +459,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
           </button>
           {isOwner && (
             <button
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-primary hover:bg-primary/10 transition-colors"
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-meta text-primary hover:bg-primary/10 transition-colors"
               onClick={handleAIModify}
             >
               <Sparkles className="h-3.5 w-3.5" />

@@ -63,14 +63,14 @@ export function SubscriptionPanel() {
 
   if (loading) {
     return (
-      <div className={cn(surfaceVariants({ variant: "inset" }), "px-4 py-3 text-[13px] text-muted-foreground")}>
+      <div className={cn(surfaceVariants({ variant: "inset" }), "px-4 py-3 text-meta text-muted-foreground")}>
         订阅状态加载中…
       </div>
     );
   }
   if (error) {
     return (
-      <Alert variant="destructive" className="text-[13px]">
+      <Alert variant="destructive" className="text-meta">
         {error}
       </Alert>
     );
@@ -92,7 +92,7 @@ export function SubscriptionPanel() {
         </Badge>
       </div>
 
-      <div className="text-[13px] text-muted-foreground">
+      <div className="text-meta text-muted-foreground">
         {status.expires_at
           ? `有效期至 ${new Date(status.expires_at).toLocaleString()}`
           : "暂无有效订阅，可在下方输入兑换码激活"}
@@ -100,7 +100,7 @@ export function SubscriptionPanel() {
 
       {/* 本周 token 配额进度条 */}
       <div className="space-y-2">
-        <div className="flex items-baseline justify-between text-[13px]">
+        <div className="flex items-baseline justify-between text-meta">
           <span className="text-foreground">本周用量</span>
           <span>
             <span className="font-semibold text-foreground">{fmtM(status.used)}M</span>
@@ -147,7 +147,7 @@ export function SubscriptionPanel() {
           </Button>
         </div>
         {msg && (
-          <Alert variant={msg.kind === "ok" ? "success" : "destructive"} className="text-[13px]">
+          <Alert variant={msg.kind === "ok" ? "success" : "destructive"} className="text-meta">
             {msg.text}
           </Alert>
         )}

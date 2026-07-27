@@ -7,6 +7,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { EmptyState } from "@/components/ui/empty-state";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import type { AISidebarConversationKey } from "../../../stores/chatStore";
@@ -47,7 +48,7 @@ export function ConversationListView({
               initial={{ opacity: 0, maxHeight: 0 }}
               animate={{ opacity: 1, maxHeight: 80 }}
               exit={{ opacity: 0, maxHeight: 0 }}
-              className="flex items-center gap-2 bg-destructive/10 text-destructive py-2 px-3 rounded-xl text-[13px] overflow-hidden"
+              className="flex items-center gap-2 bg-destructive/10 text-destructive py-2 px-3 rounded-xl text-meta overflow-hidden"
             >
               <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
               <span className="flex-1">{error}</span>
@@ -63,15 +64,12 @@ export function ConversationListView({
 
         {conversations.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-5 text-center">
-            <div>
-              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <p className="text-base font-black tracking-[-0.04em] text-foreground">还没有对话</p>
-              <p className="mt-2 max-w-[220px] text-[13px] leading-relaxed text-muted-foreground">
-                点击「新对话」开始让 AI 帮你整理想法。
-              </p>
-            </div>
+            <EmptyState
+              icon={Sparkles}
+              title="还没有对话"
+              description="点击「新对话」开始让 AI 帮你整理想法。"
+              className="max-w-[220px] border-transparent bg-transparent shadow-none"
+            />
           </div>
         ) : (
           conversations.map((conv) => (
@@ -79,7 +77,7 @@ export function ConversationListView({
               key={conv.key}
               className={cn(
                 surfaceVariants({ variant: conv.selected ? "selected" : "interactive" }),
-                "group flex w-full cursor-pointer items-center gap-3 rounded-2xl px-3.5 py-3",
+                "group flex w-full cursor-pointer items-center gap-3 rounded-panel px-3.5 py-3",
                 !conv.selected && "bg-background/58",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
               )}
@@ -93,7 +91,7 @@ export function ConversationListView({
               tabIndex={0}
             >
               <div
-                className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl ${
+                className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-panel ${
                   conv.selected
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-muted-foreground"

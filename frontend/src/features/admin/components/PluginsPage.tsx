@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Blocks, LoaderCircle, Pencil, Plus, ShieldCheck, Trash2, Wrench } from "lucide-react";
+import { Blocks, Pencil, Plus, ShieldCheck, Trash2, Wrench } from "lucide-react";
 import {
   createAdminPlugin,
   deleteAdminPlugin,
@@ -10,6 +10,7 @@ import {
   type PluginPermissionLevel,
   type PluginTransport,
 } from "@/api/client";
+import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -319,7 +320,7 @@ export function PluginsPage() {
       {error && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{error}</div>}
 
       {loading ? (
-        <div className="flex justify-center py-16 text-muted-foreground"><LoaderCircle className="h-5 w-5 animate-spin" /></div>
+        <div className="flex justify-center py-16 text-muted-foreground"><Spinner className="h-5 w-5" /></div>
       ) : plugins.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">还没有平台插件。添加后先确认发现到工具，再发布给用户。</CardContent></Card>
       ) : (
@@ -351,7 +352,7 @@ export function PluginsPage() {
                 <div className="mt-5 flex flex-wrap gap-2 border-t border-border/60 pt-4">
                   <Button size="sm" variant="outline" onClick={() => openEdit(plugin)}><Pencil />编辑</Button>
                   <Button size="sm" variant={plugin.is_published ? "outline" : "default"} disabled={changingPublishId === plugin.id} onClick={() => void togglePublished(plugin)}>
-                    {changingPublishId === plugin.id && <LoaderCircle className="animate-spin" />}
+                    {changingPublishId === plugin.id && <Spinner />}
                     {plugin.is_published ? "取消发布" : "发布给用户"}
                   </Button>
                   <Button size="sm" variant="ghost" className="ml-auto text-destructive hover:text-destructive" onClick={() => setDeleting(plugin)}><Trash2 />删除</Button>
@@ -403,7 +404,7 @@ export function PluginsPage() {
           {formError && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{formError}</div>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
-            <Button disabled={saving || !mcpJson.trim()} onClick={() => void savePlugin()}>{saving && <LoaderCircle className="animate-spin" />}{editing ? "保存修改" : "创建插件"}</Button>
+            <Button disabled={saving || !mcpJson.trim()} onClick={() => void savePlugin()}>{saving && <Spinner />}{editing ? "保存修改" : "创建插件"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -475,7 +476,7 @@ export function PluginsPage() {
       <Dialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>删除插件？</DialogTitle><DialogDescription>删除“{deleting?.name}”会同时移除所有用户的启用记录，且无法恢复。</DialogDescription></DialogHeader>
-          <DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button variant="destructive" disabled={deletingBusy} onClick={() => void confirmDelete()}>{deletingBusy && <LoaderCircle className="animate-spin" />}删除</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button variant="destructive" disabled={deletingBusy} onClick={() => void confirmDelete()}>{deletingBusy && <Spinner />}删除</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </AdminPage>

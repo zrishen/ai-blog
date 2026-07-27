@@ -7,6 +7,7 @@ import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Surface } from "@/components/ui/surface";
+import { SectionTitle } from "@/components/ui/section-title";
 import { LoginDialog } from "../auth/LoginDialog";
 import { FilePreviewPane } from "./panes/FilePreviewPane";
 import { LibraryOverviewPane } from "./panes/LibraryOverviewPane";
@@ -44,12 +45,12 @@ export function FileLibraryPage() {
             <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
               <Database className="w-7 h-7" />
             </div>
-            <div className="relative mb-3 text-[11px] font-bold uppercase tracking-[0.18em] text-primary/80">
+            <div className="relative mb-3 text-caption font-bold uppercase tracking-[0.18em] text-primary/80">
               File Library
             </div>
-            <h1 className="relative text-3xl font-black tracking-[-0.04em] text-foreground">
+            <SectionTitle as="h1" size="3xl" className="relative">
               登录后查看文件库
-            </h1>
+            </SectionTitle>
             <p className="relative mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
               登录后可查看和管理你的个人文件库，上传文档并用于写作与对话检索。
             </p>

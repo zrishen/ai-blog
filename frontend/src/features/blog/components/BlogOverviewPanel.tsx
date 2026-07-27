@@ -48,7 +48,7 @@ export function BlogOverviewPanel() {
               <div className="mt-0.5 text-xs text-muted-foreground">已发布</div>
             </Surface>
             <Surface variant="inset" className="rounded-control bg-background/62 px-2 py-3">
-              <div className="text-xl font-black tracking-[-0.04em] text-amber-600 dark:text-amber-300">{draftCount}</div>
+              <div className="text-xl font-black tracking-[-0.04em] text-warning">{draftCount}</div>
               <div className="mt-0.5 text-xs text-muted-foreground">草稿</div>
             </Surface>
           </div>
@@ -63,13 +63,13 @@ export function BlogOverviewPanel() {
             <div className="flex items-center gap-2">
               {state.blogSelectedTag && (
                 <button
-                  className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary hover:bg-primary/25 transition-colors"
+                  className="rounded-full bg-primary/15 px-2 py-0.5 text-caption font-semibold text-primary hover:bg-primary/25 transition-colors"
                   onClick={() => dispatch({ type: "SET_BLOG_SELECTED_TAG", payload: null })}
                 >
                   清除筛选
                 </button>
               )}
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] text-muted-foreground">
+              <span className="rounded-full bg-secondary px-2 py-0.5 text-caption text-muted-foreground">
                 {tagEntries.length}
               </span>
             </div>
@@ -90,7 +90,7 @@ export function BlogOverviewPanel() {
                     onClick={() => dispatch({ type: "SET_BLOG_SELECTED_TAG", payload: isSelected ? null : tag })}
                   >
                     {tag}
-                    <span className="text-[11px] opacity-70">{count}</span>
+                    <span className="text-caption opacity-70">{count}</span>
                   </button>
                 );
               })}

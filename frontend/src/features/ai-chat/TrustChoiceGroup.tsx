@@ -12,7 +12,7 @@ export function TrustChoiceGroup({ options, disabled = false, onSelect }: TrustC
 
   return (
     <div className="mt-3 border-t border-border/50 pt-2.5">
-      <div className="mb-2 text-[11px] font-semibold text-muted-foreground">请选择下一步：</div>
+      <div className="mb-2 text-caption font-semibold text-muted-foreground">请选择下一步：</div>
       <div className="flex flex-wrap gap-1.5">
         {options.map((option) => (
           <Button
@@ -20,7 +20,7 @@ export function TrustChoiceGroup({ options, disabled = false, onSelect }: TrustC
             type="button"
             variant={option.kind === "action" && option.action === "dismiss" ? "ghost" : "outline"}
             size="sm"
-            className="h-7 rounded-full px-2.5 text-[11px]"
+            className="h-7 rounded-full px-2.5 text-caption"
             disabled={disabled}
             onClick={() => onSelect(option)}
           >

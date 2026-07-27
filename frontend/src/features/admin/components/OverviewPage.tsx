@@ -17,6 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -64,11 +65,11 @@ function SkeletonCard() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2">
-        <div className="h-4 w-20 animate-pulse rounded bg-muted" />
-        <div className="h-9 w-9 animate-pulse rounded-xl bg-muted" />
+        <Skeleton className="h-4 w-20" />
+        <Skeleton className="h-9 w-9 rounded-xl" />
       </CardHeader>
       <CardContent className="p-5 pt-0">
-        <div className="h-7 w-24 animate-pulse rounded bg-muted" />
+        <Skeleton className="h-7 w-24" />
       </CardContent>
     </Card>
   );
@@ -226,9 +227,9 @@ function InviteCodeCard({
       </CardHeader>
       <CardContent>
         {loading ? (
-          <div className="h-12 w-full animate-pulse rounded-2xl bg-muted" />
+          <Skeleton className="h-12 w-full rounded-panel" />
         ) : inviteCode ? (
-          <div className="flex flex-col gap-3 rounded-2xl border border-border/65 bg-background/55 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded-panel border border-border/65 bg-background/55 p-3 sm:flex-row sm:items-center sm:justify-between">
             <code className="min-w-0 break-all px-1 font-mono text-sm font-semibold tracking-wide text-foreground">
               {inviteCode}
             </code>
@@ -245,7 +246,7 @@ function InviteCodeCard({
             </Button>
           </div>
         ) : (
-          <div className="rounded-2xl border border-dashed border-border/70 bg-muted/25 px-4 py-5 text-sm text-muted-foreground">
+          <div className="rounded-panel border border-dashed border-border/70 bg-muted/25 px-4 py-5 text-sm text-muted-foreground">
             当前未配置邀请码，新用户暂时无法注册。
           </div>
         )}

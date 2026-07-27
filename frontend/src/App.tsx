@@ -253,7 +253,7 @@ function MobileWorkspaceNavigation({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <nav aria-label="工作区主导航" className="shrink-0 border-b border-border/70 p-3">
-        <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">主导航</p>
+        <p className="px-2 pb-2 text-caption font-bold uppercase tracking-[0.14em] text-muted-foreground">主导航</p>
         <div className="space-y-1">
           {primaryNavigation.map(({ key, label, icon: Icon, onClick }) => (
             <button

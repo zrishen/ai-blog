@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Blocks, LoaderCircle, Wrench } from "lucide-react";
+import { Blocks, Wrench } from "lucide-react";
 import { listPlugins, setPluginEnabled, type PluginSummary } from "@/api/client";
 import {
   Dialog,
@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Spinner } from "@/components/ui/spinner";
 import { useChatDispatch, useChatState } from "@/stores/chatStore";
 
 export function PluginCenterDialog() {
@@ -79,7 +80,7 @@ export function PluginCenterDialog() {
 
         {loading ? (
           <div className="flex justify-center py-12 text-muted-foreground">
-            <LoaderCircle className="h-5 w-5 animate-spin" />
+            <Spinner className="h-5 w-5" />
           </div>
         ) : plugins.length === 0 ? (
           <div className="rounded-surface border border-dashed border-border/70 px-5 py-10 text-center text-sm text-muted-foreground">

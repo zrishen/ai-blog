@@ -7,8 +7,7 @@ import { BlogPostCard } from "./BlogPostCard";
 import { BlogEditor } from "./BlogEditor";
 import { splitBlogTags } from "../utils/blogTags";
 import { PenLine } from "lucide-react";
-import { surfaceVariants } from "@/lib/visualVariants";
-import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface BlogPageProps {
   username: string;
@@ -98,15 +97,12 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
     <div className="flex h-full min-h-0 flex-1 flex-col touch-pan-y overflow-y-auto bg-background p-2">
       {/* 列表只允许纵向滚动（touch-pan-y），把横向触摸交给边缘滑动手势；否则浏览器会把触摸序列绑定到滚动容器，导致滑出抽屉时中栏被一起拖动、面板跟到一半就卡住。 */}
       {visiblePosts.length === 0 ? (
-        <section className={cn(surfaceVariants({ variant: "inset" }), "flex min-h-0 flex-1 flex-col items-center justify-center rounded-surface bg-card/62 p-10 text-center shadow-sm")}>
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
-            <PenLine className="w-7 h-7" />
-          </div>
-          <h2 className="text-2xl font-bold tracking-[-0.03em] text-foreground">还没有文章</h2>
-          <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-            {isOwner ? "从一篇草稿开始，把资料、观点和创作过程留在这里。" : "这个用户暂时还没有公开文章。"}
-          </p>
-        </section>
+        <EmptyState
+          icon={PenLine}
+          title="还没有文章"
+          description={isOwner ? "从一篇草稿开始，把资料、观点和创作过程留在这里。" : "这个用户暂时还没有公开文章。"}
+          className="min-h-0 flex-1 rounded-surface p-10"
+        />
       ) : (
         <section className="flex flex-col gap-2 pb-8">
           {blogRows.map((row) =>

@@ -80,7 +80,7 @@ export function AISidebarHeader({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="end" className="w-52">
-              <DropdownMenuLabel className="text-[11px] text-muted-foreground">思考模式</DropdownMenuLabel>
+              <DropdownMenuLabel className="text-caption text-muted-foreground">思考模式</DropdownMenuLabel>
               {THINKING_MODE_OPTIONS.map((opt) => {
                 const disabled = !supportsThinking && opt.mode !== "fast";
                 const menuItem = (

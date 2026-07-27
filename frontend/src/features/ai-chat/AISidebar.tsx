@@ -186,7 +186,7 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-10 w-10 rounded-2xl border border-border/70 bg-background/70 text-primary shadow-sm hover:bg-primary/10"
+          className="relative h-10 w-10 rounded-panel border border-border/70 bg-background/70 text-primary shadow-sm hover:bg-primary/10"
           onClick={() => dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: true })}
           title={isPrivate ? "展开私人 AI" : "展开共享 AI"}
         >

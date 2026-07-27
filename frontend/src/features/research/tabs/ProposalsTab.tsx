@@ -1,6 +1,7 @@
 import { AlertCircle, CheckCircle2, ExternalLink, ShieldCheck, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useChatDispatch } from "../../../stores/chatStore";
 import type { ResearchTopicDetail } from "../../../api/client";
 import type { ResearchTopicActions } from "../hooks/useResearchTopicActions";
@@ -90,10 +91,10 @@ export function ProposalsTab({ topic, actions }: ProposalsTabProps) {
               </div>
               <h2 className="line-clamp-2 text-base font-black text-foreground">{proposal.title}</h2>
             </div>
-            <div className="shrink-0 text-[13px] text-muted-foreground">{formatDate(proposal.created_at)}</div>
+            <div className="shrink-0 text-meta text-muted-foreground">{formatDate(proposal.created_at)}</div>
           </div>
-          <p className="mt-3 text-[13px] font-semibold text-primary">{proposalOneLineSummary(proposal.payload_json)}</p>
-          {proposal.description && <p className="mt-2 line-clamp-2 text-[15px] leading-relaxed text-muted-foreground">{proposal.description}</p>}
+          <p className="mt-3 text-meta font-semibold text-primary">{proposalOneLineSummary(proposal.payload_json)}</p>
+          {proposal.description && <p className="mt-2 line-clamp-2 text-body-lg leading-relaxed text-muted-foreground">{proposal.description}</p>}
         </button>
       ))}
     </div>
@@ -152,17 +153,17 @@ function ProposalDetail({
             <Badge variant="outline" className="rounded-full">{proposal.proposal_type}</Badge>
             <Badge variant={statusBadgeVariant(proposal.status)} className="rounded-full">{statusLabel(proposal.status)}</Badge>
           </div>
-          <h2 className="text-xl font-black tracking-[-0.03em] text-foreground">{proposal.title}</h2>
+          <SectionTitle size="xl">{proposal.title}</SectionTitle>
         </div>
       </div>
 
       <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-        <div className="rounded-2xl border border-border/60 bg-card/60 px-3 py-2">创建：{formatDate(proposal.created_at)}</div>
-        <div className="rounded-2xl border border-border/60 bg-card/60 px-3 py-2">审核：{formatDate(proposal.reviewed_at)}</div>
-        <div className="rounded-2xl border border-border/60 bg-card/60 px-3 py-2">应用：{formatDate(proposal.applied_at)}</div>
+        <div className="rounded-panel border border-border/60 bg-card/60 px-3 py-2">创建：{formatDate(proposal.created_at)}</div>
+        <div className="rounded-panel border border-border/60 bg-card/60 px-3 py-2">审核：{formatDate(proposal.reviewed_at)}</div>
+        <div className="rounded-panel border border-border/60 bg-card/60 px-3 py-2">应用：{formatDate(proposal.applied_at)}</div>
       </div>
 
-      {proposal.description && <p className="mt-4 rounded-2xl border border-border/60 bg-card/60 p-4 text-sm leading-relaxed text-muted-foreground">{proposal.description}</p>}
+      {proposal.description && <p className="mt-4 rounded-panel border border-border/60 bg-card/60 p-4 text-sm leading-relaxed text-muted-foreground">{proposal.description}</p>}
       {proposal.payload_json && <ProposalPayloadSummary payload={proposal.payload_json} topic={topic} />}
 
       {proposalSources.length > 0 && (
@@ -170,7 +171,7 @@ function ProposalDetail({
           <h3 className="mb-2 text-sm font-black text-foreground">完整来源</h3>
           <div className="space-y-2">
             {proposalSources.map((source) => (
-              <div key={source.id} className="rounded-2xl border border-border/60 bg-card/60 p-4">
+              <div key={source.id} className="rounded-panel border border-border/60 bg-card/60 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-bold text-foreground">{source.title}</div>
@@ -212,7 +213,7 @@ function ProposalDetail({
               ].filter(Boolean);
 
               return (
-                <div key={claim.id} className="rounded-2xl border border-border/60 bg-card/60 p-4">
+                <div key={claim.id} className="rounded-panel border border-border/60 bg-card/60 p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap gap-2">
@@ -252,7 +253,7 @@ function ProposalDetail({
       )}
 
       {proposalConflicts.length > 0 && (
-        <div className="mt-5 rounded-2xl border border-destructive/20 bg-destructive/5 p-4">
+        <div className="mt-5 rounded-panel border border-destructive/20 bg-destructive/5 p-4">
           <h3 className="mb-2 flex items-center gap-2 text-sm font-black text-destructive"><AlertCircle className="h-4 w-4" />冲突信息</h3>
           <div className="space-y-2">
             {proposalConflicts.map((conflict, index) => (
@@ -266,7 +267,7 @@ function ProposalDetail({
       )}
 
       {!proposal.payload_json && (
-        <div className="mt-5 rounded-2xl border border-dashed border-border/80 p-4 text-sm text-muted-foreground">这条提案没有结构化明细，请根据标题和说明审核。</div>
+        <div className="mt-5 rounded-panel border border-dashed border-border/80 p-4 text-sm text-muted-foreground">这条提案没有结构化明细，请根据标题和说明审核。</div>
       )}
 
       {actionable && (

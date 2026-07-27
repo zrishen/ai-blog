@@ -142,7 +142,7 @@ function StatCard({
         {icon}
       </div>
       <div>
-        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+        <div className="text-caption uppercase tracking-wider text-muted-foreground">
           {label}
         </div>
         <div className="text-lg font-bold text-foreground">{value}</div>
@@ -162,7 +162,7 @@ function SectionCard({
 }) {
   return (
     <Surface variant="card" className="flex flex-1 flex-col overflow-hidden rounded-panel shadow-sm">
-      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5 text-[13px] font-semibold text-foreground">
+      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5 text-meta font-semibold text-foreground">
         <span className="text-primary">{icon}</span>
         {title}
       </div>
@@ -188,10 +188,10 @@ function FileRow({ doc, onPreview }: FileRowProps) {
         {getDocumentIcon(doc.original_name, "w-5 h-5")}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[14px] font-medium text-foreground">
+        <div className="truncate text-body font-medium text-foreground">
           {doc.original_name}
         </div>
-        <div className="text-[12px] text-muted-foreground">
+        <div className="text-fine text-muted-foreground">
           {doc.chunk_count} 个片段 · {formatDate(doc.created_at)}
         </div>
       </div>

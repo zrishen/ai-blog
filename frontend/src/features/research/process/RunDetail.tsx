@@ -171,13 +171,13 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
             <Icon className="h-3.5 w-3.5" />
           )}
         </div>
-        <span className={`text-[13px] font-medium ${
+        <span className={`text-meta font-medium ${
           stage.done ? "text-success" : stage.current ? "text-primary" : "text-muted-foreground"
         }`}>
           {stage.label}
         </span>
         {isRunningStage && (
-          <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-primary">
+          <span className="ml-auto flex items-center gap-1 text-caption font-medium text-primary">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             执行中
           </span>
@@ -190,7 +190,7 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
       {(hasLogs || isRunningStage) && (
         <Collapsible defaultOpen={defaultOpen} className="ml-10 mt-1">
           <CollapsibleTrigger asChild>
-            <button className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
+            <button className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-2.5 py-1.5 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground">
               <ChevronDown className="h-3 w-3 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
               <span>操作日志</span>
               <span className="text-primary">({logs.length})</span>
@@ -198,7 +198,7 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
           </CollapsibleTrigger>
           <CollapsibleContent className="mt-1.5 space-y-1.5 rounded-lg border border-border/40 bg-muted/25 p-2.5">
             {!hasLogs && isRunningStage && (
-              <div className="flex items-center gap-2 py-3 text-[11px] text-muted-foreground/60">
+              <div className="flex items-center gap-2 py-3 text-caption text-muted-foreground/60">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/50" />
                 等待操作日志...
               </div>
@@ -211,7 +211,7 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
                 return (
                   <div
                     key={li}
-                    className={`flex items-start gap-1.5 text-[11px] text-muted-foreground ${isError ? "rounded-md bg-destructive/5 pl-2 border-l-2 border-destructive/30" : ""}`}
+                    className={`flex items-start gap-1.5 text-caption text-muted-foreground ${isError ? "rounded-control bg-destructive/5 pl-2 border-l-2 border-destructive/30" : ""}`}
                   >
                     {log.type === "thinking" ? (
                       <Brain className="mt-0.5 h-3 w-3 flex-shrink-0 text-primary/60" />

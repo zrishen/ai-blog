@@ -31,6 +31,7 @@ import {
   formatDraftTime,
   recordNumber,
   recordString,
+  type DraftInfo,
 } from "../utils/blogEditorTypes";
 import { expandBlankLines, preserveBlankLines } from "../utils/markdownBlankLines";
 import { useBlogResearchContext } from "../hooks/useBlogResearchContext";
@@ -43,6 +44,59 @@ function getWysiwygReset(vditor: Vditor): HTMLElement | null {
   return (vditor as unknown as {
     vditor?: { wysiwyg?: { element?: HTMLElement | null } };
   }).vditor?.wysiwyg?.element?.querySelector(".vditor-reset") as HTMLElement | null | undefined ?? null;
+}
+
+interface DraftsPanelProps {
+  show: boolean;
+  position: { top: number; left: number };
+  drafts: DraftInfo[];
+  draftLoading: boolean;
+  onLoad: (draft: DraftInfo) => void;
+  onDeleteRequest: (draft: DraftInfo) => void;
+}
+
+// 草稿浮层:移动端与桌面端共用同一份列表 UI(原先两处 createPortal 逐字重复)。
+function DraftsPanel({ show, position, drafts, draftLoading, onLoad, onDeleteRequest }: DraftsPanelProps) {
+  return createPortal(
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.18 }}
+          style={{ position: "fixed", top: position.top, left: position.left, zIndex: 9999 }}
+          className="max-h-[min(380px,70dvh)] w-[calc(100vw-2rem)] max-w-[340px] sm:max-h-[380px] overflow-y-auto rounded-panel border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl sm:min-w-[340px]"
+        >
+          {drafts.length === 0 ? (
+            <div className="rounded-xl border border-border/80 bg-secondary/40 px-5 py-7 text-center text-sm text-muted-foreground">
+              暂无草稿
+            </div>
+          ) : (
+            drafts.map((draft) => (
+              <div key={draft.id} className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-accent">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-foreground">{draft.title}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {formatDraftTime(draft.time)}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button size="sm" className="h-7 rounded-full px-3" onClick={() => onLoad(draft)} disabled={draftLoading}>
+                    {draftLoading ? "加载中..." : "加载"}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-100 hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100" onClick={() => onDeleteRequest(draft)} aria-label={`删除草稿 ${draft.title}`}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
 }
 
 export function BlogEditor() {
@@ -444,46 +498,14 @@ export function BlogEditor() {
                 <Archive className="w-4 h-4" />
                 草稿
               </Button>
-              {createPortal(
-                <AnimatePresence>
-                  {showDraftList && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.18 }}
-                      style={{ position: "fixed", top: draftPanelPos.top, left: draftPanelPos.left, zIndex: 9999 }}
-                      className="max-h-[min(380px,70dvh)] w-[calc(100vw-2rem)] max-w-[340px] sm:max-h-[380px] overflow-y-auto rounded-2xl border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl sm:min-w-[340px]"
-                    >
-                      {drafts.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-border/80 bg-secondary/40 px-5 py-7 text-center text-sm text-muted-foreground">
-                          暂无草稿
-                        </div>
-                      ) : (
-                        drafts.map((draft) => (
-                          <div key={draft.id} className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-accent">
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold text-foreground">{draft.title}</div>
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                {formatDraftTime(draft.time)}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <Button size="sm" className="h-7 rounded-full px-3" onClick={() => handleLoadDraft(draft)} disabled={draftLoading}>
-                                {draftLoading ? "加载中..." : "加载"}
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-100 hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>,
-                document.body
-              )}
+              <DraftsPanel
+                show={showDraftList}
+                position={draftPanelPos}
+                drafts={drafts}
+                draftLoading={draftLoading}
+                onLoad={handleLoadDraft}
+                onDeleteRequest={setDraftDeleteTarget}
+              />
             </div>
             <Button variant="outline" className="rounded-full bg-background/70" onClick={() => handleSave("draft")} disabled={saving}>
               <FileText className="w-4 h-4" />
@@ -497,7 +519,7 @@ export function BlogEditor() {
         </div>
 
         <Input
-          className="h-auto w-full rounded-3xl border border-primary/20 bg-card/95 px-5 py-2 text-2xl font-black tracking-[-0.05em] text-foreground shadow-lg shadow-primary/10 transition-all placeholder:text-muted-foreground/80 focus-visible:border-primary/50 focus-visible:ring-4 focus-visible:ring-primary/15 sm:text-2xl md:text-2xl"
+          className="h-auto w-full rounded-surface border border-primary/20 bg-card/95 px-5 py-2 text-2xl font-black tracking-[-0.05em] text-foreground shadow-lg shadow-primary/10 transition-all placeholder:text-muted-foreground/80 focus-visible:border-primary/50 focus-visible:ring-4 focus-visible:ring-primary/15 sm:text-2xl md:text-2xl"
           placeholder="输入文章标题..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -535,7 +557,7 @@ export function BlogEditor() {
           <div className="mt-2 rounded-surface border border-primary/15 bg-background/64 p-3 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-2.5">
-                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/15">
+                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
                   <ShieldCheck className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
@@ -570,7 +592,7 @@ export function BlogEditor() {
             </div>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)]">
-              <div className="rounded-2xl border border-border/70 bg-card/70 p-3">
+              <div className="rounded-panel border border-border/70 bg-card/70 p-3">
                 <div className="mb-2 text-xs font-bold text-muted-foreground">关联研究主题</div>
                 {researchLoading ? (
                   <div className="text-xs text-muted-foreground">正在加载事实依据...</div>
@@ -594,7 +616,7 @@ export function BlogEditor() {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-border/70 bg-card/70 p-3">
+              <div className="rounded-panel border border-border/70 bg-card/70 p-3">
                 <div className="mb-2 text-xs font-bold text-muted-foreground">已采用事实</div>
                 {adoptedClaims.length > 0 ? (
                   <div className="space-y-2">
@@ -603,7 +625,7 @@ export function BlogEditor() {
                         {recordString(claim, "claim_text") || "未命名事实"}
                       </div>
                     ))}
-                    {adoptedClaims.length > 3 && <div className="text-[11px] text-muted-foreground">还有 {adoptedClaims.length - 3} 条事实可在研究图谱查看。</div>}
+                    {adoptedClaims.length > 3 && <div className="text-caption text-muted-foreground">还有 {adoptedClaims.length - 3} 条事实可在研究图谱查看。</div>}
                   </div>
                 ) : (
                   <div className="text-xs leading-relaxed text-muted-foreground">暂无已采用事实。</div>
@@ -649,7 +671,7 @@ export function BlogEditor() {
                   type="button"
                   className={cn(
                     surfaceVariants({ variant: coverImage === cover ? "selected" : "interactive" }),
-                    "h-16 w-28 flex-shrink-0 overflow-hidden rounded-2xl",
+                    "h-16 w-28 flex-shrink-0 overflow-hidden rounded-panel",
                     coverImage === cover ? "ring-2 ring-foreground/10" : "bg-card",
                   )}
                   onClick={() => setCoverImage(cover)}
@@ -659,7 +681,7 @@ export function BlogEditor() {
                 </button>
               ))}
             </div>
-            <div className="min-h-28 overflow-hidden rounded-2xl border border-border/70 bg-card/86">
+            <div className="min-h-28 overflow-hidden rounded-panel border border-border/70 bg-card/86">
               {coverImage ? (
                 <img src={coverImage} alt="当前封面" className="h-full min-h-28 w-full object-cover" />
               ) : (
@@ -689,46 +711,14 @@ export function BlogEditor() {
             <Archive className="w-3 h-3" />
             草稿
           </Button>
-          {createPortal(
-            <AnimatePresence>
-              {showDraftList && (
-                <motion.div
-                  initial={{ opacity: 0, y: -8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.18 }}
-                  style={{ position: "fixed", top: draftPanelPos.top, left: draftPanelPos.left, zIndex: 9999 }}
-                  className="max-h-[min(380px,70dvh)] w-[calc(100vw-2rem)] max-w-[340px] sm:max-h-[380px] overflow-y-auto rounded-2xl border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl sm:min-w-[340px]"
-                >
-                  {drafts.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border/80 bg-secondary/40 px-5 py-7 text-center text-sm text-muted-foreground">
-                      暂无草稿
-                    </div>
-                  ) : (
-                    drafts.map((draft) => (
-                      <div key={draft.id} className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-accent">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-foreground">{draft.title}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {formatDraftTime(draft.time)}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Button size="sm" className="h-7 rounded-full px-3" onClick={() => handleLoadDraft(draft)} disabled={draftLoading}>
-                            {draftLoading ? "加载中..." : "加载"}
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-100 hover:bg-destructive/10 hover:text-destructive md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100" onClick={() => setDraftDeleteTarget(draft)} aria-label={`删除草稿 ${draft.title}`}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>,
-            document.body
-          )}
+          <DraftsPanel
+            show={showDraftList}
+            position={draftPanelPos}
+            drafts={drafts}
+            draftLoading={draftLoading}
+            onLoad={handleLoadDraft}
+            onDeleteRequest={setDraftDeleteTarget}
+          />
         </div>
         <Button variant="outline" size="sm" className="h-7 rounded-full px-2 text-xs" onClick={() => handleSave("draft")} disabled={saving}>
           <FileText className="w-3 h-3" />
@@ -801,14 +791,14 @@ export function BlogEditor() {
           onClick={(e) => e.stopPropagation()}
         >
           <button
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-foreground hover:bg-accent/80 transition-colors"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-meta text-foreground hover:bg-accent/80 transition-colors"
             onClick={handleCopySelection}
           >
             <Copy className="h-3.5 w-3.5" />
             复制
           </button>
           <button
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-primary hover:bg-primary/10 transition-colors"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-meta text-primary hover:bg-primary/10 transition-colors"
             onClick={handleEditorAIModify}
           >
             <Sparkles className="h-3.5 w-3.5" />

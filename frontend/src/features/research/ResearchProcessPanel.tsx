@@ -7,9 +7,11 @@ import {
   TriangleAlert,
   Zap,
 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Surface } from "@/components/ui/surface";
+import { SectionTitle } from "@/components/ui/section-title";
 import { useResearchRuns } from "./hooks/useResearchRuns";
 import { RunHistoryList } from "./process/RunHistoryList";
 import { RunDetail } from "./process/RunDetail";
@@ -41,7 +43,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
       <Surface variant="dashed" className="flex min-h-[360px] items-center justify-center rounded-surface border-primary/20 bg-primary/6 p-5 text-center text-foreground">
         <div>
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
-            <RefreshCw className="h-6 w-6 animate-spin" />
+            <Spinner className="h-6 w-6" />
           </div>
           <p className="text-base font-black tracking-[-0.04em] text-foreground">加载研究过程</p>
           <p className="mt-2 max-w-[220px] text-xs leading-relaxed text-muted-foreground">正在读取研究运行记录...</p>
@@ -78,7 +80,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
           <button className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-destructive/8 hover:text-destructive" onClick={() => handleTabJump("conflicts")}>
             <TriangleAlert className="h-3 w-3" />冲突
           </button>
-          <button className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-emerald-500/8 hover:text-emerald-700 dark:text-emerald-300" onClick={() => handleTabJump("proposals")}>
+          <button className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-success/8 hover:text-success" onClick={() => handleTabJump("proposals")}>
             <FileSearch className="h-3 w-3" />提案
           </button>
         </div>
@@ -94,10 +96,10 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
       {runs.length === 0 ? (
         <Surface variant="dashed" className="flex min-h-[280px] items-center justify-center rounded-surface p-8 text-center text-foreground">
           <div>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-panel bg-secondary text-muted-foreground">
               <Clock className="h-5 w-5" />
             </div>
-            <h2 className="text-lg font-black tracking-[-0.03em] text-foreground">暂无研究运行记录</h2>
+            <SectionTitle size="lg">暂无研究运行记录</SectionTitle>
             <p className="mt-2 text-sm text-muted-foreground">点击上方「启动研究」按钮开始新一轮研究。</p>
           </div>
         </Surface>

@@ -9,7 +9,8 @@ import {
   deleteResearchTopic,
 } from "../../api/client";
 import { motion } from "motion/react";
-import { Trash2, Plus, Loader2, GitBranch } from "lucide-react";
+import { Trash2, Plus, GitBranch } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -153,22 +154,22 @@ export function ResearchPanel() {
         </div>
 
         {researchActionError && (
-          <Alert variant="destructive" className="px-3 py-2 text-[13px]">
+          <Alert variant="destructive" className="px-3 py-2 text-meta">
             {researchActionError}
           </Alert>
         )}
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           {state.researchTopics.length === 0 && !researchLoading ? (
-            <div className={cn(surfaceVariants({ variant: "inset" }), "px-3 py-4 text-center text-[13px] text-muted-foreground")}>
+            <div className={cn(surfaceVariants({ variant: "inset" }), "px-3 py-4 text-center text-meta text-muted-foreground")}>
               暂无研究主题，先创建一个主题开始收集来源和事实。
             </div>
           ) : state.researchTopics.map((topic) => {
             const isActive = topic.id === state.researchCurrentTopicId;
             const statusColor = topic.status === "draft" ? "bg-muted-foreground/20"
-              : topic.status === "researching" ? "bg-blue-500"
-              : topic.status === "ready" ? "bg-emerald-500"
-              : topic.status === "stale" ? "bg-amber-500"
+              : topic.status === "researching" ? "bg-primary"
+              : topic.status === "ready" ? "bg-success"
+              : topic.status === "stale" ? "bg-warning"
               : "bg-primary";
             return (
               <ContextMenu key={topic.id}>
@@ -240,7 +241,7 @@ export function ResearchPanel() {
               onClick={handleConfirmDeleteResearchTopic}
               disabled={researchDeleteTarget === null || researchDeletingId !== null}
             >
-              {researchDeletingId !== null && <Loader2 className="h-4 w-4 animate-spin" />}
+              {researchDeletingId !== null && <Spinner className="h-4 w-4" />}
               永久删除
             </Button>
           </DialogFooter>

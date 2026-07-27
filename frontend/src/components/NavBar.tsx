@@ -192,7 +192,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
           <ProjectMark className="h-7 w-7" />
         </span>
         <span
-          className="hidden text-left whitespace-nowrap text-[15px] font-semibold tracking-[0.06em] text-foreground transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.03] sm:inline"
+          className="hidden text-left whitespace-nowrap text-body-lg font-semibold tracking-[0.06em] text-foreground transition-transform duration-200 ease-out group-hover:-translate-y-0.5 group-hover:scale-[1.03] sm:inline"
           style={{ fontFamily: '"Songti SC", "Noto Serif CJK SC", "STSong", "SimSun", serif' }}
         >
           把想法写成体系
@@ -326,7 +326,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
         <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-5 py-4">
             <DialogTitle className="text-[18px]">设置</DialogTitle>
-            <DialogDescription className="text-[13px]">
+            <DialogDescription className="text-meta">
               管理应用配置。当前可配置后端 LLM 调用使用的 API。
             </DialogDescription>
           </DialogHeader>
@@ -334,16 +334,16 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
           <div className="space-y-4 px-5 py-4">
             <div>
               <h3 className="text-sm font-semibold text-foreground">AI API</h3>
-              <p className="mt-1 text-[13px] text-muted-foreground">保存后会用于后端 LLM 调用。</p>
+              <p className="mt-1 text-meta text-muted-foreground">保存后会用于后端 LLM 调用。</p>
             </div>
 
             {settingsError && (
-              <Alert variant="destructive" className="text-[13px]">
+              <Alert variant="destructive" className="text-meta">
                 {settingsError}
               </Alert>
             )}
             {settingsSaved && (
-              <Alert variant="success" className="text-[13px]">
+              <Alert variant="success" className="text-meta">
                 设置已保存，下一次 AI 调用会使用新配置。
               </Alert>
             )}
@@ -384,7 +384,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
                 />
                 <button
                   type="button"
-                  className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                  className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                   onClick={() => setShowApiKey((value) => !value)}
                   disabled={settingsLoading || settingsSaving}
                   title={showApiKey ? "隐藏 API Key" : "显示 API Key"}
@@ -434,7 +434,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
         <DialogContent className="max-w-[calc(100%-2rem)] gap-0 overflow-hidden p-0 sm:max-w-[480px]">
           <DialogHeader className="border-b border-border/60 px-6 py-5">
             <DialogTitle className="text-[18px]">订阅</DialogTitle>
-            <DialogDescription className="text-[13px]">
+            <DialogDescription className="text-meta">
               查看订阅权益、本周用量，或使用兑换码激活订阅。
             </DialogDescription>
           </DialogHeader>

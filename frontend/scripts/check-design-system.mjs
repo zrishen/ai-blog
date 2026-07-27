@@ -7,7 +7,7 @@ const componentContracts = [
   ["src/features/ai-chat/ai-sidebar/ConversationListView.tsx", "surfaceVariants"],
   ["src/features/research/ResearchPanel.tsx", "surfaceVariants"],
   ["src/features/research/ResearchPanel.tsx", "WorkspacePanel"],
-  ["src/features/research/ResearchGraphPage.tsx", "surfaceVariants"],
+  ["src/features/research/ResearchGraphPage.tsx", "EmptyState"],
   ["src/features/subscription/components/SubscriptionPanel.tsx", "surfaceVariants"],
   ["src/features/file/components/FilePanel.tsx", "WorkspacePanel"],
   ["src/features/blog/components/BlogOverviewPanel.tsx", "WorkspacePanel"],
@@ -68,11 +68,19 @@ const rawRadiusAllowlist = new Set([
   "src/components/ui/scroll-area.tsx",
 ]);
 
-// Research graph nodes use color as data encoding. Product-card borders must stay semantic.
-const dataEncodingBorderAllowlist = new Set([
+// These files use palette color as data encoding (file-type icons, graph nodes) or
+// categorical chart-like tones (admin metric tiles) where no semantic token exists.
+// Everywhere else, color must come from semantic tokens (bg-/text-/border-<token>).
+const colorPaletteAllowlist = new Set([
+  // 文件类型图标:颜色编码文件格式
+  "src/features/file/components/fileIcons.tsx",
+  "src/features/file/panes/filePaneUtils.tsx",
+  // 研究图谱节点:颜色编码实体/证据/来源类型
   "src/features/research/nodes/EntityNode.tsx",
   "src/features/research/nodes/EvidenceNode.tsx",
   "src/features/research/nodes/SourceNode.tsx",
+  // 管理后台 metric tile:分类着色(无对应语义 token)
+  "src/features/admin/components/OverviewPage.tsx",
 ]);
 
 // Mermaid owns its renderer palette and cannot consume Tailwind classes.
@@ -148,10 +156,10 @@ for (const sourcePath of sourceFiles) {
     }
   }
 
-  if (!dataEncodingBorderAllowlist.has(sourceRelativePath)) {
-    const paletteBorder = content.match(/\bborder-(?:amber|blue|cyan|emerald|green|indigo|lime|orange|pink|purple|red|rose|sky|teal|violet)-/);
-    if (paletteBorder) {
-      errors.push(`${sourceRelativePath} contains ${paletteBorder[0]}; card borders must use semantic border tokens.`);
+  if (!colorPaletteAllowlist.has(sourceRelativePath)) {
+    const paletteColor = content.match(/\b(?:bg|text|ring|fill|stroke|border|from|to|via)-(?:amber|blue|cyan|emerald|green|indigo|lime|orange|pink|purple|red|rose|sky|teal|violet|slate|gray|neutral|zinc|stone)-/);
+    if (paletteColor) {
+      errors.push(`${sourceRelativePath} contains ${paletteColor[0]}; use a semantic color token (bg-/text-/border-<token>) instead.`);
     }
   }
 

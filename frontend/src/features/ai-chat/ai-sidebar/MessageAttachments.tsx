@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Download, FileText, Image as ImageIcon, LoaderCircle } from "lucide-react";
+import { Download, FileText, Image as ImageIcon } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { getChatAttachmentBlob } from "../../../api/chatAttachments";
 import type { ChatAttachment } from "../types";
 
@@ -40,7 +41,7 @@ function PrivateAttachmentImage({ attachment }: { attachment: ChatAttachment }) 
   if (!url) {
     return (
       <div className="flex h-24 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground">
-        <LoaderCircle className="h-4 w-4 animate-spin" />
+        <Spinner className="h-4 w-4" />
       </div>
     );
   }
@@ -72,7 +73,7 @@ export function MessageAttachments({ attachments }: { attachments?: ChatAttachme
           onClick={() => void downloadAttachment(attachment)}
         >
           <PrivateAttachmentImage attachment={attachment} />
-          <span className="mt-1 flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+          <span className="mt-1 flex items-center gap-1 truncate text-caption text-muted-foreground">
             <ImageIcon className="h-3 w-3" />
             {attachment.original_name}
           </span>
@@ -87,7 +88,7 @@ export function MessageAttachments({ attachments }: { attachments?: ChatAttachme
           <FileText className="h-4 w-4 flex-none text-muted-foreground" />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-medium">{attachment.original_name}</span>
-            <span className="block text-[11px] text-muted-foreground">{formatSize(attachment.size_bytes)}</span>
+            <span className="block text-caption text-muted-foreground">{formatSize(attachment.size_bytes)}</span>
           </span>
           <Download className="h-3.5 w-3.5 flex-none text-muted-foreground" />
         </button>

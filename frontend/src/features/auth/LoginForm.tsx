@@ -4,6 +4,7 @@ import type { AuthUser } from "../../stores/authStore";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface LoginFormProps {
@@ -67,7 +68,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <TabsContent value={mode} className="mt-5">
           <form onSubmit={submit} className="space-y-4">
         <div>
-          <label htmlFor="auth-username" className="block text-sm font-medium text-foreground mb-1">用户名</label>
+          <Label htmlFor="auth-username" className="block mb-1">用户名</Label>
           <Input
             id="auth-username"
             name="username"
@@ -80,7 +81,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           />
         </div>
         <div>
-          <label htmlFor="auth-password" className="block text-sm font-medium text-foreground mb-1">密码</label>
+          <Label htmlFor="auth-password" className="block mb-1">密码</Label>
           <Input
             id="auth-password"
             name="password"
@@ -94,7 +95,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
         {mode === "register" && (
           <div>
-            <label htmlFor="auth-invite-code" className="block text-sm font-medium text-foreground mb-1">邀请码</label>
+            <Label htmlFor="auth-invite-code" className="block mb-1">邀请码</Label>
             <Input
               id="auth-invite-code"
               name="invite_code"

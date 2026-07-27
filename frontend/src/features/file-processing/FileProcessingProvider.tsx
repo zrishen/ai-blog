@@ -387,10 +387,10 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
           role="status"
           aria-live="polite"
           data-testid="file-processing-upload-overlay"
-          className="fixed top-20 left-1/2 z-50 w-[380px] max-w-[90vw] -translate-x-1/2 rounded-2xl border border-border/70 bg-card/95 px-4 py-3 shadow-2xl shadow-foreground/10 backdrop-blur-xl"
+          className="fixed top-20 left-1/2 z-50 w-[380px] max-w-[90vw] -translate-x-1/2 rounded-panel border border-border/70 bg-card/95 px-4 py-3 shadow-2xl shadow-foreground/10 backdrop-blur-xl"
         >
           <div className="mb-1.5 flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1 truncate text-[13px] font-medium">{uploadTask.fileName}</div>
+            <div className="min-w-0 flex-1 truncate text-meta font-medium">{uploadTask.fileName}</div>
             {uploadTask.status === "failed" && (
               <button
                 type="button"
@@ -403,7 +403,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
             )}
           </div>
           {uploadTask.status === "failed" ? (
-            <div className="text-[12px] leading-relaxed text-destructive">{uploadTask.error}</div>
+            <div className="text-fine leading-relaxed text-destructive">{uploadTask.error}</div>
           ) : (
             <FileProcessingProgress value={uploadTask} />
           )}

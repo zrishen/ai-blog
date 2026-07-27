@@ -19,7 +19,7 @@ export function FilePreview({ filename }: Props) {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
-      <div className="p-10 text-center text-red-500 text-sm">不支持预览该文件类型</div>
+      <div className="p-10 text-center text-destructive text-sm">不支持预览该文件类型</div>
     </div>
   );
 }
@@ -44,7 +44,7 @@ function PdfPreview({ filename, previewUrl }: { filename: string; previewUrl: st
           </div>
         )}
         {error && (
-          <div className="p-10 text-center text-red-500 text-sm">{error}</div>
+          <div className="p-10 text-center text-destructive text-sm">{error}</div>
         )}
       </div>
     </div>
@@ -85,7 +85,7 @@ function FilePreviewHTML({ url }: { url: string }) {
           </div>
         )}
         {error && (
-          <div className="p-10 text-center text-red-500 text-sm">{error}</div>
+          <div className="p-10 text-center text-destructive text-sm">{error}</div>
         )}
         {html && (
           <div

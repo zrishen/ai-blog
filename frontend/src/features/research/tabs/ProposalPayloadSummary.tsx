@@ -25,14 +25,14 @@ export function ProposalPayloadSummary({ payload, topic }: ProposalPayloadSummar
 
   if (!hasSummary) {
     return (
-      <div className="mt-3 rounded-2xl border border-border/70 bg-card/70 p-3 text-xs leading-relaxed text-muted-foreground">
+      <div className="mt-3 rounded-panel border border-border/70 bg-card/70 p-3 text-xs leading-relaxed text-muted-foreground">
         这条提案包含系统更新明细，但当前没有可展示的摘要字段；请结合标题和说明决定是否审核。
       </div>
     );
   }
 
   return (
-    <div className="mt-3 space-y-3 rounded-2xl border border-border/70 bg-card/70 p-4">
+    <div className="mt-3 space-y-3 rounded-panel border border-border/70 bg-card/70 p-4">
       <div className="flex flex-wrap gap-2">
         {sourceIds.length > 0 && <Badge variant="outline" className="rounded-full">新增来源 {sourceIds.length} 个</Badge>}
         {claimIds.length > 0 && <Badge variant="outline" className="rounded-full">新增事实 {claimIds.length} 条</Badge>}

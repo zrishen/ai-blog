@@ -81,7 +81,7 @@ function MessageListComponent({
               <Sparkles className="h-6 w-6 animate-pulse" />
             </div>
             <p className="text-base font-black tracking-[-0.04em] text-foreground">正在加载历史对话</p>
-            <p className="mt-2 max-w-[220px] text-[13px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-[220px] text-meta leading-relaxed text-muted-foreground">
               请稍候，正在读取这段对话的历史消息。
             </p>
           </div>
@@ -99,7 +99,7 @@ function MessageListComponent({
               <AlertCircle className="h-6 w-6" />
             </div>
             <p className="text-base font-black tracking-[-0.04em] text-foreground">历史对话加载失败</p>
-            <p className="mt-2 max-w-[240px] text-[13px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-[240px] text-meta leading-relaxed text-muted-foreground">
               {historyLoadError}
             </p>
             <Button
@@ -125,7 +125,7 @@ function MessageListComponent({
               <Sparkles className="h-6 w-6" />
             </div>
             <p className="text-base font-black tracking-[-0.04em] text-foreground">有什么我可以帮你的？</p>
-            <p className="mt-2 max-w-[220px] text-[13px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-[220px] text-meta leading-relaxed text-muted-foreground">
               {emptyHint}
             </p>
           </div>
@@ -379,7 +379,7 @@ function ThinkingPanel({
       data-streaming="false"
     >
       <CollapsibleTrigger asChild>
-        <button className="flex w-full cursor-pointer items-center gap-1.5 rounded-md py-1 text-base font-medium text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
+        <button className="flex w-full cursor-pointer items-center gap-1.5 rounded-control py-1 text-base font-medium text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
           <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 motion-reduce:transition-none [[data-state=open]>&]:rotate-90" aria-hidden="true" />
           <span>{title}</span>
         </button>
@@ -571,7 +571,7 @@ function CollapsibleReasoningBlock({ content }: { content: string }) {
   return (
     <Collapsible defaultOpen={false}>
       <CollapsibleTrigger asChild>
-        <button className="flex w-full cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-base text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
+        <button className="flex w-full cursor-pointer items-center gap-1 rounded-control px-1.5 py-1 text-base text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
           <span className="font-medium">模型推理</span>
           <span className="text-muted-foreground/60">({charCount} 字)</span>
         </button>
@@ -589,7 +589,7 @@ function ProcessText({ content }: { content: string }) {
   const masked = maskStreamingMarkdown(content);
   if (!masked) return null;
   return (
-    <div className="prose max-w-none break-words px-1.5 text-base leading-relaxed text-foreground [&_*]:text-foreground prose-p:my-0.5 prose-p:text-base prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-md prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-1 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-1 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert">
+    <div className="prose max-w-none break-words px-1.5 text-base leading-relaxed text-foreground [&_*]:text-foreground prose-p:my-0.5 prose-p:text-base prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-1 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-1 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert">
       <Markdown remarkPlugins={[remarkGfm]} components={messageMermaidComponents}>{masked}</Markdown>
     </div>
   );
@@ -612,7 +612,7 @@ function ActionNode({ tools }: { tools: ToolPair[] }) {
   return (
     <Collapsible defaultOpen={false}>
       <CollapsibleTrigger asChild>
-        <button className="flex w-full cursor-pointer items-center rounded-md px-1.5 py-1 text-left text-base text-muted-foreground/70 transition-colors hover:bg-muted/65 hover:text-muted-foreground">
+        <button className="flex w-full cursor-pointer items-center rounded-control px-1.5 py-1 text-left text-base text-muted-foreground/70 transition-colors hover:bg-muted/65 hover:text-muted-foreground">
           {title}
         </button>
       </CollapsibleTrigger>
@@ -720,7 +720,7 @@ function MessageBody({
   if (messageContent) {
     return (
       <div
-        className={`prose max-w-none break-words text-base text-foreground [&_*]:text-foreground prose-p:my-1 prose-p:text-base prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-md prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-2 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert ${isAssistant
+        className={`prose max-w-none break-words text-base text-foreground [&_*]:text-foreground prose-p:my-1 prose-p:text-base prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-2 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert ${isAssistant
           ? "prose-p:leading-7 prose-li:leading-7 prose-strong:font-black"
           : "prose-p:my-0 prose-ul:my-0 prose-ol:my-0"
           }`}

@@ -35,12 +35,12 @@ export function RunHistoryList({ runs, selectedRunId, onSelect }: RunHistoryList
                 <span className="text-xs font-semibold text-foreground">Run #{run.id}</span>
                 <RunStatusBadge status={run.status} />
               </div>
-              <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <div className="mt-1 flex items-center gap-2 text-caption text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 <span>{formatTime(run.started_at) ?? formatTime(run.created_at) ?? "未知时间"}</span>
               </div>
               {isRunActive && (
-                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                <div className="mt-1.5 flex items-center gap-1.5 text-caption font-medium text-primary">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                   运行中...
                 </div>

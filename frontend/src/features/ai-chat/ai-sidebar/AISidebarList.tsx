@@ -133,8 +133,8 @@ export function AISidebarList() {
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <DialogContent className="max-w-[340px] p-0 gap-0">
           <DialogHeader className="px-4 py-3 border-b border-border">
-            <DialogTitle className="text-[14px]">确认删除</DialogTitle>
-            <DialogDescription className="text-[12px]">删除后可在回收站恢复。</DialogDescription>
+            <DialogTitle className="text-body">确认删除</DialogTitle>
+            <DialogDescription className="text-fine">删除后可在回收站恢复。</DialogDescription>
           </DialogHeader>
           <DialogFooter className="px-4 py-3 gap-2">
             <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>取消</Button>

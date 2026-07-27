@@ -2,6 +2,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { ResearchTopicActions } from "../hooks/useResearchTopicActions";
 
 interface ConflictsTabProps {
@@ -13,9 +14,7 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
 
   if (!conflictPairs.length) {
     return (
-      <Surface variant="dashed" className="rounded-surface p-8 text-center text-sm">
-        暂无冲突关系。
-      </Surface>
+      <EmptyState title="暂无冲突关系" className="rounded-surface p-8" />
     );
   }
 
@@ -29,7 +28,7 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
           <div key={relation.id} className="rounded-surface border border-destructive/25 bg-destructive/5 p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-bold text-destructive"><AlertCircle className="h-4 w-4" />冲突事实</div>
-              {resolved && <Badge className="rounded-full bg-emerald-600 text-white">已解决</Badge>}
+              {resolved && <Badge variant="success" solid className="rounded-full">已解决</Badge>}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <Surface variant="card" className="rounded-control bg-card/75 p-4 shadow-sm">

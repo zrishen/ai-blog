@@ -10,7 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
-import { Trash2, RotateCcw, Loader2, MessageSquare, FileText, PenLine, Search } from "lucide-react";
+import { Trash2, RotateCcw, MessageSquare, FileText, PenLine, Search } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import { listTrash, restoreTrashItem, purgeTrashItem, emptyTrash } from "../../../api/trash";
 import type { TrashItem, TrashItemType, TrashPurgeResponse } from "../../../api/trash";
 import { useFileProcessing } from "../../../features/file-processing/FileProcessingProvider";
@@ -230,19 +231,19 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
             <Trash2 className="w-4 h-4 text-muted-foreground" />
             回收站
           </DialogTitle>
-          <DialogDescription className="text-[13px]">
+          <DialogDescription className="text-meta">
             已删除的文件、文章和 AI 会话会保留在这里，直到永久删除。
           </DialogDescription>
         </DialogHeader>
 
         <div className="px-5 py-3 flex flex-col gap-2 max-h-[60vh] overflow-y-auto">
           {error && (
-            <Alert variant="destructive" className="text-[13px]">
+            <Alert variant="destructive" className="text-meta">
               {error}
             </Alert>
           )}
           {partialNotice && !emptyConfirmOpen && !purgeTarget && (
-            <Alert variant="warning" className="text-[13px]">
+            <Alert variant="warning" className="text-meta">
               {partialNotice}
             </Alert>
           )}
@@ -261,7 +262,7 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
 
           {loading ? (
             <div className="flex items-center justify-center py-10 text-sm text-muted-foreground gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Spinner className="w-4 h-4" />
               加载中...
             </div>
           ) : filteredItems.length === 0 ? (
@@ -282,18 +283,18 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
                 const rowPending = restoring || purging;
                 return (
                   <li key={`${item.type}:${item.id}`} className="group flex items-center gap-3 py-2.5">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-control bg-secondary text-muted-foreground">
                       <Icon className="w-4 h-4" />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm text-foreground">{item.name || "(未命名)"}</div>
-                      <div className="text-[12px] text-muted-foreground">
+                      <div className="text-fine text-muted-foreground">
                         {meta.label} · {formatDate(item.deleted_at)}
                       </div>
                       {restoreJob && (
                         <div className="mt-1.5">
                           {restoreJob.status === "failed" ? (
-                            <div className="text-[12px] text-destructive">{restoreJob.error_message || "恢复失败，可重试"}</div>
+                            <div className="text-fine text-destructive">{restoreJob.error_message || "恢复失败，可重试"}</div>
                           ) : (
                             <FileProcessingProgress value={{ percent: restoreJob.progress_percent, stage: restoreJob.current_stage || "正在恢复文件", job: restoreJob }} />
                           )}
@@ -309,7 +310,7 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
                         disabled={rowPending || emptying}
                         title="恢复"
                       >
-                        {restoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                        {restoring ? <Spinner className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
                         {restoring ? "恢复中..." : "恢复"}
                       </Button>
                       <Button
@@ -320,7 +321,7 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
                         disabled={rowPending || emptying}
                         title="永久删除"
                       >
-                        {purging ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                        {purging ? <Spinner className="w-3.5 h-3.5" /> : <Trash2 className="w-3.5 h-3.5" />}
                         永久删除
                       </Button>
                     </div>
@@ -332,7 +333,7 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
         </div>
 
         <DialogFooter className="border-t border-border px-5 py-3 flex items-center justify-between gap-2">
-          <span className="text-[13px] text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             共 {total} 项
           </span>
           <div className="flex items-center gap-2">
@@ -355,8 +356,8 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
         <Dialog open={purgeTarget !== null} onOpenChange={(o) => { if (!o && !purgeTargetPending) setPurgeTarget(null); }}>
           <DialogContent className="max-w-[380px] p-0 gap-0">
             <DialogHeader className="border-b border-border px-4 py-3">
-              <DialogTitle className="text-[15px]">确认永久删除</DialogTitle>
-              <DialogDescription className="text-[13px]">
+              <DialogTitle className="text-body-lg">确认永久删除</DialogTitle>
+              <DialogDescription className="text-meta">
                 永久删除「{purgeTarget?.name}」后无法恢复。
               </DialogDescription>
             </DialogHeader>
@@ -374,8 +375,8 @@ export function TrashDialog({ open, onOpenChange, onRestored, onPurged }: TrashD
         <Dialog open={emptyConfirmOpen} onOpenChange={(nextOpen) => { if (!emptying) setEmptyConfirmOpen(nextOpen); }}>
           <DialogContent className="max-w-[380px] p-0 gap-0">
             <DialogHeader className="border-b border-border px-4 py-3">
-              <DialogTitle className="text-[15px]">确认清空回收站</DialogTitle>
-              <DialogDescription className="text-[13px]">
+              <DialogTitle className="text-body-lg">确认清空回收站</DialogTitle>
+              <DialogDescription className="text-meta">
                 将永久删除回收站中的全部 {total} 项内容，操作无法撤销。
               </DialogDescription>
             </DialogHeader>

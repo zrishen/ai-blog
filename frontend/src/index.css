@@ -4,7 +4,6 @@
 
 @theme inline {
   --radius-lg: 16px;
-  --radius-md: 12px;
   --radius-sm: 8px;
   --radius-full: 9999px;
   --radius-feature: 2rem;
@@ -42,15 +41,16 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
-  --color-sidebar: hsl(var(--sidebar));
-  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
-  --color-sidebar-primary: hsl(var(--sidebar-primary));
-  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
-  --color-sidebar-accent: hsl(var(--sidebar-accent));
-  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
-  --color-sidebar-border: hsl(var(--sidebar-border));
-  --color-sidebar-ring: hsl(var(--sidebar-ring));
-  --color-sidebar-background: hsl(var(--sidebar-background));
+  --color-context-bar: hsl(var(--context-bar));
+
+  /* 字号:辅助文字基于 --font-base 联动,改基础则 caption/fine/meta/body/body-lg 整体平移。
+     值 = 项目原有像素,视觉零变化;未来调 --font-base 即可全局缩放辅助字号。 */
+  --font-base: 0.875rem;
+  --text-caption: calc(var(--font-base) - 3px);
+  --text-fine: calc(var(--font-base) - 2px);
+  --text-meta: calc(var(--font-base) - 1px);
+  --text-body: var(--font-base);
+  --text-body-lg: calc(var(--font-base) + 1px);
 }
 
 :root,
@@ -84,14 +84,7 @@
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 66%;
   --chart-5: 27 87% 67%;
-  --sidebar-background: 0 0% 98%;
-  --sidebar-foreground: 240 5.3% 26.1%;
-  --sidebar-primary: 240 5.9% 10%;
-  --sidebar-primary-foreground: 0 0% 98%;
-  --sidebar-accent: 240 4.8% 95.9%;
-  --sidebar-accent-foreground: 240 5.9% 10%;
-  --sidebar-border: 220 13% 91%;
-  --sidebar-ring: 217.2 91.2% 59.8%;
+  --context-bar: 217 84% 95%;
 }
 
 [data-theme="dark"] {
@@ -123,14 +116,7 @@
   --chart-3: 30 80% 55%;
   --chart-4: 280 65% 60%;
   --chart-5: 340 75% 55%;
-  --sidebar-background: 240 5.9% 10%;
-  --sidebar-foreground: 240 4.8% 95.9%;
-  --sidebar-primary: 224.3 76.3% 48%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 3.7% 15.9%;
-  --sidebar-accent-foreground: 240 4.8% 95.9%;
-  --sidebar-border: 240 3.7% 15.9%;
-  --sidebar-ring: 217.2 91.2% 59.8%;
+  --context-bar: 221 28% 18%;
 }
 
 @layer base {
