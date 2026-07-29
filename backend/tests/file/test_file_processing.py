@@ -341,6 +341,7 @@ async def test_upload_failure_cleans_document_chunks_and_file(
     response = await client.post(
         "/api/v1/files/documents",
         files={"file": ("failure.pdf", io.BytesIO(b"%PDF-1.4 failure"), "application/pdf")},
+        data={"auto_index": "true"},
         headers=_request_headers(),
     )
     job_id = response.json()["id"]
@@ -369,6 +370,38 @@ async def test_upload_failure_cleans_document_chunks_and_file(
     assert not upload_path.exists()
     assert len(cleanup_calls) >= 2
     assert (await db_session.execute(select(FileDocument))).scalars().all() == []
+
+
+@pytest.mark.asyncio
+async def test_upload_without_auto_index_skips_vectorization(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch,
+):
+    """上传默认不索引：_run_job 不调 vectorize，FileDocument 标记 not indexed。"""
+    vectorize_calls: list[int] = []
+
+    async def spy_vectorize(*args, **kwargs):
+        vectorize_calls.append(1)
+        return ["chunk"]
+
+    monkeypatch.setattr(file_processing_service, "vectorize_and_store", spy_vectorize)
+
+    response = await client.post(
+        "/api/v1/files/documents",
+        files={"file": ("plain.pdf", io.BytesIO(b"%PDF-1.4 plain"), "application/pdf")},
+        headers=_request_headers(),
+    )
+    job_id = response.json()["id"]
+    await _run_job(job_id)
+
+    db_session.expire_all()
+    job = await db_session.get(FileProcessingJob, job_id)
+    assert job.status == "succeeded"
+    assert job.result_document_id is not None
+    doc = await db_session.get(FileDocument, job.result_document_id)
+    assert doc.chunk_content == "not indexed"
+    assert vectorize_calls == []
 
 
 @pytest.mark.asyncio

@@ -51,7 +51,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
 
   const loadPosts = useCallback(async () => {
     try {
-      const data = await listSitePosts(username, { include_drafts: isOwner, per_page: 50 });
+      const data = await listSitePosts(username, { per_page: 50 });
       dispatch({ type: "SET_BLOG_POSTS", payload: data.posts });
       return data.posts;
     } catch (e) {
@@ -59,7 +59,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
       dispatch({ type: "SET_BLOG_POSTS", payload: [] });
       return [];
     }
-  }, [username, isOwner, dispatch]);
+  }, [username, dispatch]);
 
   useEffect(() => {
     dispatch({ type: "SET_PAGE", payload: "blog" });

@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
-import type { ResearchTopicDetail, ResearchTopicSummary } from "../api/client";
+import type { ResearchTopicDetail, ResearchTopicSummary, WorkspaceNode } from "../api/client";
 import type { TrustChoiceOption } from "../features/ai-chat/trustPrompts";
 import type { ThinkingMode } from "../api/chat";
 import type {
@@ -17,7 +17,7 @@ import type {
 import { isDisplayableMessage } from "../features/ai-chat/types";
 import type { BlogPost, BlogView } from "../features/blog/types";
 import type { FileCategory, FileDocument } from "../features/file/types";
-import type { Page, Panel, Theme } from "./types";
+import type { Page, Panel, Theme, WorkspaceView } from "./types";
 import { researchReducer } from "./slices/researchSlice";
 import { conversationReducer } from "./slices/conversationSlice";
 import { blogReducer } from "./slices/blogSlice";
@@ -25,6 +25,7 @@ import { fileReducer } from "./slices/fileSlice";
 import { uiReducer } from "./slices/uiSlice";
 import { revisionReducer } from "./slices/revisionSlice";
 import { aiSidebarReducer } from "./slices/aiSidebarSlice";
+import { workspaceReducer } from "./slices/workspaceSlice";
 
 export interface BlogStreamingState {
   runId: string;
@@ -84,6 +85,13 @@ interface ChatState {
   fileCategories: FileCategory[];
   fileSelectedCategoryId: number | null;
   fileSelectedFile: string | null;
+
+  // Workspace
+  workspaceTree: WorkspaceNode[];
+  workspaceSelectedFolderId: number | null;
+  workspaceSelectedView: WorkspaceView;
+  // 工作区内联编辑的博客 id（null=不在编辑，显示视图列表）
+  workspaceEditingBlogId: number | null;
 
   // Research Graph
   researchTopics: ResearchTopicSummary[];
@@ -151,6 +159,7 @@ type ChatAction =
   | { type: "SET_BLOG_CURRENT_POST_ID"; payload: number | null }
   | { type: "SET_BLOG_SELECTED_TAG"; payload: string | null }
   | { type: "UPDATE_BLOG_POST"; payload: BlogPost }
+  | { type: "UPSERT_BLOG_POST"; payload: BlogPost }
   | { type: "START_BLOG_STREAMING"; payload: { postId: number; runId: string } }
   | { type: "APPEND_BLOG_STREAMING"; payload: { postId: number; runId: string; contentDelta: string } }
   | { type: "CLEAR_BLOG_STREAMING"; payload: { postId: number; runId: string } }
@@ -165,6 +174,10 @@ type ChatAction =
   | { type: "SET_FILE_CATEGORIES"; payload: FileCategory[] }
   | { type: "SET_FILE_SELECTED_CATEGORY_ID"; payload: number | null }
   | { type: "SET_FILE_SELECTED_FILE"; payload: string | null }
+  // Workspace
+  | { type: "SET_WORKSPACE_TREE"; payload: WorkspaceNode[] }
+  | { type: "SET_WORKSPACE_SELECTED_FOLDER"; payload: number | null }
+  | { type: "SET_WORKSPACE_SELECTED_VIEW"; payload: WorkspaceView }
   // Research Graph
   | { type: "SET_RESEARCH_TOPICS"; payload: ResearchTopicSummary[] }
   | { type: "SET_RESEARCH_CURRENT_TOPIC_ID"; payload: number | null }
@@ -178,6 +191,8 @@ type ChatAction =
   | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
   | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
   | { type: "INCREMENT_TRASH_REVISION" }
+  // Workspace 内联编辑博客
+  | { type: "SET_WORKSPACE_EDITING_BLOG"; payload: number | null }
   // Auth
   | { type: "LOGOUT" };
 
@@ -189,6 +204,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   state = uiReducer(state, action);
   state = revisionReducer(state, action);
   state = aiSidebarReducer(state, action);
+  state = workspaceReducer(state, action);
   switch (action.type) {
     // Auth — 登出时清除用户级别 UI 状态（不删后端数据）
     case "LOGOUT":
@@ -218,6 +234,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         fileDocuments: [],
         fileSelectedCategoryId: null,
         fileSelectedFile: null,
+        workspaceTree: [],
+        workspaceSelectedFolderId: null,
+        workspaceSelectedView: "overview",
+        workspaceEditingBlogId: null,
         researchTopics: [],
         researchCurrentTopicId: null,
         researchCurrentTopic: null,
@@ -240,7 +260,21 @@ function getInitialPage(): Page {
   const path = window.location.pathname;
   if (path.startsWith("/files")) return "files";
   if (path.startsWith("/research")) return "research";
+  if (path.startsWith("/workspace")) return "workspace";
   return "blog";
+}
+
+// 工作区选中视图/目录持久化：刷新页面后恢复上次位置，不回退到「全部」。
+const WS_VIEWS: WorkspaceView[] = ["overview", "drafts", "published", "ai_knowledge", "inbox", "trash"];
+function loadWorkspaceView(): WorkspaceView {
+  const v = localStorage.getItem("ws_view");
+  return v && WS_VIEWS.includes(v as WorkspaceView) ? (v as WorkspaceView) : "overview";
+}
+function loadWorkspaceFolder(): number | null {
+  const raw = localStorage.getItem("ws_folder");
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 }
 
 const initialState: ChatState = {
@@ -286,6 +320,12 @@ const initialState: ChatState = {
   fileSelectedCategoryId: null,
   fileSelectedFile: null,
 
+  // Workspace
+  workspaceTree: [],
+  workspaceSelectedFolderId: loadWorkspaceFolder(),
+  workspaceSelectedView: loadWorkspaceView(),
+  workspaceEditingBlogId: null,
+
   // Research Graph
   researchTopics: [],
   researchCurrentTopicId: null,
@@ -311,6 +351,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute("data-theme", state.theme);
     localStorage.setItem("theme", state.theme);
   }, [state.theme]);
+
+  // 工作区视图/目录持久化到 localStorage，刷新后恢复
+  useEffect(() => {
+    localStorage.setItem("ws_view", state.workspaceSelectedView);
+  }, [state.workspaceSelectedView]);
+  useEffect(() => {
+    if (state.workspaceSelectedFolderId == null) localStorage.removeItem("ws_folder");
+    else localStorage.setItem("ws_folder", String(state.workspaceSelectedFolderId));
+  }, [state.workspaceSelectedFolderId]);
 
   useEffect(() => {
     const handleAuthLogout = () => dispatch({ type: "LOGOUT" });

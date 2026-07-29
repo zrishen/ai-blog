@@ -42,7 +42,6 @@ import {
 import { LoginDialog } from "@/features/auth/LoginDialog";
 import { SubscriptionPanel } from "@/features/subscription/components/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
-import { TrashDialog } from "@/features/file/components/TrashDialog";
 import { getLLMSettings, updateLLMSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";
 import { cn } from "@/lib/utils";
@@ -69,7 +68,12 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     handleHome,
     handleLoginSuccess,
   } = useWorkspacePrimaryNavigation();
-  const [trashDialogOpen, setTrashDialogOpen] = useState(false);
+  const goTrash = () => {
+    dispatch({ type: "SET_WORKSPACE_SELECTED_VIEW", payload: "trash" });
+    dispatch({ type: "SET_WORKSPACE_SELECTED_FOLDER", payload: null });
+    dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null });
+    navigate("/workspace");
+  };
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(false);
@@ -290,7 +294,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               <Settings className="w-4 h-4 text-muted-foreground" />
               设置
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTrashDialogOpen(true)}>
+            <DropdownMenuItem onClick={goTrash}>
               <Trash2 className="w-4 h-4 text-muted-foreground" />
               回收站
             </DropdownMenuItem>
@@ -316,12 +320,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       )}
 
       <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} onSuccess={handleLoginSuccess} />
-      <TrashDialog
-        open={trashDialogOpen}
-        onOpenChange={setTrashDialogOpen}
-        onRestored={() => dispatch({ type: "INCREMENT_TRASH_REVISION" })}
-        onPurged={() => dispatch({ type: "INCREMENT_TRASH_REVISION" })}
-      />
       <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
         <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-5 py-4">

@@ -22,6 +22,7 @@ _IDEMPOTENT_COLUMNS = {
         ("summary_until_message_id", "INTEGER"),
     ],
     "file_documents": [("deleted_at", "DATETIME")],
+    "file_processing_jobs": [("auto_index", "BOOLEAN NOT NULL DEFAULT 0")],
     "blog_posts": [("deleted_at", "DATETIME")],
     "chat_attachments": [
         ("position", "INTEGER"),

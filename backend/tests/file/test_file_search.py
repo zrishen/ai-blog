@@ -51,3 +51,35 @@ async def test_search_collections_only_returns_active_stored_names(monkeypatch):
     )
 
     assert [result.content for _, result in results] == ["active"]
+
+
+@pytest.mark.asyncio
+async def test_whitelist_only_includes_active_rag_sources(db_session, monkeypatch):
+    """检索白名单只含 RagSource(active) 的文件；仅上传未加入 AI 知识的不在内。"""
+    import contextlib
+
+    from src.database.models import FileDocument
+    from src.services.workspace import rag_service
+    from src.tools.file import _get_active_file_whitelist
+
+    @contextlib.asynccontextmanager
+    async def _factory():
+        yield db_session
+
+    monkeypatch.setattr("src.database.session.async_session", _factory)
+
+    plain = FileDocument(
+        collection_name="user_1", user_id="1", original_name="plain.pdf",
+        file_path="plain.store", chunk_content="not indexed", meta="",
+    )
+    indexed = FileDocument(
+        collection_name="user_1", user_id="1", original_name="indexed.pdf",
+        file_path="indexed.store", chunk_content="3 chunks", meta="",
+    )
+    db_session.add_all([plain, indexed])
+    await db_session.commit()
+    await rag_service.add_to_ai_knowledge(db_session, 1, resource_type="file", resource_id=indexed.id)
+    await rag_service.mark_indexed(db_session, 1, "file", indexed.id)
+
+    whitelist = await _get_active_file_whitelist(user_id=1)
+    assert whitelist == {"user_1": {"indexed.store"}}

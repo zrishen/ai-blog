@@ -11,6 +11,7 @@ import { SiteBlogRoute } from "./features/blog/components/SiteBlogRoute";
 import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
 import { FileLibraryPage } from "./features/file/FileLibraryPage";
+import { WorkspacePage } from "./features/workspace/WorkspacePage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
 import { OverviewPage } from "./features/admin/components/OverviewPage";
 import { UsersPage } from "./features/admin/components/UsersPage";
@@ -85,6 +86,19 @@ function FilesRoute() {
   return <FileLibraryPage />;
 }
 
+function WorkspaceRoute() {
+  const dispatch = useChatDispatch();
+
+  useEffect(() => {
+    dispatch({ type: "SET_PAGE", payload: "workspace" });
+    // 进工作区重置内联编辑 / 文件预览态，避免从别处带入
+    dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null });
+    dispatch({ type: "SET_FILE_SELECTED_FILE", payload: null });
+  }, [dispatch]);
+
+  return <WorkspacePage />;
+}
+
 function ResearchRoute() {
   const dispatch = useChatDispatch();
 
@@ -114,6 +128,7 @@ function MainContent() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/files" element={<FilesRoute />} />
+      <Route path="/workspace" element={<WorkspaceRoute />} />
       <Route path="/research" element={<ResearchRoute />} />
       <Route path="/research/:topicId" element={<ResearchRoute />} />
       <Route path="/u/:username" element={<SiteBlogRoute />} />
@@ -327,7 +342,7 @@ function MobileWorkspace({ aiContext }: { aiContext: AISidebarRouteContext }) {
 
 function AuthenticatedApp() {
   const state = useChatState();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isInitializing } = useAuth();
   const aiContext = useAISidebarRouteContext();
   const isMobileWorkspace = useMediaQuery(MOBILE_WORKSPACE_QUERY);
   const [groupApi, groupRef] = useGroupCallbackRef();
@@ -343,6 +358,11 @@ function AuthenticatedApp() {
   }, [groupApi, isMobileWorkspace, state.aiSidebarOpen]);
 
   const panelGroupValue = groupApi ?? null;
+
+  // 刷新页面后 access token（仅存内存）丢失，AuthProvider 正用 HttpOnly cookie 换新 token（isInitializing 期间）。
+  // 此时暂不渲染，避免 LeftSidebar / MainContent 等子组件的 effect 在 token 就绪前发请求触发批量 401，
+  // 也避免与 apiFetch 的 refreshOnce 并发抢刷新。
+  if (isInitializing) return null;
 
   return (
     <ErrorBoundary>

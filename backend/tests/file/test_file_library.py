@@ -219,7 +219,7 @@ async def test_upload_file_document_passes_numeric_user_id_to_vectorizer(
     monkeypatch.setattr("src.services.file.file_processing_service.vectorize_and_store", capture_vectorize)
     files = {"file": ("numeric-id.pdf", io.BytesIO(b"%PDF-1.4 content"), "application/pdf")}
 
-    response = await client.post("/api/v1/files/documents", files=files, headers={"X-File-Request-Id": str(uuid.uuid4())})
+    response = await client.post("/api/v1/files/documents", files=files, data={"auto_index": "true"}, headers={"X-File-Request-Id": str(uuid.uuid4())})
     await _run_job(response.json()["id"])
 
     assert response.status_code == 202

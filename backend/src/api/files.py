@@ -389,6 +389,7 @@ async def delete_file_category(
 async def upload_to_file_library(
     file: UploadFile = File(...),
     category_id: Optional[int] = Form(None),
+    auto_index: Optional[bool] = Form(None),
     x_file_request_id: str = Header(..., alias="X-File-Request-Id"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -420,6 +421,7 @@ async def upload_to_file_library(
             collection_name=collection_name,
             category_id=category_id,
             processing_dir=processing_dir,
+            auto_index=bool(auto_index),
         )
     except FileProcessingActiveError as exc:
         raise HTTPException(

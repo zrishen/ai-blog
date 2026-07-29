@@ -1,6 +1,5 @@
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils";
 
 interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
@@ -25,12 +24,11 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
     { icon: Icon, title, description, action, size = "default", className, children, ...props },
     ref,
   ) => (
-    <Surface
+    <div
       ref={ref}
-      variant="card"
       className={cn(
         "flex flex-col items-center justify-center text-center",
-        size === "compact" ? "gap-2 rounded-control px-4 py-6" : "gap-3 rounded-panel px-6 py-12",
+        size === "compact" ? "gap-2 px-4 py-6" : "gap-3 px-6 py-12",
         className,
       )}
       {...props}
@@ -46,9 +44,9 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
         </div>
       ) : null}
       <div className="space-y-1">
-        <p className={cn("font-semibold text-foreground", size === "compact" ? "text-sm" : "text-base")}>
+        <h3 className={cn("font-semibold text-foreground", size === "compact" ? "text-sm" : "text-base")}>
           {title}
-        </p>
+        </h3>
         {description ? (
           <p className={cn("text-muted-foreground", size === "compact" ? "text-xs" : "text-sm")}>
             {description}
@@ -57,7 +55,7 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
       </div>
       {action ? <div className={size === "compact" ? "mt-1" : "mt-2"}>{action}</div> : null}
       {children}
-    </Surface>
+    </div>
   ),
 );
 EmptyState.displayName = "EmptyState";

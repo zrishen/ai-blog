@@ -15,18 +15,26 @@ RAG_MAX_CONTEXT_CHARS = 6000
 
 
 async def _get_active_file_whitelist(user_id: int | None = None) -> dict[str, set[str]]:
+    """检索白名单：仅「加入 AI 知识」且索引 active 的文件（RagSource）。
+
+    RAG 解耦后上传不再自动索引；只有 RagSource(active) 对应的文件可被检索。
+    """
     if user_id is None:
         return {}
 
     from sqlalchemy import select
 
-    from src.database.models import FileDocument
+    from src.database.models import FileDocument, RagSource
     from src.database.session import async_session
 
     async with async_session() as db:
         result = await db.execute(
-            select(FileDocument.collection_name, FileDocument.file_path).where(
-                FileDocument.user_id == str(user_id),
+            select(FileDocument.collection_name, FileDocument.file_path)
+            .join(RagSource, RagSource.resource_id == FileDocument.id)
+            .where(
+                RagSource.user_id == user_id,
+                RagSource.resource_type == "file",
+                RagSource.index_status == "active",
                 FileDocument.deleted_at.is_(None),
             )
         )

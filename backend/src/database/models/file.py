@@ -1,6 +1,7 @@
 """文件库模型：文档 + 处理任务 + 分类。"""
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -56,6 +57,8 @@ class FileProcessingJob(Base):
     stored_name = Column(String(300), nullable=True)
     collection_name = Column(String(200), nullable=False)
     category_id = Column(Integer, ForeignKey("file_categories.id", ondelete="SET NULL"), nullable=True)
+    # 上传时是否自动索引（RAG）；默认 False——上传仅存文件+建元记录，索引由「加入 AI 知识」触发
+    auto_index = Column(Boolean, nullable=False, default=False)
     staging_path = Column(String(500), nullable=True)
     active_key = Column(String(200), nullable=True)
     attempt_count = Column(Integer, nullable=False, default=0)

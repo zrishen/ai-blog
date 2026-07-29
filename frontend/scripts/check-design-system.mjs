@@ -61,6 +61,7 @@ const rawNativeControlAllowlist = new Set([
   "src/features/ai-chat/ai-sidebar/ChatInputBar.tsx",
   "src/features/blog/components/BlogEditor.tsx",
   "src/features/file/components/FilePanel.tsx",
+  "src/features/workspace/WorkspaceNav.tsx",
 ]);
 
 // These are implementation details of a primitive; product code must use a named radius token.

@@ -7,7 +7,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { EmptyState } from "@/components/ui/empty-state";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import type { AISidebarConversationKey } from "../../../stores/chatStore";
@@ -64,12 +63,15 @@ export function ConversationListView({
 
         {conversations.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-5 text-center">
-            <EmptyState
-              icon={Sparkles}
-              title="还没有对话"
-              description="点击「新对话」开始让 AI 帮你整理想法。"
-              className="max-w-[220px] border-transparent bg-transparent shadow-none"
-            />
+            <div>
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <p className="text-base font-black tracking-[-0.04em] text-foreground">还没有对话</p>
+              <p className="mt-2 max-w-[220px] text-meta leading-relaxed text-muted-foreground">
+                点击「新对话」开始让 AI 帮你整理想法。
+              </p>
+            </div>
           </div>
         ) : (
           conversations.map((conv) => (

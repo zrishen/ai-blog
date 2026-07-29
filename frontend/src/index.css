@@ -44,13 +44,19 @@
   --color-context-bar: hsl(var(--context-bar));
 
   /* 字号:辅助文字基于 --font-base 联动,改基础则 caption/fine/meta/body/body-lg 整体平移。
-     值 = 项目原有像素,视觉零变化;未来调 --font-base 即可全局缩放辅助字号。 */
-  --font-base: 0.875rem;
+     值 = 项目原有像素,视觉零变化;未来调 --font-base 即可全局缩放辅助字号。
+     --font-base 定义见下方 :root(@theme inline 不暴露变量,需运行时可见)。 */
   --text-caption: calc(var(--font-base) - 3px);
   --text-fine: calc(var(--font-base) - 2px);
   --text-meta: calc(var(--font-base) - 1px);
   --text-body: var(--font-base);
   --text-body-lg: calc(var(--font-base) + 1px);
+}
+
+/* --font-base 需运行时可见:@theme inline 不暴露变量,而 --text-* 通过 var(--font-base) 引用,
+   放 :root 保证 .text-body 等 utility 的 font-size 能正确解析。 */
+:root {
+  --font-base: 0.875rem;
 }
 
 :root,

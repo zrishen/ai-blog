@@ -39,6 +39,15 @@ export function blogReducer(state: ChatState, action: ChatAction): ChatState {
           p.id === action.payload.id ? { ...p, ...action.payload } : p
         ),
       };
+    case "UPSERT_BLOG_POST": {
+      const exists = state.blogPosts.some((p) => p.id === action.payload.id);
+      return {
+        ...state,
+        blogPosts: exists
+          ? state.blogPosts.map((p) => (p.id === action.payload.id ? { ...p, ...action.payload } : p))
+          : [action.payload, ...state.blogPosts],
+      };
+    }
     case "START_BLOG_STREAMING":
       return {
         ...state,

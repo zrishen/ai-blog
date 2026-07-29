@@ -26,3 +26,4 @@ from .research import (
 )
 from .settings import LLMSettings, PublicChatDailyUsage
 from .subscription import RedemptionCode, SubscriptionWeeklyUsage
+from .workspace import RagSource, WorkspaceNode

@@ -30,7 +30,7 @@ describe("BlogPage 空状态布局", () => {
     await waitFor(() => expect(listSitePostsMock).toHaveBeenCalled());
 
     const heading = screen.getByRole("heading", { name: "还没有文章" });
-    const emptyCard = heading.closest("section");
+    const emptyCard = heading.closest(".flex-1");
     const middleColumn = emptyCard?.parentElement;
 
     expect(emptyCard).toHaveClass("min-h-0", "flex-1", "items-center", "justify-center");

@@ -3,10 +3,15 @@ import { BlogTocPanel } from "../features/blog/components/BlogTocPanel";
 import { FilePanel } from "../features/file/components/FilePanel";
 import { ResearchPanel } from "../features/research/ResearchPanel";
 import { BlogOverviewPanel } from "../features/blog/components/BlogOverviewPanel";
+import { WorkspaceNav } from "../features/workspace/WorkspaceNav";
 import { AdminNav } from "../features/admin/components/AdminNav";
 
 export function LeftSidebar() {
   const { state } = useChat();
+
+  if (state.currentPage === "workspace") {
+    return <WorkspaceNav />;
+  }
 
   if (state.currentPage === "admin") {
     return <AdminNav />;

@@ -171,6 +171,7 @@ async def create_or_reuse_upload_job(
     collection_name: str,
     category_id: int | None,
     processing_dir: Path,
+    auto_index: bool = False,
 ) -> tuple[FileProcessingJob, bool]:
     existing = (
         await db.execute(
@@ -208,6 +209,7 @@ async def create_or_reuse_upload_job(
         stored_name=stored_name,
         collection_name=collection_name,
         category_id=category_id,
+        auto_index=auto_index,
         staging_path=str(processing_dir / f"{job_id}.part"),
         active_key=active_key,
         created_at=now,
@@ -437,6 +439,11 @@ async def _run_job(job_id: str) -> None:
             last_report: tuple[str, int, float] | None = None
             progress_state = _normalize_progress(job.progress_json, job.progress_model_version, job.current_stage)
             try:
+                # auto_index=False（默认）：上传仅存文件 + 建 FileDocument 元记录，不索引；
+                # 索引由「加入 AI 知识」(rag_service) 或目录 auto_index 触发。
+                if job.job_type == "upload" and not job.auto_index:
+                    await _finalize_success(db, job.id, token, [], indexed=False)
+                    return
                 await delete_document_chunks(job.collection_name, job.stored_name or "")
                 await _update_progress(db, job.id, token, "cleanup_index", 1, 1, "operation")
                 progress_state["stages"]["cleanup_index"] = {
@@ -475,7 +482,7 @@ async def _run_job(job_id: str) -> None:
                     user_id=job.user_id,
                     progress_reporter=reporter,
                 )
-                await _finalize_success(db, job.id, token, chunks)
+                await _finalize_success(db, job.id, token, chunks, indexed=True)
             except asyncio.CancelledError:
                 logger.warning("File processing task cancelled; stale reconciliation will recover: %s", job_id)
                 raise
@@ -488,7 +495,9 @@ async def _run_job(job_id: str) -> None:
                     await heartbeat_task
 
 
-async def _finalize_success(db: AsyncSession, job_id: str, token: str, chunks: list[str]) -> None:
+async def _finalize_success(
+    db: AsyncSession, job_id: str, token: str, chunks: list[str], *, indexed: bool = True
+) -> None:
     await db.rollback()
     job = await db.get(FileProcessingJob, job_id)
     if not job or job.execution_token != token or job.status != "running":
@@ -505,7 +514,7 @@ async def _finalize_success(db: AsyncSession, job_id: str, token: str, chunks: l
             user_id=str(job.user_id),
             original_name=job.original_name,
             file_path=job.stored_name,
-            chunk_content=f"{len(chunks)} chunks",
+            chunk_content=f"{len(chunks)} chunks" if indexed else "not indexed",
             meta="",
             category_id=category_id,
             created_at=utcnow(),

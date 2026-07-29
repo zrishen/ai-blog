@@ -2,7 +2,7 @@ import React from "react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import "@testing-library/jest-dom/vitest";
 
 // 阻止 NavBar 在挂载时拉取 LLM 设置
@@ -74,19 +74,32 @@ describe("NavBar 回收站入口", () => {
     expect(iLogout).toBeGreaterThan(iTrash);
   });
 
-  it("点击「回收站」菜单项打开 TrashDialog", async () => {
+  it("点击「回收站」菜单项跳转到工作区回收站", async () => {
     const user = userEvent.setup();
-    await renderNav(true);
+    let currentPath = "";
+    const Probe = () => {
+      currentPath = useLocation().pathname;
+      return null;
+    };
+    localStorage.setItem("auth_token", "t");
+    localStorage.setItem("auth_user", JSON.stringify({ id: 1, username: "alice" }));
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <ChatProvider>
+            <FileProcessingProvider>
+              <NavBar />
+              <Probe />
+            </FileProcessingProvider>
+          </ChatProvider>
+        </AuthProvider>
+      </MemoryRouter>,
+    );
     const trigger = await screen.findByTitle("alice");
     await user.click(trigger);
     const trashItem = await screen.findByText("回收站");
     await user.click(trashItem);
-    await waitFor(() => {
-      const dialog = screen.getByRole("dialog");
-      expect(dialog).toBeInTheDocument();
-      expect(dialog.textContent).toContain("回收站");
-      expect(dialog.textContent).toContain("已删除的文件、文章和 AI 会话会保留在这里，直到永久删除。");
-    });
+    await waitFor(() => expect(currentPath).toBe("/workspace"));
   });
 });
 

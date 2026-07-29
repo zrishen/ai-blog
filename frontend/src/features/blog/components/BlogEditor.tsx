@@ -99,7 +99,7 @@ function DraftsPanel({ show, position, drafts, draftLoading, onLoad, onDeleteReq
   );
 }
 
-export function BlogEditor() {
+export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
   const { state, dispatch } = useChat();
   const navigate = useNavigate();
   const existingPost = state.blogPosts.find((p) => p.id === state.blogCurrentPostId);
@@ -156,11 +156,15 @@ export function BlogEditor() {
     setError,
   });
 
-  // 退出编辑器:切回详情页/列表,同时清除 URL 的 ?edit(避免刷新跑回编辑页)
+  // 退出编辑器:工作区内联时走 onBack(回工作区列表);否则切回详情页/列表 + 清 URL ?edit
   const exitEditor = useCallback(() => {
+    if (onBack) {
+      onBack();
+      return;
+    }
     dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
     if (window.location.search) navigate(window.location.pathname, { replace: true });
-  }, [dispatch, existingPost, navigate]);
+  }, [onBack, dispatch, existingPost, navigate]);
 
   // 加载草稿时把后端 post 整体写回表单 + Vditor（桥接逻辑留主组件）
   const applyDraft = useCallback((post: BlogPost) => {
