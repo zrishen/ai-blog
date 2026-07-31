@@ -98,7 +98,7 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
 
   if (errored) {
     return (
-      <pre className="my-4 overflow-x-auto rounded-xl border border-border bg-muted/60 p-3 text-xs leading-relaxed text-muted-foreground">
+      <pre className="my-4 overflow-x-auto rounded-xl border border-border bg-muted/60 p-3 text-fine leading-relaxed text-muted-foreground">
         <code>{code}</code>
       </pre>
     );
@@ -106,7 +106,7 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
 
   if (!svg) {
     return (
-      <div className="my-4 flex items-center justify-center rounded-xl border border-border/60 bg-muted/30 px-4 py-8 text-xs text-muted-foreground">
+      <div className="my-4 flex items-center justify-center rounded-xl border border-border/60 bg-muted/30 px-4 py-8 text-fine text-muted-foreground">
         正在渲染图表…
       </div>
     );

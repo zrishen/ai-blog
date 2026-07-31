@@ -129,6 +129,19 @@ async def detach_resource(
     return node
 
 
+async def detach_resource_if_any(
+    db: AsyncSession, user_id: int, resource_type: str, resource_id: int
+) -> None:
+    """回收站还原用：若资源有工作区挂靠点则硬删，使其回到未分类（inbox）；无挂靠点则空操作。
+
+    与 detach_resource 的区别：不抛 NotFound（还原的资源可能从未归档过），
+    也不自行 commit（由调用方在同一事务内统一提交，避免与 deleted_at 清理割裂）。
+    """
+    node = await _resource_node(db, user_id, resource_type, resource_id)
+    if node is not None:
+        await db.delete(node)
+
+
 async def move_resource(
     db: AsyncSession,
     user_id: int,

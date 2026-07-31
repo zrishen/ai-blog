@@ -336,7 +336,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
             )}
 
             <div className={`relative mb-5 flex flex-wrap items-center justify-between gap-2 ${isDark && post.cover_image ? "[&_button]:text-white/85 [&_button]:border-white/25 [&_button:hover]:bg-white/10 [&_.text-muted-foreground]:text-white/70" : ""}`}>
-              <Button variant="ghost" className="h-7 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground" onClick={goBack}>
+              <Button variant="ghost" className="h-7 rounded-full px-2.5 text-fine text-muted-foreground hover:text-foreground" onClick={goBack}>
                 <ArrowLeft className="w-3 h-3" />
                 返回
               </Button>
@@ -348,18 +348,18 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
                       {error}
                     </Badge>
                   )}
-                  <Button variant="outline" className="h-7 rounded-full bg-background/70 px-2.5 text-xs" onClick={handleEdit}>
+                  <Button variant="outline" className="h-7 rounded-full bg-background/70 px-2.5 text-fine" onClick={handleEdit}>
                     <Pencil className="w-3 h-3" />
                     编辑
                   </Button>
-                  <Button variant="outline" className="h-7 rounded-full bg-background/70 px-2.5 text-xs" onClick={handlePublish}>
+                  <Button variant="outline" className="h-7 rounded-full bg-background/70 px-2.5 text-fine" onClick={handlePublish}>
                     {post.status === "published" ? (
                       <><EyeOff className="w-3 h-3" /> 取消发布</>
                     ) : (
                       <><Globe className="w-3 h-3" /> 发布</>
                     )}
                   </Button>
-                  <Button variant="destructive" className="h-7 rounded-full px-2.5 text-xs" onClick={() => setDeleteOpen(true)}>
+                  <Button variant="destructive" className="h-7 rounded-full px-2.5 text-fine" onClick={() => setDeleteOpen(true)}>
                     <Trash2 className="w-3 h-3" />
                     删除
                   </Button>
@@ -376,7 +376,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold"
+                  className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-fine font-semibold"
                   style={getBlogTagStyle(tag)}
                 >
                   <Tags className="w-3 h-3" />
@@ -389,7 +389,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
               {post.title}
             </h1>
 
-            <div className={`relative mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 pb-3 text-sm ${isDark && post.cover_image ? "text-white/60" : "text-muted-foreground"}`}>
+            <div className={`relative mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border/70 pb-3 text-body ${isDark && post.cover_image ? "text-white/60" : "text-muted-foreground"}`}>
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="w-4 h-4" />
                 {date}
@@ -410,7 +410,7 @@ export function BlogPostView({ username, isOwner = true }: BlogPostViewProps) {
                 <>
                   <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.before)}</Markdown>
                   <div className="ai-patch-inline my-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 not-prose">
-                    <div className="ai-patch-inline__label mb-2 text-xs font-medium text-primary">AI 修改中...</div>
+                    <div className="ai-patch-inline__label mb-2 text-fine font-medium text-primary">AI 修改中...</div>
                     <div className="ai-patch-inline__text text-foreground whitespace-pre-wrap">
                       <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>{expandBlankLines(patchRenderInfo.replacement)}</Markdown>
                     </div>

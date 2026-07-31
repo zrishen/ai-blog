@@ -33,7 +33,7 @@ function PrivateAttachmentImage({ attachment }: { attachment: ChatAttachment }) 
 
   if (failed) {
     return (
-      <div className="flex h-24 items-center justify-center rounded-xl bg-muted/60 text-xs text-muted-foreground">
+      <div className="flex h-24 items-center justify-center rounded-xl bg-muted/60 text-fine text-muted-foreground">
         图片预览失败
       </div>
     );
@@ -87,7 +87,7 @@ export function MessageAttachments({ attachments }: { attachments?: ChatAttachme
         >
           <FileText className="h-4 w-4 flex-none text-muted-foreground" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-medium">{attachment.original_name}</span>
+            <span className="block truncate text-fine font-medium">{attachment.original_name}</span>
             <span className="block text-caption text-muted-foreground">{formatSize(attachment.size_bytes)}</span>
           </span>
           <Download className="h-3.5 w-3.5 flex-none text-muted-foreground" />

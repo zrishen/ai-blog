@@ -43,16 +43,16 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-black text-foreground">Run #{run.id}</h2>
+              <h2 className="text-reading font-black text-foreground">Run #{run.id}</h2>
               <RunStatusBadge status={run.status} />
             </div>
-            <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+            <div className="mt-2 grid gap-1 text-fine text-muted-foreground sm:grid-cols-2">
               <span>开始：{formatTime(run.started_at) ?? "-"}</span>
               <span>结束：{formatTime(run.finished_at) ?? (isRunning ? "进行中..." : "-")}</span>
             </div>
           </div>
           {isRunning && (
-            <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
+            <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-fine font-medium text-primary">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
               研究任务执行中
             </div>
@@ -60,7 +60,7 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
         </div>
 
         {run.error_message && (
-          <Alert variant="destructive" className="mt-3 flex items-start gap-2 py-2.5 text-xs">
+          <Alert variant="destructive" className="mt-3 flex items-start gap-2 py-2.5 text-fine">
             <XCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             <span>{run.error_message}</span>
           </Alert>
@@ -68,7 +68,7 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
       </div>
 
       <div className="rounded-surface border border-border/70 bg-background/55 p-5">
-        <div className="mb-3 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">阶段进度</div>
+        <div className="mb-3 text-fine font-bold uppercase tracking-[0.14em] text-muted-foreground">阶段进度</div>
         <div className="space-y-2">
           {stages.map((stage) => (
             <StageRow
@@ -89,9 +89,9 @@ export function RunDetail({ run, isRunning, drafting, onWriteDraft, onQuickDraft
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10 text-success">
                   <FileEdit className="h-4 w-4" />
                 </div>
-                <h3 className="text-sm font-black text-foreground">研究已完成，开始写作</h3>
+                <h3 className="text-body font-black text-foreground">研究已完成，开始写作</h3>
               </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 text-fine leading-relaxed text-muted-foreground">
                 研究运行已结束。你可以让 AI 基于已确认事实生成草稿，或先创建空白草稿手动编辑。
               </p>
             </div>

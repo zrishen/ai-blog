@@ -37,7 +37,7 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 p-3 sm:p-4">
           <div>
             <SectionTitle size="lg">研究图谱</SectionTitle>
-            <p className="mt-1 text-sm text-muted-foreground">展示来源、证据、事实和实体之间的可追溯关系。</p>
+            <p className="mt-1 text-body text-muted-foreground">展示来源、证据、事实和实体之间的可追溯关系。</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline" className="rounded-full">来源 {topic.sources.length}</Badge>
@@ -72,7 +72,7 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
               <Background gap={22} size={1} />
             </ReactFlow>
           ) : (
-            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+            <div className="flex h-full items-center justify-center p-8 text-center text-body text-muted-foreground">
               暂无可视化节点。运行研究或添加来源、证据、事实、实体后会生成图谱。
             </div>
           )}
@@ -83,18 +83,18 @@ export function ResearchGraphView({ topic }: { topic: ResearchTopicDetail }) {
         <EntityDetailPanel entity={selectedEntity} topic={topic} />
       ) : (
         <aside className="rounded-surface border border-border/70 bg-background/55 p-5 shadow-sm">
-          <div className="text-sm font-black text-foreground">图谱详情</div>
+          <div className="text-body font-black text-foreground">图谱详情</div>
           {selectedClaim ? (
             <div className="mt-4 rounded-panel border border-border/60 bg-card/60 p-4">
               <div className="mb-2 flex flex-wrap gap-2">
                 <Badge variant="outline" className="rounded-full">{selectedClaim.status}</Badge>
                 <Badge variant="outline" className="rounded-full">置信度 {selectedClaim.confidence}%</Badge>
               </div>
-              <p className="text-sm font-semibold leading-relaxed text-foreground">{selectedClaim.claim_text}</p>
-              {selectedClaim.reasoning && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{selectedClaim.reasoning}</p>}
+              <p className="text-body font-semibold leading-relaxed text-foreground">{selectedClaim.claim_text}</p>
+              {selectedClaim.reasoning && <p className="mt-3 text-fine leading-relaxed text-muted-foreground">{selectedClaim.reasoning}</p>}
             </div>
           ) : (
-            <div className="mt-4 rounded-panel border border-dashed border-border/80 p-4 text-sm leading-relaxed text-muted-foreground">
+            <div className="mt-4 rounded-panel border border-dashed border-border/80 p-4 text-body leading-relaxed text-muted-foreground">
               点击实体节点查看相关事实、来源、冲突和关系；点击事实节点可查看事实摘要。
             </div>
           )}

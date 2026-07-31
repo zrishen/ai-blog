@@ -70,7 +70,7 @@ function BlogTocView({ content, title }: { content: string; title?: string }) {
         </div>
         {headings.length > 0 && (
           <nav className="flex flex-col gap-0 mt-1">
-            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground/70 font-semibold px-1">目录</span>
+            <span className="text-fine uppercase tracking-[0.15em] text-muted-foreground/70 font-semibold px-1">目录</span>
             {headings.map((h) => {
               const isH2 = h.level === 2;
               return (
@@ -86,7 +86,7 @@ function BlogTocView({ content, title }: { content: string; title?: string }) {
                   )}
                   <button
                     onClick={() => scrollToHeading(h.slug)}
-                    className={`flex-1 text-left text-sm leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-control ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
+                    className={`flex-1 text-left text-body leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-control ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
                   >
                     {h.text}
                   </button>
@@ -168,7 +168,7 @@ function BlogTocEdit({ title }: { title?: string }) {
         </div>
         {liveHeadings.length > 0 && (
           <nav className="flex flex-col gap-0 mt-1">
-            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground/70 font-semibold px-1">目录</span>
+            <span className="text-fine uppercase tracking-[0.15em] text-muted-foreground/70 font-semibold px-1">目录</span>
             {liveHeadings.map((h) => {
               const isH2 = h.level === 2;
               return (
@@ -192,7 +192,7 @@ function BlogTocEdit({ title }: { title?: string }) {
                       );
                       if (target) scrollToEl(target);
                     }}
-                    className={`flex-1 text-left text-sm leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-control ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
+                    className={`flex-1 text-left text-body leading-snug truncate transition-colors hover:text-primary hover:bg-primary/8 rounded-control ${isH2 ? "" : h.level === 3 ? "pl-3" : "pl-5"}`}
                   >
                     {h.text}
                   </button>

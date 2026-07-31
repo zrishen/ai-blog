@@ -1,10 +1,12 @@
 import * as React from "react";
-import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "title"> {
   /** 顶部图标(传 lucide 图标组件,如 FileX)。会包在统一的圆环容器里 */
-  icon?: LucideIcon;
+  icon?: React.ComponentType<{
+    className?: string;
+    "aria-hidden"?: boolean | "true" | "false";
+  }>;
   /** 主标题 */
   title: React.ReactNode;
   /** 副描述 */
@@ -44,11 +46,11 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
         </div>
       ) : null}
       <div className="space-y-1">
-        <h3 className={cn("font-semibold text-foreground", size === "compact" ? "text-sm" : "text-base")}>
+        <h3 className={cn("font-semibold text-foreground", size === "compact" ? "text-meta" : "text-body")}>
           {title}
         </h3>
         {description ? (
-          <p className={cn("text-muted-foreground", size === "compact" ? "text-xs" : "text-sm")}>
+          <p className={cn("text-muted-foreground", size === "compact" ? "text-fine" : "text-meta")}>
             {description}
           </p>
         ) : null}

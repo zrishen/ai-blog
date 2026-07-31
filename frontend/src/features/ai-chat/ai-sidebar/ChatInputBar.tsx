@@ -133,7 +133,7 @@ export function ChatInputBar({
         </DropdownMenu>
         <Textarea
           ref={textareaRef}
-          className="min-h-[40px] max-h-[88px] flex-1 resize-none border-none bg-transparent px-2 py-2 text-sm leading-relaxed text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="min-h-[40px] max-h-[88px] flex-1 resize-none border-none bg-transparent px-2 py-2 text-body leading-relaxed text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
           placeholder={
             topicCreateMode ? "输入新研究主题名称，Enter 创建..." : "想写什么，尽管说"
           }

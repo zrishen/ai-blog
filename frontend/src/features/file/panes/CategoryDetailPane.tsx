@@ -61,7 +61,7 @@ export function CategoryDetailPane({ categoryId }: CategoryDetailPaneProps) {
 
   if (!category) {
     return (
-      <div className="flex flex-col flex-1 h-full items-center justify-center bg-background p-8 text-center text-sm text-muted-foreground">
+      <div className="flex flex-col flex-1 h-full items-center justify-center bg-background p-8 text-center text-body text-muted-foreground">
         分类不存在或已被删除。
       </div>
     );
@@ -105,7 +105,7 @@ export function CategoryDetailPane({ categoryId }: CategoryDetailPaneProps) {
             <h2 className="text-2xl font-bold tracking-[-0.03em] text-foreground">
               暂无文件
             </h2>
-            <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-md text-body leading-relaxed text-muted-foreground">
               在左侧栏该分类上右键即可上传文件，或新建子分类。
             </p>
           </Surface>
@@ -192,7 +192,7 @@ function FileRow({ doc, onPreview }: FileRowProps) {
           {doc.original_name}
         </div>
         <div className="text-fine text-muted-foreground">
-          {doc.chunk_count} 个片段 · {formatDate(doc.created_at)}
+          {formatDate(doc.created_at)}
         </div>
       </div>
     </button>

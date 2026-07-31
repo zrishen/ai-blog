@@ -8,6 +8,18 @@ const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
       rounded: ["rounded-surface", "rounded-panel", "rounded-control", "rounded-shell"],
+      // 自定义字号 token（text-caption/fine/meta/body/body-lg/reading）登记进 font-size 组：
+      // tailwind-merge 默认只认 text-sm/lg 等标准档与 text-[Npx]，自定义 token 不被识别为字号，
+      // 会与同元素的 text-{color}（如 text-primary / text-muted-foreground）判为同组冲突而被删除，
+      // 导致元素丢失字号类、回退继承到 html 默认 16px（视觉变大）。登记后字号与颜色分属不同组，共存不冲突。
+      "font-size": [
+        "text-caption",
+        "text-fine",
+        "text-meta",
+        "text-body-lg",
+        "text-body",
+        "text-reading",
+      ],
     },
   },
 })

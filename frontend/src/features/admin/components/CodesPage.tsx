@@ -249,11 +249,11 @@ export function CodesPage() {
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-6 text-sm text-muted-foreground">加载中…</div>
+            <div className="p-6 text-body text-muted-foreground">加载中…</div>
           ) : error ? (
-            <div className="p-6 text-sm text-destructive">{error}</div>
+            <div className="p-6 text-body text-destructive">{error}</div>
           ) : items.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground">暂无兑换码</div>
+            <div className="p-6 text-body text-muted-foreground">暂无兑换码</div>
           ) : (
             <Table>
               <TableHeader>
@@ -270,7 +270,7 @@ export function CodesPage() {
               <TableBody>
                 {items.map((c) => (
                   <TableRow key={c.id}>
-                    <TableCell className="break-all pl-5 font-mono text-xs">
+                    <TableCell className="break-all pl-5 font-mono text-fine">
                       {c.code}
                     </TableCell>
                     <TableCell>{c.duration_days}天</TableCell>
@@ -310,7 +310,7 @@ export function CodesPage() {
       </Card>
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
+        <span className="text-body text-muted-foreground">
           {items.length > 0
             ? `第 ${offset + 1} - ${offset + items.length} 条`
             : "暂无数据"}
@@ -348,7 +348,7 @@ export function CodesPage() {
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="gen-count">
+              <label className="text-body font-medium" htmlFor="gen-count">
                 数量（1-100）
               </label>
               <Input
@@ -365,7 +365,7 @@ export function CodesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="gen-days">
+              <label className="text-body font-medium" htmlFor="gen-days">
                 时长天数（1-365）
               </label>
               <Input
@@ -382,7 +382,7 @@ export function CodesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <label className="text-sm font-medium" htmlFor="gen-note">
+              <label className="text-body font-medium" htmlFor="gen-note">
                 备注（可选）
               </label>
               <Input
@@ -392,7 +392,7 @@ export function CodesPage() {
                 onChange={(e) => setGenNote(e.target.value)}
               />
             </div>
-            {genError && <p className="text-sm text-destructive">{genError}</p>}
+            {genError && <p className="text-body text-destructive">{genError}</p>}
           </div>
           <DialogFooter>
             <Button
@@ -420,7 +420,7 @@ export function CodesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm text-muted-foreground">
+            <span className="text-body text-muted-foreground">
               共 {resultCodes.length} 条
             </span>
             <Button size="sm" variant="outline" onClick={handleCopyAll}>
@@ -435,7 +435,7 @@ export function CodesPage() {
                   key={`${code}-${idx}`}
                   className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-muted"
                 >
-                  <code className="font-mono text-xs break-all">{code}</code>
+                  <code className="font-mono text-fine break-all">{code}</code>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -474,7 +474,7 @@ export function CodesPage() {
             </DialogDescription>
           </DialogHeader>
           {revokeError && (
-            <p className="text-sm text-destructive">{revokeError}</p>
+            <p className="text-body text-destructive">{revokeError}</p>
           )}
           <DialogFooter>
             <Button

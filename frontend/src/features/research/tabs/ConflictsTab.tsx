@@ -27,21 +27,21 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
         return (
           <div key={relation.id} className="rounded-surface border border-destructive/25 bg-destructive/5 p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm font-bold text-destructive"><AlertCircle className="h-4 w-4" />冲突事实</div>
+              <div className="flex items-center gap-2 text-body font-bold text-destructive"><AlertCircle className="h-4 w-4" />冲突事实</div>
               {resolved && <Badge variant="success" solid className="rounded-full">已解决</Badge>}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <Surface variant="card" className="rounded-control bg-card/75 p-4 shadow-sm">
                 <Badge variant="outline" className="mb-2 rounded-full">事实 A</Badge>
-                <p className="text-sm font-semibold leading-relaxed text-foreground">{fromClaim?.claim_text ?? `Claim #${relation.from_id}`}</p>
+                <p className="text-body font-semibold leading-relaxed text-foreground">{fromClaim?.claim_text ?? `Claim #${relation.from_id}`}</p>
               </Surface>
               <Surface variant="card" className="rounded-control bg-card/75 p-4 shadow-sm">
                 <Badge variant="outline" className="mb-2 rounded-full">事实 B</Badge>
-                <p className="text-sm font-semibold leading-relaxed text-foreground">{toClaim?.claim_text ?? `Claim #${relation.to_id}`}</p>
+                <p className="text-body font-semibold leading-relaxed text-foreground">{toClaim?.claim_text ?? `Claim #${relation.to_id}`}</p>
               </Surface>
             </div>
             {resolved ? (
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <div className="mt-3 flex flex-wrap gap-2 text-fine text-muted-foreground">
                 <Badge variant="success" className="rounded-full">已采用 Claim #{acceptedClaimId ?? "-"}</Badge>
                 <Badge variant="destructive" className="rounded-full">已拒绝 Claim #{rejectedClaimId ?? "-"}</Badge>
               </div>
@@ -68,8 +68,8 @@ export function ConflictsTab({ actions }: ConflictsTabProps) {
                 </Button>
               </div>
             )}
-            <p className="mt-3 text-sm text-muted-foreground">写作时不要把冲突内容写成确定事实，应先解释冲突或补充检索。</p>
-            {!resolved && <p className="mt-2 text-xs text-muted-foreground">接受的一方会标记为已支持并采用；拒绝的一方会标记为已拒绝。</p>}
+            <p className="mt-3 text-body text-muted-foreground">写作时不要把冲突内容写成确定事实，应先解释冲突或补充检索。</p>
+            {!resolved && <p className="mt-2 text-fine text-muted-foreground">接受的一方会标记为已支持并采用；拒绝的一方会标记为已拒绝。</p>}
           </div>
         );
       })}

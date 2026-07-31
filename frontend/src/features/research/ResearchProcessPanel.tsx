@@ -45,8 +45,8 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
           <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
             <Spinner className="h-6 w-6" />
           </div>
-          <p className="text-base font-black tracking-[-0.04em] text-foreground">加载研究过程</p>
-          <p className="mt-2 max-w-[220px] text-xs leading-relaxed text-muted-foreground">正在读取研究运行记录...</p>
+          <p className="text-reading font-black tracking-[-0.04em] text-foreground">加载研究过程</p>
+          <p className="mt-2 max-w-[220px] text-fine leading-relaxed text-muted-foreground">正在读取研究运行记录...</p>
         </div>
       </Surface>
     );
@@ -72,7 +72,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
           刷新
         </Button>
 
-        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="ml-auto flex items-center gap-1.5 text-fine text-muted-foreground">
           <span className="font-medium">快捷入口：</span>
           <button className="inline-flex items-center gap-1 rounded-full px-2 py-1 transition hover:bg-primary/8 hover:text-primary" onClick={() => handleTabJump("claims")}>
             <Zap className="h-3 w-3" />事实
@@ -100,7 +100,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
               <Clock className="h-5 w-5" />
             </div>
             <SectionTitle size="lg">暂无研究运行记录</SectionTitle>
-            <p className="mt-2 text-sm text-muted-foreground">点击上方「启动研究」按钮开始新一轮研究。</p>
+            <p className="mt-2 text-body text-muted-foreground">点击上方「启动研究」按钮开始新一轮研究。</p>
           </div>
         </Surface>
       ) : (
@@ -112,7 +112,7 @@ export function ResearchProcessPanel({ topicId }: ResearchProcessPanelProps) {
           />
 
           {!selectedRun ? (
-            <Surface variant="dashed" className="flex min-h-[200px] items-center justify-center rounded-panel text-sm">
+            <Surface variant="dashed" className="flex min-h-[200px] items-center justify-center rounded-panel text-body">
               选择左侧运行记录查看详情
             </Surface>
           ) : (

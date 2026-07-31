@@ -58,19 +58,19 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
   return (
     <aside className={cn(surfaceVariants({ variant: "inset" }), "h-full min-h-[420px] overflow-hidden rounded-surface bg-background/75 shadow-sm")}>
       <div className="border-b border-border/70 p-5">
-        <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground"><Network className="h-3.5 w-3.5" />实体详情</div>
+        <div className="mb-2 flex items-center gap-2 text-fine font-bold uppercase tracking-[0.16em] text-muted-foreground"><Network className="h-3.5 w-3.5" />实体详情</div>
         <SectionTitle size="xl">{entity.name}</SectionTitle>
         <div className="mt-3 flex flex-wrap gap-2">
           <Badge variant="outline" className="rounded-full">{entity.entity_type || "entity"}</Badge>
           <Badge variant="outline" className="rounded-full">置信度 {entity.confidence}%</Badge>
           <Badge variant="outline" className="rounded-full">{statusLabel(entity.status)}</Badge>
         </div>
-        {entity.description && <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{entity.description}</p>}
+        {entity.description && <p className="mt-3 text-body leading-relaxed text-muted-foreground">{entity.description}</p>}
       </div>
 
       <div className="max-h-[560px] space-y-5 overflow-y-auto p-5">
         <section>
-          <h3 className="mb-2 text-sm font-black text-foreground">相关事实</h3>
+          <h3 className="mb-2 text-body font-black text-foreground">相关事实</h3>
           <div className="space-y-2">
             {relatedClaims.length ? relatedClaims.map((claim) => (
               <Surface key={claim.id} variant="card" className="rounded-control bg-card/60 p-3 shadow-sm">
@@ -78,19 +78,19 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
                   <Badge variant="outline" className="rounded-full text-[10px]">{statusLabel(claim.status)}</Badge>
                   <Badge variant="outline" className="rounded-full text-[10px]">{claim.confidence}%</Badge>
                 </div>
-                <p className="text-xs font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
+                <p className="text-fine font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
               </Surface>
-            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无直接绑定的事实。</Surface>}
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-fine">暂无直接绑定的事实。</Surface>}
           </div>
         </section>
 
         <section>
-          <h3 className="mb-2 text-sm font-black text-foreground">相关来源</h3>
+          <h3 className="mb-2 text-body font-black text-foreground">相关来源</h3>
           <div className="space-y-2">
             {relatedSources.length ? relatedSources.map((source) => (
               <Surface key={source.id} variant="card" className="rounded-control bg-card/60 p-3 shadow-sm">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 text-xs font-semibold leading-relaxed text-foreground">{source.title}</div>
+                  <div className="min-w-0 text-fine font-semibold leading-relaxed text-foreground">{source.title}</div>
                   {(source.url || source.canonical_url) && (
                     <a className="shrink-0 text-primary" href={source.url ?? source.canonical_url ?? undefined} target="_blank" rel="noreferrer">
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -99,33 +99,33 @@ export function EntityDetailPanel({ entity, topic }: { entity: ResearchEntity; t
                 </div>
                 <div className="mt-2 text-caption text-muted-foreground">{source.source_type} · {source.trust_level}</div>
               </Surface>
-            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无可追溯来源。</Surface>}
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-fine">暂无可追溯来源。</Surface>}
           </div>
         </section>
 
         <section>
-          <h3 className="mb-2 text-sm font-black text-foreground">冲突</h3>
+          <h3 className="mb-2 text-body font-black text-foreground">冲突</h3>
           <div className="space-y-2">
             {conflicts.length ? conflicts.map((relation) => (
-              <div key={relation.id} className="rounded-panel border border-destructive/25 bg-destructive/5 p-3 text-xs leading-relaxed text-muted-foreground">
+              <div key={relation.id} className="rounded-panel border border-destructive/25 bg-destructive/5 p-3 text-fine leading-relaxed text-muted-foreground">
                 <div className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.from_type, relation.from_id)}</div>
                 <div className="my-1 font-bold text-destructive">conflicts_with</div>
                 <div className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.to_type, relation.to_id)}</div>
               </div>
-            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无关联冲突。</Surface>}
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-fine">暂无关联冲突。</Surface>}
           </div>
         </section>
 
         <section>
-          <h3 className="mb-2 text-sm font-black text-foreground">关系</h3>
+          <h3 className="mb-2 text-body font-black text-foreground">关系</h3>
           <div className="space-y-2">
             {relatedRelations.length ? relatedRelations.map((relation) => (
-              <Surface key={relation.id} variant="card" className="rounded-control bg-card/60 p-3 text-xs leading-relaxed shadow-sm">
+              <Surface key={relation.id} variant="card" className="rounded-control bg-card/60 p-3 text-fine leading-relaxed shadow-sm">
                 <span className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.from_type, relation.from_id)}</span>
                 <span className="mx-1.5 text-primary">{relation.relation_type}</span>
                 <span className="font-semibold text-foreground">{relationEndpointLabel(topic, relation.to_type, relation.to_id)}</span>
               </Surface>
-            )) : <Surface variant="dashed" className="rounded-control p-3 text-xs">暂无关系。</Surface>}
+            )) : <Surface variant="dashed" className="rounded-control p-3 text-fine">暂无关系。</Surface>}
           </div>
         </section>
       </div>

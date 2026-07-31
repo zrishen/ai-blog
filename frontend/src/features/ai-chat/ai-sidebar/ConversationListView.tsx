@@ -67,7 +67,7 @@ export function ConversationListView({
               <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <p className="text-base font-black tracking-[-0.04em] text-foreground">还没有对话</p>
+              <p className="text-reading font-black tracking-[-0.04em] text-foreground">还没有对话</p>
               <p className="mt-2 max-w-[220px] text-meta leading-relaxed text-muted-foreground">
                 点击「新对话」开始让 AI 帮你整理想法。
               </p>
@@ -106,13 +106,13 @@ export function ConversationListView({
               </div>
               <div className="min-w-0 flex-1">
                 <div
-                  className={`truncate text-sm font-semibold ${
+                  className={`truncate text-body font-semibold ${
                     conv.selected ? "text-primary" : "text-foreground"
                   }`}
                 >
                   {conv.title}
                 </div>
-                <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="mt-0.5 flex items-center gap-2 text-fine text-muted-foreground">
                   {conv.streaming ? (
                     <span className="inline-flex items-center gap-1 text-primary">
                       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />

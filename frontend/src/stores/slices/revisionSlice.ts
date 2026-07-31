@@ -13,6 +13,8 @@ export function revisionReducer(state: ChatState, action: ChatAction): ChatState
       };
     case "INCREMENT_TRASH_REVISION":
       return { ...state, trashRevision: state.trashRevision + 1 };
+    case "INCREMENT_AI_KNOWLEDGE_REVISION":
+      return { ...state, aiKnowledgeRevision: state.aiKnowledgeRevision + 1 };
     default:
       return state;
   }

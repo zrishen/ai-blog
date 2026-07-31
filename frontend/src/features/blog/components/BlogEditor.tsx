@@ -69,15 +69,15 @@ function DraftsPanel({ show, position, drafts, draftLoading, onLoad, onDeleteReq
           className="max-h-[min(380px,70dvh)] w-[calc(100vw-2rem)] max-w-[340px] sm:max-h-[380px] overflow-y-auto rounded-panel border border-border/70 bg-popover/96 p-2 shadow-2xl shadow-foreground/15 backdrop-blur-xl sm:min-w-[340px]"
         >
           {drafts.length === 0 ? (
-            <div className="rounded-xl border border-border/80 bg-secondary/40 px-5 py-7 text-center text-sm text-muted-foreground">
+            <div className="rounded-xl border border-border/80 bg-secondary/40 px-5 py-7 text-center text-body text-muted-foreground">
               暂无草稿
             </div>
           ) : (
             drafts.map((draft) => (
               <div key={draft.id} className="group flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-accent">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-foreground">{draft.title}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">
+                  <div className="truncate text-body font-semibold text-foreground">{draft.title}</div>
+                  <div className="mt-1 text-fine text-muted-foreground">
                     {formatDraftTime(draft.time)}
                   </div>
                 </div>
@@ -533,7 +533,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
           <div className="relative min-w-0 flex-1 basis-full sm:min-w-[220px] sm:basis-auto">
             <Tags className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              className="h-9 rounded-full border-border bg-secondary/65 pl-9 pr-20 text-sm shadow-none"
+              className="h-9 rounded-full border-border bg-secondary/65 pl-9 pr-20 text-body shadow-none"
               placeholder="标签（逗号分隔）"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
@@ -541,7 +541,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
             <Button
               variant="ghost"
               size="sm"
-              className={`absolute right-1 top-1/2 h-7 -translate-y-1/2 rounded-full px-2 text-xs ${
+              className={`absolute right-1 top-1/2 h-7 -translate-y-1/2 rounded-full px-2 text-fine ${
                 tagGenerating || !content.trim() ? "opacity-50 cursor-not-allowed" : ""
               }`}
               onClick={handleSuggestTags}
@@ -551,7 +551,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
               {tagGenerating ? "生成中..." : "AI 生成"}
             </Button>
           </div>
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-background/70 px-3 py-2 text-fine text-muted-foreground">
             <FolderOpen className="w-3.5 h-3.5" />
             {wordCount} 字 · {lineCount} 行
           </span>
@@ -565,8 +565,8 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
                   <ShieldCheck className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <div className="text-sm font-black tracking-[-0.03em] text-foreground">事实依据</div>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  <div className="text-body font-black tracking-[-0.03em] text-foreground">事实依据</div>
+                  <p className="mt-1 text-fine leading-relaxed text-muted-foreground">
                     关联的研究主题和已确认事实，发布后不会公开展示。
                   </p>
                 </div>
@@ -597,11 +597,11 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
 
             <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)]">
               <div className="rounded-panel border border-border/70 bg-card/70 p-3">
-                <div className="mb-2 text-xs font-bold text-muted-foreground">关联研究主题</div>
+                <div className="mb-2 text-fine font-bold text-muted-foreground">关联研究主题</div>
                 {researchLoading ? (
-                  <div className="text-xs text-muted-foreground">正在加载事实依据...</div>
+                  <div className="text-fine text-muted-foreground">正在加载事实依据...</div>
                 ) : researchError ? (
-                  <div className="text-xs text-destructive">{researchError}</div>
+                  <div className="text-fine text-destructive">{researchError}</div>
                 ) : linkedTopics.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {linkedTopics.map((topic, index) => (
@@ -616,23 +616,23 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
                     当前上下文：{state.researchCurrentTopic.title}
                   </Badge>
                 ) : (
-                  <div className="text-xs leading-relaxed text-muted-foreground">暂无关联主题，可在研究图谱中创建。</div>
+                  <div className="text-fine leading-relaxed text-muted-foreground">暂无关联主题，可在研究图谱中创建。</div>
                 )}
               </div>
 
               <div className="rounded-panel border border-border/70 bg-card/70 p-3">
-                <div className="mb-2 text-xs font-bold text-muted-foreground">已采用事实</div>
+                <div className="mb-2 text-fine font-bold text-muted-foreground">已采用事实</div>
                 {adoptedClaims.length > 0 ? (
                   <div className="space-y-2">
                     {adoptedClaims.slice(0, 3).map((claim, index) => (
-                      <div key={`${recordNumber(claim, "id") ?? index}`} className="rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-xs leading-relaxed text-foreground">
+                      <div key={`${recordNumber(claim, "id") ?? index}`} className="rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-fine leading-relaxed text-foreground">
                         {recordString(claim, "claim_text") || "未命名事实"}
                       </div>
                     ))}
                     {adoptedClaims.length > 3 && <div className="text-caption text-muted-foreground">还有 {adoptedClaims.length - 3} 条事实可在研究图谱查看。</div>}
                   </div>
                 ) : (
-                  <div className="text-xs leading-relaxed text-muted-foreground">暂无已采用事实。</div>
+                  <div className="text-fine leading-relaxed text-muted-foreground">暂无已采用事实。</div>
                 )}
               </div>
             </div>
@@ -642,11 +642,11 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
         <div className="mt-2 rounded-surface border border-border/70 bg-background/56 p-3">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="inline-flex items-center gap-2 text-sm font-bold text-foreground">
+              <div className="inline-flex items-center gap-2 text-body font-bold text-foreground">
                 <ImageIcon className="h-4 w-4 text-primary" />
                 文章封面
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">可使用 AI 生成、上传图片、选择默认图，也可以不设置封面。</p>
+              <p className="mt-1 text-fine text-muted-foreground">可使用 AI 生成、上传图片、选择默认图，也可以不设置封面。</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={handleUploadCover} />
@@ -689,7 +689,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
               {coverImage ? (
                 <img src={coverImage} alt="当前封面" className="h-full min-h-28 w-full object-cover" />
               ) : (
-                <div className="flex h-full min-h-28 flex-col items-center justify-center gap-2 border border-dashed border-border/80 text-xs text-muted-foreground">
+                <div className="flex h-full min-h-28 flex-col items-center justify-center gap-2 border border-dashed border-border/80 text-fine text-muted-foreground">
                   <ImageIcon className="h-5 w-5" />
                   无封面，发布后白底显示
                 </div>
@@ -699,19 +699,19 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
         </div>
       </div>
       ) : (
-      <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-0.5 text-xs">
-        <Button variant="ghost" size="sm" className="h-7 rounded-full px-2 text-xs text-muted-foreground hover:text-foreground" onClick={handleCancel}>
+      <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-0.5 text-fine">
+        <Button variant="ghost" size="sm" className="h-7 rounded-full px-2 text-fine text-muted-foreground hover:text-foreground" onClick={handleCancel}>
           <ArrowLeft className="w-3 h-3" />
           返回
         </Button>
         <Input
-          className="h-7 min-w-[120px] flex-1 appearance-none rounded-full border border-solid border-input bg-background shadow-sm px-3 text-xs text-foreground placeholder:text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="h-7 min-w-[120px] flex-1 appearance-none rounded-full border border-solid border-input bg-background shadow-sm px-3 text-fine text-foreground placeholder:text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
           placeholder="输入文章标题..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         <div ref={draftBtnRef}>
-          <Button variant="outline" size="sm" className="h-7 rounded-full px-2 text-xs" onClick={loadDraftList}>
+          <Button variant="outline" size="sm" className="h-7 rounded-full px-2 text-fine" onClick={loadDraftList}>
             <Archive className="w-3 h-3" />
             草稿
           </Button>
@@ -724,11 +724,11 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
             onDeleteRequest={setDraftDeleteTarget}
           />
         </div>
-        <Button variant="outline" size="sm" className="h-7 rounded-full px-2 text-xs" onClick={() => handleSave("draft")} disabled={saving}>
+        <Button variant="outline" size="sm" className="h-7 rounded-full px-2 text-fine" onClick={() => handleSave("draft")} disabled={saving}>
           <FileText className="w-3 h-3" />
           保存草稿
         </Button>
-        <Button size="sm" className="h-7 rounded-full px-3 text-xs" onClick={() => handleSave("published")} disabled={saving}>
+        <Button size="sm" className="h-7 rounded-full px-3 text-fine" onClick={() => handleSave("published")} disabled={saving}>
           <Save className="w-3 h-3" />
           {saving ? "保存中..." : existingPost ? "更新文章" : "发布文章"}
         </Button>

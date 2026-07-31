@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
-from src.database.models import BlogPost, FileDocument
-from src.services.file import file_service
+from src.database.models import BlogPost, FileDocument, FileProcessingJob
+from src.services.file import file_processing_service, file_service
 from src.services.workspace import node_service, rag_service, resource_service
 
 TEST_USER_ID = 1
@@ -279,26 +279,116 @@ def _make_file_document(*, chunk_content: str, original_name: str = "doc.pdf") -
 
 
 @pytest.mark.asyncio
-async def test_index_file_document(db_session: AsyncSession, monkeypatch):
+async def test_index_file_document_creates_pending_and_schedules_job(
+    db_session: AsyncSession, monkeypatch
+):
+    """异步入口：建 RagSource(pending) + index job(queued) 并调度，向量由 worker 处理。"""
     doc = _make_file_document(chunk_content="not indexed")
     db_session.add(doc)
     await db_session.commit()
 
-    async def fake_vectorize(stored_filename, collection_name, **kwargs):
-        return ["chunk-1", "chunk-2"]
+    scheduled: list[str] = []
+    monkeypatch.setattr(file_processing_service, "schedule_job", scheduled.append)
 
-    monkeypatch.setattr(file_service, "vectorize_and_store", fake_vectorize)
-
-    source = await rag_service.index_file_document(db_session, TEST_USER_ID, doc.id)
-    assert source.index_status == "active"
-    assert source.indexed_version == "2"
-    await db_session.refresh(doc)
-    assert doc.chunk_content == "2 chunks"
+    source, job = await rag_service.index_file_document(db_session, TEST_USER_ID, doc.id)
+    assert source.index_status == "pending"
+    assert source.collection_name == doc.collection_name
+    assert job.job_type == "index"
+    assert job.status == "queued"
+    assert job.target_resource_type == "file"
+    assert job.target_resource_id == doc.id
+    assert job.stored_name == doc.file_path
+    assert scheduled == [job.id]
     assert await rag_service.get_rag_source(db_session, TEST_USER_ID, "file", doc.id) is not None
 
 
 @pytest.mark.asyncio
-async def test_index_file_document_marks_failed_on_error(db_session: AsyncSession, monkeypatch):
+async def test_index_blog_post_creates_pending_and_schedules_job(
+    db_session: AsyncSession, monkeypatch
+):
+    post = BlogPost(title="t", slug="blog-idx", content="c", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+
+    scheduled: list[str] = []
+    monkeypatch.setattr(file_processing_service, "schedule_job", scheduled.append)
+
+    source, job = await rag_service.index_blog_post(db_session, TEST_USER_ID, post.id)
+    assert source.index_status == "pending"
+    assert source.resource_type == "blog_post"
+    assert source.collection_name == rag_service.blog_collection_name(TEST_USER_ID)
+    assert job.job_type == "index"
+    assert job.target_resource_type == "blog_post"
+    assert job.target_resource_id == post.id
+    assert job.stored_name == f"blog_post:{post.id}"
+    assert scheduled == [job.id]
+
+
+@pytest.mark.asyncio
+async def test_index_file_job_runs_to_active(db_session: AsyncSession, monkeypatch):
+    """index job(file) 在 worker 内跑完 → RagSource active + 回写 chunk 数。"""
+    from src.services.file.file_processing_service import _run_job
+
+    doc = _make_file_document(chunk_content="not indexed")
+    db_session.add(doc)
+    await db_session.commit()
+
+    async def fake_vectorize(*args, **kwargs):
+        return ["chunk-1", "chunk-2"]
+
+    monkeypatch.setattr(file_processing_service, "schedule_job", lambda job_id: None)
+    monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake_vectorize)
+
+    doc_id = doc.id
+    _, job = await rag_service.index_file_document(db_session, TEST_USER_ID, doc_id)
+    job_id = job.id
+    await _run_job(job_id)
+
+    db_session.expire_all()
+    source = await rag_service.get_rag_source(db_session, TEST_USER_ID, "file", doc_id)
+    assert source is not None and source.index_status == "active"
+    assert source.indexed_version == "2"
+    refreshed_doc = await db_session.get(FileDocument, doc_id)
+    assert refreshed_doc.chunk_content == "2 chunks"
+    succeeded = await db_session.get(FileProcessingJob, job_id)
+    assert succeeded.status == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_index_blog_job_runs_to_active(db_session: AsyncSession, monkeypatch):
+    """index job(blog_post) 在 worker 内跑完 → RagSource active。"""
+    from src.services.file.file_processing_service import _run_job
+
+    post = BlogPost(title="t", slug="blog-run", content="正文内容", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+
+    async def fake_text_vectorize(*args, **kwargs):
+        return ["c1"]
+
+    monkeypatch.setattr(file_processing_service, "schedule_job", lambda job_id: None)
+    monkeypatch.setattr(file_processing_service, "vectorize_text_and_store", fake_text_vectorize)
+
+    post_id = post.id
+    _, job = await rag_service.index_blog_post(db_session, TEST_USER_ID, post_id)
+    job_id = job.id
+    await _run_job(job_id)
+
+    db_session.expire_all()
+    source = await rag_service.get_rag_source(db_session, TEST_USER_ID, "blog_post", post_id)
+    assert source is not None and source.index_status == "active"
+    assert source.indexed_version == "1"
+    succeeded = await db_session.get(FileProcessingJob, job_id)
+    assert succeeded.status == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_index_file_job_failure_marks_rag_source_failed(
+    db_session: AsyncSession, monkeypatch
+):
+    """index job 在 worker 内 vectorize 失败 → RagSource 标 failed。"""
+    from src.services.file.file_processing_service import _run_job
+
     doc = _make_file_document(chunk_content="not indexed")
     db_session.add(doc)
     await db_session.commit()
@@ -306,15 +396,21 @@ async def test_index_file_document_marks_failed_on_error(db_session: AsyncSessio
     async def boom(*args, **kwargs):
         raise RuntimeError("embedding unavailable")
 
-    monkeypatch.setattr(file_service, "vectorize_and_store", boom)
+    monkeypatch.setattr(file_processing_service, "schedule_job", lambda job_id: None)
+    monkeypatch.setattr(file_processing_service, "vectorize_and_store", boom)
 
-    with pytest.raises(RuntimeError):
-        await rag_service.index_file_document(db_session, TEST_USER_ID, doc.id)
+    doc_id = doc.id
+    _, job = await rag_service.index_file_document(db_session, TEST_USER_ID, doc_id)
+    job_id = job.id
+    await _run_job(job_id)
 
-    source = await rag_service.get_rag_source(db_session, TEST_USER_ID, "file", doc.id)
+    db_session.expire_all()
+    source = await rag_service.get_rag_source(db_session, TEST_USER_ID, "file", doc_id)
     assert source is not None
     assert source.index_status == "failed"
     assert "embedding unavailable" in (source.error_message or "")
+    failed_job = await db_session.get(FileProcessingJob, job_id)
+    assert failed_job.status == "failed"
 
 
 @pytest.mark.asyncio

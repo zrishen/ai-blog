@@ -16,7 +16,7 @@ export function RunHistoryList({ runs, selectedRunId, onSelect }: RunHistoryList
   return (
     <ScrollArea className="max-h-[520px]">
       <div className="space-y-1.5 pr-2">
-        <div className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">历史运行</div>
+        <div className="mb-2 text-fine font-bold uppercase tracking-[0.14em] text-muted-foreground">历史运行</div>
         {runs.map((run) => {
           const isActive = run.id === selectedRunId;
           const isRunActive = run.status === "running" || run.status === "processing";
@@ -32,7 +32,7 @@ export function RunHistoryList({ runs, selectedRunId, onSelect }: RunHistoryList
               onClick={() => onSelect(run.id)}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground">Run #{run.id}</span>
+                <span className="text-fine font-semibold text-foreground">Run #{run.id}</span>
                 <RunStatusBadge status={run.status} />
               </div>
               <div className="mt-1 flex items-center gap-2 text-caption text-muted-foreground">

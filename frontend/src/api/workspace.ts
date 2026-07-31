@@ -1,4 +1,5 @@
 import { API_BASE, apiFetch, readErrorDetail } from "./client";
+import type { FileProcessingJob } from "./files";
 
 export interface WorkspaceNode {
   id: number;
@@ -125,13 +126,21 @@ export async function detachResource(resourceType: string, resourceId: number): 
   await apiFetch(`${API_BASE}/workspace/resources/${resourceType}/${resourceId}`, { method: "DELETE" });
 }
 
-export async function joinAiKnowledge(resourceType: string, resourceId: number): Promise<RagSource> {
+export interface AiKnowledgeJoinResult {
+  rag_source: RagSource;
+  job: FileProcessingJob | null;
+}
+
+export async function joinAiKnowledge(
+  resourceType: string,
+  resourceId: number,
+): Promise<AiKnowledgeJoinResult> {
   const res = await apiFetch(`${API_BASE}/workspace/ai-knowledge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resource_type: resourceType, resource_id: resourceId }),
   });
-  return (await unwrap(res, "加入 AI 知识失败")) as RagSource;
+  return (await unwrap(res, "加入 AI 知识失败")) as AiKnowledgeJoinResult;
 }
 
 export async function leaveAiKnowledge(resourceType: string, resourceId: number): Promise<void> {

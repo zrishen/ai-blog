@@ -67,7 +67,7 @@ export function AISidebarHeader({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 gap-1.5 rounded-full px-3 text-xs font-medium border-primary/25 bg-primary/8 text-primary hover:bg-primary/15 hover:border-primary/40 shadow-sm"
+                className="h-8 gap-1.5 rounded-full px-3 text-fine font-medium border-primary/25 bg-primary/8 text-primary hover:bg-primary/15 hover:border-primary/40 shadow-sm"
               >
                 {state.aiSidebarThinkingMode === "smart" ? (
                   <Sparkles className="h-3 w-3" />
@@ -136,7 +136,7 @@ export function AISidebarHeader({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 rounded-full bg-background/70 px-3 text-xs"
+            className="h-8 rounded-full bg-background/70 px-3 text-fine"
             onClick={onBackToList}
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -145,7 +145,7 @@ export function AISidebarHeader({
         ) : (
           <Button
             size="sm"
-            className="h-8 rounded-full px-3 text-xs shadow-md shadow-primary/15"
+            className="h-8 rounded-full px-3 text-fine shadow-md shadow-primary/15"
             onClick={onNewChat}
           >
             <Plus className="h-3.5 w-3.5" />

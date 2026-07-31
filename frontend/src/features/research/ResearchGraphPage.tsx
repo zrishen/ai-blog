@@ -87,7 +87,7 @@ export function ResearchGraphPage() {
             </div>
             <div className="relative mb-3 text-caption font-bold uppercase tracking-[0.18em] text-primary/80">Research Graph</div>
             <SectionTitle as="h1" size="3xl" className="relative">登录后查看研究图谱</SectionTitle>
-            <p className="relative mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+            <p className="relative mx-auto mt-3 max-w-md text-body leading-relaxed text-muted-foreground">
               登录后可创建研究主题、审核事实依据，并把可信事实关联到博客写作流程。
             </p>
             <Button className="relative mt-6 rounded-full shadow-lg shadow-primary/20" onClick={() => setLoginDialogOpen(true)}>

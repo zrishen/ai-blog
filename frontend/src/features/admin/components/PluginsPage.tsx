@@ -317,12 +317,12 @@ export function PluginsPage() {
         actions={<Button onClick={openCreate}><Plus />添加插件</Button>}
       />
 
-      {error && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{error}</div>}
+      {error && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-body text-destructive">{error}</div>}
 
       {loading ? (
         <div className="flex justify-center py-16 text-muted-foreground"><Spinner className="h-5 w-5" /></div>
       ) : plugins.length === 0 ? (
-        <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">还没有平台插件。添加后先确认发现到工具，再发布给用户。</CardContent></Card>
+        <Card><CardContent className="py-12 text-center text-body text-muted-foreground">还没有平台插件。添加后先确认发现到工具，再发布给用户。</CardContent></Card>
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
           {plugins.map((plugin) => (
@@ -335,14 +335,14 @@ export function PluginsPage() {
                       <h2 className="font-semibold">{plugin.name}</h2>
                       <Badge variant={plugin.is_published ? "default" : "secondary"}>{plugin.is_published ? "已发布" : "未发布"}</Badge>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{plugin.description || "未填写说明"}</p>
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-body text-muted-foreground">{plugin.description || "未填写说明"}</p>
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-fine text-muted-foreground">
                       <span className="inline-flex items-center gap-1"><Wrench className="h-3.5 w-3.5" />{plugin.tools.length} 个工具</span>
                       <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" />{plugin.permission_level === "write" ? "可写入" : "只读"}</span>
                       <span>{plugin.transport}</span>
                       {plugin.has_env_vars && <span>已配置环境变量</span>}
                     </div>
-                    <p className="mt-2 truncate text-xs text-muted-foreground">
+                    <p className="mt-2 truncate text-fine text-muted-foreground">
                       {plugin.tools.length > 0
                         ? `已发现：${plugin.tools.map((tool) => tool.name).join(" · ")}`
                         : "尚未发现工具，暂不能发布给用户"}
@@ -370,16 +370,16 @@ export function PluginsPage() {
             <DialogDescription>填写插件信息后，可直接粘贴完整 MCP JSON，或通过配置向导生成并回填配置</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-medium">插件名称<Input value={form.name} placeholder="例如：必应搜索" onChange={(event) => setField("name", event.target.value)} /></label>
-            <label className="grid gap-1.5 text-sm font-medium">插件标识<Input value={form.slug} readOnly placeholder="由 JSON 中的 MCP 服务名自动生成" /></label>
-            <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">说明<Textarea value={form.description} placeholder="说明这个插件能帮写作助手做什么" onChange={(event) => setField("description", event.target.value)} /></label>
-            <label className="grid gap-1.5 text-sm font-medium">权限级别
+            <label className="grid gap-1.5 text-body font-medium">插件名称<Input value={form.name} placeholder="例如：必应搜索" onChange={(event) => setField("name", event.target.value)} /></label>
+            <label className="grid gap-1.5 text-body font-medium">插件标识<Input value={form.slug} readOnly placeholder="由 JSON 中的 MCP 服务名自动生成" /></label>
+            <label className="grid gap-1.5 text-body font-medium sm:col-span-2">说明<Textarea value={form.description} placeholder="说明这个插件能帮写作助手做什么" onChange={(event) => setField("description", event.target.value)} /></label>
+            <label className="grid gap-1.5 text-body font-medium">权限级别
               <Select value={form.permissionLevel} onChange={(event) => setField("permissionLevel", event.target.value as PluginPermissionLevel)}>
                 <option value="read">只读</option>
                 <option value="write">可写入外部服务</option>
               </Select>
             </label>
-            <div className="flex h-9 items-center justify-between gap-3 self-end rounded-control border border-border/70 bg-muted/35 px-3 text-sm">
+            <div className="flex h-9 items-center justify-between gap-3 self-end rounded-control border border-border/70 bg-muted/35 px-3 text-body">
               <span className="font-medium">立即发布给用户</span>
               <Switch
                 checked={form.isPublished}
@@ -390,18 +390,18 @@ export function PluginsPage() {
           </div>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm font-medium">完整的 JSON 配置</span>
+              <span className="text-body font-medium">完整的 JSON 配置</span>
               <Button type="button" variant="link" className="h-auto p-0 text-primary" onClick={openGuide}>配置向导</Button>
             </div>
             <Textarea
-              className="min-h-64 font-mono text-xs leading-6"
+              className="min-h-64 font-mono text-fine leading-6"
               value={mcpJson}
               placeholder={'{\n  "mcpServers": {\n    "bing-search": {\n      "command": "npx",\n      "args": ["-y", "bing-cn-mcp"]\n    }\n  }\n}'}
               onChange={(event) => updateMcpJson(event.target.value)}
             />
             <Button type="button" variant="ghost" className="-ml-2" onClick={formatMcpJson}>格式化</Button>
           </div>
-          {formError && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{formError}</div>}
+          {formError && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-body text-destructive">{formError}</div>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
             <Button disabled={saving || !mcpJson.trim()} onClick={() => void savePlugin()}>{saving && <Spinner />}{editing ? "保存修改" : "创建插件"}</Button>
@@ -417,7 +417,7 @@ export function PluginsPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid gap-2">
-              <span className="text-sm font-medium">类型</span>
+              <span className="text-body font-medium">类型</span>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -441,31 +441,31 @@ export function PluginsPage() {
                 </Button>
               </div>
             </div>
-            <label className="grid gap-1.5 text-sm font-medium">
+            <label className="grid gap-1.5 text-body font-medium">
               MCP 标题（唯一）
               <Input value={guide.name} placeholder="my-mcp-server" onChange={(event) => setGuide((current) => ({ ...current, name: event.target.value }))} />
             </label>
             {guide.transport === "stdio" ? (
-              <label className="grid gap-1.5 text-sm font-medium">
+              <label className="grid gap-1.5 text-body font-medium">
                 命令
                 <Input value={guide.command} placeholder="npx 或 uvx" onChange={(event) => setGuide((current) => ({ ...current, command: event.target.value }))} />
               </label>
             ) : (
-              <label className="grid gap-1.5 text-sm font-medium">
+              <label className="grid gap-1.5 text-body font-medium">
                 服务 URL
                 <Input value={guide.url} placeholder="https://example.com/mcp" onChange={(event) => setGuide((current) => ({ ...current, url: event.target.value }))} />
               </label>
             )}
-            <label className="grid gap-1.5 text-sm font-medium">
+            <label className="grid gap-1.5 text-body font-medium">
               参数
-              <Textarea className="min-h-20 font-mono text-xs" value={guide.args} placeholder={'每行一个参数\n-y\nbing-cn-mcp'} onChange={(event) => setGuide((current) => ({ ...current, args: event.target.value }))} />
+              <Textarea className="min-h-20 font-mono text-fine" value={guide.args} placeholder={'每行一个参数\n-y\nbing-cn-mcp'} onChange={(event) => setGuide((current) => ({ ...current, args: event.target.value }))} />
             </label>
-            <label className="grid gap-1.5 text-sm font-medium">
+            <label className="grid gap-1.5 text-body font-medium">
               环境变量
-              <Textarea className="min-h-20 font-mono text-xs" value={guide.envVars} placeholder={'每行一个变量\nKEY1=value1\nKEY2=value2'} onChange={(event) => setGuide((current) => ({ ...current, envVars: event.target.value }))} />
+              <Textarea className="min-h-20 font-mono text-fine" value={guide.envVars} placeholder={'每行一个变量\nKEY1=value1\nKEY2=value2'} onChange={(event) => setGuide((current) => ({ ...current, envVars: event.target.value }))} />
             </label>
           </div>
-          {guideError && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{guideError}</div>}
+          {guideError && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-body text-destructive">{guideError}</div>}
           <DialogFooter>
             <Button variant="outline" onClick={closeGuide}>取消</Button>
             <Button onClick={applyGuideConfig}>应用配置</Button>

@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { ArrowLeft, type LucideIcon } from "lucide-react";
+import type { ComponentType, ReactNode } from "react";
+import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -33,33 +33,20 @@ export function WorkspaceView({
   );
 }
 
-// 二级页面顶部栏：复刻文章编辑 toolbar 布局——返回+操作在上（mb-4 行，返回单独左对齐），
-// 标题在返回行下方（只读，text-body-lg），flex 自适应换行。
-export function SubPageHeader({
-  title,
-  onBack,
-  actions,
-}: {
-  title?: ReactNode;
-  onBack: () => void;
-  actions?: ReactNode;
-}) {
+// 二级页面顶部栏：与文章编辑收缩态工具栏同规格——单行、px-2.5 py-0.5、h-7 控件、无下边框。
+// 目前只挂返回（标题/操作暂不上）。
+export function SubPageHeader({ onBack }: { onBack: () => void }) {
   return (
-    <div className="border-b border-border/70 p-2">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <Button
-          variant="ghost"
-          className="rounded-full text-muted-foreground hover:text-foreground"
-          onClick={onBack}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          返回
-        </Button>
-        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-      </div>
-      {title ? (
-        <div className="min-w-0 truncate text-body-lg font-semibold text-foreground">{title}</div>
-      ) : null}
+    <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-0.5 text-fine">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 rounded-full px-2 text-body text-muted-foreground hover:text-foreground"
+        onClick={onBack}
+      >
+        <ArrowLeft className="w-3 h-3" />
+        返回
+      </Button>
     </div>
   );
 }
@@ -72,13 +59,13 @@ export function SectionCard({
   children,
 }: {
   title: string;
-  icon?: LucideIcon;
+  icon?: ComponentType<{ className?: string }>;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <section className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-2 border-b border-border/60 px-1 pb-2 text-meta font-semibold text-foreground">
+      <div className="flex h-9 items-center gap-2 border-b border-border/60 px-1 text-meta font-semibold text-foreground">
         {Icon ? <Icon className="h-4 w-4 text-primary" /> : null}
         <span className="flex-1">{title}</span>
         {actions}

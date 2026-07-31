@@ -30,17 +30,17 @@ export function SourcesTab({ topic }: SourcesTabProps) {
                 <Badge variant="outline" className="rounded-full">{sourceTypeLabel(source.source_type)}</Badge>
                 <Badge variant="outline" className="rounded-full"><ShieldCheck className="h-3 w-3" />{trustLabel(source.trust_level)}</Badge>
               </div>
-              <h2 className="mt-3 text-base font-black leading-snug text-foreground">{source.title}</h2>
+              <h2 className="mt-3 text-reading font-black leading-snug text-foreground">{source.title}</h2>
             </div>
             {source.url && <a className="rounded-full border border-border/70 p-2 text-muted-foreground hover:text-primary" href={source.url} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a>}
           </div>
-          <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+          <div className="grid gap-2 text-fine text-muted-foreground sm:grid-cols-2">
             <span>发布者：{source.publisher || "未记录"}</span>
             <span>发布时间：{formatDate(source.published_at)}</span>
             <span>抓取时间：{formatDate(source.fetched_at)}</span>
             <span>状态：{statusLabel(source.status)}</span>
           </div>
-          {source.raw_excerpt && <p className="mt-3 line-clamp-3 rounded-panel bg-card/70 p-3 text-sm leading-relaxed text-muted-foreground">{source.raw_excerpt}</p>}
+          {source.raw_excerpt && <p className="mt-3 line-clamp-3 rounded-panel bg-card/70 p-3 text-body leading-relaxed text-muted-foreground">{source.raw_excerpt}</p>}
         </Surface>
       ))}
     </div>

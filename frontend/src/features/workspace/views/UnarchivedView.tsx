@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, FileStack, FileText, Inbox } from "lucide-react";
+import type { ReactNode } from "react";
+import { Archive, Inbox, Trash2 } from "lucide-react";
+import { BlogIcon, PublishedIcon } from "@/components/icons";
+import { getFileIcon } from "@/features/file/components/fileIcons";
 import {
   listBlogPosts,
   listFileDocuments,
@@ -9,10 +12,91 @@ import {
 import { useChat } from "../../../stores/chatStore";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ArchiveToFolderDialog, type ArchiveTarget } from "../components/ArchiveToFolderDialog";
+import { DeleteResourceDialog, type DeleteResourceTarget } from "../components/DeleteResourceDialog";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
 import { formatDate } from "./utils";
 
-// 未分类：未挂靠到任何工作区文件夹的文件与文章（文章段在上、文件段在下）。
+// 未分类：未挂靠到任何工作区文件夹的文件与文章，按时间倒序混排（不再分「文章 / 文件」两段）。
+
+interface InboxRow {
+  key: string;
+  icon: ReactNode;
+  name: string;
+  meta: string;
+  dragData: string;
+  dragName: string;
+  onOpen: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}
+
+// 文章与文件共用的未分类行：图标 + 名称 + 右侧元信息，hover 露出「归档 / 删除」兜底入口。
+function InboxRowItem({
+  icon,
+  name,
+  meta,
+  dragData,
+  dragName,
+  onOpen,
+  onArchive,
+  onDelete,
+}: InboxRow) {
+  return (
+    <li className="group relative">
+      <div
+        role="button"
+        tabIndex={0}
+        draggable
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData("text/plain", dragData);
+          e.dataTransfer.setData("application/x-ws-name", dragName);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        className="flex w-full cursor-pointer select-none items-center gap-3 rounded-control px-3 py-2 text-left transition-colors hover:bg-secondary/60"
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">{name}</span>
+        {/* hover 时淡出，让位给「归档」按钮，避免叠在元信息上 */}
+        <span className="text-fine text-muted-foreground transition-opacity group-hover:opacity-0">{meta}</span>
+      </div>
+      <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <button
+          type="button"
+          aria-label="归档到文件夹"
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive();
+          }}
+          className="flex items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground backdrop-blur-sm transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          <Archive className="h-3.5 w-3.5" />
+          归档
+        </button>
+        <button
+          type="button"
+          aria-label="删除"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="flex items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground backdrop-blur-sm transition-colors hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          删除
+        </button>
+      </div>
+    </li>
+  );
+}
+
 export function UnarchivedView({
   onOpenFile,
   onOpenBlog,
@@ -24,6 +108,7 @@ export function UnarchivedView({
   const [docs, setDocs] = useState<FileDocument[] | null>(null);
   const [posts, setPosts] = useState<BlogPostData[] | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteResourceTarget | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -51,7 +136,7 @@ export function UnarchivedView({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [state.trashRevision]);
 
   // 已挂靠到工作区文件夹的资源 id（resource 节点的 resource_id），按类型分桶
   const attachedFileIds = useMemo(
@@ -87,128 +172,72 @@ export function UnarchivedView({
   const loading = files === null || unarchivedPosts === null;
   const total = (files?.length ?? 0) + (unarchivedPosts?.length ?? 0);
 
+  // 合并文章与文件，按时间倒序混排
+  const rows = useMemo<InboxRow[]>(() => {
+    if (loading) return [];
+    type WithTs = InboxRow & { ts: number };
+    const postRows: WithTs[] = (unarchivedPosts ?? []).map((p) => {
+      const name = p.title || "无标题";
+      const ts = p.updated_at ?? p.created_at;
+      return {
+        key: `post-${p.id}`,
+        icon:
+          p.status === "published" ? (
+            <PublishedIcon className="h-4 w-4 flex-shrink-0" />
+          ) : (
+            <BlogIcon className="h-4 w-4 flex-shrink-0" />
+          ),
+        name,
+        meta: formatDate(ts),
+        dragData: `blog:${p.id}`,
+        dragName: name,
+        onOpen: () => onOpenBlog(p.id),
+        onArchive: () => setArchiveTarget({ type: "blog_post", id: p.id, name }),
+        onDelete: () => setDeleteTarget({ type: "blog_post", id: p.id, name }),
+        ts: Date.parse(ts) || 0,
+      };
+    });
+    const fileRows: WithTs[] = (files ?? []).map((d) => ({
+      key: `file-${d.id}`,
+      icon: getFileIcon(d.original_name),
+      name: d.original_name,
+      meta: formatDate(d.created_at),
+      dragData: `file:${d.id}`,
+      dragName: d.original_name,
+      onOpen: () => onOpenFile(d.file_path),
+      onArchive: () => setArchiveTarget({ type: "file", id: d.id, name: d.original_name }),
+      onDelete: () => setDeleteTarget({ type: "file", id: d.id, name: d.original_name }),
+      ts: Date.parse(d.created_at) || 0,
+    }));
+    return [...postRows, ...fileRows].sort((a, b) => b.ts - a.ts);
+  }, [loading, unarchivedPosts, files, onOpenBlog, onOpenFile]);
+
   return (
     <WorkspaceView>
-      <div className="flex flex-col flex-1 min-h-0 gap-3">
-        {loading ? (
-          <LoadingState />
-        ) : total === 0 ? (
-          <EmptyState
-            icon={Inbox}
-            title="没有未分类的内容"
-            description="所有文件和文章都已归入文件夹。"
-            className="flex-1 p-10"
-          />
-        ) : (
-          <>
-            {unarchivedPosts!.length > 0 && (
-              <SectionCard title={`文章 · ${unarchivedPosts!.length}`} icon={FileText}>
-                <ul className="flex flex-col">
-                  {unarchivedPosts!.map((p) => (
-                    <li key={p.id} className="group relative">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        draggable
-                        onDragStart={(e) => {
-                          e.stopPropagation();
-                          e.dataTransfer.setData("text/plain", `blog:${p.id}`);
-                          e.dataTransfer.setData("application/x-ws-name", p.title || "无标题");
-                          e.dataTransfer.effectAllowed = "move";
-                        }}
-                        onClick={() => onOpenBlog(p.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onOpenBlog(p.id);
-                          }
-                        }}
-                        className="flex w-full cursor-pointer select-none items-center gap-3 rounded-control px-3 py-2 text-left transition-colors hover:bg-secondary/60"
-                      >
-                        <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
-                          {p.title || "无标题"}
-                        </span>
-                        <span className="text-fine text-muted-foreground">
-                          {formatDate(p.updated_at ?? p.created_at)}
-                        </span>
-                      </div>
-                      {/* hover「归档」按钮：拖拽的兜底入口（移动端 / 精确选） */}
-                      <button
-                        type="button"
-                        aria-label="归档到文件夹"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setArchiveTarget({ type: "blog_post", id: p.id, name: p.title || "无标题" });
-                        }}
-                        className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-secondary hover:text-foreground group-hover:opacity-100"
-                      >
-                        <Archive className="h-3.5 w-3.5" />
-                        归档
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </SectionCard>
-            )}
-            {files!.length > 0 && (
-              <SectionCard title={`文件 · ${files!.length}`} icon={FileStack}>
-                <ul className="flex flex-col">
-                  {files!.map((d) => (
-                    <li key={d.id} className="group relative">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        draggable
-                        onDragStart={(e) => {
-                          e.stopPropagation();
-                          e.dataTransfer.setData("text/plain", `file:${d.id}`);
-                          e.dataTransfer.setData("application/x-ws-name", d.original_name);
-                          e.dataTransfer.effectAllowed = "move";
-                        }}
-                        onClick={() => onOpenFile(d.file_path)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onOpenFile(d.file_path);
-                          }
-                        }}
-                        className="flex w-full cursor-pointer select-none items-center gap-3 rounded-control px-3 py-2 text-left transition-colors hover:bg-secondary/60"
-                        title={d.original_name}
-                      >
-                        <FileStack className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                        <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
-                          {d.original_name}
-                        </span>
-                        <span className="text-fine text-muted-foreground">
-                          {d.chunk_count} 片段 · {formatDate(d.created_at)}
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label="归档到文件夹"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setArchiveTarget({ type: "file", id: d.id, name: d.original_name });
-                        }}
-                        className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-secondary hover:text-foreground group-hover:opacity-100"
-                      >
-                        <Archive className="h-3.5 w-3.5" />
-                        归档
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </SectionCard>
-            )}
-          </>
-        )}
-      </div>
+      {loading ? (
+        <LoadingState />
+      ) : total === 0 ? (
+        <EmptyState
+          icon={Inbox}
+          title="没有未分类的内容"
+          description="所有文件和文章都已归入文件夹。"
+          className="flex-1 p-10"
+        />
+      ) : (
+        <SectionCard title={`未分类 · ${total}`} icon={Inbox}>
+          <ul className="flex flex-col">
+            {rows.map((r) => (
+              <InboxRowItem key={r.key} {...r} />
+            ))}
+          </ul>
+        </SectionCard>
+      )}
       <ArchiveToFolderDialog
         open={archiveTarget !== null}
         target={archiveTarget}
         onClose={() => setArchiveTarget(null)}
       />
+      <DeleteResourceDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </WorkspaceView>
   );
 }

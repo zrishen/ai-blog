@@ -44,7 +44,7 @@ function KpiCard({
   return (
     <Card className="group transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-2xl hover:shadow-foreground/7">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardTitle className="text-body font-medium text-muted-foreground">
           {label}
         </CardTitle>
         <span className={cn("flex h-9 w-9 items-center justify-center rounded-xl", tone)}>
@@ -55,7 +55,7 @@ function KpiCard({
         <div className="text-2xl font-semibold tracking-[-0.035em] tabular-nums">
           {value}
         </div>
-        {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
+        {hint ? <div className="mt-1 text-fine text-muted-foreground">{hint}</div> : null}
       </CardContent>
     </Card>
   );
@@ -125,7 +125,7 @@ export function OverviewPage() {
         <Card className="border-destructive/20 bg-destructive/5 shadow-none">
           <CardContent className="flex items-center gap-3 p-6 text-destructive">
             <AlertCircle className="h-5 w-5 shrink-0" />
-            <div className="flex-1 text-sm">
+            <div className="flex-1 text-body">
               {error}
             </div>
             <Button variant="outline" size="sm" onClick={handleRetry}>
@@ -230,7 +230,7 @@ function InviteCodeCard({
           <Skeleton className="h-12 w-full rounded-panel" />
         ) : inviteCode ? (
           <div className="flex flex-col gap-3 rounded-panel border border-border/65 bg-background/55 p-3 sm:flex-row sm:items-center sm:justify-between">
-            <code className="min-w-0 break-all px-1 font-mono text-sm font-semibold tracking-wide text-foreground">
+            <code className="min-w-0 break-all px-1 font-mono text-body font-semibold tracking-wide text-foreground">
               {inviteCode}
             </code>
             <Button
@@ -246,7 +246,7 @@ function InviteCodeCard({
             </Button>
           </div>
         ) : (
-          <div className="rounded-panel border border-dashed border-border/70 bg-muted/25 px-4 py-5 text-sm text-muted-foreground">
+          <div className="rounded-panel border border-dashed border-border/70 bg-muted/25 px-4 py-5 text-body text-muted-foreground">
             当前未配置邀请码，新用户暂时无法注册。
           </div>
         )}

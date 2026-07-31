@@ -884,7 +884,7 @@ export function AISidebarChat({
             initial={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
             animate={{ maxHeight: 120, opacity: 1, paddingTop: 8, paddingBottom: 8 }}
             exit={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
-            className="pointer-events-auto absolute left-0 right-0 top-0 z-30 flex flex-col gap-1 overflow-hidden border-b border-primary/15 bg-context-bar/85 px-3 text-xs font-medium text-primary shadow-sm backdrop-blur-sm"
+            className="pointer-events-auto absolute left-0 right-0 top-0 z-30 flex flex-col gap-1 overflow-hidden border-b border-primary/15 bg-context-bar/85 px-3 text-fine font-medium text-primary shadow-sm backdrop-blur-sm"
           >
             {contextText && (
               <div className="flex items-center gap-2">

@@ -32,14 +32,14 @@ export function EntityNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Left} className="!bg-emerald-500" />
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="line-clamp-2 text-sm font-black leading-snug text-foreground">{entity.name}</div>
+          <div className="line-clamp-2 text-body font-black leading-snug text-foreground">{entity.name}</div>
           <div className="mt-1 text-caption text-muted-foreground">{entityTypeLabel(entity.entity_type)}</div>
         </div>
         <Badge variant="success" className="shrink-0 rounded-full text-[10px]">
           {entity.confidence}%
         </Badge>
       </div>
-      {entity.description && <p className="mt-3 line-clamp-3 text-xs leading-relaxed text-muted-foreground">{entity.description}</p>}
+      {entity.description && <p className="mt-3 line-clamp-3 text-fine leading-relaxed text-muted-foreground">{entity.description}</p>}
       <div className="mt-3 flex flex-wrap gap-1.5">
         <Badge variant="outline" className="rounded-full text-[10px]">{entity.status}</Badge>
         {entity.aliases_json?.slice(0, 2).map((alias) => <Badge key={alias} variant="outline" className="rounded-full text-[10px]">{alias}</Badge>)}

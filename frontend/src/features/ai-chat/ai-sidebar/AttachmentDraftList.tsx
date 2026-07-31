@@ -53,7 +53,7 @@ export function AttachmentDraftList({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium text-foreground" title={draft.file.name}>{draft.file.name}</p>
+              <p className="truncate text-fine font-medium text-foreground" title={draft.file.name}>{draft.file.name}</p>
               <div className="mt-1 flex items-center gap-1 text-caption text-muted-foreground">
                 {isBusy && <Spinner className="h-3 w-3" />}
                 {draft.status === "failed" && <AlertCircle className="h-3 w-3 text-destructive" />}

@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   CheckCircle2,
   ChevronRight,
   Eye,
-  FileStack,
-  Folder,
   FolderPlus,
   Inbox,
   LayoutDashboard,
@@ -18,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import folderIcon from "@/components/icons/folder.svg";
+import { getResourceIcon } from "./components/resourceIcon";
 
 import { useChat } from "../../stores/chatStore";
 import type { WorkspaceView } from "../../stores/types";
@@ -127,8 +127,54 @@ function Divider() {
   return <div className="my-1.5 border-t border-border" />;
 }
 
+// 树形连接线（极简：竖线 + 末项圆弧拐角）：每级缩进画一段连接线。
+//   pipe │  —— 竖线贯穿（中间层祖先 / 非末项子项都走它，不画横线）
+//   corner ╰—— 本节点是末项：竖线只画上半截，底部圆角转向横线（圆弧拐角，非直角）
+//   empty   —— 该层祖先已是末项，分支结束，留空
+// mask 由 buildMask(ancestorTail, isLast) 生成：ancestorTail 记录每层祖先是否末项，
+// isLast 表示本节点是否父容器最后一个子项——末项画圆弧拐角，其余仅竖线。
+// pipe 竖线上下各越界 4px 跨过行间 gap，与同列竖线无缝衔接（无隔断）。
+type ConnectorType = "pipe" | "corner" | "empty";
+
+function buildMask(ancestorTail: boolean[], isLast: boolean): ConnectorType[] {
+  return [
+    ...ancestorTail.map<ConnectorType>((t) => (t ? "empty" : "pipe")),
+    isLast ? "corner" : "pipe",
+  ];
+}
+
+function TreeConnectors({ mask }: { mask: ConnectorType[] }) {
+  if (mask.length === 0) return null;
+  const unit = 10; // 每级缩进单元宽度，与 paddingLeft: depth*10+8 对齐
+  const baseX = 8; // left-2，行基础左偏移
+  const half = unit / 2;
+  return (
+    <span className="pointer-events-none absolute inset-y-0 left-0" aria-hidden>
+      {mask.map((type, i) => {
+        if (type === "empty") return null;
+        const x = baseX + i * unit + half; // 该层竖线 x（相对行）
+        return (
+          <span key={i} className="absolute inset-y-0" style={{ left: x }}>
+            {type === "corner" ? (
+              // 末项 ╰：竖线只画上半截，底部左下圆角自然转向横线，连到本节点（圆弧拐角，非直角）
+              <span
+                className="absolute left-0 top-0 h-1/2 w-[5px] border-l border-b border-foreground/25"
+                style={{ borderBottomLeftRadius: "5px" }}
+              />
+            ) : (
+              // pipe │：贯穿竖线，上下各越界 4px 跨过行间 gap，与同列竖线无缝衔接（无隔断）
+              <span className="absolute left-0 -top-1 -bottom-1 w-px bg-foreground/25" />
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
 function InlineNameInput({
   depth,
+  mask,
   value,
   placeholder,
   onChange,
@@ -136,6 +182,7 @@ function InlineNameInput({
   onCancel,
 }: {
   depth: number;
+  mask: ConnectorType[];
   value: string;
   placeholder: string;
   onChange: (v: string) => void;
@@ -144,10 +191,12 @@ function InlineNameInput({
 }) {
   return (
     <div
-      className="flex items-center gap-2 rounded-control py-1.5 pr-2"
+      className="relative flex items-center gap-2 rounded-control py-1.5 pr-2"
       style={{ paddingLeft: depth * 10 + 8 }}
     >
-      <Folder className="h-4 w-4 flex-shrink-0 text-primary" />
+      <TreeConnectors mask={mask} />
+      <span className="h-4 w-4 flex-shrink-0" aria-hidden />
+      <img src={folderIcon} alt="" aria-hidden className="h-4 w-4 flex-shrink-0" />
       <Input
         value={value}
         autoFocus
@@ -169,6 +218,8 @@ function InlineNameInput({
 interface FolderTreeProps {
   folders: TreeFolder[];
   depth: number;
+  ancestorTail: boolean[];
+  trailingResourcesCount: number;
   selectedId: number | null;
   editing: EditingState | null;
   dropIndicator: DropIndicator | null;
@@ -196,6 +247,8 @@ interface FolderTreeProps {
 function FolderTree({
   folders,
   depth,
+  ancestorTail,
+  trailingResourcesCount,
   selectedId,
   editing,
   dropIndicator,
@@ -216,16 +269,22 @@ function FolderTree({
 }: FolderTreeProps) {
   return (
     <div className="flex flex-col gap-0.5">
-      {folders.map((f) => {
+      {folders.map((f, index) => {
         const isRenaming = editing?.type === "rename" && editing.nodeId === f.id;
         const showNewSub = editing?.type === "new" && editing.parentId === f.id;
         const isSelected = selectedId === f.id;
         const isInside = dropIndicator?.id === f.id && dropIndicator.kind === "inside";
+        // 是否父容器最后一个子项：仅当是 folders 末项、且其后没有资源时成立
+        const isLast = index === folders.length - 1 && trailingResourcesCount === 0;
+        // depth=0（根级）不画连接线，也不向子级传递末项状态——子级首层直接连到根级
+        const mask = depth === 0 ? [] : buildMask(ancestorTail, isLast);
+        const childTail = depth === 0 ? [] : [...ancestorTail, isLast];
         return (
           <div key={f.id}>
             {isRenaming ? (
               <InlineNameInput
                 depth={depth}
+                mask={mask}
                 value={editing?.value ?? ""}
                 placeholder="目录名称"
                 onChange={onEditingValue}
@@ -302,6 +361,7 @@ function FolderTree({
                     )}
                     style={{ paddingLeft: depth * 10 + 8 }}
                   >
+                    <TreeConnectors mask={mask} />
                     {dropIndicator?.id === f.id && dropIndicator.kind === "before" && (
                       <span className="pointer-events-none absolute -top-px left-2 right-2 h-0.5 rounded-full bg-primary" />
                     )}
@@ -324,11 +384,11 @@ function FolderTree({
                         )}
                       />
                     </button>
-                    <Folder
-                      className={cn(
-                        "h-4 w-4 flex-shrink-0",
-                        isSelected ? "text-primary" : "text-muted-foreground",
-                      )}
+                    <img
+                      src={folderIcon}
+                      alt=""
+                      aria-hidden
+                      className="h-4 w-4 flex-shrink-0"
                     />
                     <span className="flex-1 truncate text-body">{f.name}</span>
                     {f.auto_index && (
@@ -392,6 +452,10 @@ function FolderTree({
             {showNewSub && (
               <InlineNameInput
                 depth={depth + 1}
+                mask={buildMask(
+                  childTail,
+                  f.children.length === 0 && f.resources.length === 0,
+                )}
                 value={editing?.value ?? ""}
                 placeholder="新目录名称"
                 onChange={onEditingValue}
@@ -405,6 +469,8 @@ function FolderTree({
                   <FolderTree
                     folders={f.children}
                     depth={depth + 1}
+                    ancestorTail={childTail}
+                    trailingResourcesCount={f.resources.length}
                     selectedId={selectedId}
                     editing={editing}
                     dropIndicator={dropIndicator}
@@ -424,11 +490,13 @@ function FolderTree({
                     actions={actions}
                   />
                 )}
-                {f.resources.map((r) => (
+                {f.resources.map((r, ridx) => (
                   <ResourceItem
                     key={r.id}
                     node={r}
                     depth={depth + 1}
+                    ancestorTail={childTail}
+                    isLast={ridx === f.resources.length - 1}
                     dropIndicator={dropIndicator}
                     onDropIndicatorChange={onDropIndicatorChange}
                     onDrop={onDrop}
@@ -449,6 +517,8 @@ function FolderTree({
 function ResourceItem({
   node,
   depth,
+  ancestorTail,
+  isLast,
   dropIndicator,
   onDropIndicatorChange,
   onDrop,
@@ -457,6 +527,8 @@ function ResourceItem({
 }: {
   node: WorkspaceNode;
   depth: number;
+  ancestorTail: boolean[];
+  isLast: boolean;
   dropIndicator: DropIndicator | null;
   onDropIndicatorChange: (ind: DropIndicator | null) => void;
   onDrop: (
@@ -471,21 +543,22 @@ function ResourceItem({
   const isBlog = node.resource_type === "blog_post";
   const canManage = isFile || isBlog; // 重命名/删除仅文件与文章（研究无对应操作）
   const openable = isBlog || isFile;
-  const Icon = isFile ? FileStack : FileText;
   const rid = node.resource_id;
   const open = () => {
     if (rid != null && openable) onOpen(node.resource_type ?? "file", rid);
   };
   const isRenaming = actions.rename?.nodeId === node.id;
+  const mask = buildMask(ancestorTail, isLast);
 
   if (isRenaming) {
     return (
       <div
-        className="flex items-center gap-2 rounded-control py-1.5 pr-2"
+        className="relative flex items-center gap-2 rounded-control py-1.5 pr-2"
         style={{ paddingLeft: depth * 10 + 8 }}
       >
+        <TreeConnectors mask={mask} />
         <span className="h-4 w-4 flex-shrink-0" aria-hidden />
-        <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        {getResourceIcon(node)}
         <Input
           value={actions.rename!.value}
           autoFocus
@@ -604,6 +677,7 @@ function ResourceItem({
           className="group relative flex w-full cursor-pointer select-none items-center gap-2 rounded-control py-1.5 pr-2 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/30 data-[state=open]:bg-primary/10 has-[[data-state=open]]:bg-primary/10"
           style={{ paddingLeft: depth * 10 + 8 }}
         >
+          <TreeConnectors mask={mask} />
           {dropIndicator?.id === node.id && dropIndicator.kind === "before" && (
             <span className="pointer-events-none absolute -top-px left-2 right-2 h-0.5 rounded-full bg-primary" />
           )}
@@ -611,7 +685,7 @@ function ResourceItem({
             <span className="pointer-events-none absolute -bottom-px left-2 right-2 h-0.5 rounded-full bg-primary" />
           )}
           <span className="h-4 w-4 flex-shrink-0" aria-hidden />
-          <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          {getResourceIcon(node)}
           <span className="min-w-0 flex-1 truncate text-body text-foreground">{node.name}</span>
           {/* ⋯ 菜单：移动端常驻、桌面 hover 显示，与右键菜单内容一致 */}
           <DropdownMenu>
@@ -670,6 +744,9 @@ function ResourceItem({
   );
 }
 
+// 工作区目录树折叠状态持久化 key
+const COLLAPSED_FOLDERS_KEY = "workspace:collapsed-folder-ids";
+
 export function WorkspaceNav() {
   const { state, dispatch } = useChat();
   const [editing, setEditing] = useState<EditingState | null>(null);
@@ -677,8 +754,18 @@ export function WorkspaceNav() {
   const [uploadTarget, setUploadTarget] = useState<number | null | undefined>(undefined);
   // 拖拽放置位置：before/after=同级排序插入线；inside=移入文件夹
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
-  // 折叠的文件夹 id（默认空=全部展开）
-  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
+  // 折叠的文件夹 id：初始从 localStorage 恢复，保留用户上次的展开/折叠状态
+  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_FOLDERS_KEY);
+      if (raw) return new Set(JSON.parse(raw) as number[]);
+    } catch {
+      /* ignore */
+    }
+    return new Set();
+  });
+  // localStorage 已有记录则视为已恢复用户状态，不再默认折叠
+  const didInitCollapseRef = useRef(localStorage.getItem(COLLAPSED_FOLDERS_KEY) !== null);
   const toggleExpand = useCallback((id: number) => {
     setCollapsedIds((prev) => {
       const next = new Set(prev);
@@ -936,6 +1023,21 @@ export function WorkspaceNav() {
   const resourceActions = useResourceActions(reload);
   const flatFolders = useMemo(() => flattenFolders(state.workspaceTree), [state.workspaceTree]);
   const folders = buildTree(state.workspaceTree);
+  // 首次（无持久状态）默认折叠所有目录；已有记录则保留用户状态。useLayoutEffect 避免首次闪烁
+  useLayoutEffect(() => {
+    if (didInitCollapseRef.current || flatFolders.length === 0) return;
+    didInitCollapseRef.current = true;
+    setCollapsedIds(new Set(flatFolders.map((f) => f.node.id)));
+  }, [flatFolders]);
+  // 折叠状态持久化到 localStorage（初始化完成后才写，避免 tree 未加载时空值覆盖默认折叠）
+  useEffect(() => {
+    if (!didInitCollapseRef.current) return;
+    try {
+      localStorage.setItem(COLLAPSED_FOLDERS_KEY, JSON.stringify([...collapsedIds]));
+    } catch {
+      /* ignore */
+    }
+  }, [collapsedIds]);
   const isRootNew = editing?.type === "new" && editing.parentId === null;
   const isEmpty = folders.length === 0 && !isRootNew;
 
@@ -992,6 +1094,7 @@ export function WorkspaceNav() {
               {isRootNew && (
                 <InlineNameInput
                   depth={0}
+                  mask={[]}
                   value={editing?.value ?? ""}
                   placeholder="新目录名称"
                   onChange={onEditingValue}
@@ -1007,6 +1110,8 @@ export function WorkspaceNav() {
                 <FolderTree
                   folders={folders}
                   depth={0}
+                  ancestorTail={[]}
+                  trailingResourcesCount={0}
                   selectedId={selectedFolderId}
                   editing={editing}
                   dropIndicator={dropIndicator}

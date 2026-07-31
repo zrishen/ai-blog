@@ -72,7 +72,7 @@ export function UsagePage() {
         {/* ---- 左：用户列表 ---- */}
         <Card className="flex flex-col overflow-hidden">
           <CardHeader className="pb-3 space-y-3">
-            <CardTitle className="text-base">用户</CardTitle>
+            <CardTitle className="text-reading">用户</CardTitle>
             <Input
               placeholder="搜索用户名"
               value={search}
@@ -82,11 +82,11 @@ export function UsagePage() {
           </CardHeader>
           <CardContent className="min-h-0">
             {usersLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
+              <p className="py-8 text-center text-body text-muted-foreground">
                 加载中…
               </p>
             ) : usersError ? (
-              <p className="py-8 text-center text-sm text-destructive">
+              <p className="py-8 text-center text-body text-destructive">
                 {usersError}
               </p>
             ) : (
@@ -105,15 +105,15 @@ export function UsagePage() {
                       )}
                     >
                       <span className="flex flex-col items-start gap-0.5">
-                        <span className="text-sm">{u.username}</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-body">{u.username}</span>
+                        <span className="text-fine text-muted-foreground">
                           #{u.id}
                         </span>
                       </span>
                     </Button>
                   ))}
                   {filteredUsers.length === 0 && (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
+                    <p className="py-8 text-center text-body text-muted-foreground">
                       无匹配用户
                     </p>
                   )}
@@ -127,7 +127,7 @@ export function UsagePage() {
         <div className="min-w-0">
           {selectedUserId == null ? (
             <Card className="flex h-full min-h-[60vh] items-center justify-center">
-              <CardContent className="py-20 text-center text-sm text-muted-foreground">
+              <CardContent className="py-20 text-center text-body text-muted-foreground">
                 请从左侧选择用户
               </CardContent>
             </Card>
@@ -167,7 +167,7 @@ function UsageDetail({ userId }: { userId: number }) {
   if (loading) {
     return (
       <Card className="min-h-[60vh]">
-        <CardContent className="py-20 text-center text-sm text-muted-foreground">
+        <CardContent className="py-20 text-center text-body text-muted-foreground">
           加载中…
         </CardContent>
       </Card>
@@ -176,7 +176,7 @@ function UsageDetail({ userId }: { userId: number }) {
   if (error) {
     return (
       <Card className="min-h-[60vh] border-destructive/20 bg-destructive/5 shadow-none">
-        <CardContent className="py-20 text-center text-sm text-destructive">
+        <CardContent className="py-20 text-center text-body text-destructive">
           {error}
         </CardContent>
       </Card>
@@ -203,8 +203,8 @@ function UsageDetail({ userId }: { userId: number }) {
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted-foreground">本周已用</span>
-            <span className="text-sm">
+            <span className="text-body text-muted-foreground">本周已用</span>
+            <span className="text-body">
               <span className="font-semibold">{fmtM(usage.used)}M</span>
               <span className="text-muted-foreground">
                 {" "}
@@ -229,14 +229,14 @@ function UsageDetail({ userId }: { userId: number }) {
               style={{ width: `${Math.min(pct, 100)}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="flex justify-between text-fine text-muted-foreground">
             <span>剩余 {fmtM(usage.remaining)}M</span>
             <span className={overWarn ? "text-destructive font-medium" : ""}>
               {pct.toFixed(1)}%
             </span>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-fine text-muted-foreground">
           周额度上限固定为 {fmtM(WEEKLY_LIMIT)}M tokens，超过 80% 显示警示色。
         </p>
       </CardContent>

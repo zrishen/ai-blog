@@ -4,8 +4,8 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.models import FileDocument
-from src.services.file import file_service
+from src.database.models import BlogPost, FileDocument
+from src.services.file import file_processing_service
 
 
 @pytest.mark.asyncio
@@ -68,6 +68,7 @@ async def test_attach_and_detach_resource(client: AsyncClient, db_session: Async
 
 @pytest.mark.asyncio
 async def test_ai_knowledge_join_file_indexes(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    monkeypatch.setattr(file_processing_service, "schedule_job", lambda job_id: None)
     doc = FileDocument(
         collection_name="user_1", user_id="1", original_name="x.pdf",
         file_path="x.store", chunk_content="not indexed", meta="",
@@ -75,19 +76,16 @@ async def test_ai_knowledge_join_file_indexes(client: AsyncClient, db_session: A
     db_session.add(doc)
     await db_session.commit()
 
-    async def fake_vectorize(stored_filename, collection_name, **kwargs):
-        return ["c1", "c2"]
-
-    monkeypatch.setattr(file_service, "vectorize_and_store", fake_vectorize)
-
     resp = await client.post(
         "/api/v1/workspace/ai-knowledge",
         json={"resource_type": "file", "resource_id": doc.id},
     )
     assert resp.status_code == 201
     body = resp.json()
-    assert body["index_status"] == "active"
-    assert body["collection_name"] == "user_1"
+    assert body["rag_source"]["index_status"] == "pending"
+    assert body["rag_source"]["collection_name"] == "user_1"
+    assert body["job"]["job_type"] == "index"
+    assert body["job"]["status"] == "queued"
 
     assert len((await client.get("/api/v1/workspace/ai-knowledge")).json()) == 1
 
@@ -97,10 +95,20 @@ async def test_ai_knowledge_join_file_indexes(client: AsyncClient, db_session: A
 
 
 @pytest.mark.asyncio
-async def test_ai_knowledge_join_blog_is_pending(client: AsyncClient):
+async def test_ai_knowledge_join_blog_indexes(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    monkeypatch.setattr(file_processing_service, "schedule_job", lambda job_id: None)
+    post = BlogPost(title="t", slug="blog-join", content="c", user_id=1)
+    db_session.add(post)
+    await db_session.commit()
+
     resp = await client.post(
         "/api/v1/workspace/ai-knowledge",
-        json={"resource_type": "blog_post", "resource_id": 42},
+        json={"resource_type": "blog_post", "resource_id": post.id},
     )
     assert resp.status_code == 201
-    assert resp.json()["index_status"] == "pending"
+    body = resp.json()
+    assert body["rag_source"]["index_status"] == "pending"
+    assert body["rag_source"]["resource_type"] == "blog_post"
+    assert body["job"]["job_type"] == "index"
+    assert body["job"]["target_resource_type"] == "blog_post"
+    assert body["job"]["target_resource_id"] == post.id

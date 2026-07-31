@@ -52,6 +52,8 @@ from src.services.file.file_processing_service import (
 from src.services.file.file_service import get_user_upload_dir
 from src.services.blog.markdown_blog_service import delete_post_file
 from src.services.rag.vector_store import delete_document_chunks
+from src.services.workspace import rag_service
+from src.services.workspace.resource_service import detach_resource_if_any
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +308,8 @@ async def _restore_blog_post(db: AsyncSession, *, item_id: int, user_id: int) ->
     deleted_at = post.deleted_at
 
     post.deleted_at = None
+    # 还原后统一回未分类（inbox）：清掉原工作区挂靠点，不论原先挂在哪个目录
+    await detach_resource_if_any(db, user_id, "blog_post", item_id)
     await db.commit()
     await db.refresh(post)
     return TrashItem(type="blog_post", id=post.id, name=post.title, deleted_at=deleted_at)
@@ -555,6 +559,12 @@ async def _purge_file_document(db: AsyncSession, *, item_id: int, user_id: int) 
         logger.warning(
             "上传文件清理失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True
         )
+    # 关联移出 AI 知识（删 RagSource）；向量已在上面清理，避免孤儿源残留。
+    try:
+        if await rag_service.get_rag_source(db, user_id, "file", doc_id) is not None:
+            await rag_service.remove_from_ai_knowledge(db, user_id, "file", doc_id)
+    except Exception:
+        logger.warning("AI 知识源清理失败（留待孤儿清理）: doc_id=%s", doc_id, exc_info=True)
 
 
 async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> None:
@@ -589,6 +599,14 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
     await db.commit()
 
     # commit 成功后 best-effort 清理；失败留孤儿，由清理脚本回收。
+    # 先清 AI 知识（RagSource + 向量），再清 Markdown 与封面，避免孤儿向量。
+    try:
+        rag_source = await rag_service.get_rag_source(db, user_id, "blog_post", post_id)
+        if rag_source is not None:
+            await delete_document_chunks(rag_source.collection_name, f"blog_post:{post_id}")
+            await rag_service.remove_from_ai_knowledge(db, user_id, "blog_post", post_id)
+    except Exception:
+        logger.warning("AI 知识向量清理失败（留待孤儿清理）: post_id=%s", post_id, exc_info=True)
     if slug:
         try:
             delete_post_file(slug, user_id)

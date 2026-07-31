@@ -44,19 +44,24 @@
   --color-context-bar: hsl(var(--context-bar));
 
   /* 字号:辅助文字基于 --font-base 联动,改基础则 caption/fine/meta/body/body-lg 整体平移。
-     值 = 项目原有像素,视觉零变化;未来调 --font-base 即可全局缩放辅助字号。
+     --font-base=0.9375rem(15px):中文 body 在原生 14px 标准档上整体 +1px,兼顾密度与舒适;
+     想回归标准 14px 改回 0.875rem 即可。reading 固定 16px 不联动(阅读正文不随界面缩放)。
      --font-base 定义见下方 :root(@theme inline 不暴露变量,需运行时可见)。 */
   --text-caption: calc(var(--font-base) - 3px);
   --text-fine: calc(var(--font-base) - 2px);
+  --text-fine--line-height: 1rem; /* 对齐原生 text-xs 行高，避免替换后行高丢失 */
   --text-meta: calc(var(--font-base) - 1px);
   --text-body: var(--font-base);
+  --text-body--line-height: 1.25rem; /* 对齐原生 text-sm 行高 */
   --text-body-lg: calc(var(--font-base) + 1px);
+  --text-reading: 1rem; /* 阅读内容（文章正文 / AI 消息）固定 16px，不随 --font-base 联动 */
+  --text-reading--line-height: 1.5rem; /* 对齐原生 text-base 行高 */
 }
 
 /* --font-base 需运行时可见:@theme inline 不暴露变量,而 --text-* 通过 var(--font-base) 引用,
    放 :root 保证 .text-body 等 utility 的 font-size 能正确解析。 */
 :root {
-  --font-base: 0.875rem;
+  --font-base: 0.9375rem; /* 15px:中文 body 较 14px 标准档放大一档 */
 }
 
 :root,

@@ -83,3 +83,32 @@ async def test_whitelist_only_includes_active_rag_sources(db_session, monkeypatc
 
     whitelist = await _get_active_file_whitelist(user_id=1)
     assert whitelist == {"user_1": {"indexed.store"}}
+
+
+@pytest.mark.asyncio
+async def test_whitelist_includes_active_blog_posts(db_session, monkeypatch):
+    """检索白名单含 RagSource(blog_post, active)；collection 取自 RagSource，stored_name = blog_post:{id}。"""
+    import contextlib
+
+    from src.database.models import BlogPost
+    from src.services.workspace import rag_service
+    from src.tools.file import _get_active_file_whitelist
+
+    @contextlib.asynccontextmanager
+    async def _factory():
+        yield db_session
+
+    monkeypatch.setattr("src.database.session.async_session", _factory)
+
+    post = BlogPost(title="t", slug="blog-wl", content="c", user_id=1)
+    db_session.add(post)
+    await db_session.commit()
+
+    collection = rag_service.blog_collection_name(1)
+    await rag_service.add_to_ai_knowledge(
+        db_session, 1, resource_type="blog_post", resource_id=post.id, collection_name=collection
+    )
+    await rag_service.mark_indexed(db_session, 1, "blog_post", post.id)
+
+    whitelist = await _get_active_file_whitelist(user_id=1)
+    assert whitelist == {collection: {f"blog_post:{post.id}"}}

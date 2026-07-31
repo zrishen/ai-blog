@@ -2,12 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronRight,
   Eye,
-  File as FileIcon,
-  FileText,
   Folder,
   MoreHorizontal,
   Move,
-  Network,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -36,13 +33,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import folderIcon from "@/components/icons/folder.svg";
+import { getResourceIcon } from "../components/resourceIcon";
 import { SubPageHeader, WorkspaceView } from "./shared";
-
-const RESOURCE_ICON: Record<string, LucideIcon> = {
-  blog_post: FileText,
-  file: FileIcon,
-  research_topic: Network,
-};
 
 const RESOURCE_LABEL: Record<string, string> = {
   blog_post: "文章",
@@ -110,7 +103,7 @@ export function FolderView({
   };
 
   return (
-    <WorkspaceView header={<SubPageHeader title={`内容 · ${items.length}`} onBack={onBack} />}>
+    <WorkspaceView header={<SubPageHeader onBack={onBack} />}>
       {items.length === 0 ? (
         <EmptyState
           icon={Folder}
@@ -155,7 +148,7 @@ function FolderRow({ folder, onOpen }: { folder: WorkspaceNode; onOpen: () => vo
         onClick={onOpen}
         className="flex w-full items-center gap-3 rounded-control px-3 py-2 text-left transition-colors hover:bg-secondary/60"
       >
-        <Folder className="h-4 w-4 flex-shrink-0 text-primary" />
+        <img src={folderIcon} alt="" aria-hidden className="h-4 w-4 flex-shrink-0" />
         <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">{folder.name}</span>
         <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
       </button>
@@ -173,7 +166,6 @@ function ResourceRow({
   openResource: (r: WorkspaceNode) => void;
   actions: ReturnType<typeof useResourceActions>;
 }) {
-  const Icon = RESOURCE_ICON[node.resource_type ?? ""] ?? FileText;
   const isFile = node.resource_type === "file";
   const isBlog = node.resource_type === "blog_post";
   const canManage = isFile || isBlog; // 重命名/删除仅文件与文章（研究无对应操作）
@@ -183,7 +175,7 @@ function ResourceRow({
   if (isRenaming) {
     return (
       <li className="flex items-center gap-3 rounded-control px-3 py-2">
-        <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        {getResourceIcon(node)}
         <Input
           value={actions.rename!.value}
           autoFocus
@@ -249,7 +241,7 @@ function ResourceRow({
               openable ? "cursor-pointer hover:bg-secondary/60" : "cursor-default",
             )}
           >
-            <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            {getResourceIcon(node)}
             <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
               {node.name}
             </span>

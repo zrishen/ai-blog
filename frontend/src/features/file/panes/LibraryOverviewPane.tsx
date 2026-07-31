@@ -163,7 +163,7 @@ function FileRow({ doc, onPreview }: FileRowProps) {
           {doc.original_name}
         </div>
         <div className="text-fine text-muted-foreground">
-          {doc.chunk_count} 个片段 · {formatDate(doc.created_at)}
+          {formatDate(doc.created_at)}
         </div>
       </div>
     </button>

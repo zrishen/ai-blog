@@ -57,6 +57,10 @@ class FileProcessingJob(Base):
     stored_name = Column(String(300), nullable=True)
     collection_name = Column(String(200), nullable=False)
     category_id = Column(Integer, ForeignKey("file_categories.id", ondelete="SET NULL"), nullable=True)
+    # index job 专属：被索引的目标资源（file / blog_post）；upload/restore 留空。
+    # progress_json 会被 _normalize_progress 重建擦除，故目标资源走独立列。
+    target_resource_type = Column(String(20), nullable=True)
+    target_resource_id = Column(Integer, nullable=True)
     # 上传时是否自动索引（RAG）；默认 False——上传仅存文件+建元记录，索引由「加入 AI 知识」触发
     auto_index = Column(Boolean, nullable=False, default=False)
     staging_path = Column(String(500), nullable=True)

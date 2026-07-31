@@ -76,7 +76,7 @@ export function WorkspacePage() {
 
   switch (view) {
     case "overview":
-      return <OverviewView onOpenBlog={openBlog} />;
+      return <OverviewView onOpenBlog={openBlog} onOpenFile={openFile} />;
     case "drafts":
       return <BlogPostsView status="draft" title="草稿" onOpen={openBlog} />;
     case "published":
@@ -86,6 +86,6 @@ export function WorkspacePage() {
     case "ai_knowledge":
       return <AiKnowledgeView onOpenBlog={openBlog} onOpenFile={openFile} />;
     default:
-      return <OverviewView onOpenBlog={openBlog} />;
+      return <OverviewView onOpenBlog={openBlog} onOpenFile={openFile} />;
   }
 }

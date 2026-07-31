@@ -108,6 +108,9 @@ interface ChatState {
 
   // Trash — 恢复/永久删除/清空成功后递增,触发会话/博客列表刷新
   trashRevision: number;
+
+  // AI 知识索引完成/移除后递增，触发 AiKnowledgeView 刷新（进度条→徽章）
+  aiKnowledgeRevision: number;
 }
 
 type ChatAction =
@@ -191,6 +194,7 @@ type ChatAction =
   | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
   | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
   | { type: "INCREMENT_TRASH_REVISION" }
+  | { type: "INCREMENT_AI_KNOWLEDGE_REVISION" }
   // Workspace 内联编辑博客
   | { type: "SET_WORKSPACE_EDITING_BLOG"; payload: number | null }
   // Auth
@@ -248,6 +252,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         pendingResearchPrompt: null,
         fileLibraryRevision: state.fileLibraryRevision + 1,
         trashRevision: state.trashRevision + 1,
+        aiKnowledgeRevision: state.aiKnowledgeRevision + 1,
       };
     default:
       return state;
@@ -339,6 +344,7 @@ const initialState: ChatState = {
   // File processing / Trash
   fileLibraryRevision: 0,
   trashRevision: 0,
+  aiKnowledgeRevision: 0,
 };
 
 const ChatStateContext = createContext<ChatState>(initialState);

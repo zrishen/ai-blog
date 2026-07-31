@@ -76,14 +76,14 @@ export function PluginCenterDialog() {
           </DialogDescription>
         </DialogHeader>
 
-        {error && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-sm text-destructive">{error}</div>}
+        {error && <div className="rounded-control border border-destructive/20 bg-destructive/8 px-3 py-2 text-body text-destructive">{error}</div>}
 
         {loading ? (
           <div className="flex justify-center py-12 text-muted-foreground">
             <Spinner className="h-5 w-5" />
           </div>
         ) : plugins.length === 0 ? (
-          <div className="rounded-surface border border-dashed border-border/70 px-5 py-10 text-center text-sm text-muted-foreground">
+          <div className="rounded-surface border border-dashed border-border/70 px-5 py-10 text-center text-body text-muted-foreground">
             暂无可用插件。
           </div>
         ) : (
@@ -102,7 +102,7 @@ export function PluginCenterDialog() {
                     />
                   </div>
                   <h3 className="mt-4 font-medium text-foreground">{plugin.name}</h3>
-                  <p className="mt-1 line-clamp-3 text-sm leading-6 text-muted-foreground">{plugin.description || "可供写作助手调用的扩展能力"}</p>
+                  <p className="mt-1 line-clamp-3 text-body leading-6 text-muted-foreground">{plugin.description || "可供写作助手调用的扩展能力"}</p>
                 </section>
               );
             })}

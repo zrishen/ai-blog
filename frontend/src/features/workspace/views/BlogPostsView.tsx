@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
-import { Archive, FileText } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Archive, FileText, Trash2 } from "lucide-react";
 import { listBlogPosts, type BlogPostData } from "../../../api/client";
+import { useChat } from "../../../stores/chatStore";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Badge } from "@/components/ui/badge";
+import { BlogIcon, PublishedIcon } from "@/components/icons";
 import { ArchiveToFolderDialog, type ArchiveTarget } from "../components/ArchiveToFolderDialog";
+import { DeleteResourceDialog, type DeleteResourceTarget } from "../components/DeleteResourceDialog";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
 import { formatDate } from "./utils";
 
@@ -15,8 +19,10 @@ export function BlogPostsView({
   title: string;
   onOpen: (id: number) => void;
 }) {
+  const { state } = useChat();
   const [posts, setPosts] = useState<BlogPostData[] | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteResourceTarget | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -30,7 +36,31 @@ export function BlogPostsView({
     return () => {
       alive = false;
     };
-  }, [status]);
+  }, [status, state.trashRevision]);
+
+  // 文章 id → 归档所在文件夹名（未归档则不在 map）。草稿/已发布视图按状态列出全部文章，
+  // 已归档的标注其文件夹——避免「还是草稿却在草稿视图找不到」的困惑（与文件夹视图正交）。
+  const postFolderName = useMemo(() => {
+    const folderName = new Map<number, string>();
+    for (const n of state.workspaceTree) {
+      if (n.node_type === "folder") folderName.set(n.id, n.name);
+    }
+    const map = new Map<number, string>();
+    for (const n of state.workspaceTree) {
+      if (
+        n.node_type === "resource" &&
+        n.resource_type === "blog_post" &&
+        n.resource_id != null &&
+        n.parent_id != null
+      ) {
+        const name = folderName.get(n.parent_id);
+        if (name) map.set(n.resource_id, name);
+      }
+    }
+    return map;
+  }, [state.workspaceTree]);
+
+  const PostIcon = status === "published" ? PublishedIcon : BlogIcon;
 
   return (
     <WorkspaceView>
@@ -67,27 +97,46 @@ export function BlogPostsView({
                   }}
                   className="flex w-full cursor-pointer select-none items-center gap-3 rounded-control px-3 py-2 text-left transition-colors hover:bg-secondary/60"
                 >
-                  <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  <PostIcon className="h-4 w-4 flex-shrink-0" />
                   <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
                     {p.title || "无标题"}
                   </span>
-                  <span className="text-fine text-muted-foreground">
+                  {postFolderName.has(p.id) && (
+                    <Badge variant="secondary" className="max-w-[8rem] truncate">
+                      {postFolderName.get(p.id)}
+                    </Badge>
+                  )}
+                  <span className="text-fine text-muted-foreground transition-opacity group-hover:opacity-0">
                     {formatDate(p.updated_at ?? p.created_at)}
                   </span>
                 </div>
-                {/* hover「归档」按钮：拖拽的兜底入口（移动端 / 精确选） */}
-                <button
-                  type="button"
-                  aria-label="归档到文件夹"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setArchiveTarget({ type: "blog_post", id: p.id, name: p.title || "无标题" });
-                  }}
-                  className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground opacity-0 backdrop-blur-sm transition-opacity hover:bg-secondary hover:text-foreground group-hover:opacity-100"
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  归档
-                </button>
+                {/* hover「归档 / 删除」按钮：拖拽的兜底入口（移动端 / 精确选） */}
+                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    type="button"
+                    aria-label="归档到文件夹"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setArchiveTarget({ type: "blog_post", id: p.id, name: p.title || "无标题" });
+                    }}
+                    className="flex items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground backdrop-blur-sm transition-colors hover:bg-secondary hover:text-foreground"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    归档
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="删除"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ type: "blog_post", id: p.id, name: p.title || "无标题" });
+                    }}
+                    className="flex items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground backdrop-blur-sm transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    删除
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -98,6 +147,7 @@ export function BlogPostsView({
         target={archiveTarget}
         onClose={() => setArchiveTarget(null)}
       />
+      <DeleteResourceDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
     </WorkspaceView>
   );
 }

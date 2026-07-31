@@ -28,7 +28,7 @@ function getExcerpt(post: BlogPost) {
 function MetaInfo({ post, className }: { post: BlogPost; className?: string }) {
   const dateStr = post.published_at || post.created_at;
   return (
-    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${className || "text-muted-foreground"}`}>
+    <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-fine ${className || "text-muted-foreground"}`}>
       {post.author && (
         <span className="inline-flex items-center gap-1">
           <User className="w-3 h-3" />
@@ -53,7 +53,7 @@ function TagList({ tags, onDarkImage = false }: { tags: string[]; onDarkImage?: 
       {tags.map((tag) => (
         <span
           key={tag}
-          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${onDarkImage ? "border-white/22 bg-white/14 text-white/82 backdrop-blur-md" : ""}`}
+          className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-fine font-semibold ${onDarkImage ? "border-white/22 bg-white/14 text-white/82 backdrop-blur-md" : ""}`}
           style={onDarkImage ? undefined : getBlogTagStyle(tag)}
         >
           <Tags className="w-3 h-3" />

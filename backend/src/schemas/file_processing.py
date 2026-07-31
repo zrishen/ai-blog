@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 
-FileProcessingJobType = Literal["upload", "restore"]
+FileProcessingJobType = Literal["upload", "restore", "index"]
 FileProcessingJobStatus = Literal["staging", "queued", "running", "succeeded", "failed"]
 
 
@@ -23,6 +23,8 @@ class FileProcessingJobResponse(BaseModel):
     result_document_id: int | None = None
     original_name: str
     category_id: int | None = None
+    target_resource_type: str | None = None
+    target_resource_id: int | None = None
     error_code: str | None = None
     error_message: str | None = None
     created_at: datetime

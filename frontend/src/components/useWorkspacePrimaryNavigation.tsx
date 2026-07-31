@@ -105,7 +105,7 @@ export function useWorkspacePrimaryNavigation() {
 
   const primaryNavigation = useMemo<PrimaryNavigationItem[]>(() => [
     { key: "home", label: "首页", icon: Home, onClick: handleHome },
-    { key: "workspace", label: "工作区", icon: LayoutDashboard, onClick: handleWorkspace },
+    { key: "workspace", label: "创作", icon: LayoutDashboard, onClick: handleWorkspace },
     { key: "files", label: "文件库", icon: FolderOpen, onClick: handleFiles },
     { key: "research", label: "研究图谱", icon: Network, onClick: handleResearch },
   ], [handleFiles, handleHome, handleResearch, handleWorkspace]);

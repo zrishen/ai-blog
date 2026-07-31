@@ -44,8 +44,8 @@ export function ClaimsTab({ topic, actions }: ClaimsTabProps) {
                   <Badge variant="outline" className="rounded-full">置信度 {claim.confidence}%</Badge>
                   {claim.adopted && <Badge variant="success" solid className="rounded-full">已采用</Badge>}
                 </div>
-                <h2 className="text-base font-black leading-snug text-foreground">{claim.claim_text}</h2>
-                {claim.reasoning && <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{claim.reasoning}</p>}
+                <h2 className="text-reading font-black leading-snug text-foreground">{claim.claim_text}</h2>
+                {claim.reasoning && <p className="mt-2 text-body leading-relaxed text-muted-foreground">{claim.reasoning}</p>}
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 {!claim.adopted && (
@@ -62,12 +62,12 @@ export function ClaimsTab({ topic, actions }: ClaimsTabProps) {
               </div>
             </div>
             <div className="mt-4 rounded-panel border border-border/70 bg-card/70 p-4">
-              <div className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">支持证据</div>
+              <div className="mb-2 text-fine font-bold uppercase tracking-[0.14em] text-muted-foreground">支持证据</div>
               {evidence.length ? evidence.map((item) => {
                 const source = sourceForEvidence(item.source_id);
                 return (
                   <div key={item.id} className="mb-2 rounded-panel bg-background/70 p-3 last:mb-0">
-                    <p className="text-sm leading-relaxed text-foreground">"{item.quote}"</p>
+                    <p className="text-body leading-relaxed text-foreground">"{item.quote}"</p>
                     <div className="mt-2 flex flex-wrap gap-2 text-caption text-muted-foreground">
                       <span>{item.kind}</span>
                       {item.location && <span>{item.location}</span>}
@@ -75,7 +75,7 @@ export function ClaimsTab({ topic, actions }: ClaimsTabProps) {
                     </div>
                   </div>
                 );
-              }) : <div className="text-sm text-muted-foreground">暂无可追溯证据，不能确认成确定事实。</div>}
+              }) : <div className="text-body text-muted-foreground">暂无可追溯证据，不能确认成确定事实。</div>}
             </div>
           </div>
         );

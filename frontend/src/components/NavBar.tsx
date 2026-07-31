@@ -331,7 +331,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
 
           <div className="space-y-4 px-5 py-4">
             <div>
-              <h3 className="text-sm font-semibold text-foreground">AI API</h3>
+              <h3 className="text-body font-semibold text-foreground">AI API</h3>
               <p className="mt-1 text-meta text-muted-foreground">保存后会用于后端 LLM 调用。</p>
             </div>
 
@@ -347,9 +347,9 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
             )}
 
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-foreground">协议</span>
+              <span className="text-body font-medium text-foreground">协议</span>
               <Select
-                className="text-sm"
+                className="text-body"
                 value={llmProtocol}
                 onChange={(event) => setLlmProtocol(event.target.value as LLMProtocol)}
                 disabled={settingsLoading || settingsSaving}
@@ -360,7 +360,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
             </label>
 
             <label className="block space-y-1.5">
-              <span className="text-sm font-medium text-foreground">Base URL</span>
+              <span className="text-body font-medium text-foreground">Base URL</span>
               <Input
                 value={llmBaseUrl}
                 onChange={(event) => setLlmBaseUrl(event.target.value)}
@@ -370,7 +370,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
             </label>
 
             <div className="block space-y-1.5">
-              <span className="text-sm font-medium text-foreground">API Key</span>
+              <span className="text-body font-medium text-foreground">API Key</span>
               <div className="relative">
                 <Input
                   type={showApiKey ? "text" : "password"}
@@ -394,7 +394,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
             </div>
 
             <label className="block space-y-1.5">
-              <span className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <span className="flex items-center gap-2 text-body font-medium text-foreground">
                 Model
                 {(() => {
                   const name = llmModel.trim().toLowerCase();

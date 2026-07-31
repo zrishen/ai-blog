@@ -1,26 +1,24 @@
-import { useCallback, useEffect, useState, type ComponentType } from "react";
-import { FileStack, FileText, MessageSquare, RotateCcw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
+import { BlogIcon } from "@/components/icons";
+import { getFileIcon } from "@/features/file/components/fileIcons";
 import {
   emptyTrash,
   listTrash,
   purgeTrashItem,
   restoreTrashItem,
   type TrashItem,
-  type TrashItemType,
 } from "../../../api/trash";
-import { Badge } from "@/components/ui/badge";
+import { useChat } from "../../../stores/chatStore";
+import { useFileProcessing } from "@/features/file-processing/FileProcessingProvider";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
 import { formatDate } from "./utils";
 
-const TYPE_META: Record<TrashItemType, { label: string; icon: ComponentType<{ className?: string }> }> = {
-  conversation: { label: "会话", icon: MessageSquare },
-  file_document: { label: "文件", icon: FileStack },
-  blog_post: { label: "文章", icon: FileText },
-};
-
 export function TrashView() {
+  const { state, dispatch } = useChat();
+  const { restoreFile } = useFileProcessing();
   const [items, setItems] = useState<TrashItem[] | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [emptying, setEmptying] = useState(false);
@@ -35,20 +33,38 @@ export function TrashView() {
     reload();
   }, [reload]);
 
+  // 文件还原是异步 job（重建向量）：job 完成/失败时 Provider 会 dispatch revision，
+  // 据此自动 reload。不在点击还原时立即 reload——那会把 job 未完成的项又拉回列表。
+  useEffect(() => {
+    if (state.trashRevision === 0) return;
+    reload();
+  }, [state.trashRevision, reload]);
+
   const handleRestore = useCallback(
     async (it: TrashItem) => {
       const key = `${it.type}-${it.id}`;
       setBusyKey(key);
+      // 乐观移除：点击瞬间从列表去掉
+      setItems((cur) => (cur ? cur.filter((x) => `${x.type}-${x.id}` !== key) : cur));
       try {
-        await restoreTrashItem(it.type, it.id);
-        await reload();
+        if (it.type === "file_document") {
+          // 文件还原是异步 job（重建向量）：交给 Provider 轮询，job 完成/失败时它会
+          // dispatch revision，本视图经 trashRevision 监听自动 reload。避免在此立即 reload
+          // 把 job 未完成的项又拉回（即「刷新后又显示」）。
+          await restoreFile(it);
+        } else {
+          // 博客/会话同步还原：接口返回即生效，dispatch 触发本视图及其它栏刷新。
+          await restoreTrashItem(it.type, it.id);
+          dispatch({ type: "INCREMENT_FILE_RESTORE_REVISIONS" });
+        }
       } catch (e) {
         console.error("[workspace] 恢复失败:", e);
+        await reload(); // 失败回滚：重新拉取真实列表
       } finally {
         setBusyKey(null);
       }
     },
-    [reload],
+    [restoreFile, dispatch, reload],
   );
 
   const handlePurge = useCallback(
@@ -106,40 +122,47 @@ export function TrashView() {
             <ul className="flex flex-col">
               {items.map((it) => {
                 const key = `${it.type}-${it.id}`;
-                const meta = TYPE_META[it.type];
-                const Icon = meta.icon;
                 const busy = busyKey === key;
                 return (
-                  <li
-                    key={key}
-                    className="group flex items-center gap-3 rounded-control px-3 py-2 hover:bg-secondary/60"
-                  >
-                    <Icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-body font-medium text-foreground">
+                  <li key={key} className="group relative">
+                    <div className="flex w-full items-center gap-3 rounded-control px-3 py-2 hover:bg-secondary/60">
+                      {it.type === "blog_post" ? (
+                        <BlogIcon className="h-4 w-4 flex-shrink-0" />
+                      ) : it.type === "file_document" ? (
+                        getFileIcon(it.name)
+                      ) : (
+                        <MessageSquare className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
                         {it.name || `#${it.id}`}
-                      </div>
-                      <div className="text-fine text-muted-foreground">{formatDate(it.deleted_at)}</div>
+                      </span>
+                      {/* hover 时淡出，让位给「还原 / 删除」按钮 */}
+                      <span className="text-fine text-muted-foreground transition-opacity group-hover:opacity-0">
+                        {formatDate(it.deleted_at)}
+                      </span>
                     </div>
-                    <Badge variant="secondary">{meta.label}</Badge>
-                    <button
-                      type="button"
-                      aria-label="恢复"
-                      onClick={() => handleRestore(it)}
-                      disabled={busy}
-                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-50"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="永久删除"
-                      onClick={() => handlePurge(it)}
-                      disabled={busy}
-                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <button
+                        type="button"
+                        aria-label="还原"
+                        onClick={() => handleRestore(it)}
+                        disabled={busy}
+                        className="flex items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground backdrop-blur-sm transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        还原
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="永久删除"
+                        onClick={() => handlePurge(it)}
+                        disabled={busy}
+                        className="flex items-center gap-1 rounded-control bg-card/80 px-1.5 py-1 text-fine text-muted-foreground backdrop-blur-sm transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        删除
+                      </button>
+                    </div>
                   </li>
                 );
               })}

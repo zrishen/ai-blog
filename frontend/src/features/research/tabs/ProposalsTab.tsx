@@ -64,7 +64,7 @@ export function ProposalsTab({ topic, actions }: ProposalsTabProps) {
 
   if (!topic.proposals.length) {
     return (
-      <div className="rounded-surface border border-dashed border-border/80 bg-background/45 p-8 text-center text-sm text-muted-foreground">
+      <div className="rounded-surface border border-dashed border-border/80 bg-background/45 p-8 text-center text-body text-muted-foreground">
         暂无 Agent 更新提案。
       </div>
     );
@@ -89,7 +89,7 @@ export function ProposalsTab({ topic, actions }: ProposalsTabProps) {
                 <Badge variant="outline" className="rounded-full">{proposal.proposal_type}</Badge>
                 <Badge variant={statusBadgeVariant(proposal.status)} className="rounded-full">{statusLabel(proposal.status)}</Badge>
               </div>
-              <h2 className="line-clamp-2 text-base font-black text-foreground">{proposal.title}</h2>
+              <h2 className="line-clamp-2 text-reading font-black text-foreground">{proposal.title}</h2>
             </div>
             <div className="shrink-0 text-meta text-muted-foreground">{formatDate(proposal.created_at)}</div>
           </div>
@@ -144,7 +144,7 @@ function ProposalDetail({
           <Button
             variant="ghost"
             size="sm"
-            className="mb-3 h-7 rounded-full px-2.5 text-xs"
+            className="mb-3 h-7 rounded-full px-2.5 text-fine"
             onClick={onBack}
           >
             返回列表
@@ -157,25 +157,25 @@ function ProposalDetail({
         </div>
       </div>
 
-      <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+      <div className="grid gap-2 text-fine text-muted-foreground sm:grid-cols-3">
         <div className="rounded-panel border border-border/60 bg-card/60 px-3 py-2">创建：{formatDate(proposal.created_at)}</div>
         <div className="rounded-panel border border-border/60 bg-card/60 px-3 py-2">审核：{formatDate(proposal.reviewed_at)}</div>
         <div className="rounded-panel border border-border/60 bg-card/60 px-3 py-2">应用：{formatDate(proposal.applied_at)}</div>
       </div>
 
-      {proposal.description && <p className="mt-4 rounded-panel border border-border/60 bg-card/60 p-4 text-sm leading-relaxed text-muted-foreground">{proposal.description}</p>}
+      {proposal.description && <p className="mt-4 rounded-panel border border-border/60 bg-card/60 p-4 text-body leading-relaxed text-muted-foreground">{proposal.description}</p>}
       {proposal.payload_json && <ProposalPayloadSummary payload={proposal.payload_json} topic={topic} />}
 
       {proposalSources.length > 0 && (
         <div className="mt-5">
-          <h3 className="mb-2 text-sm font-black text-foreground">完整来源</h3>
+          <h3 className="mb-2 text-body font-black text-foreground">完整来源</h3>
           <div className="space-y-2">
             {proposalSources.map((source) => (
               <div key={source.id} className="rounded-panel border border-border/60 bg-card/60 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-bold text-foreground">{source.title}</div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap gap-2 text-fine text-muted-foreground">
                       <span>{sourceTypeLabel(source.source_type)}</span>
                       <span>· {trustLabel(source.trust_level)}</span>
                       {source.publisher && <span>· {source.publisher}</span>}
@@ -183,12 +183,12 @@ function ProposalDetail({
                     </div>
                   </div>
                   {(source.url || source.canonical_url) && (
-                    <a className="inline-flex items-center gap-1 rounded-full border border-border/70 px-2.5 py-1 text-xs text-primary hover:bg-primary/10" href={source.url ?? source.canonical_url ?? undefined} target="_blank" rel="noreferrer">
+                    <a className="inline-flex items-center gap-1 rounded-full border border-border/70 px-2.5 py-1 text-fine text-primary hover:bg-primary/10" href={source.url ?? source.canonical_url ?? undefined} target="_blank" rel="noreferrer">
                       打开来源 <ExternalLink className="h-3 w-3" />
                     </a>
                   )}
                 </div>
-                {source.raw_excerpt && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{source.raw_excerpt}</p>}
+                {source.raw_excerpt && <p className="mt-3 text-fine leading-relaxed text-muted-foreground">{source.raw_excerpt}</p>}
               </div>
             ))}
           </div>
@@ -198,7 +198,7 @@ function ProposalDetail({
       {proposalClaims.length > 0 && (
         <div className="mt-5">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-black text-foreground">完整事实</h3>
+            <h3 className="text-body font-black text-foreground">完整事实</h3>
             <Badge variant="outline" className="rounded-full">可一键采用 {safeClaims.length} 条</Badge>
           </div>
           <div className="space-y-3">
@@ -222,8 +222,8 @@ function ProposalDetail({
                         <Badge variant={claim.adopted ? "success" : "outline"} className="rounded-full">{claim.adopted ? "已采用" : "未采用"}</Badge>
                         {riskNotes.map((note) => <Badge key={note} variant="destructive" className="rounded-full">{note}</Badge>)}
                       </div>
-                      <p className="mt-3 text-sm font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
-                      {claim.reasoning && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{claim.reasoning}</p>}
+                      <p className="mt-3 text-body font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
+                      {claim.reasoning && <p className="mt-2 text-fine leading-relaxed text-muted-foreground">{claim.reasoning}</p>}
                     </div>
                     {!claim.adopted && (
                       <Button size="sm" className="rounded-full" onClick={() => handleAdoptProposalClaim(claim.id)}>
@@ -234,16 +234,16 @@ function ProposalDetail({
                   </div>
 
                   <div className="mt-4 space-y-2">
-                    <div className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">支持证据</div>
+                    <div className="text-fine font-bold uppercase tracking-[0.14em] text-muted-foreground">支持证据</div>
                     {evidence.length ? evidence.map((item) => {
                       const source = sourceForEvidence(item.source_id);
                       return (
-                        <div key={item.id} className="rounded-xl bg-background/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                        <div key={item.id} className="rounded-xl bg-background/70 px-3 py-2 text-fine leading-relaxed text-muted-foreground">
                           <div className="font-semibold text-foreground">"{item.quote}"</div>
                           <div className="mt-1">{item.kind}{item.location ? ` · ${item.location}` : ""}{source ? ` · ${source.title}` : ""}</div>
                         </div>
                       );
-                    }) : <div className="rounded-xl border border-dashed border-border/70 px-3 py-2 text-xs text-muted-foreground">暂无支持证据，不能进入一键采用。</div>}
+                    }) : <div className="rounded-xl border border-dashed border-border/70 px-3 py-2 text-fine text-muted-foreground">暂无支持证据，不能进入一键采用。</div>}
                   </div>
                 </div>
               );
@@ -254,10 +254,10 @@ function ProposalDetail({
 
       {proposalConflicts.length > 0 && (
         <div className="mt-5 rounded-panel border border-destructive/20 bg-destructive/5 p-4">
-          <h3 className="mb-2 flex items-center gap-2 text-sm font-black text-destructive"><AlertCircle className="h-4 w-4" />冲突信息</h3>
+          <h3 className="mb-2 flex items-center gap-2 text-body font-black text-destructive"><AlertCircle className="h-4 w-4" />冲突信息</h3>
           <div className="space-y-2">
             {proposalConflicts.map((conflict, index) => (
-              <div key={`${conflict.between}-${index}`} className="rounded-xl bg-background/70 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              <div key={`${conflict.between}-${index}`} className="rounded-xl bg-background/70 px-3 py-2 text-fine leading-relaxed text-muted-foreground">
                 <div className="font-semibold text-foreground">{conflict.between || `冲突 ${index + 1}`}</div>
                 {conflict.reason && <div className="mt-1">{conflict.reason}</div>}
               </div>
@@ -267,7 +267,7 @@ function ProposalDetail({
       )}
 
       {!proposal.payload_json && (
-        <div className="mt-5 rounded-panel border border-dashed border-border/80 p-4 text-sm text-muted-foreground">这条提案没有结构化明细，请根据标题和说明审核。</div>
+        <div className="mt-5 rounded-panel border border-dashed border-border/80 p-4 text-body text-muted-foreground">这条提案没有结构化明细，请根据标题和说明审核。</div>
       )}
 
       {actionable && (

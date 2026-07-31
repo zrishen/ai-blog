@@ -478,3 +478,34 @@ async def test_active_restore_blocks_purge_and_empty_trash_is_partial(
     assert empty.status_code == 200
     assert empty.json()["status"] == "partial"
     assert any(item["code"] == "FILE_PROCESSING_ACTIVE" for item in empty.json()["failed"])
+
+
+@pytest.mark.asyncio
+async def test_purge_file_document_removes_ai_knowledge(client: AsyncClient, db_session: AsyncSession):
+    """永久删除文件时关联删除 RagSource，避免 AI 知识列表残留孤儿。"""
+    from src.services.workspace import rag_service
+
+    source = file_service.get_user_upload_dir(1) / f"purge-rag-{uuid.uuid4().hex}.pdf"
+    source.write_bytes(b"%PDF-1.4 purge")
+    doc = FileDocument(
+        collection_name="user_1_file_test",
+        user_id="1",
+        original_name="purge.pdf",
+        file_path=source.name,
+        chunk_content="2 chunks",
+        meta="",
+        deleted_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    db_session.add(doc)
+    await db_session.commit()
+    await db_session.refresh(doc)
+    doc_id = doc.id
+
+    await rag_service.add_to_ai_knowledge(db_session, 1, resource_type="file", resource_id=doc_id)
+    await rag_service.mark_indexed(db_session, 1, "file", doc_id)
+
+    resp = await client.delete(f"/api/v1/trash/file_document/{doc_id}")
+    assert resp.status_code == 200
+
+    db_session.expire_all()
+    assert await rag_service.get_rag_source(db_session, 1, "file", doc_id) is None

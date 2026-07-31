@@ -1,26 +1,36 @@
-import { FileText, FileSpreadsheet, FileImage, File } from "lucide-react";
+import pdfIcon from "@/components/icons/pdf.svg";
+import docxIcon from "@/components/icons/docx.svg";
+import xlsxIcon from "@/components/icons/xlsx.svg";
+import jpgIcon from "@/components/icons/jpg.svg";
+import unknownIcon from "@/components/icons/unknown.svg";
 
+// 文件类型彩色图标：保留品牌原色（PDF 红 / Word 蓝 / Excel 绿 …），
+// 作为 SVG 资源以 <img> 引用，尺寸随外层 className。
 export function getFileIcon(fileName: string) {
   const ext = fileName.split(".").pop()?.toLowerCase();
+  let src = unknownIcon;
   switch (ext) {
     case "pdf":
-      return <FileText className="w-4 h-4 flex-shrink-0 text-red-500" />;
+      src = pdfIcon;
+      break;
     case "docx":
     case "doc":
-      return <FileText className="w-4 h-4 flex-shrink-0 text-blue-500" />;
+      src = docxIcon;
+      break;
     case "xlsx":
     case "xls":
-      return (
-        <FileSpreadsheet className="w-4 h-4 flex-shrink-0 text-green-500" />
-      );
+      src = xlsxIcon;
+      break;
     case "png":
     case "jpg":
     case "jpeg":
     case "gif":
-      return <FileImage className="w-4 h-4 flex-shrink-0 text-purple-500" />;
+    case "webp":
+    case "bmp":
+      src = jpgIcon;
+      break;
     default:
-      return (
-        <File className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
-      );
+      src = unknownIcon;
   }
+  return <img src={src} alt="" aria-hidden className="h-4 w-4 flex-shrink-0" />;
 }

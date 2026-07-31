@@ -7,7 +7,7 @@ export function FilePreviewView({ onBack }: { onBack: () => void }) {
   const { state } = useChat();
   if (!state.fileSelectedFile) return null;
   return (
-    <WorkspaceView header={<SubPageHeader title={state.fileSelectedFile} onBack={onBack} />}>
+    <WorkspaceView header={<SubPageHeader onBack={onBack} />}>
       <div className="flex min-h-0 flex-1 flex-col">
         <FilePreview filename={state.fileSelectedFile} />
       </div>

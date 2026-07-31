@@ -20,7 +20,7 @@ export function EvidenceNode({ data, selected }: NodeProps) {
         <Badge variant="outline" className="rounded-full border-sky-500/25 bg-sky-500/10 text-[10px] text-sky-700 dark:text-sky-300">{evidence.kind}</Badge>
         {evidence.location && <Badge variant="outline" className="rounded-full text-[10px]">{evidence.location}</Badge>}
       </div>
-      <p className="line-clamp-4 text-xs font-semibold leading-relaxed text-foreground">“{evidence.quote}”</p>
+      <p className="line-clamp-4 text-fine font-semibold leading-relaxed text-foreground">“{evidence.quote}”</p>
       {source && <div className="mt-3 line-clamp-1 text-caption text-muted-foreground">来源：{source.title}</div>}
       <Handle type="source" position={Position.Right} className="!bg-sky-500" />
     </div>

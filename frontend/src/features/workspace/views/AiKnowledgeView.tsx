@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Sparkles, X } from "lucide-react";
+import { Network, Plus, Sparkles, X } from "lucide-react";
+import { BlogIcon } from "@/components/icons";
+import { getFileIcon } from "@/features/file/components/fileIcons";
 import { leaveAiKnowledge, listAiKnowledge, type RagSource } from "../../../api/workspace";
 import { listBlogPosts, listFileDocuments, type BlogPostData, type FileDocument } from "../../../api/client";
 import { JoinAiKnowledgeDialog } from "../components/JoinAiKnowledgeDialog";
@@ -7,21 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
+import { FileProcessingProgress } from "@/features/file-processing/FileProcessingProgress";
+import { jobStage, useFileProcessing } from "@/features/file-processing/FileProcessingProvider";
+import { useChat } from "../../../stores/chatStore";
 import { cn } from "@/lib/utils";
 
-const STATUS_LABEL: Record<string, string> = {
-  active: "已索引",
-  pending: "排队中",
-  stale: "需更新",
-  failed: "失败",
-};
-
-const STATUS_VARIANT: Record<string, "success" | "warning" | "destructive" | "secondary"> = {
-  active: "success",
-  pending: "secondary",
-  stale: "warning",
-  failed: "destructive",
-};
+// 状态徽标已精简：索引中显示进度条，失败显示红字「失败」，其余状态不标记。
 
 interface AiKnowledgeData {
   rag: RagSource[];
@@ -36,19 +29,25 @@ export function AiKnowledgeView({
   onOpenBlog: (id: number) => void;
   onOpenFile: (filePath: string) => void;
 }) {
+  const { state } = useChat();
+  const { indexJobs, optimisticKeys, consumeOptimistic } = useFileProcessing();
   const [data, setData] = useState<AiKnowledgeData | null>(null);
   const [joinOpen, setJoinOpen] = useState(false);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     return Promise.all([listAiKnowledge(), listFileDocuments(), listBlogPosts()])
-      .then(([rag, files, blogs]) => setData({ rag, docs: files.documents, posts: blogs.posts }))
+      .then(([rag, files, blogs]) => {
+        setData({ rag, docs: files.documents, posts: blogs.posts });
+        const realKeys = new Set(rag.map((r) => `${r.resource_type}:${r.resource_id}`));
+        consumeOptimistic(realKeys);
+      })
       .catch(() => setData({ rag: [], docs: [], posts: [] }));
-  }, []);
+  }, [consumeOptimistic]);
 
   useEffect(() => {
     reload();
-  }, [reload]);
+  }, [reload, state.aiKnowledgeRevision]);
 
   // RagSource 不含 name,按 resource_type 在文件/文章列表里反查真实名称
   const nameOf = (it: RagSource): string => {
@@ -77,7 +76,7 @@ export function AiKnowledgeView({
 
   const handleRemove = useCallback(
     async (it: RagSource) => {
-      const key = `${it.resource_type}-${it.resource_id}`;
+      const key = `${it.resource_type}:${it.resource_id}`;
       setRemovingKey(key);
       try {
         await leaveAiKnowledge(it.resource_type, it.resource_id);
@@ -91,8 +90,16 @@ export function AiKnowledgeView({
     [reload],
   );
 
-  const items = data?.rag ?? null;
-  const ragList = data?.rag ?? [];
+  const realRag = data?.rag ?? null;
+  const realKeys = new Set((realRag ?? []).map((r) => `${r.resource_type}:${r.resource_id}`));
+  const optimisticItems: RagSource[] = optimisticKeys
+    .filter((k) => !realKeys.has(k))
+    .map((k) => {
+      const [t, idStr] = k.split(":");
+      return { resource_type: t, resource_id: Number(idStr), index_status: "pending" } as RagSource;
+    });
+  const items: RagSource[] | null = realRag === null ? null : [...optimisticItems, ...realRag];
+  const ragList = realRag ?? [];
 
   return (
     <WorkspaceView>
@@ -124,14 +131,21 @@ export function AiKnowledgeView({
           >
             <ul className="flex flex-col">
               {items.map((it) => {
-                const key = `${it.resource_type}-${it.resource_id}`;
+                const key = `${it.resource_type}:${it.resource_id}`;
                 const openable = it.resource_type === "blog_post" || it.resource_type === "file";
+                const indexJob = indexJobs[key];
                 return (
                   <li
                     key={key}
                     className="group flex items-center gap-3 rounded-control px-3 py-2 hover:bg-secondary/60"
                   >
-                    <Sparkles className="h-4 w-4 flex-shrink-0 text-primary" />
+                    {it.resource_type === "blog_post" ? (
+                      <BlogIcon className="h-4 w-4 flex-shrink-0" />
+                    ) : it.resource_type === "file" ? (
+                      getFileIcon(nameOf(it))
+                    ) : (
+                      <Network className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    )}
                     <button
                       type="button"
                       disabled={!openable}
@@ -145,18 +159,26 @@ export function AiKnowledgeView({
                     >
                       {nameOf(it)}
                     </button>
-                    <Badge variant={STATUS_VARIANT[it.index_status] ?? "secondary"}>
-                      {STATUS_LABEL[it.index_status] ?? it.index_status}
-                    </Badge>
-                    <button
-                      type="button"
-                      aria-label="移出 AI 知识"
-                      onClick={() => handleRemove(it)}
-                      disabled={removingKey === key}
-                      className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    {indexJob ? (
+                      <div className="w-40 shrink-0">
+                        <FileProcessingProgress
+                          value={{ percent: indexJob.progress_percent, stage: jobStage(indexJob), job: indexJob }}
+                        />
+                      </div>
+                    ) : it.index_status === "failed" ? (
+                      <Badge variant="destructive">失败</Badge>
+                    ) : null}
+                    {realKeys.has(key) && (
+                      <button
+                        type="button"
+                        aria-label="移出 AI 知识"
+                        onClick={() => handleRemove(it)}
+                        disabled={removingKey === key}
+                        className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -166,7 +188,6 @@ export function AiKnowledgeView({
       <JoinAiKnowledgeDialog
         open={joinOpen}
         onClose={() => setJoinOpen(false)}
-        onDone={reload}
         existing={ragList}
       />
     </WorkspaceView>

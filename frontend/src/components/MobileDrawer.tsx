@@ -229,7 +229,7 @@ export function MobileDrawer({
         )}
       >
         <div className="flex h-13 flex-shrink-0 items-center justify-between border-b border-border px-4">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <h2 className="text-body font-semibold text-foreground">{title}</h2>
           <Button
             type="button"
             variant="ghost"

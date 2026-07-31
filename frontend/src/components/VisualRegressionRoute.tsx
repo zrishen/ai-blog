@@ -24,9 +24,9 @@ function FoundationPreview() {
   return (
     <div className="mx-auto max-w-4xl space-y-5">
       <header className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Visual system</p>
+        <p className="text-fine font-semibold uppercase tracking-[0.18em] text-primary">Visual system</p>
         <h1 className="text-2xl font-semibold tracking-tight">基础控件视觉回归</h1>
-        <p className="text-sm text-muted-foreground">按钮、输入、状态和层级使用同一套柔和的边界与焦点表达。</p>
+        <p className="text-body text-muted-foreground">按钮、输入、状态和层级使用同一套柔和的边界与焦点表达。</p>
       </header>
 
       <Surface className="grid gap-5 p-5 md:grid-cols-[1.25fr_0.75fr]">
@@ -45,22 +45,22 @@ function FoundationPreview() {
             </TabsList>
             <TabsContent value="settings" className="space-y-3">
               <label className="block space-y-1.5" htmlFor="visual-title">
-                <span className="text-sm font-medium">标题</span>
+                <span className="text-body font-medium">标题</span>
                 <Input id="visual-title" defaultValue="本周内容计划" />
               </label>
               <label className="block space-y-1.5" htmlFor="visual-protocol">
-                <span className="text-sm font-medium">协议</span>
+                <span className="text-body font-medium">协议</span>
                 <Select id="visual-protocol" defaultValue="openai">
                   <option value="openai">OpenAI</option>
                   <option value="anthropic">Anthropic</option>
                 </Select>
               </label>
               <label className="block space-y-1.5" htmlFor="visual-note">
-                <span className="text-sm font-medium">备注</span>
+                <span className="text-body font-medium">备注</span>
                 <Textarea id="visual-note" defaultValue="保持内容结构清晰，重点说明可执行的工作流。" />
               </label>
             </TabsContent>
-            <TabsContent value="usage" className="text-sm text-muted-foreground">本周已使用 32.4M token。</TabsContent>
+            <TabsContent value="usage" className="text-body text-muted-foreground">本周已使用 32.4M token。</TabsContent>
           </Tabs>
         </section>
 
@@ -94,9 +94,9 @@ function LoginPreview() {
     <div className="flex min-h-[650px] items-center justify-center">
       <Surface className="w-full max-w-md p-6 shadow-surface-raised">
         <header className="mb-5 space-y-1.5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Welcome back</p>
+          <p className="text-fine font-semibold uppercase tracking-[0.18em] text-primary">Welcome back</p>
           <h1 className="text-2xl font-semibold tracking-tight">登录到 AI Blog</h1>
-          <p className="text-sm text-muted-foreground">继续管理写作、知识库和研究内容。</p>
+          <p className="text-body text-muted-foreground">继续管理写作、知识库和研究内容。</p>
         </header>
         <Tabs defaultValue="login" variant="underline">
           <TabsList className="grid grid-cols-2" aria-label="身份验证方式">
@@ -105,11 +105,11 @@ function LoginPreview() {
           </TabsList>
           <TabsContent value="login" className="space-y-4">
             <label className="block space-y-1.5" htmlFor="visual-login-username">
-              <span className="text-sm font-medium">用户名</span>
+              <span className="text-body font-medium">用户名</span>
               <Input id="visual-login-username" defaultValue="guangbing" />
             </label>
             <label className="block space-y-1.5" htmlFor="visual-login-password">
-              <span className="text-sm font-medium">密码</span>
+              <span className="text-body font-medium">密码</span>
               <Input id="visual-login-password" type="password" defaultValue="password" />
             </label>
             <Button type="button" className="w-full">登录</Button>
@@ -126,42 +126,42 @@ function WorkspacePreview() {
       <div className="grid min-h-[650px] overflow-hidden rounded-shell border border-border/70 bg-card/86 shadow-surface md:grid-cols-[210px_minmax(0,1fr)_250px]">
         <WorkspacePanel side="left" className="gap-4 p-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Workspace</p>
-            <p className="mt-1 text-sm font-semibold">我的主页</p>
+            <p className="text-fine font-semibold uppercase tracking-[0.16em] text-primary">Workspace</p>
+            <p className="mt-1 text-body font-semibold">我的主页</p>
           </div>
           <nav className="space-y-1" aria-label="工作区导航">
             <button type="button" className={navItemVariants({ layout: "side", state: "active" })}><Sparkles className="h-4 w-4" />首页</button>
             <button type="button" className={navItemVariants({ layout: "side", state: "idle" })}><FileText className="h-4 w-4" />文件库</button>
             <button type="button" className={navItemVariants({ layout: "side", state: "idle" })}><Network className="h-4 w-4" />研究图谱</button>
           </nav>
-          <div className="mt-auto rounded-panel border border-border/60 bg-background/55 p-3 text-xs text-muted-foreground">3 篇草稿 · 本周 0.0M token</div>
+          <div className="mt-auto rounded-panel border border-border/60 bg-background/55 p-3 text-fine text-muted-foreground">3 篇草稿 · 本周 0.0M token</div>
         </WorkspacePanel>
 
         <section className="min-w-0 space-y-4 bg-background/45 p-5">
           <header className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Overview</p>
+              <p className="text-fine font-semibold uppercase tracking-[0.16em] text-primary">Overview</p>
               <h1 className="mt-1 text-2xl font-semibold tracking-tight">写作工作台</h1>
-              <p className="mt-1 text-sm text-muted-foreground">把灵感、资料和文章放在同一个清晰的流程里。</p>
+              <p className="mt-1 text-body text-muted-foreground">把灵感、资料和文章放在同一个清晰的流程里。</p>
             </div>
             <Button size="sm">新建文章</Button>
           </header>
           <Surface variant="featured" className="p-5">
             <div className="flex flex-wrap gap-2"><Badge>草稿</Badge><Badge variant="success">已整理</Badge><Badge variant="outline">AI 协作</Badge></div>
             <h2 className="mt-4 text-xl font-semibold">从“会用”到“用好”：个人 AI 工作流</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">先明确读者与目标，再逐步整理素材、生成大纲并回收反馈。</p>
+            <p className="mt-2 text-body leading-relaxed text-muted-foreground">先明确读者与目标，再逐步整理素材、生成大纲并回收反馈。</p>
           </Surface>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Surface variant="interactive" className="p-4"><p className="text-sm font-medium">待完善：研究提纲</p><p className="mt-1 text-xs text-muted-foreground">7 月 25 日 · 19 次引用</p></Surface>
-            <Surface variant="interactive" className="p-4"><p className="text-sm font-medium">可信使用指南</p><p className="mt-1 text-xs text-muted-foreground">7 月 25 日 · 11 次引用</p></Surface>
+            <Surface variant="interactive" className="p-4"><p className="text-body font-medium">待完善：研究提纲</p><p className="mt-1 text-fine text-muted-foreground">7 月 25 日 · 19 次引用</p></Surface>
+            <Surface variant="interactive" className="p-4"><p className="text-body font-medium">可信使用指南</p><p className="mt-1 text-fine text-muted-foreground">7 月 25 日 · 11 次引用</p></Surface>
           </div>
         </section>
 
         <WorkspacePanel side="right" className="p-4">
-          <div className="-mx-4 -mt-4 mb-4 flex items-center gap-2 border-b border-primary/15 bg-context-bar/85 px-4 py-2 text-xs font-medium text-primary shadow-sm backdrop-blur-sm"><span className="size-2 shrink-0 rounded-full bg-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]" />当前上下文：个人 AI 工作流</div>
-          <div className="flex items-center gap-2"><span className="flex size-8 items-center justify-center rounded-control bg-primary/10 text-primary"><MessageSquare className="size-4" /></span><div><p className="text-sm font-semibold">AI 助手</p><p className="text-xs text-muted-foreground">当前文章上下文</p></div></div>
-          <div className="mt-6 space-y-3 text-sm"><div className="rounded-panel bg-muted/65 p-3">我可以帮你整理选题或继续写作。</div><div className="ml-6 rounded-panel border border-border/60 bg-background/65 p-3">帮我列一个可执行的大纲。</div></div>
-          <div className="mt-auto rounded-shell border border-border/70 bg-background/78 p-2 text-sm text-muted-foreground">想写什么，尽管说</div>
+          <div className="-mx-4 -mt-4 mb-4 flex items-center gap-2 border-b border-primary/15 bg-context-bar/85 px-4 py-2 text-fine font-medium text-primary shadow-sm backdrop-blur-sm"><span className="size-2 shrink-0 rounded-full bg-primary shadow-[0_0_0_4px_hsl(var(--primary)/0.12)]" />当前上下文：个人 AI 工作流</div>
+          <div className="flex items-center gap-2"><span className="flex size-8 items-center justify-center rounded-control bg-primary/10 text-primary"><MessageSquare className="size-4" /></span><div><p className="text-body font-semibold">AI 助手</p><p className="text-fine text-muted-foreground">当前文章上下文</p></div></div>
+          <div className="mt-6 space-y-3 text-body"><div className="rounded-panel bg-muted/65 p-3">我可以帮你整理选题或继续写作。</div><div className="ml-6 rounded-panel border border-border/60 bg-background/65 p-3">帮我列一个可执行的大纲。</div></div>
+          <div className="mt-auto rounded-shell border border-border/70 bg-background/78 p-2 text-body text-muted-foreground">想写什么，尽管说</div>
         </WorkspacePanel>
       </div>
     </div>
@@ -179,21 +179,21 @@ function AdminPreview() {
   return (
     <div className="mx-auto max-w-5xl space-y-5">
       <header>
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Admin console</p>
+        <p className="text-fine font-semibold uppercase tracking-[0.18em] text-primary">Admin console</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">概览</h1>
-        <p className="mt-1 text-sm text-muted-foreground">汇总用户、订阅、邀请码与全站用量。</p>
+        <p className="mt-1 text-body text-muted-foreground">汇总用户、订阅、邀请码与全站用量。</p>
       </header>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map(([Icon, label, value, tone]) => (
           <Card key={label} className="shadow-none">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle><span className={`flex size-9 items-center justify-center rounded-control ${tone}`}><Icon className="size-[18px]" /></span></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-5 pb-2"><CardTitle className="text-body font-medium text-muted-foreground">{label}</CardTitle><span className={`flex size-9 items-center justify-center rounded-control ${tone}`}><Icon className="size-[18px]" /></span></CardHeader>
             <CardContent className="p-5 pt-0"><div className="text-2xl font-semibold tracking-[-0.035em] tabular-nums">{value}</div></CardContent>
           </Card>
         ))}
       </div>
       <Card>
-        <CardHeader><CardTitle>本周用量</CardTitle><p className="text-sm text-muted-foreground">全站本周 token 消耗占周额度（100.0M）的比例。</p></CardHeader>
-        <CardContent><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full w-[12%] rounded-full bg-primary" /></div><div className="mt-3 flex justify-between text-sm text-muted-foreground"><span>已用 12.0M / 100.0M</span><span>占比 12.0%</span></div></CardContent>
+        <CardHeader><CardTitle>本周用量</CardTitle><p className="text-body text-muted-foreground">全站本周 token 消耗占周额度（100.0M）的比例。</p></CardHeader>
+        <CardContent><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full w-[12%] rounded-full bg-primary" /></div><div className="mt-3 flex justify-between text-body text-muted-foreground"><span>已用 12.0M / 100.0M</span><span>占比 12.0%</span></div></CardContent>
       </Card>
     </div>
   );

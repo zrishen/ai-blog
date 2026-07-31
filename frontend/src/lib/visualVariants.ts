@@ -20,7 +20,7 @@ export const surfaceVariants = cva(
 );
 
 export const navItemVariants = cva(
-  "inline-flex items-center justify-center gap-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
+  "inline-flex items-center justify-center gap-2 text-body font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20",
   {
     variants: {
       layout: {

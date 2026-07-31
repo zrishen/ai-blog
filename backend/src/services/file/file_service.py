@@ -264,6 +264,101 @@ async def vectorize_and_store(
     return chunks
 
 
+async def vectorize_text_and_store(
+    text: str,
+    collection_name: str,
+    *,
+    source_id: str,
+    original_name: str | None = None,
+    user_id: int | str = "default_user",
+    resource_type: str = "blog_post",
+    category_id: int | None = None,
+    progress_reporter=None,
+) -> list[str]:
+    """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库。
+
+    与 vectorize_and_store 的差异：跳过文件解析（直接用传入 text），metadata 的
+    stored_name/chunk_id 用 source_id（资源稳定标识，如 "blog_post:123"），并附带
+    resource_type 便于检索侧按资源类型过滤。
+    """
+    from src.services.rag.embedding_service import get_embeddings
+    from src.services.rag.vector_store import add_documents
+    from src.utils.chunker import chunk_text
+
+    async def report(stage: str, completed: int, total: int, unit: str) -> None:
+        if progress_reporter:
+            await progress_reporter(stage, completed, total, unit)
+
+    logger.info(
+        "KB text vectorization started: source_id=%s resource_type=%s user_id=%s",
+        source_id,
+        resource_type,
+        user_id,
+    )
+
+    # 对齐 index_v1 权重表（含 parse）：文本无需解析，瞬间完成 parse 段。
+    await report("parse", 1, 1, "operation")
+
+    await report("chunk", 0, 1, "operation")
+    chunks = await asyncio.to_thread(chunk_text, text)
+    await report("chunk", 1, 1, "operation")
+    logger.info(
+        "KB text vectorization chunking completed: source_id=%s chunks=%s",
+        source_id,
+        len(chunks),
+    )
+    if not chunks:
+        logger.warning("KB text vectorization produced no chunks: source_id=%s", source_id)
+        raise ValueError("Document contains no indexable text")
+
+    async def embedding_progress(completed: int, total: int, unit: str) -> None:
+        await report("embedding", completed, total, unit)
+
+    await report("embedding", 0, len(chunks), "chunk")
+    embeddings = await get_embeddings(chunks, progress_callback=embedding_progress)
+    if len(embeddings) != len(chunks):
+        raise ValueError(f"Embedding count mismatch: chunks={len(chunks)} embeddings={len(embeddings)}")
+
+    display_name = original_name or source_id
+    metadata_list = []
+    await report("metadata", 0, len(chunks), "chunk")
+    for index in range(len(chunks)):
+        metadata = {
+            "source": display_name,
+            "original_name": display_name,
+            "stored_name": source_id,
+            "resource_type": resource_type,
+            "collection_name": collection_name,
+            "user_id": user_id,
+            "chunk_index": index,
+            "total_chunks": len(chunks),
+            "chunk_id": f"{source_id}:{index}",
+        }
+        if category_id is not None:
+            metadata["category_id"] = category_id
+        metadata_list.append(metadata)
+        await report("metadata", index + 1, len(chunks), "chunk")
+
+    async def vector_progress(completed: int, total: int, unit: str) -> None:
+        await report("vector_store", completed, total, unit)
+
+    await report("vector_store", 0, len(chunks), "chunk")
+    await add_documents(
+        collection_name,
+        chunks,
+        metadata_list,
+        embeddings=embeddings,
+        progress_callback=vector_progress,
+    )
+    logger.info(
+        "KB text vectorization completed: source_id=%s collection=%s chunks=%s",
+        source_id,
+        collection_name,
+        len(chunks),
+    )
+    return chunks
+
+
 # ---- File Preview (docx/xlsx → HTML) ----
 
 

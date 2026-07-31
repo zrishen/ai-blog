@@ -10,9 +10,6 @@ export function BlogOverviewPanel() {
   const { state, dispatch } = useChat();
   const location = useLocation();
 
-  const publishedCount = state.blogPosts.filter((p) => p.status === "published").length;
-  const draftCount = state.blogPosts.length - publishedCount;
-
   const introPost = state.blogPosts?.find((p) => p.slug === "ai-blog-intro");
   const introTags = useMemo(() => splitBlogTags(introPost?.tags), [introPost?.tags]);
 
@@ -35,28 +32,8 @@ export function BlogOverviewPanel() {
     <WorkspacePanel className="overflow-y-auto select-none">
       <div className="p-4 flex flex-col gap-4">
         <Surface variant="card" className="rounded-panel bg-card/80 p-3 shadow-sm">
-          <div className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
-            Overview
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <Surface variant="inset" className="rounded-control bg-background/62 px-2 py-3">
-              <div className="text-xl font-black tracking-[-0.04em] text-foreground">{state.blogPosts.length}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">文章</div>
-            </Surface>
-            <Surface variant="inset" className="rounded-control bg-background/62 px-2 py-3">
-              <div className="text-xl font-black tracking-[-0.04em] text-primary">{publishedCount}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">已发布</div>
-            </Surface>
-            <Surface variant="inset" className="rounded-control bg-background/62 px-2 py-3">
-              <div className="text-xl font-black tracking-[-0.04em] text-warning">{draftCount}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">草稿</div>
-            </Surface>
-          </div>
-        </Surface>
-
-        <Surface variant="card" className="rounded-panel bg-card/80 p-3 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="inline-flex items-center gap-2 text-fine font-bold uppercase tracking-[0.18em] text-muted-foreground">
               <Tags className="h-3.5 w-3.5 text-primary" />
               Tags
             </div>
@@ -75,7 +52,7 @@ export function BlogOverviewPanel() {
             </div>
           </div>
           {tagEntries.length === 0 ? (
-            <Surface variant="dashed" className="rounded-control bg-secondary/45 px-3 py-5 text-center text-xs">
+            <Surface variant="dashed" className="rounded-control bg-secondary/45 px-3 py-5 text-center text-fine">
               暂无标签
             </Surface>
           ) : (
@@ -85,7 +62,7 @@ export function BlogOverviewPanel() {
                 return (
                   <button
                     key={tag}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold cursor-pointer transition-all ${isSelected ? "ring-2 ring-primary scale-105" : "hover:opacity-80"}`}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-fine font-semibold cursor-pointer transition-all ${isSelected ? "ring-2 ring-primary scale-105" : "hover:opacity-80"}`}
                     style={getBlogTagStyle(tag)}
                     onClick={() => dispatch({ type: "SET_BLOG_SELECTED_TAG", payload: isSelected ? null : tag })}
                   >

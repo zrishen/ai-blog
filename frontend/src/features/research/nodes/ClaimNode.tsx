@@ -37,7 +37,7 @@ export function ClaimNode({ data, selected }: NodeProps) {
         <Badge variant="outline" className="rounded-full text-[10px]">置信度 {claim.confidence}%</Badge>
         {claim.adopted && <Badge variant="success" className="rounded-full text-[10px]">已采用</Badge>}
       </div>
-      <p className="line-clamp-4 text-sm font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
+      <p className="line-clamp-4 text-body font-semibold leading-relaxed text-foreground">{claim.claim_text}</p>
       {entities.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {entities.slice(0, 3).map((entity) => <Badge key={entity.id} variant="outline" className="rounded-full text-[10px]">{entity.name}</Badge>)}

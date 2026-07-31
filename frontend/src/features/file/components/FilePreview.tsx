@@ -19,7 +19,7 @@ export function FilePreview({ filename }: Props) {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
-      <div className="p-10 text-center text-destructive text-sm">不支持预览该文件类型</div>
+      <div className="p-10 text-center text-destructive text-body">不支持预览该文件类型</div>
     </div>
   );
 }
@@ -39,12 +39,12 @@ function PdfPreview({ filename, previewUrl }: { filename: string; previewUrl: st
           title={filename}
         />
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-background">
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-body bg-background">
             加载中...
           </div>
         )}
         {error && (
-          <div className="p-10 text-center text-destructive text-sm">{error}</div>
+          <div className="p-10 text-center text-destructive text-body">{error}</div>
         )}
       </div>
     </div>
@@ -80,16 +80,16 @@ function FilePreviewHTML({ url }: { url: string }) {
     <div className="flex flex-col flex-1 overflow-hidden h-full">
       <div className="flex-1 relative overflow-hidden">
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm bg-background">
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-body bg-background">
             加载中...
           </div>
         )}
         {error && (
-          <div className="p-10 text-center text-destructive text-sm">{error}</div>
+          <div className="p-10 text-center text-destructive text-body">{error}</div>
         )}
         {html && (
           <div
-            className="h-full overflow-auto p-0 text-sm leading-[1.8] md:overflow-x-hidden md:overflow-y-auto max-md:[&_img]:max-w-none max-md:[&_table]:min-w-max"
+            className="h-full overflow-auto p-0 text-body leading-[1.8] md:overflow-x-hidden md:overflow-y-auto max-md:[&_img]:max-w-none max-md:[&_table]:min-w-max"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         )}

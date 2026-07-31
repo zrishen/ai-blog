@@ -9,6 +9,7 @@ import {
   type FileProcessingJob,
 } from "../../api/files";
 import { restoreTrashItem, type TrashItem } from "../../api/trash";
+import { joinAiKnowledge } from "../../api/workspace";
 import { useAuth } from "../../stores/authStore";
 import { useChatDispatch } from "../../stores/chatStore";
 import { FileProcessingProgress, type FileProcessingProgressValue } from "./FileProcessingProgress";
@@ -46,6 +47,13 @@ interface FileProcessingContextValue {
   restoreFile: (item: TrashItem) => Promise<void>;
   consumeRestoreSuccess: (sourceId: number, jobId: string) => void;
   clearUploadError: () => void;
+  // 「加入 AI 知识」索引 job：key = `${target_resource_type}:${target_resource_id}`
+  indexJobs: Record<string, FileProcessingJob>;
+  joinToAiKnowledge: (resourceType: string, resourceId: number) => Promise<void>;
+  consumeIndexSuccess: (key: string, jobId: string) => void;
+  // 乐观加入的资源 key（API 返回前先在中栏显示）；真实 RagSource 到达后被 consumeOptimistic 清理
+  optimisticKeys: string[];
+  consumeOptimistic: (realKeys: Set<string>) => void;
 }
 
 const FileProcessingContext = createContext<FileProcessingContextValue | null>(null);
@@ -61,7 +69,7 @@ function makeRequestId() {
   return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
 }
 
-function jobStage(job: FileProcessingJob) {
+export function jobStage(job: FileProcessingJob) {
   if (job.status === "failed") return job.error_message || "文件处理失败";
   if (job.status === "succeeded") return "文件处理完成";
   return job.current_stage || (job.status === "queued" ? "等待服务器处理" : "正在处理文件");
@@ -109,6 +117,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   const dispatch = useChatDispatch();
   const [uploadTask, setUploadTask] = useState<UploadTask | null>(null);
   const [restoreJobs, setRestoreJobs] = useState<Record<number, FileProcessingJob>>({});
+  const [indexJobs, setIndexJobs] = useState<Record<string, FileProcessingJob>>({});
+  const [optimisticKeys, setOptimisticKeys] = useState<string[]>([]);
   const uploadCancelRef = useRef<(() => void) | null>(null);
   const timersRef = useRef(new Map<string, number>());
   const pollingRef = useRef(new Set<string>());
@@ -121,63 +131,99 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     pollingRef.current.delete(key);
   }, []);
 
-  const onSucceeded = useCallback((key: string, restore: boolean) => {
+  const onSucceeded = useCallback((key: string, kind: "upload" | "restore" | "index") => {
     if (completedRef.current.has(key)) return;
     completedRef.current.add(key);
-    dispatch({ type: restore ? "INCREMENT_FILE_RESTORE_REVISIONS" : "INCREMENT_FILE_LIBRARY_REVISION" });
+    if (kind === "restore") dispatch({ type: "INCREMENT_FILE_RESTORE_REVISIONS" });
+    else if (kind === "index") dispatch({ type: "INCREMENT_AI_KNOWLEDGE_REVISION" });
+    else dispatch({ type: "INCREMENT_FILE_LIBRARY_REVISION" });
   }, [dispatch]);
 
-  const pollJob = useCallback((jobId: string, kind: "upload" | "restore", sourceId?: number) => {
-    const key = `${kind}:${jobId}`;
-    if (pollingRef.current.has(key)) return;
-    pollingRef.current.add(key);
+  const consumeIndexSuccess = useCallback((key: string, jobId: string) => {
+    setIndexJobs((current) => {
+      if (current[key]?.id !== jobId) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
-    const tick = async () => {
-      try {
-        const latest = await getFileProcessingJob(jobId);
-        if (kind === "upload") {
-          setUploadTask((current) => {
-            if (!current || (current.job && current.job.id !== jobId)) return current;
-            const job = mergeJob(current.job, latest);
-            const next = {
-              ...current,
-              phase: "server" as const,
-              percent: Math.max(current.percent ?? 0, job.progress_percent),
-              stage: jobStage(job),
-              job,
-            };
-            saveUpload(next);
-            return next;
-          });
-        } else if (sourceId != null) {
-          setRestoreJobs((current) => ({ ...current, [sourceId]: mergeJob(current[sourceId], latest) }));
-        }
+  const consumeOptimistic = useCallback((realKeys: Set<string>) => {
+    setOptimisticKeys((prev) => {
+      const next = prev.filter((k) => !realKeys.has(k));
+      return next.length === prev.length ? prev : next;
+    });
+  }, []);
 
-        if (latest.status === "succeeded") {
-          clearPoll(key);
-          onSucceeded(key, kind === "restore");
+  const pollJob = useCallback(
+    (
+      jobId: string,
+      kind: "upload" | "restore" | "index",
+      sourceId?: number,
+      indexKey?: string,
+    ) => {
+      const key = `${kind}:${jobId}`;
+      if (pollingRef.current.has(key)) return;
+      pollingRef.current.add(key);
+
+      const tick = async () => {
+        try {
+          const latest = await getFileProcessingJob(jobId);
           if (kind === "upload") {
-            sessionStorage.removeItem(STORAGE_KEY);
-            setUploadTask(null);
+            setUploadTask((current) => {
+              if (!current || (current.job && current.job.id !== jobId)) return current;
+              const job = mergeJob(current.job, latest);
+              const next = {
+                ...current,
+                phase: "server" as const,
+                percent: Math.max(current.percent ?? 0, job.progress_percent),
+                stage: jobStage(job),
+                job,
+              };
+              saveUpload(next);
+              return next;
+            });
+          } else if (kind === "index" && indexKey) {
+            setIndexJobs((current) => ({ ...current, [indexKey]: mergeJob(current[indexKey], latest) }));
+          } else if (sourceId != null) {
+            setRestoreJobs((current) => ({ ...current, [sourceId]: mergeJob(current[sourceId], latest) }));
           }
-          return;
-        }
-        if (latest.status === "failed") {
-          clearPoll(key);
-          if (kind === "upload") {
-            sessionStorage.removeItem(STORAGE_KEY);
-            setUploadTask((current) => current ? { ...current, status: "failed", error: latest.error_message || "文件处理失败" } : current);
-          }
-          return;
-        }
-        timersRef.current.set(key, window.setTimeout(tick, POLL_MS));
-      } catch {
-        timersRef.current.set(key, window.setTimeout(tick, POLL_MS));
-      }
-    };
 
-    void tick();
-  }, [clearPoll, onSucceeded]);
+          if (latest.status === "succeeded") {
+            clearPoll(key);
+            onSucceeded(key, kind);
+            if (kind === "upload") {
+              sessionStorage.removeItem(STORAGE_KEY);
+              setUploadTask(null);
+            } else if (kind === "index" && indexKey) {
+              consumeIndexSuccess(indexKey, jobId);
+            }
+            return;
+          }
+          if (latest.status === "failed") {
+            clearPoll(key);
+            if (kind === "upload") {
+              sessionStorage.removeItem(STORAGE_KEY);
+              setUploadTask((current) => current ? { ...current, status: "failed", error: latest.error_message || "文件处理失败" } : current);
+            } else if (kind === "index" && indexKey) {
+              consumeIndexSuccess(indexKey, jobId);
+              dispatch({ type: "INCREMENT_AI_KNOWLEDGE_REVISION" });
+            } else if (kind === "restore") {
+              // 还原 job 失败：触发刷新让回收站视图回滚乐观移除
+              dispatch({ type: "INCREMENT_FILE_RESTORE_REVISIONS" });
+            }
+            return;
+          }
+          timersRef.current.set(key, window.setTimeout(tick, POLL_MS));
+        } catch {
+          timersRef.current.set(key, window.setTimeout(tick, POLL_MS));
+        }
+      };
+
+      void tick();
+    },
+    [clearPoll, consumeIndexSuccess, dispatch, onSucceeded],
+  );
 
   const attachUploadJob = useCallback((job: FileProcessingJob, stored?: StoredUpload | null) => {
     const task: UploadTask = {
@@ -194,7 +240,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     setUploadTask(task);
     saveUpload(task);
     if (job.status === "succeeded") {
-      onSucceeded(`upload:${job.id}`, false);
+      onSucceeded(`upload:${job.id}`, "upload");
       setUploadTask(null);
       sessionStorage.removeItem(STORAGE_KEY);
     } else if (job.status !== "failed") {
@@ -238,10 +284,19 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
         if (cancelled) return;
 
         for (const job of active) {
-          if (job.job_type !== "restore" || job.source_document_id == null) continue;
-          const sourceId = job.source_document_id;
-          setRestoreJobs((current) => ({ ...current, [sourceId]: mergeJob(current[sourceId], job) }));
-          pollJob(job.id, "restore", sourceId);
+          if (job.job_type === "restore" && job.source_document_id != null) {
+            const sourceId = job.source_document_id;
+            setRestoreJobs((current) => ({ ...current, [sourceId]: mergeJob(current[sourceId], job) }));
+            pollJob(job.id, "restore", sourceId);
+          } else if (
+            job.job_type === "index" &&
+            job.target_resource_type &&
+            job.target_resource_id != null
+          ) {
+            const idxKey = `${job.target_resource_type}:${job.target_resource_id}`;
+            setIndexJobs((current) => ({ ...current, [idxKey]: mergeJob(current[idxKey], job) }));
+            pollJob(job.id, "index", undefined, idxKey);
+          }
         }
 
         const activeUploads = active.filter((job) => job.job_type === "upload");
@@ -277,6 +332,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setUploadTask(null);
     setRestoreJobs({});
+    setIndexJobs({});
+    setOptimisticKeys([]);
     sessionStorage.removeItem(STORAGE_KEY);
   }, [isAuthenticated]);
 
@@ -352,7 +409,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     if (!result) throw new Error("恢复任务响应为空");
     setRestoreJobs((current) => ({ ...current, [item.id]: result }));
     if (result.status === "succeeded") {
-      onSucceeded(`restore:${result.id}`, true);
+      onSucceeded(`restore:${result.id}`, "restore");
     } else if (result.status !== "failed") {
       pollJob(result.id, "restore", item.id);
     }
@@ -367,6 +424,29 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     });
   }, []);
 
+  const joinToAiKnowledge = useCallback(async (resourceType: string, resourceId: number) => {
+    const optimisticKey = `${resourceType}:${resourceId}`;
+    setOptimisticKeys((prev) => (prev.includes(optimisticKey) ? prev : [...prev, optimisticKey]));
+    try {
+      const result = await joinAiKnowledge(resourceType, resourceId);
+      const job = result.job;
+      if (job) {
+        const key =
+          job.target_resource_type && job.target_resource_id != null
+            ? `${job.target_resource_type}:${job.target_resource_id}`
+            : optimisticKey;
+        setIndexJobs((current) => ({ ...current, [key]: mergeJob(current[key], job) }));
+        if (job.status !== "succeeded" && job.status !== "failed") {
+          pollJob(job.id, "index", undefined, key);
+        }
+      }
+      dispatch({ type: "INCREMENT_AI_KNOWLEDGE_REVISION" });
+    } catch (e) {
+      setOptimisticKeys((prev) => prev.filter((k) => k !== optimisticKey));
+      throw e;
+    }
+  }, [dispatch, pollJob]);
+
   const clearUploadError = useCallback(() => {
     setUploadTask((current) => current?.status === "failed" ? null : current);
   }, []);
@@ -380,6 +460,11 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
       restoreFile,
       consumeRestoreSuccess,
       clearUploadError,
+      indexJobs,
+      joinToAiKnowledge,
+      consumeIndexSuccess,
+      optimisticKeys,
+      consumeOptimistic,
     }}>
       {children}
       {uploadTask && (

@@ -43,7 +43,7 @@ export function OverviewTab({ topic }: OverviewTabProps) {
                   <Badge variant={statusBadgeVariant(claim.status)} className="shrink-0 rounded-full">{statusLabel(claim.status)}</Badge>
                 </div>
               </SelectableSurface>
-            )) : <Surface variant="dashed" className="rounded-control p-4 text-sm">暂无事实，点击更新图谱后会在这里展示可审核事实。</Surface>}
+            )) : <Surface variant="dashed" className="rounded-control p-4 text-body">暂无事实，点击更新图谱后会在这里展示可审核事实。</Surface>}
           </div>
         </Surface>
         <Surface variant="inset" className="rounded-surface p-5">
@@ -52,12 +52,12 @@ export function OverviewTab({ topic }: OverviewTabProps) {
             {topic.proposals.slice(0, 4).length ? topic.proposals.slice(0, 4).map((proposal) => (
               <Surface key={proposal.id} variant="card" className="rounded-control bg-card/70 p-3 shadow-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold text-foreground">{proposal.title}</div>
+                  <div className="text-body font-semibold text-foreground">{proposal.title}</div>
                   <Badge variant={statusBadgeVariant(proposal.status)} className="rounded-full">{statusLabel(proposal.status)}</Badge>
                 </div>
-                {proposal.description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{proposal.description}</p>}
+                {proposal.description && <p className="mt-2 line-clamp-2 text-fine leading-relaxed text-muted-foreground">{proposal.description}</p>}
               </Surface>
-            )) : <Surface variant="dashed" className="rounded-control p-4 text-sm">暂无更新提案。</Surface>}
+            )) : <Surface variant="dashed" className="rounded-control p-4 text-body">暂无更新提案。</Surface>}
           </div>
         </Surface>
       </div>

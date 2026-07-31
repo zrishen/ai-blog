@@ -47,8 +47,8 @@ const TabsTrigger = React.forwardRef<
       ref={ref}
       className={cn(
         variant === "surface"
-          ? "inline-flex items-center justify-center whitespace-nowrap rounded-control px-3 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card/92 data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:shadow-foreground/5"
-          : "-mb-px inline-flex h-10 items-center justify-center whitespace-nowrap border-b-2 border-transparent px-1 text-sm font-medium text-muted-foreground transition-[border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:border-primary data-[state=active]:text-foreground",
+          ? "inline-flex items-center justify-center whitespace-nowrap rounded-control px-3 py-1.5 text-body font-medium transition-[background-color,color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-card/92 data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=active]:shadow-foreground/5"
+          : "-mb-px inline-flex h-10 items-center justify-center whitespace-nowrap border-b-2 border-transparent px-1 text-body font-medium text-muted-foreground transition-[border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/20 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:border-primary data-[state=active]:text-foreground",
         className,
       )}
       {...props}

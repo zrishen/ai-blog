@@ -80,7 +80,7 @@ function MessageListComponent({
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
               <Sparkles className="h-6 w-6 animate-pulse" />
             </div>
-            <p className="text-base font-black tracking-[-0.04em] text-foreground">正在加载历史对话</p>
+            <p className="text-reading font-black tracking-[-0.04em] text-foreground">正在加载历史对话</p>
             <p className="mt-2 max-w-[220px] text-meta leading-relaxed text-muted-foreground">
               请稍候，正在读取这段对话的历史消息。
             </p>
@@ -98,14 +98,14 @@ function MessageListComponent({
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-destructive/10 text-destructive ring-1 ring-destructive/15">
               <AlertCircle className="h-6 w-6" />
             </div>
-            <p className="text-base font-black tracking-[-0.04em] text-foreground">历史对话加载失败</p>
+            <p className="text-reading font-black tracking-[-0.04em] text-foreground">历史对话加载失败</p>
             <p className="mt-2 max-w-[240px] text-meta leading-relaxed text-muted-foreground">
               {historyLoadError}
             </p>
             <Button
               variant="outline"
               size="sm"
-              className="mt-4 h-8 rounded-full px-4 text-xs"
+              className="mt-4 h-8 rounded-full px-4 text-fine"
               onClick={onReloadHistory}
             >
               重新加载
@@ -124,7 +124,7 @@ function MessageListComponent({
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
               <Sparkles className="h-6 w-6" />
             </div>
-            <p className="text-base font-black tracking-[-0.04em] text-foreground">有什么我可以帮你的？</p>
+            <p className="text-reading font-black tracking-[-0.04em] text-foreground">有什么我可以帮你的？</p>
             <p className="mt-2 max-w-[220px] text-meta leading-relaxed text-muted-foreground">
               {emptyHint}
             </p>
@@ -149,7 +149,7 @@ function MessageListComponent({
             >
               <div
                 className={`min-w-0 ${isAssistantGroup
-                  ? "w-full max-w-none text-left text-base leading-relaxed text-foreground"
+                  ? "w-full max-w-none text-left text-reading leading-relaxed text-foreground"
                   : "flex max-w-[86%] flex-col items-end gap-2"
                   }`}
               >
@@ -222,7 +222,7 @@ function MessageListComponent({
                         <>
                           <MessageAttachments attachments={msg.attachments} />
                           {messageContent ? (
-                            <div className="rounded-panel border border-border/45 bg-muted/70 px-4 py-2 text-left text-base leading-relaxed text-foreground shadow-sm">
+                            <div className="rounded-panel border border-border/45 bg-muted/70 px-4 py-2 text-left text-reading leading-relaxed text-foreground shadow-sm">
                               <MessageBody
                                 messageContent={messageContent}
                                 isAssistant={false}
@@ -240,7 +240,7 @@ function MessageListComponent({
                       )}
                       {uniqueRefs.length > 0 && !isStreaming && (
                         <div className="mt-2.5 border-t border-border/40 pt-2">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-reading text-muted-foreground">
                             <span className="font-medium text-muted-foreground/70">引用来源</span>
                             {uniqueRefs.map((ref, ri) => (
                               <span key={ri} className="inline-flex items-center gap-0.5">
@@ -379,7 +379,7 @@ function ThinkingPanel({
       data-streaming="false"
     >
       <CollapsibleTrigger asChild>
-        <button className="flex w-full cursor-pointer items-center gap-1.5 rounded-control py-1 text-base font-medium text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
+        <button className="flex w-full cursor-pointer items-center gap-1.5 rounded-control py-1 text-reading font-medium text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
           <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 motion-reduce:transition-none [[data-state=open]>&]:rotate-90" aria-hidden="true" />
           <span>{title}</span>
         </button>
@@ -552,13 +552,13 @@ function countThinkingSteps(entries: ThinkingEntry[]) {
 
 function ThinkingFlow({ entries }: { entries: ThinkingEntry[] }) {
   return (
-    <div className="space-y-1.2 text-base text-muted-foreground">
+    <div className="space-y-1.2 text-reading text-muted-foreground">
       {entries.map((entry) => (
         <TimelineNode key={entry.key}>
           {entry.type === "reasoning" && <CollapsibleReasoningBlock content={entry.content} />}
           {entry.type === "process" && <ProcessText content={entry.content} />}
           {entry.type === "action" && <ActionNode tools={entry.tools} />}
-          {entry.type === "error" && <div className="px-1.5 text-base leading-relaxed text-destructive">{entry.content}</div>}
+          {entry.type === "error" && <div className="px-1.5 text-reading leading-relaxed text-destructive">{entry.content}</div>}
         </TimelineNode>
       ))}
     </div>
@@ -571,13 +571,13 @@ function CollapsibleReasoningBlock({ content }: { content: string }) {
   return (
     <Collapsible defaultOpen={false}>
       <CollapsibleTrigger asChild>
-        <button className="flex w-full cursor-pointer items-center gap-1 rounded-control px-1.5 py-1 text-base text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
+        <button className="flex w-full cursor-pointer items-center gap-1 rounded-control px-1.5 py-1 text-reading text-muted-foreground transition-colors hover:bg-muted/65 hover:text-foreground">
           <span className="font-medium">模型推理</span>
           <span className="text-muted-foreground/60">({charCount} 字)</span>
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-1">
-        <div className="whitespace-pre-wrap px-5 break-words text-base leading-relaxed text-muted-foreground">
+        <div className="whitespace-pre-wrap px-5 break-words text-reading leading-relaxed text-muted-foreground">
           {content}
         </div>
       </CollapsibleContent>
@@ -589,7 +589,7 @@ function ProcessText({ content }: { content: string }) {
   const masked = maskStreamingMarkdown(content);
   if (!masked) return null;
   return (
-    <div className="prose max-w-none break-words px-1.5 text-base leading-relaxed text-foreground [&_*]:text-foreground prose-p:my-0.5 prose-p:text-base prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-1 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-1 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert">
+    <div className="prose max-w-none break-words px-1.5 text-reading leading-relaxed text-foreground [&_*]:text-foreground prose-p:my-0.5 prose-p:text-reading prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-reading prose-td:text-body prose-th:text-body prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-1 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-1 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-reading prose-blockquote:text-foreground dark:prose-invert">
       <Markdown remarkPlugins={[remarkGfm]} components={messageMermaidComponents}>{masked}</Markdown>
     </div>
   );
@@ -612,7 +612,7 @@ function ActionNode({ tools }: { tools: ToolPair[] }) {
   return (
     <Collapsible defaultOpen={false}>
       <CollapsibleTrigger asChild>
-        <button className="flex w-full cursor-pointer items-center rounded-control px-1.5 py-1 text-left text-base text-muted-foreground/70 transition-colors hover:bg-muted/65 hover:text-muted-foreground">
+        <button className="flex w-full cursor-pointer items-center rounded-control px-1.5 py-1 text-left text-reading text-muted-foreground/70 transition-colors hover:bg-muted/65 hover:text-muted-foreground">
           {title}
         </button>
       </CollapsibleTrigger>
@@ -660,7 +660,7 @@ function ToolDetail({ tool }: { tool: ToolPair }) {
   const references = tool.end?.references ?? [];
 
   return (
-    <div className="text-base leading-relaxed text-muted-foreground/75">
+    <div className="text-reading leading-relaxed text-muted-foreground/75">
       <div className="font-medium text-muted-foreground">{formatToolName(tool)}</div>
       {!tool.end && <div className="mt-0.5 text-muted-foreground/80">{tool.start?.status === "preparing" ? "正在生成…" : "正在运行..."}</div>}
       {result && (
@@ -672,7 +672,7 @@ function ToolDetail({ tool }: { tool: ToolPair }) {
       {references.length > 0 && (
         <div className="mt-1 space-y-0.5">
           {references.map((ref, ri) => (
-            <div key={ri} className="flex items-center gap-1 text-base text-muted-foreground/80">
+            <div key={ri} className="flex items-center gap-1 text-reading text-muted-foreground/80">
               {ref.type === "rag" ? (
                 <>
                   <BookOpen className="h-2.5 w-2.5" />
@@ -720,7 +720,7 @@ function MessageBody({
   if (messageContent) {
     return (
       <div
-        className={`prose max-w-none break-words text-base text-foreground [&_*]:text-foreground prose-p:my-1 prose-p:text-base prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-base prose-td:text-sm prose-th:text-sm prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-2 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-base prose-blockquote:text-foreground dark:prose-invert ${isAssistant
+        className={`prose max-w-none break-words text-reading text-foreground [&_*]:text-foreground prose-p:my-1 prose-p:text-reading prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-reading prose-td:text-body prose-th:text-body prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-2 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-reading prose-blockquote:text-foreground dark:prose-invert ${isAssistant
           ? "prose-p:leading-7 prose-li:leading-7 prose-strong:font-black"
           : "prose-p:my-0 prose-ul:my-0 prose-ol:my-0"
           }`}
@@ -743,7 +743,7 @@ function ThinkingPlaceholder() {
         className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary animate-pulse motion-reduce:animate-none"
         aria-hidden="true"
       />
-      <span className="thinking-flow-text text-base font-medium leading-7">
+      <span className="thinking-flow-text text-reading font-medium leading-7">
         正在思考...
       </span>
     </div>

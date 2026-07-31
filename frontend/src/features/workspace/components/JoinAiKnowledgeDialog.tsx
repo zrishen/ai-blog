@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileStack, FileText } from "lucide-react";
-import { joinAiKnowledge, listBlogPosts, listFileDocuments } from "../../../api/client";
+import { listBlogPosts, listFileDocuments } from "../../../api/client";
 import type { RagSource } from "../../../api/workspace";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useFileProcessing } from "@/features/file-processing/FileProcessingProvider";
 
 interface Candidate {
   key: string; // "file:123" / "blog_post:456"
@@ -23,17 +24,15 @@ interface Candidate {
 export function JoinAiKnowledgeDialog({
   open,
   onClose,
-  onDone,
   existing,
 }: {
   open: boolean;
   onClose: () => void;
-  onDone: () => void;
   existing: RagSource[];
 }) {
+  const { joinToAiKnowledge } = useFileProcessing();
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState(false);
 
   const existingSet = useMemo(
     // 失败的允许重新加入（重试索引），不排除
@@ -78,21 +77,16 @@ export function JoinAiKnowledgeDialog({
       return next;
     });
 
-  const confirm = async () => {
-    setBusy(true);
-    try {
-      for (const key of selected) {
-        const [type, idStr] = key.split(":");
-        await joinAiKnowledge(type, Number(idStr));
-      }
-      setSelected(new Set());
-      onDone();
-      onClose();
-    } catch (e) {
-      console.error("[workspace] 加入 AI 知识失败:", e);
-    } finally {
-      setBusy(false);
+  const confirm = () => {
+    // 立即触发（乐观显示），后台建索引 job；进度由 AiKnowledgeView 行内进度条展示。
+    for (const key of selected) {
+      const [type, idStr] = key.split(":");
+      void joinToAiKnowledge(type, Number(idStr)).catch((e) => {
+        console.error("[workspace] 加入 AI 知识失败:", e);
+      });
     }
+    setSelected(new Set());
+    onClose();
   };
 
   return (
@@ -149,8 +143,8 @@ export function JoinAiKnowledgeDialog({
           <Button variant="ghost" onClick={onClose}>
             取消
           </Button>
-          <Button onClick={confirm} disabled={selected.size === 0 || busy}>
-            {busy ? "加入中…" : `加入${selected.size > 0 ? ` (${selected.size})` : ""}`}
+          <Button onClick={confirm} disabled={selected.size === 0}>
+            加入{selected.size > 0 ? ` (${selected.size})` : ""}
           </Button>
         </DialogFooter>
       </DialogContent>

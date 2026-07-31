@@ -29,7 +29,7 @@ export function SourceNode({ data, selected }: NodeProps) {
       <div className="mb-2 flex items-center gap-2 text-caption font-bold uppercase tracking-[0.14em] text-muted-foreground">
         <FileText className="h-3.5 w-3.5" /> 来源
       </div>
-      <div className="line-clamp-3 text-sm font-black leading-snug text-foreground">{source.title}</div>
+      <div className="line-clamp-3 text-body font-black leading-snug text-foreground">{source.title}</div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         <Badge variant="outline" className="rounded-full text-[10px]">{source.source_type}</Badge>
         <Badge variant="outline" className="rounded-full border-amber-500/25 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-300">{trustLabel(source.trust_level)}</Badge>

@@ -8,7 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import NotFoundError, OwnershipError
+from src.database.models import BlogPost as BlogPostModel
 from src.database.models import FileDocument as FileDocumentModel
+from src.database.models import FileProcessingJob
 from src.database.models import RagSource as RagSourceModel
 from src.database.models import _utcnow
 
@@ -18,6 +20,16 @@ _ACTIVE = "active"
 
 def default_collection_name(user_id: int) -> str:
     return f"user_{user_id}"
+
+
+def blog_collection_name(user_id: int) -> str:
+    """文章向量集合：按用户 + embedding 模型隔离（与文件集合并列，便于单独清理）。
+
+    不要用 default_collection_name 的无后缀版本——换 embedding 模型后旧向量无法定位。
+    """
+    from src.services.rag.embedding_service import get_embedding_collection_suffix
+
+    return f"user_{user_id}_blog{get_embedding_collection_suffix()}"
 
 
 async def _get(
@@ -173,33 +185,76 @@ async def _get_owned_file_document(
 
 async def index_file_document(
     db: AsyncSession, user_id: int, document_id: int
-) -> RagSourceModel:
-    """对已上传文件触发索引：vectorize 写入向量库 + RagSource(active)。
+) -> tuple[RagSourceModel, FileProcessingJob]:
+    """对已上传文件触发异步索引：建 RagSource(pending) + 创建 index job 并调度。
 
-    失败则标记 RagSource(failed) 并向上抛出；文件本身不受影响。重新索引已加入的资源会覆盖旧向量。
+    向量化在 job worker 内执行（带进度），完成由 worker 回写 active；失败标 failed。
+    重新索引已加入的资源会覆盖旧向量（worker 先 cleanup）。
     """
-    from src.services.file.file_service import vectorize_and_store
+    from src.services.file.file_processing_service import (
+        create_or_reuse_index_job,
+        schedule_job,
+    )
 
     doc = await _get_owned_file_document(db, user_id, document_id)
-    await add_to_ai_knowledge(
+    source = await add_to_ai_knowledge(
         db,
         user_id,
         resource_type="file",
         resource_id=document_id,
         collection_name=doc.collection_name,
     )
-    try:
-        chunks = await vectorize_and_store(
-            doc.file_path,
-            doc.collection_name,
-            original_name=doc.original_name,
-            user_id=user_id,
-        )
-    except Exception as exc:
-        await mark_failed(db, user_id, "file", document_id, error_message=str(exc)[:2000])
-        raise
-    doc.chunk_content = f"{len(chunks)} chunks"
-    return await mark_indexed(db, user_id, "file", document_id, version=str(len(chunks)))
+    job = await create_or_reuse_index_job(
+        db,
+        user_id=user_id,
+        target_resource_type="file",
+        target_resource_id=document_id,
+        collection_name=doc.collection_name,
+        original_name=doc.original_name,
+        stored_name=doc.file_path,
+        category_id=doc.category_id,
+    )
+    schedule_job(job.id)
+    return source, job
+
+
+async def index_blog_post(
+    db: AsyncSession, user_id: int, post_id: int
+) -> tuple[RagSourceModel, FileProcessingJob]:
+    """对文章触发异步索引：建 RagSource(pending) + 创建 index job 并调度。
+
+    向量化在 worker 内读 MD 正文执行；完成回写 active，失败标 failed。
+    """
+    from src.services.file.file_processing_service import (
+        create_or_reuse_index_job,
+        schedule_job,
+    )
+
+    post = await db.get(BlogPostModel, post_id)
+    if post is None or post.deleted_at is not None:
+        raise NotFoundError("文章不存在")
+    if post.user_id != user_id:
+        raise OwnershipError("无权操作该文章")
+    collection = blog_collection_name(user_id)
+    source = await add_to_ai_knowledge(
+        db,
+        user_id,
+        resource_type="blog_post",
+        resource_id=post_id,
+        collection_name=collection,
+    )
+    job = await create_or_reuse_index_job(
+        db,
+        user_id=user_id,
+        target_resource_type="blog_post",
+        target_resource_id=post_id,
+        collection_name=collection,
+        original_name=post.title or f"文章 #{post_id}",
+        stored_name=f"blog_post:{post_id}",
+        category_id=post.category_id,
+    )
+    schedule_job(job.id)
+    return source, job
 
 
 async def unindex_file_document(
@@ -217,6 +272,20 @@ async def unindex_file_document(
     await delete_document_chunks(collection_name, doc.file_path)
     doc.chunk_content = "not indexed"
     await db.commit()
+
+
+async def unindex_blog_post(
+    db: AsyncSession, user_id: int, post_id: int
+) -> None:
+    """从 AI 知识移除文章：删向量 + 删 RagSource，文章本身保留。"""
+    from src.services.rag.vector_store import delete_document_chunks
+
+    source = await get_rag_source(db, user_id, "blog_post", post_id)
+    if source is None:
+        raise NotFoundError("该资源未加入 AI 知识")
+    collection_name = source.collection_name
+    await remove_from_ai_knowledge(db, user_id, "blog_post", post_id)
+    await delete_document_chunks(collection_name, f"blog_post:{post_id}")
 
 
 async def backfill_rag_sources_from_files(db: AsyncSession) -> int:

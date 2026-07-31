@@ -51,7 +51,7 @@ export function FileLibraryPage() {
             <SectionTitle as="h1" size="3xl" className="relative">
               登录后查看文件库
             </SectionTitle>
-            <p className="relative mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+            <p className="relative mx-auto mt-3 max-w-md text-body leading-relaxed text-muted-foreground">
               登录后可查看和管理你的个人文件库，上传文档并用于写作与对话检索。
             </p>
             <Button

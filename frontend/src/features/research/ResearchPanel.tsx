@@ -146,7 +146,7 @@ export function ResearchPanel() {
             onChange={(e) => setNewResearchTitle(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleCreateResearchTopic(); }}
             placeholder="新建研究主题"
-            className="rounded-full bg-background/70 text-sm"
+            className="rounded-full bg-background/70 text-body"
           />
           <Button size="icon" className="shrink-0 rounded-full" onClick={handleCreateResearchTopic} disabled={!newResearchTitle.trim()}>
             <Plus className="h-4 w-4" />
@@ -191,9 +191,9 @@ export function ResearchPanel() {
                         <GitBranch className={`h-3.5 w-3.5 ${isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"} transition-colors`} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="line-clamp-1 text-sm font-semibold leading-snug text-foreground">{topic.title}</div>
+                        <div className="line-clamp-1 text-body font-semibold leading-snug text-foreground">{topic.title}</div>
                         {topic.description && (
-                          <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{topic.description}</div>
+                          <div className="mt-0.5 line-clamp-1 text-fine text-muted-foreground">{topic.description}</div>
                         )}
                       </div>
                       <span className={`h-2 w-2 shrink-0 rounded-full ${statusColor}`} title={researchStatusLabel(topic.status)} />

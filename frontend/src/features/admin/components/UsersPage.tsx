@@ -192,7 +192,7 @@ export function UsersPage() {
       />
 
       {success && (
-        <div className="rounded-panel border border-primary/20 bg-primary/8 px-4 py-3 text-sm text-primary shadow-sm shadow-primary/5">
+        <div className="rounded-panel border border-primary/20 bg-primary/8 px-4 py-3 text-body text-primary shadow-sm shadow-primary/5">
           {success}
         </div>
       )}
@@ -223,7 +223,7 @@ export function UsersPage() {
         </div>
       ) : loading ? (
         <Card>
-          <CardContent className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+          <CardContent className="flex items-center justify-center gap-2 py-16 text-body text-muted-foreground">
             <Spinner className="h-4 w-4" /> 加载中...
           </CardContent>
         </Card>
@@ -318,7 +318,7 @@ export function UsersPage() {
           </Card>
 
           <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">{rangeText}</div>
+            <div className="text-body text-muted-foreground">{rangeText}</div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -357,7 +357,7 @@ export function UsersPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-sm font-medium" htmlFor="extend-days">
+            <label className="text-body font-medium" htmlFor="extend-days">
               延期天数
             </label>
             <Input
@@ -369,7 +369,7 @@ export function UsersPage() {
               onChange={(e) => setExtendDays(Number(e.target.value))}
             />
             {extendError && (
-              <p className="text-sm text-destructive">{extendError}</p>
+              <p className="text-body text-destructive">{extendError}</p>
             )}
           </div>
           <DialogFooter>

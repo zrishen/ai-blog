@@ -27,7 +27,7 @@ AI 写作 + 知识库 RAG + 研究图谱；前后端分离 + LangGraph。
 
 前端 `frontend/src/`：`features/<域>/` 自包含；`api/client.ts` 统一请求（双 token：access 内存 + refresh HttpOnly cookie，401 单飞刷新）；业务沉 hook；chatStore 拆 7 slice，改 reducer 注意 LOGOUT 跨域重置（范式 `features/research/hooks/`）。
 
-设计系统（改 UI 必读，`scripts/check-design-system.mjs` 守门 + CI 强制）：`index.css` 是 token 唯一源——色用语义 token（`bg-primary`/`text-muted-foreground`/`border-border`…）禁硬编码调色板色；圆角 `rounded-{panel,control,surface,shell}`；字号 `text-{caption,fine,meta,body,body-lg}`（联动 `--font-base`），标题 `text-{3xl,2xl,xl}`；复用 `components/ui/` 原语（EmptyState/SectionTitle/PageHeader/Surface/Badge/Button…），别新造。
+设计系统（改 UI 必读，`scripts/check-design-system.mjs` 守门 + CI 强制）：`index.css` 是 token 唯一源——色用语义 token（`bg-primary`/`text-muted-foreground`/`border-border`…）禁硬编码调色板色；圆角 `rounded-{panel,control,surface,shell}`；字号（`index.css` token）：`text-caption(11)/fine(12)/meta(13)/body(14)/body-lg(15)` 联动 `--font-base`，`text-reading(16)` 锁定用于阅读正文（AI 消息/文章正文）；标题 `text-{xl,2xl,3xl}`。场景→档位：阅读正文=reading；界面主文本(列表/导航/表单/默认按钮/Dialog 正文)=body；次要(时间戳/Alert/段落小标题条/Dialog 描述/helper)=meta；微信息(Badge/Eyebrow/tooltip/计数)=fine；最小(脚注/节点元数据)=caption；紧凑按钮=meta；Dialog 标题=body-lg。**禁裸用 `text-xs/sm/base`**（等像素已并入 fine/body/reading，表单防缩放用 `text-reading md:text-body`）；复用 `components/ui/` 原语（EmptyState/SectionTitle/PageHeader/Surface/Badge/Button…），别新造。
 
 原则：最小范围改；遵循架构/接口；不改无关代码，职责单一；数据 user-scoped；废弃代码要及时删除，不残留死代码。
 

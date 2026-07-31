@@ -86,7 +86,7 @@ export function SubscriptionPanel() {
       className={cn(surfaceVariants({ variant: "inset" }), "space-y-4 p-4")}
     >
       <div className="flex items-center justify-between">
-        <span className="text-sm font-semibold text-foreground">订阅</span>
+        <span className="text-body font-semibold text-foreground">订阅</span>
         <Badge variant={status.active ? "default" : "secondary"}>
           {status.active ? "订阅生效" : "未订阅 / 已过期"}
         </Badge>
@@ -116,7 +116,7 @@ export function SubscriptionPanel() {
             style={{ width: `${Math.min(pct, 100)}%` }}
           />
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
+        <div className="flex justify-between text-fine text-muted-foreground">
           <span>
             剩余 {fmtM(status.remaining)}M
             {status.period ? ` · 周期 ${status.period}` : ""}
@@ -129,7 +129,7 @@ export function SubscriptionPanel() {
 
       {/* 兑换码激活 */}
       <div className="space-y-2 border-t border-border/60 pt-3.5">
-        <span className="text-sm font-medium text-foreground">兑换码</span>
+        <span className="text-body font-medium text-foreground">兑换码</span>
         <div className="flex gap-2">
           <Input
             value={code}

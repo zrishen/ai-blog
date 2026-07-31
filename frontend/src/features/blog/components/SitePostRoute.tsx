@@ -70,7 +70,7 @@ export function SitePostRoute() {
 
   if (loading) {
     return (
-      <div className="flex h-full flex-1 items-center justify-center bg-background p-8 text-sm text-muted-foreground">
+      <div className="flex h-full flex-1 items-center justify-center bg-background p-8 text-body text-muted-foreground">
         正在加载文章...
       </div>
     );
@@ -84,7 +84,7 @@ export function SitePostRoute() {
             <AlertCircle className="h-5 w-5" />
           </div>
           <h2 className="text-xl font-bold tracking-[-0.03em] text-foreground">无法打开文章</h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{error}</p>
+          <p className="mt-2 text-body leading-relaxed text-muted-foreground">{error}</p>
         </div>
       </div>
     );

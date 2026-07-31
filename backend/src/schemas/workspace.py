@@ -5,6 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from src.schemas.file_processing import FileProcessingJobResponse
+
 
 # ---- 目录树 ----
 
@@ -86,3 +88,10 @@ class RagSourceResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RagJoinResponse(BaseModel):
+    """加入 AI 知识的响应：RagSource（已建 pending）+ 异步索引 job（file/blog_post）。"""
+
+    rag_source: RagSourceResponse
+    job: Optional[FileProcessingJobResponse] = None

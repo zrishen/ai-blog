@@ -228,7 +228,7 @@
   overflow: hidden;
   background: transparent;
   color: hsl(var(--foreground));
-  font-size: 16px;
+  font-size: var(--text-reading);
   line-height: 1.86;
   padding: var(--blog-editor-content-padding) !important;
 }
@@ -241,7 +241,7 @@
   background: transparent !important;
   padding: 0 !important;
   color: hsl(var(--foreground));
-  font-size: 16px;
+  font-size: var(--text-reading);
   line-height: 1.86;
 }
 
@@ -589,14 +589,14 @@
 .blog-editor-body .vditor-sv__markdown {
   background: transparent;
   color: hsl(var(--foreground));
-  font-size: 16px;
+  font-size: var(--text-reading);
   line-height: 1.86;
 }
 
 .blog-editor-body .vditor-sv .vditor-sv__markdown textarea {
   background: transparent;
   color: hsl(var(--foreground));
-  font-size: 16px;
+  font-size: var(--text-reading);
   line-height: 1.86;
   padding: var(--blog-editor-content-padding) !important;
 }
@@ -605,7 +605,7 @@
   border-left: 1px solid hsl(var(--border) / 0.76);
   background: transparent;
   color: hsl(var(--foreground));
-  font-size: 16px;
+  font-size: var(--text-reading);
   line-height: 1.86;
   padding: var(--blog-editor-content-padding) !important;
 }

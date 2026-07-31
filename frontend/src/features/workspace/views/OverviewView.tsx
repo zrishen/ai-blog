@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { CheckCircle2, Database, FileText, Sparkles, type LucideIcon } from "lucide-react";
+import { useEffect, useState, type ComponentType } from "react";
+import { CheckCircle2, Database, FileText, Sparkles } from "lucide-react";
+import { BlogIcon, PublishedIcon } from "@/components/icons";
+import { getFileIcon } from "@/features/file/components/fileIcons";
 import { listBlogPosts, listFileDocuments } from "../../../api/client";
 import { listAiKnowledge } from "../../../api/workspace";
 import { Badge } from "@/components/ui/badge";
@@ -9,11 +11,18 @@ import { formatDate } from "./utils";
 interface RecentItem {
   id: number;
   title: string;
-  kind: "draft" | "published";
+  kind: "draft" | "published" | "file";
   updated: string;
+  filePath?: string;
 }
 
-export function OverviewView({ onOpenBlog }: { onOpenBlog: (id: number) => void }) {
+export function OverviewView({
+  onOpenBlog,
+  onOpenFile,
+}: {
+  onOpenBlog: (id: number) => void;
+  onOpenFile: (filePath: string) => void;
+}) {
   const [counts, setCounts] = useState({ drafts: 0, published: 0, files: 0, ai: 0 });
   const [recent, setRecent] = useState<RecentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +56,13 @@ export function OverviewView({ onOpenBlog }: { onOpenBlog: (id: number) => void 
             title: p.title,
             kind: "published" as const,
             updated: p.updated_at ?? p.published_at ?? p.created_at,
+          })),
+          ...files.documents.map((d) => ({
+            id: d.id,
+            title: d.original_name,
+            kind: "file" as const,
+            updated: d.created_at,
+            filePath: d.file_path,
           })),
         ]
           .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime())
@@ -86,23 +102,35 @@ export function OverviewView({ onOpenBlog }: { onOpenBlog: (id: number) => void 
                 </div>
               ) : (
                 <ul className="flex flex-col">
-                  {recent.map((it) => (
+                  {recent.map((it) => {
+                    const isFile = it.kind === "file";
+                    return (
                     <li key={`${it.kind}-${it.id}`}>
                       <button
                         type="button"
-                        onClick={() => onOpenBlog(it.id)}
+                        onClick={() =>
+                          isFile && it.filePath ? onOpenFile(it.filePath) : onOpenBlog(it.id)
+                        }
                         className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-secondary/60"
                       >
+                        {isFile ? (
+                          getFileIcon(it.title)
+                        ) : it.kind === "published" ? (
+                          <PublishedIcon className="h-4 w-4 flex-shrink-0" />
+                        ) : (
+                          <BlogIcon className="h-4 w-4 flex-shrink-0" />
+                        )}
                         <span className="min-w-0 flex-1 truncate text-body font-medium text-foreground">
                           {it.title || "无标题"}
                         </span>
-                        <Badge variant={it.kind === "draft" ? "warning" : "success"}>
-                          {it.kind === "draft" ? "草稿" : "已发布"}
+                        <Badge variant={it.kind === "draft" ? "warning" : it.kind === "published" ? "success" : "outline"}>
+                          {it.kind === "draft" ? "草稿" : it.kind === "published" ? "已发布" : "文件"}
                         </Badge>
                         <span className="text-fine text-muted-foreground">{formatDate(it.updated)}</span>
                       </button>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -113,7 +141,7 @@ export function OverviewView({ onOpenBlog }: { onOpenBlog: (id: number) => void 
 }
 
 // 扁平统计块：轻底色区块（不浮起、无边框无阴影），贴边风格下替代浮起的 StatCard。
-function StatBlock({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: number }) {
+function StatBlock({ icon: Icon, label, value }: { icon: ComponentType<{ className?: string }>; label: string; value: number }) {
   return (
     <div className="flex items-center gap-2.5 px-1 py-1">
       <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control bg-primary/10 text-primary">

@@ -467,7 +467,7 @@ export function FilePanel() {
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className="flex-1 flex items-center justify-center px-6 text-center">
-              <span className="text-base text-muted-foreground leading-relaxed">
+              <span className="text-reading text-muted-foreground leading-relaxed">
                 <span className="md:hidden">暂无分类，可使用上方按钮创建分类和上传文件</span>
                 <span className="hidden md:inline">暂无分类，右键可创建分类和上传文件</span>
               </span>

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import get_db
 from src.database.models import User
+from src.schemas.file_processing import FileProcessingJobResponse
 from src.schemas.workspace import (
     AttachRequest,
     FolderCreate,
@@ -18,6 +19,7 @@ from src.schemas.workspace import (
     NodeMove,
     NodePatch,
     RagJoinRequest,
+    RagJoinResponse,
     RagSourceResponse,
     ReorderRequest,
     WorkspaceNodeResponse,
@@ -152,17 +154,25 @@ async def move_resource(
 # ---- AI 知识 ----
 
 
-@router.post("/workspace/ai-knowledge", response_model=RagSourceResponse, status_code=201)
+@router.post("/workspace/ai-knowledge", response_model=RagJoinResponse, status_code=201)
 async def join_ai_knowledge(
     data: RagJoinRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """加入 AI 知识。file 触发真实索引；其他类型暂建 pending（2-C 补索引逻辑）。"""
+    """加入 AI 知识。file/blog_post 触发异步索引（返回 job 供前端轮询进度）；其他类型建 pending。"""
     if data.resource_type == "file":
-        return await rag_service.index_file_document(db, user.id, data.resource_id)
-    return await rag_service.add_to_ai_knowledge(
-        db, user.id, resource_type=data.resource_type, resource_id=data.resource_id
+        source, job = await rag_service.index_file_document(db, user.id, data.resource_id)
+    elif data.resource_type == "blog_post":
+        source, job = await rag_service.index_blog_post(db, user.id, data.resource_id)
+    else:
+        source = await rag_service.add_to_ai_knowledge(
+            db, user.id, resource_type=data.resource_type, resource_id=data.resource_id
+        )
+        job = None
+    return RagJoinResponse(
+        rag_source=source,
+        job=FileProcessingJobResponse.model_validate(job) if job else None,
     )
 
 
@@ -178,6 +188,8 @@ async def leave_ai_knowledge(
 ):
     if resource_type == "file":
         await rag_service.unindex_file_document(db, user.id, resource_id)
+    elif resource_type == "blog_post":
+        await rag_service.unindex_blog_post(db, user.id, resource_id)
     else:
         await rag_service.remove_from_ai_knowledge(db, user.id, resource_type, resource_id)
     return None

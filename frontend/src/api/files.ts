@@ -39,7 +39,7 @@ export interface FileProcessingProgressJson {
 
 export interface FileProcessingJob {
   id: string;
-  job_type: "upload" | "restore";
+  job_type: "upload" | "restore" | "index";
   status: FileProcessingStatus;
   current_stage: string;
   progress_model_version: string;
@@ -50,6 +50,8 @@ export interface FileProcessingJob {
   result_document_id: number | null;
   original_name: string;
   category_id: number | null;
+  target_resource_type: string | null;
+  target_resource_id: number | null;
   error_code: string | null;
   error_message: string | null;
   created_at: string;
