@@ -40,6 +40,7 @@ class WorkspaceNodeResponse(BaseModel):
     node_type: str
     resource_type: Optional[str] = None
     resource_id: Optional[int] = None
+    blog_status: Optional[str] = None
     name: str
     slug: str
     sort_order: int

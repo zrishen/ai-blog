@@ -5,6 +5,15 @@ export function workspaceReducer(state: ChatState, action: ChatAction): ChatStat
   switch (action.type) {
     case "SET_WORKSPACE_TREE":
       return { ...state, workspaceTree: action.payload };
+    case "SET_WORKSPACE_BLOG_STATUS":
+      return {
+        ...state,
+        workspaceTree: state.workspaceTree.map((node) =>
+          node.resource_type === "blog_post" && node.resource_id === action.payload.id
+            ? { ...node, blog_status: action.payload.status }
+            : node,
+        ),
+      };
     case "SET_WORKSPACE_SELECTED_FOLDER":
       return { ...state, workspaceSelectedFolderId: action.payload };
     case "SET_WORKSPACE_SELECTED_VIEW":

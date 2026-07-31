@@ -25,6 +25,25 @@ export interface BlogListResponse {
   per_page: number;
 }
 
+export interface BlogRevisionSummary {
+  id: number;
+  revision_number: number;
+  kind: "commit" | "publish" | "pre_restore";
+  title: string;
+  created_at: string;
+  is_published: boolean;
+}
+
+export interface BlogRevision extends BlogRevisionSummary {
+  slug: string;
+  content: string;
+  excerpt?: string | null;
+  cover_image?: string | null;
+  category_id?: number | null;
+  tags?: string | null;
+  author?: string | null;
+}
+
 export interface SiteUserData {
   id: number;
   username: string;
@@ -142,6 +161,43 @@ export async function publishBlogPost(id: number, publish: boolean): Promise<Blo
   });
   if (!res.ok) throw new Error("Failed to publish/unpublish blog post");
   return res.json();
+}
+
+export async function listBlogRevisions(id: number): Promise<BlogRevisionSummary[]> {
+  const res = await apiFetch(`${API_BASE}/blog/posts/${id}/revisions`);
+  if (!res.ok) throw new Error("Failed to fetch blog revisions");
+  const data = await res.json() as { revisions: BlogRevisionSummary[] };
+  return data.revisions;
+}
+
+export async function getBlogRevision(postId: number, revisionId: number): Promise<BlogRevision> {
+  const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions/${revisionId}`);
+  if (!res.ok) throw new Error("Failed to fetch blog revision");
+  return res.json();
+}
+
+export async function commitBlogRevision(postId: number): Promise<BlogRevision> {
+  const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to create blog revision");
+  return res.json();
+}
+
+export async function restoreBlogRevision(postId: number, revisionId: number): Promise<BlogPostData> {
+  const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions/${revisionId}/restore`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to restore blog revision");
+  return res.json();
+}
+
+export async function deleteBlogRevision(postId: number, revisionId: number): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions/${revisionId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(detail || "Failed to delete blog revision");
+  }
 }
 
 export async function updateSidebarSettings(showTags: boolean): Promise<void> {

@@ -15,6 +15,7 @@ interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "ti
   action?: React.ReactNode;
   /** compact:面板内较小留白;default:页面/大面板主体空状态 */
   size?: "default" | "compact";
+  variant?: "default" | "ai-chat";
 }
 
 /**
@@ -23,14 +24,14 @@ interface EmptyStateProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "ti
  */
 const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
   (
-    { icon: Icon, title, description, action, size = "default", className, children, ...props },
+    { icon: Icon, title, description, action, size = "default", variant = "default", className, children, ...props },
     ref,
   ) => (
     <div
       ref={ref}
       className={cn(
         "flex flex-col items-center justify-center text-center",
-        size === "compact" ? "gap-2 px-4 py-6" : "gap-3 px-6 py-12",
+        variant === "ai-chat" ? "gap-0 px-5 py-0" : size === "compact" ? "gap-2 px-4 py-6" : "gap-3 px-6 py-12",
         className,
       )}
       {...props}
@@ -39,23 +40,33 @@ const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
         <div
           className={cn(
             "flex items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15",
-            size === "compact" ? "h-10 w-10" : "h-14 w-14",
+            variant === "ai-chat" ? "mb-3 h-14 w-14" : size === "compact" ? "h-10 w-10" : "h-14 w-14",
           )}
         >
-          <Icon className={size === "compact" ? "size-5" : "size-6"} aria-hidden />
+          <Icon className={variant === "ai-chat" || size !== "compact" ? "size-6" : "size-5"} aria-hidden />
         </div>
       ) : null}
-      <div className="space-y-1">
-        <h3 className={cn("font-semibold text-foreground", size === "compact" ? "text-meta" : "text-body")}>
+      <div className={variant === "ai-chat" ? "space-y-0" : "space-y-1"}>
+        <h3
+          className={cn(
+            "text-foreground",
+            variant === "ai-chat" ? "text-reading font-black tracking-[-0.04em]" : size === "compact" ? "text-meta font-semibold" : "text-body font-semibold",
+          )}
+        >
           {title}
         </h3>
         {description ? (
-          <p className={cn("text-muted-foreground", size === "compact" ? "text-fine" : "text-meta")}>
+          <p
+            className={cn(
+              "text-muted-foreground",
+              variant === "ai-chat" ? "mt-2 max-w-[220px] text-meta leading-relaxed" : size === "compact" ? "text-fine" : "text-meta",
+            )}
+          >
             {description}
           </p>
         ) : null}
       </div>
-      {action ? <div className={size === "compact" ? "mt-1" : "mt-2"}>{action}</div> : null}
+      {action ? <div className={variant === "ai-chat" ? "mt-4" : size === "compact" ? "mt-1" : "mt-2"}>{action}</div> : null}
       {children}
     </div>
   ),

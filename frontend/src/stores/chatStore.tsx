@@ -160,7 +160,7 @@ type ChatAction =
   | { type: "SET_BLOG_VIEW"; payload: BlogView }
   | { type: "SET_BLOG_CURRENT_POST_ID"; payload: number | null }
   | { type: "SET_BLOG_SELECTED_TAG"; payload: string | null }
-  | { type: "UPDATE_BLOG_POST"; payload: BlogPost }
+  | { type: "UPDATE_BLOG_POST"; payload: { id: number } & Partial<BlogPost> }
   | { type: "UPSERT_BLOG_POST"; payload: BlogPost }
   | { type: "START_BLOG_STREAMING"; payload: { postId: number; runId: string } }
   | { type: "APPEND_BLOG_STREAMING"; payload: { postId: number; runId: string; contentDelta: string } }
@@ -181,6 +181,7 @@ type ChatAction =
   | { type: "SET_FILE_SELECTED_FILE"; payload: string | null }
   // Workspace
   | { type: "SET_WORKSPACE_TREE"; payload: WorkspaceNode[] }
+  | { type: "SET_WORKSPACE_BLOG_STATUS"; payload: { id: number; status: string } }
   | { type: "SET_WORKSPACE_SELECTED_FOLDER"; payload: number | null }
   | { type: "SET_WORKSPACE_SELECTED_VIEW"; payload: WorkspaceView }
   // Research Graph

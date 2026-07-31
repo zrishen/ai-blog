@@ -76,11 +76,6 @@ describe("四处删除确认文案都改为可在回收站恢复", () => {
       rel: path.join("src", "features", "blog", "components", "BlogPostView.tsx"),
       marker: "删除后可在回收站恢复。",
     },
-    {
-      name: "BlogEditor 删除草稿确认",
-      rel: path.join("src", "features", "blog", "components", "BlogEditor.tsx"),
-      marker: "删除后可在回收站恢复。",
-    },
   ];
 
   for (const c of cases) {

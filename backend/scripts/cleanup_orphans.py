@@ -1,7 +1,7 @@
 """孤儿物理资源清理脚本。
 
 回收站永久删除采用「DB 先提交、物理后清理」：数据库硬删记录并 commit 之后，
-物理资源（上传文件 / Chroma 向量 / Markdown）以 best-effort 方式清理；一旦
+物理资源（上传文件 / Chroma 向量）以 best-effort 方式清理；一旦
 物理删除失败或进程中途退出，会留下「无数据库引用的孤儿资源」。本脚本扫描并
 删除这些孤儿，幂等可重复运行，建议配合定时任务周期性执行。
 
@@ -109,27 +109,6 @@ async def cleanup_chat_attachment_orphans(db, *, dry_run: bool) -> int:
     return removed
 
 
-async def cleanup_markdown_orphans(db, *, dry_run: bool) -> int:
-    referenced_slugs = {
-        slug for (slug,) in (await db.execute(select(BlogPostModel.slug))).all() if slug
-    }
-    content_root = Path(settings.blog_content_dir)
-    if not content_root.exists():
-        return 0
-    removed = 0
-    for path in content_root.rglob("*.md"):
-        if path.stem in referenced_slugs:
-            continue
-        logger.info("发现孤儿 Markdown: %s", path)
-        removed += 1
-        if not dry_run:
-            try:
-                path.unlink()
-            except OSError:
-                logger.warning("删除失败: %s", path, exc_info=True)
-    return removed
-
-
 async def cleanup_chroma_orphans(db, *, dry_run: bool) -> int:
     removed = 0
     client = await asyncio.to_thread(_get_client)
@@ -171,15 +150,13 @@ async def main() -> None:
     async with async_session() as db:
         uploads = await cleanup_upload_orphans(db, dry_run=args.dry_run)
         chat_attachments = await cleanup_chat_attachment_orphans(db, dry_run=args.dry_run)
-        markdown = await cleanup_markdown_orphans(db, dry_run=args.dry_run)
         vectors = await cleanup_chroma_orphans(db, dry_run=args.dry_run)
     mode = "dry-run" if args.dry_run else "deleted"
     logger.info(
-        "完成（%s）：上传孤儿 %d，聊天附件孤儿 %d，Markdown 孤儿 %d，向量孤儿 %d",
+        "完成（%s）：上传孤儿 %d，聊天附件孤儿 %d，向量孤儿 %d",
         mode,
         uploads,
         chat_attachments,
-        markdown,
         vectors,
     )
 

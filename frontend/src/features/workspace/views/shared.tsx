@@ -33,11 +33,11 @@ export function WorkspaceView({
   );
 }
 
-// 二级页面顶部栏：与文章编辑收缩态工具栏同规格——单行、px-2.5 py-0.5、h-7 控件、无下边框。
+// 二级页面顶部栏：与文章编辑收缩态工具栏同规格——单行、px-2.5 pt-1.5 pb-0.5、h-7 控件、无下边框。
 // 目前只挂返回（标题/操作暂不上）。
 export function SubPageHeader({ onBack }: { onBack: () => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-2.5 py-0.5 text-fine">
+    <div className="flex flex-wrap items-center gap-1.5 px-2.5 pb-0.5 pt-1.5 text-fine">
       <Button
         variant="ghost"
         size="sm"

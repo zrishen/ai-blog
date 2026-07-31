@@ -76,8 +76,8 @@ describe("BlogEditor 工具区折叠/展开", () => {
     );
 
     expect(await result.findByPlaceholderText("输入文章标题...", {}, { timeout: 5000 })).toBeInTheDocument();
-    expect(result.queryByText("保存草稿")).toBeInTheDocument();
-    expect(result.queryByText("发布文章")).toBeInTheDocument();
+    expect(result.queryByText("历史")).toBeInTheDocument();
+    expect(result.queryByText("发布")).toBeInTheDocument();
     expect(result.queryByText("文章封面")).toBeNull();
 
     result.unmount();

@@ -77,7 +77,7 @@ async def test_empty_api_key_clears_existing_value(client: AsyncClient, db_sessi
     assert resp2.status_code == 200
     assert resp2.json()["model"] == "new-model"
     assert resp2.json()["has_api_key"] is False
-    assert resp2.json()["api_key"] is None
+    assert "api_key" not in resp2.json()
 
     record = (await db_session.execute(
         select(LLMSettings).where(LLMSettings.user_id == user_id)
@@ -145,8 +145,10 @@ async def test_settings_are_isolated_per_user(client: AsyncClient, db_session):
 
     resp_a = await client.get("/api/v1/settings/llm", headers=headers_a)
     resp_b = await client.get("/api/v1/settings/llm", headers=headers_b)
-    assert resp_a.json()["api_key"] == "key-a"
-    assert resp_b.json()["api_key"] == "key-b"
+    assert resp_a.json()["has_api_key"] is True
+    assert resp_b.json()["has_api_key"] is True
+    assert "api_key" not in resp_a.json()
+    assert "api_key" not in resp_b.json()
 
 
 @pytest.mark.asyncio
@@ -161,7 +163,26 @@ async def test_get_settings_returns_default_for_new_user(client: AsyncClient):
     assert data["has_api_key"] is False
     assert data["base_url"] is None
     assert data["model"] is None
-    assert data["api_key"] is None
+    assert "api_key" not in data
+
+
+@pytest.mark.asyncio
+async def test_invalid_base_url_is_rejected_and_legacy_value_is_ignored(client: AsyncClient, db_session):
+    token, user_id = await _register(client, "invalid_base_url")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    invalid = await client.put("/api/v1/settings/llm", headers=headers, json={
+        "protocol": "openai",
+        "base_url": "guangbing",
+    })
+    assert invalid.status_code == 422
+
+    db_session.add(LLMSettings(user_id=user_id, protocol="openai", base_url="guangbing"))
+    await db_session.commit()
+
+    response = await client.get("/api/v1/settings/llm", headers=headers)
+    assert response.status_code == 200
+    assert response.json()["base_url"] is None
 
 
 @pytest.mark.asyncio

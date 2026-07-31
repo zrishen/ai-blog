@@ -74,12 +74,12 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
   }, [loadPosts, state.trashRevision]);
 
   const visiblePosts = useMemo(() => {
-    let posts = isOwner ? state.blogPosts : state.blogPosts.filter((post) => post.status === "published");
+    let posts = state.blogPosts.filter((post) => post.status === "published");
     if (state.blogSelectedTag) {
       posts = posts.filter((post) => splitBlogTags(post.tags).includes(state.blogSelectedTag!));
     }
     return posts;
-  }, [isOwner, state.blogPosts, state.blogSelectedTag]);
+  }, [state.blogPosts, state.blogSelectedTag]);
 
   const handlePostClick = useCallback((id: number) => {
     const post = state.blogPosts.find((item) => item.id === id);

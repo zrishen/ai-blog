@@ -6,6 +6,7 @@ import { useAuth } from "../../../stores/authStore";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { Surface } from "@/components/ui/surface";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { LeftbarHtmlFrame } from "@/components/LeftbarHtmlFrame";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 
@@ -20,6 +21,7 @@ export function BlogOverviewPanel() {
   const isOwner = isAuthenticated && !!user && user.username === username;
   const hasHtml = !!state.leftbarHtml;
   const showTags = state.leftbarShowTags;
+  const isEmpty = !hasHtml && !showTags;
 
   const introPost = state.blogPosts?.find((p) => p.slug === "ai-blog-intro");
   const introTags = useMemo(() => splitBlogTags(introPost?.tags), [introPost?.tags]);
@@ -45,8 +47,8 @@ export function BlogOverviewPanel() {
   };
 
   return (
-    <WorkspacePanel className="overflow-y-auto select-none">
-      <div className="p-4 flex flex-col gap-4">
+    <WorkspacePanel className="overflow-y-auto">
+      <div className={isEmpty ? "flex h-full w-full flex-col items-center justify-center gap-4 p-4" : "flex flex-col gap-4 p-4"}>
         {hasHtml && <LeftbarHtmlFrame html={state.leftbarHtml as string} theme={state.theme} />}
 
         {showTags && (
@@ -95,13 +97,17 @@ export function BlogOverviewPanel() {
           </Surface>
         )}
 
-        {!hasHtml && !showTags && (
-          <Surface
-            variant="dashed"
-            className="rounded-control bg-secondary/45 px-3 py-8 text-center text-fine text-muted-foreground"
-          >
-            {isOwner ? "点下方「用 AI 编辑」自定义左栏" : "博主暂未设置左栏内容"}
-          </Surface>
+        {isEmpty && (
+          <EmptyState
+            icon={Sparkles}
+            title={isOwner ? "定制你的博客左栏" : "博主暂未设置左栏内容"}
+            description={
+              isOwner
+                ? "用 AI 添加个人介绍、创作理念和更多内容。"
+                : "这里将展示博主的个人介绍与创作信息。"
+            }
+            variant="ai-chat"
+          />
         )}
 
         {isOwner && (

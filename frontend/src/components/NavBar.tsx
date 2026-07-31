@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useChat, toggleTheme } from "../stores/chatStore";
 import { useAuth } from "../stores/authStore";
 import { motion } from "motion/react";
@@ -44,7 +44,7 @@ import { LoginDialog } from "@/features/auth/LoginDialog";
 import { SubscriptionPanel } from "@/features/subscription/components/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
 import { getLLMSettings, updateLLMSettings, updateSidebarSettings } from "../api/client";
-import type { LLMProtocol } from "../api/client";
+import type { LLMProtocol, LLMSettingsUpdate } from "../api/client";
 import { cn } from "@/lib/utils";
 import { navItemVariants } from "@/lib/visualVariants";
 import { useWorkspacePrimaryNavigation } from "@/components/useWorkspacePrimaryNavigation";
@@ -60,6 +60,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
   const { state, dispatch } = useChat();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     activePrimaryPage,
     primaryNavigation,
@@ -84,6 +85,8 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
   const [llmProtocol, setLlmProtocol] = useState<LLMProtocol>("openai");
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
+  const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
+  const [apiKeyChanged, setApiKeyChanged] = useState(false);
   const [llmModel, setLlmModel] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -106,7 +109,9 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     dispatch({ type: "SET_PAGE", payload: "blog" });
     dispatch({ type: "SET_BLOG_VIEW", payload: "edit" });
     dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
-    navigate(`/u/${encodeURIComponent(user.username)}`);
+    navigate(`/u/${encodeURIComponent(user.username)}`, {
+      state: { returnTo: `${location.pathname}${location.search}${location.hash}` },
+    });
   };
 
   const handleLogout = () => {
@@ -128,12 +133,14 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     setSettingsError(null);
     setSettingsSaved(false);
     setLlmApiKey("");
+    setHasSavedApiKey(false);
+    setApiKeyChanged(false);
     setShowApiKey(false);
     try {
       const data = await getLLMSettings();
       setLlmProtocol(data.protocol);
       setLlmBaseUrl(data.base_url ?? "");
-      setLlmApiKey(data.api_key ?? "");
+      setHasSavedApiKey(data.has_api_key);
       setLlmModel(data.model ?? "");
       dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: !!data.supports_thinking });
     } catch (err) {
@@ -148,16 +155,21 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     setSettingsError(null);
     setSettingsSaved(false);
     try {
-      const data = await updateLLMSettings({
+      const update: LLMSettingsUpdate = {
         protocol: llmProtocol,
         base_url: llmBaseUrl.trim() || null,
-        api_key: llmApiKey.trim() || null,
         model: llmModel.trim() || null,
-      });
+      };
+      if (apiKeyChanged) {
+        update.api_key = llmApiKey.trim() || null;
+      }
+      const data = await updateLLMSettings(update);
       setLlmProtocol(data.protocol);
       setLlmBaseUrl(data.base_url ?? "");
       setLlmModel(data.model ?? "");
-      setLlmApiKey(data.api_key ?? "");
+      setLlmApiKey("");
+      setHasSavedApiKey(data.has_api_key);
+      setApiKeyChanged(false);
       setShowApiKey(false);
       dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: !!data.supports_thinking });
       setSettingsSaved(true);
@@ -376,6 +388,9 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
             <label className="block space-y-1.5">
               <span className="text-body font-medium text-foreground">Base URL</span>
               <Input
+                name="llm-base-url"
+                type="url"
+                autoComplete="url"
                 value={llmBaseUrl}
                 onChange={(event) => setLlmBaseUrl(event.target.value)}
                 placeholder={llmProtocol === "anthropic" ? "https://api.anthropic.com" : "https://api.openai.com/v1"}
@@ -387,10 +402,15 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
               <span className="text-body font-medium text-foreground">API Key</span>
               <div className="relative">
                 <Input
+                  name="llm-api-key"
                   type={showApiKey ? "text" : "password"}
+                  autoComplete="new-password"
                   value={llmApiKey}
-                  onChange={(event) => setLlmApiKey(event.target.value)}
-                  placeholder="输入 API Key"
+                  onChange={(event) => {
+                    setLlmApiKey(event.target.value);
+                    setApiKeyChanged(true);
+                  }}
+                  placeholder={hasSavedApiKey ? "已保存 API Key；输入可替换" : "输入 API Key"}
                   disabled={settingsLoading || settingsSaving}
                   className="pr-10"
                 />
@@ -405,6 +425,25 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
                   {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {hasSavedApiKey && (
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="text-meta text-muted-foreground">
+                    {apiKeyChanged && !llmApiKey.trim() ? "保存后将清除已保存的 API Key。" : "API Key 已保存，留空不会修改。"}
+                  </p>
+                  {!apiKeyChanged && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-meta text-muted-foreground"
+                      onClick={() => setApiKeyChanged(true)}
+                      disabled={settingsLoading || settingsSaving}
+                    >
+                      清除
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
             <label className="block space-y-1.5">
@@ -424,6 +463,8 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
                 })()}
               </span>
               <Input
+                name="llm-model"
+                autoComplete="off"
                 value={llmModel}
                 onChange={(event) => setLlmModel(event.target.value)}
                 placeholder={llmProtocol === "anthropic" ? "claude-3-5-sonnet-latest" : "gpt-4o-mini"}

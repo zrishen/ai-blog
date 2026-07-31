@@ -7,6 +7,7 @@ export interface WorkspaceNode {
   node_type: "folder" | "resource";
   resource_type: string | null;
   resource_id: number | null;
+  blog_status?: string | null;
   name: string;
   slug: string;
   sort_order: number;

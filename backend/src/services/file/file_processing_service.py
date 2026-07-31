@@ -512,13 +512,10 @@ async def _vectorize_blog_post(
     db: AsyncSession, job: FileProcessingJob, reporter
 ) -> list[str]:
     """index job 的 blog_post 分支：读 MD 正文 → vectorize_text_and_store。"""
-    from src.services.blog.markdown_blog_service import read_post_by_slug
-
     post = await db.get(BlogPost, job.target_resource_id)
     if post is None or post.user_id != job.user_id or post.deleted_at is not None:
         raise RuntimeError("Blog post is no longer available for indexing")
-    data = read_post_by_slug(post.slug, post.user_id)
-    body = (data or {}).get("body") or post.content or ""
+    body = post.content or ""
     return await vectorize_text_and_store(
         body,
         job.collection_name,

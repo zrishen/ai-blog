@@ -7,13 +7,13 @@
 - 恢复 file 时复用 file_service.vectorize_and_store 重建向量，成功才清 deleted_at；
   失败时清新 chunks 以避免残留半向量，并保留在回收站中。
 - 永久删除遵循「DB 先提交、物理后清理」：先在数据库事务中硬删记录并 commit，
-  再 best-effort 清理物理资源（上传文件 / Chroma 向量 / Markdown）。物理清理失败
+  再 best-effort 清理物理资源（上传文件 / Chroma 向量）。物理清理失败
   仅记录日志并保留孤儿，由 scripts/cleanup_orphans.py 回收，避免出现
   「DB 仍可见、但正文/附件/向量已不可逆丢失」的不一致。
 - 永久删除 conversation 时清理独占的本地附件（Message.image_url/file_url）；
   Message 经外键 CASCADE 同步删除。
 - 永久删除 file 时清理 Chroma chunks（幂等）与独占上传文件。
-- 永久删除 blog 时清理独占 Markdown 与独占本地封面。
+- 永久删除 blog 时清理独占本地封面。
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import (
     BlogPost as BlogPostModel,
+    BlogPostRevision,
     ChatAttachment as ChatAttachmentModel,
     Conversation as ConversationModel,
     FileDocument as FileDocumentModel,
@@ -50,7 +51,6 @@ from src.services.file.file_processing_service import (
     schedule_job,
 )
 from src.services.file.file_service import get_user_upload_dir
-from src.services.blog.markdown_blog_service import delete_post_file
 from src.services.rag.vector_store import delete_document_chunks
 from src.services.workspace import rag_service
 from src.services.workspace.resource_service import detach_resource_if_any
@@ -580,7 +580,6 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
         raise _not_found_error()
 
     # commit 前先收集物理资源信息
-    slug = post.slug
     post_id = post.id
     cover_value = post.cover_image or ""
     cover_stored = (
@@ -589,7 +588,15 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
         else None
     )
 
-    # 先硬删 DB 并提交，再 best-effort 清理 Markdown 与封面，避免「DB 还在、正文已丢」。
+    # Hard-delete DB records before best-effort cleanup of derived resources.
+    # SQLite does not guarantee the cyclic post/revision foreign keys are
+    # enforced in every existing deployment, so remove snapshots explicitly.
+    await db.execute(
+        sql_delete(BlogPostRevision).where(
+            BlogPostRevision.post_id == post_id,
+            BlogPostRevision.user_id == user_id,
+        )
+    )
     await db.execute(
         sql_delete(BlogPostModel).where(
             BlogPostModel.id == post_id,
@@ -599,7 +606,7 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
     await db.commit()
 
     # commit 成功后 best-effort 清理；失败留孤儿，由清理脚本回收。
-    # 先清 AI 知识（RagSource + 向量），再清 Markdown 与封面，避免孤儿向量。
+    # Clear AI knowledge after the database deletion.
     try:
         rag_source = await rag_service.get_rag_source(db, user_id, "blog_post", post_id)
         if rag_source is not None:
@@ -607,11 +614,6 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
             await rag_service.remove_from_ai_knowledge(db, user_id, "blog_post", post_id)
     except Exception:
         logger.warning("AI 知识向量清理失败（留待孤儿清理）: post_id=%s", post_id, exc_info=True)
-    if slug:
-        try:
-            delete_post_file(slug, user_id)
-        except Exception:
-            logger.warning("Markdown 清理失败（留待孤儿清理）: slug=%s", slug, exc_info=True)
     if cover_stored:
         try:
             await _purge_uploaded_file_if_exclusive(

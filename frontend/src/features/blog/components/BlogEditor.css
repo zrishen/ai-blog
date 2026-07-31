@@ -229,7 +229,7 @@
   background: transparent;
   color: hsl(var(--foreground));
   font-size: var(--text-reading);
-  line-height: 1.86;
+  line-height: 1.25rem;
   padding: var(--blog-editor-content-padding) !important;
 }
 
@@ -242,7 +242,7 @@
   padding: 0 !important;
   color: hsl(var(--foreground));
   font-size: var(--text-reading);
-  line-height: 1.86;
+  line-height: 1.25rem;
 }
 
 .blog-editor-body .vditor-wysiwyg h1,
@@ -953,9 +953,9 @@
 
 .blog-editor-body .vditor-wysiwyg pre.vditor-reset:empty::before,
 .blog-editor-body .vditor-ir pre.vditor-reset:empty::before {
-  top: -4px;
   color: hsl(var(--muted-foreground));
-  font-style: italic;
+  font-style: normal;
+  line-height: inherit;
   pointer-events: none;
   position: relative;
 }

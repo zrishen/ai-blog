@@ -27,7 +27,10 @@ _IDEMPOTENT_COLUMNS = {
         ("target_resource_type", "VARCHAR(20)"),
         ("target_resource_id", "INTEGER"),
     ],
-    "blog_posts": [("deleted_at", "DATETIME")],
+    "blog_posts": [
+        ("deleted_at", "DATETIME"),
+        ("published_revision_id", "INTEGER"),
+    ],
     "chat_attachments": [
         ("position", "INTEGER"),
         ("extracted_text", "TEXT"),
@@ -44,6 +47,7 @@ _IDEMPOTENT_INDEXES = {
     "ix_conversations_user_deleted": ("conversations", ["user_id", "deleted_at"], False),
     "ix_file_documents_user_deleted": ("file_documents", ["user_id", "deleted_at"], False),
     "ix_blog_posts_user_deleted": ("blog_posts", ["user_id", "deleted_at"], False),
+    "ix_blog_posts_published_revision": ("blog_posts", ["published_revision_id"], False),
     "ix_file_processing_jobs_user_status": ("file_processing_jobs", ["user_id", "status"], False),
     "ix_file_processing_jobs_heartbeat": ("file_processing_jobs", ["heartbeat_at"], False),
     "ix_file_processing_jobs_source_document": ("file_processing_jobs", ["source_document_id"], False),

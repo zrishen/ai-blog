@@ -69,3 +69,28 @@ class BlogPostListResponse(BaseModel):
 
 class BlogPublishRequest(BaseModel):
     publish: bool
+
+
+class BlogPostRevisionSummary(BaseModel):
+    id: int
+    revision_number: int
+    kind: str
+    title: str
+    created_at: datetime
+    is_published: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class BlogPostRevisionResponse(BlogPostRevisionSummary):
+    slug: str
+    content: str
+    excerpt: Optional[str] = None
+    cover_image: Optional[str] = None
+    category_id: Optional[int] = None
+    tags: Optional[str] = None
+    author: Optional[str] = None
+
+
+class BlogPostRevisionListResponse(BaseModel):
+    revisions: list[BlogPostRevisionSummary]

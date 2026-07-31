@@ -13,6 +13,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { Message } from "../../../stores/chatStore";
 import { TrustChoiceGroup } from "../TrustChoiceGroup";
 import type { TrustChoiceOption } from "../trustPrompts";
@@ -119,17 +120,13 @@ function MessageListComponent({
   if (groups.length === 0) {
     return (
       <ScrollArea className="relative min-h-0 flex-1">
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-5 text-center">
-          <div>
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-panel bg-primary/10 text-primary ring-1 ring-primary/15">
-              <Sparkles className="h-6 w-6" />
-            </div>
-            <p className="text-reading font-black tracking-[-0.04em] text-foreground">有什么我可以帮你的？</p>
-            <p className="mt-2 max-w-[220px] text-meta leading-relaxed text-muted-foreground">
-              {emptyHint}
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          icon={Sparkles}
+          title="有什么我可以帮你的？"
+          description={emptyHint}
+          variant="ai-chat"
+          className="pointer-events-none absolute inset-0 z-10 h-full w-full"
+        />
       </ScrollArea>
     );
   }

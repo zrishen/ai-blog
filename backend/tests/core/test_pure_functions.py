@@ -8,7 +8,7 @@ from src.services.llm.llm_settings_service import (
     build_llm_model_kwargs,
     normalize_llm_protocol,
 )
-from src.services.blog.markdown_blog_service import normalize_post_body
+from src.services.blog.blog_storage_service import normalize_post_body
 from src.tools.blog import BLOG_TOOLS
 from src.utils.slug import slugify
 

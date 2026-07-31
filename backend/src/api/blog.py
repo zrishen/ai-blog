@@ -18,11 +18,38 @@ from src.schemas.blog import (
     BlogPostResponse,
     BlogPostUpdate,
     BlogPublishRequest,
+    BlogPostRevisionListResponse,
+    BlogPostRevisionResponse,
+    BlogPostRevisionSummary,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _revision_summary(revision, *, published_revision_id: int | None) -> BlogPostRevisionSummary:
+    return BlogPostRevisionSummary(
+        id=revision.id,
+        revision_number=revision.revision_number,
+        kind=revision.kind,
+        title=revision.title,
+        created_at=revision.created_at,
+        is_published=revision.id == published_revision_id,
+    )
+
+
+def _revision_response(revision, *, published_revision_id: int | None) -> BlogPostRevisionResponse:
+    return BlogPostRevisionResponse(
+        **_revision_summary(revision, published_revision_id=published_revision_id).model_dump(),
+        slug=revision.slug,
+        content=revision.content,
+        excerpt=revision.excerpt,
+        cover_image=revision.cover_image,
+        category_id=revision.category_id,
+        tags=revision.tags,
+        author=revision.author,
+    )
 
 
 # ---- Public site reads ----
@@ -103,7 +130,10 @@ async def get_public_user_post(
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     await increment_view_count(db, post.id)
-    await db.refresh(post)
+    if hasattr(post, "_sa_instance_state"):
+        await db.refresh(post)
+    else:
+        post.view_count += 1
     return BlogPostResponse.model_validate(post)
 
 
@@ -144,15 +174,21 @@ async def get_blog_post(
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_optional_user),
 ):
-    from src.services.blog.blog_service import get_post, increment_view_count
+    from src.services.blog.blog_service import get_post, get_published_post_by_id, increment_view_count
 
     post = await get_post(db, post_id)
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    if post.status != "published" and (not user or user.id != post.user_id):
+    is_owner = bool(user and user.id == post.user_id)
+    if not is_owner:
+        post = await get_published_post_by_id(db, post_id)
+    if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     await increment_view_count(db, post_id)
-    await db.refresh(post)
+    if hasattr(post, "_sa_instance_state"):
+        await db.refresh(post)
+    else:
+        post.view_count += 1
     return BlogPostResponse.model_validate(post)
 
 
@@ -207,6 +243,92 @@ async def publish_blog_post(post_id: int, data: BlogPublishRequest, db: AsyncSes
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
     return BlogPostResponse.model_validate(post)
+
+
+@router.get("/blog/posts/{post_id}/revisions", response_model=BlogPostRevisionListResponse)
+async def list_blog_post_revisions(
+    post_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from src.services.blog.blog_service import get_owned_post, list_revisions
+
+    post = await get_owned_post(db, post_id, user.id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    revisions = await list_revisions(db, post_id, user.id)
+    return BlogPostRevisionListResponse(
+        revisions=[_revision_summary(revision, published_revision_id=post.published_revision_id) for revision in revisions]
+    )
+
+
+@router.get("/blog/posts/{post_id}/revisions/{revision_id}", response_model=BlogPostRevisionResponse)
+async def get_blog_post_revision(
+    post_id: int,
+    revision_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from src.services.blog.blog_service import get_owned_post, get_revision
+
+    post = await get_owned_post(db, post_id, user.id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    try:
+        revision = await get_revision(db, post_id, revision_id, user.id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Revision not found")
+    return _revision_response(revision, published_revision_id=post.published_revision_id)
+
+
+@router.post("/blog/posts/{post_id}/revisions", response_model=BlogPostRevisionResponse, status_code=201)
+async def commit_blog_post_revision(
+    post_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from src.services.blog.blog_service import commit_revision, get_owned_post
+
+    post = await get_owned_post(db, post_id, user.id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    revision = await commit_revision(db, post_id, user.id)
+    return _revision_response(revision, published_revision_id=post.published_revision_id)
+
+
+@router.post("/blog/posts/{post_id}/revisions/{revision_id}/restore", response_model=BlogPostResponse)
+async def restore_blog_post_revision(
+    post_id: int,
+    revision_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from src.services.blog.blog_service import restore_revision
+
+    try:
+        post = await restore_revision(db, post_id, revision_id, user.id)
+    except ValueError as exc:
+        detail = str(exc)
+        raise HTTPException(status_code=404, detail=detail)
+    return BlogPostResponse.model_validate(post)
+
+
+@router.delete("/blog/posts/{post_id}/revisions/{revision_id}")
+async def delete_blog_post_revision(
+    post_id: int,
+    revision_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from src.services.blog.blog_service import delete_revision
+
+    try:
+        await delete_revision(db, post_id, revision_id, user.id)
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = 409 if detail == "Published revision cannot be deleted" else 404
+        raise HTTPException(status_code=status_code, detail=detail)
+    return {"status": "ok"}
 
 
 @router.post("/blog/posts/{post_id}/generate-cover", response_model=BlogPostResponse)

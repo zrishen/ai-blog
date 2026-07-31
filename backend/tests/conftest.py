@@ -118,8 +118,7 @@ def mock_external_services():
          patch("src.services.rag.vector_store.search", return_value=[]), \
          patch("src.services.rag.vector_store.delete_document_chunks", return_value=True), \
          patch("src.services.rag.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
-         patch("src.services.trash.trash_service.delete_document_chunks", return_value=True), \
-         patch("src.services.trash.trash_service.delete_post_file", return_value=True):
+         patch("src.services.trash.trash_service.delete_document_chunks", return_value=True):
         yield
 
 

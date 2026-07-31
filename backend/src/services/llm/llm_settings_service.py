@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,18 @@ def normalize_llm_protocol(protocol: str | None) -> str:
     return value if value in SUPPORTED_LLM_PROTOCOLS else "openai"
 
 
+def normalize_llm_base_url(base_url: str | None) -> str | None:
+    """Return a usable HTTP(S) endpoint, or None for an empty/invalid value."""
+    value = (base_url or "").strip()
+    if not value:
+        return None
+
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    return value
+
+
 async def get_user_llm_settings(db: AsyncSession, user_id: int) -> LLMSettings | None:
     result = await db.execute(select(LLMSettings).where(LLMSettings.user_id == user_id))
     return result.scalar_one_or_none()
@@ -69,7 +82,7 @@ def build_llm_model_kwargs(
     has_custom_model = bool(llm_settings and llm_settings.model_name)
 
     user_api_key = decrypt_secret(llm_settings.api_key) if llm_settings and llm_settings.api_key else None
-    user_base_url = llm_settings.base_url if llm_settings and llm_settings.base_url else None
+    user_base_url = normalize_llm_base_url(llm_settings.base_url if llm_settings else None)
 
     if allow_official_fallback:
         api_key = user_api_key or settings.openai_api_key

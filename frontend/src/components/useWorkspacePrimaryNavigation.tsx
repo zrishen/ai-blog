@@ -78,11 +78,15 @@ export function useWorkspacePrimaryNavigation() {
     navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
   }, [dispatch, navigate, pendingLoginDestination, resetBlogList]);
 
-  const activePrimaryPage: PrimaryNavigationKey | null = location.pathname === "/workspace"
+  const returnTo = (location.state as { returnTo?: unknown } | null)?.returnTo;
+  const activePath = typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//")
+    ? returnTo
+    : location.pathname;
+  const activePrimaryPage: PrimaryNavigationKey | null = activePath === "/workspace"
     ? "workspace"
-    : location.pathname.startsWith("/research")
+    : activePath.startsWith("/research")
         ? "research"
-        : location.pathname === "/" || location.pathname.startsWith("/u/")
+        : activePath === "/" || activePath.startsWith("/u/")
           ? "home"
           : null;
 

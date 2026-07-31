@@ -7,7 +7,7 @@
 # ruff: noqa: F401
 from .auth import RefreshToken, User
 from .base import Base, _utcnow
-from .blog import BlogCategory, BlogPost
+from .blog import BlogCategory, BlogPost, BlogPostRevision
 from .chat import ChatAttachment, Conversation, Message
 from .file import FileDocument, FileProcessingJob
 from .plugin import PlatformPlugin, UserPlugin

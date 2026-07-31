@@ -10,9 +10,14 @@ from src.schemas.settings import (
     SidebarSettingsResponse,
     SidebarSettingsUpdate,
 )
-from src.services.llm.llm_settings_service import get_user_llm_settings, model_supports_thinking, normalize_llm_protocol
+from src.services.llm.llm_settings_service import (
+    get_user_llm_settings,
+    model_supports_thinking,
+    normalize_llm_base_url,
+    normalize_llm_protocol,
+)
 from src.utils.auth import get_current_user
-from src.utils.secret_crypto import decrypt_secret, encrypt_secret
+from src.utils.secret_crypto import encrypt_secret
 
 router = APIRouter()
 
@@ -21,9 +26,8 @@ def _response_from_settings(record: LLMSettings | None) -> LLMSettingsResponse:
     model_name = record.model_name if record and record.model_name else settings.model_name
     return LLMSettingsResponse(
         protocol=normalize_llm_protocol(record.protocol if record else None),
-        base_url=record.base_url if record and record.base_url else None,
+        base_url=normalize_llm_base_url(record.base_url if record else None),
         model=record.model_name if record and record.model_name else None,
-        api_key=decrypt_secret(record.api_key) if record and record.api_key else None,
         has_api_key=bool(record and record.api_key),
         supports_thinking=model_supports_thinking(model_name),
     )

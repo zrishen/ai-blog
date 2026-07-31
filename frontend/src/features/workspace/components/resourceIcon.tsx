@@ -1,6 +1,7 @@
 import { Network } from "lucide-react";
 import { getFileIcon } from "@/components/fileIcons";
 import blogIcon from "@/components/icons/blog.svg";
+import publishedIcon from "@/components/icons/published.svg";
 import type { WorkspaceNode } from "@/api/client";
 
 /**
@@ -12,7 +13,7 @@ import type { WorkspaceNode } from "@/api/client";
 export function getResourceIcon(node: WorkspaceNode) {
   switch (node.resource_type) {
     case "blog_post":
-      return <img src={blogIcon} alt="" aria-hidden className="h-4 w-4 flex-shrink-0" />;
+      return <img src={node.blog_status === "published" ? publishedIcon : blogIcon} alt="" aria-hidden className="h-4 w-4 flex-shrink-0" />;
     case "file":
       return getFileIcon(node.name);
     default:

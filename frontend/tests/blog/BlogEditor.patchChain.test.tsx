@@ -131,6 +131,12 @@ vi.mock("../../src/features/blog/utils/vditorMenus", () => ({
 const api = vi.hoisted(() => ({
   createBlogPost: vi.fn(),
   updateBlogPost: vi.fn(),
+  publishBlogPost: vi.fn(),
+  listBlogRevisions: vi.fn(),
+  getBlogRevision: vi.fn(),
+  commitBlogRevision: vi.fn(),
+  restoreBlogRevision: vi.fn(),
+  deleteBlogRevision: vi.fn(),
   deleteBlogPost: vi.fn(),
   getBlogPost: vi.fn(),
   getBlogResearchSummary: vi.fn(),
@@ -208,6 +214,7 @@ describe("BlogEditor AI patch 链", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
     api.getBlogResearchSummary.mockResolvedValue(null);
     api.listBlogPosts.mockResolvedValue([]);
+    api.listBlogRevisions.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -353,32 +360,15 @@ describe("BlogEditor dirty 追踪", () => {
     vi.useRealTimers();
   });
 
-  it("P1-B5 切文章时 skipDirtyOnceRef 跳过一次 dirty，返回不弹保存草稿框", async () => {
+  it("返回时立即保存工作副本并退出编辑器", async () => {
     renderEditor(EXISTING_POST);
     await waitForVditor();
 
-    // 改标题 → dirty
+    api.updateBlogPost.mockResolvedValue({ ...EXISTING_POST, title: "改过的标题" });
     const title = screen.getByPlaceholderText("输入文章标题...");
     fireEvent.change(title, { target: { value: "改过的标题" } });
-    // 点返回 → dirty，弹"是否保存草稿？"
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
-    expect(await screen.findByText("是否保存草稿？")).toBeInTheDocument();
-
-    // 继续编辑关闭弹窗
-    fireEvent.click(screen.getByRole("button", { name: "继续编辑" }));
-    await waitFor(() => expect(screen.queryByText("是否保存草稿？")).not.toBeInTheDocument());
-
-    // 切到 post B：表单整体重置 + skipDirtyOnceRef=true，字段 effect 消费后不标 dirty
-    const POST_B = { ...EXISTING_POST, id: 18, title: "文章B", content: "## B节\n\nB内容" };
-    act(() => {
-      latestChat!.dispatch({ type: "SET_BLOG_POSTS", payload: [POST_B] });
-      latestChat!.dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: POST_B.id });
-    });
-    await act(async () => { await Promise.resolve(); });
-
-    // 点返回 → 不弹保存草稿框，直接退到 view
-    fireEvent.click(screen.getByRole("button", { name: "返回" }));
-    await waitFor(() => expect(screen.queryByText("是否保存草稿？")).not.toBeInTheDocument());
+    await waitFor(() => expect(api.updateBlogPost).toHaveBeenCalledOnce());
     expect(latestChat!.state.blogCurrentView).toBe("view");
   });
 });

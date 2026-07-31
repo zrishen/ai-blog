@@ -67,6 +67,24 @@ async def test_attach_and_detach_resource(client: AsyncClient, db_session: Async
 
 
 @pytest.mark.asyncio
+async def test_workspace_tree_includes_blog_publish_status(client: AsyncClient, db_session: AsyncSession):
+    folder = (await client.post("/api/v1/workspace/folders", json={"name": "F"})).json()
+    post = BlogPost(title="Published", slug="published", content="c", status="published", user_id=1)
+    db_session.add(post)
+    await db_session.commit()
+
+    resp = await client.post(
+        "/api/v1/workspace/resources/attach",
+        json={"resource_type": "blog_post", "resource_id": post.id, "parent_id": folder["id"]},
+    )
+    assert resp.status_code == 201
+
+    tree = (await client.get("/api/v1/workspace/tree")).json()["nodes"]
+    node = next(item for item in tree if item["resource_id"] == post.id)
+    assert node["blog_status"] == "published"
+
+
+@pytest.mark.asyncio
 async def test_ai_knowledge_join_file_indexes(client: AsyncClient, db_session: AsyncSession, monkeypatch):
     monkeypatch.setattr(file_processing_service, "schedule_job", lambda job_id: None)
     doc = FileDocument(

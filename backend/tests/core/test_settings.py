@@ -31,7 +31,7 @@ async def test_get_and_update_llm_settings(client: AsyncClient):
     data = resp.json()
     assert data["protocol"] == "openai"
     assert data["has_api_key"] is False
-    assert data["api_key"] is None
+    assert "api_key" not in data
 
     resp = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "anthropic",
@@ -45,7 +45,7 @@ async def test_get_and_update_llm_settings(client: AsyncClient):
     assert data["base_url"] == "https://api.anthropic.com"
     assert data["model"] == "claude-3-5-sonnet-latest"
     assert data["has_api_key"] is True
-    assert data["api_key"] == "secret-key"
+    assert "api_key" not in data
 
     resp = await client.put("/api/v1/settings/llm", headers=headers, json={
         "protocol": "openai",
@@ -57,4 +57,4 @@ async def test_get_and_update_llm_settings(client: AsyncClient):
     data = resp.json()
     assert data["protocol"] == "openai"
     assert data["has_api_key"] is False
-    assert data["api_key"] is None
+    assert "api_key" not in data

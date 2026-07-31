@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
+from src.database.models import BlogPost as BlogPostModel
 from src.database.models import WorkspaceNode as WorkspaceNodeModel
 from src.database.models import _utcnow
 
@@ -217,7 +218,32 @@ async def list_all(db: AsyncSession, user_id: int) -> list[WorkspaceNodeModel]:
         WorkspaceNodeModel.deleted_at.is_(None),
     ).order_by(WorkspaceNodeModel.parent_id, WorkspaceNodeModel.sort_order, WorkspaceNodeModel.id)
     nodes = list((await db.execute(stmt)).scalars().all())
-    return await _without_soft_deleted_resources(db, nodes)
+    visible_nodes = await _without_soft_deleted_resources(db, nodes)
+    return await _with_blog_status(db, user_id, visible_nodes)
+
+
+async def _with_blog_status(
+    db: AsyncSession, user_id: int, nodes: list[WorkspaceNodeModel]
+) -> list[WorkspaceNodeModel]:
+    """为文章挂靠节点补充发布状态，供工作区视图选择对应图标。"""
+    post_ids = [
+        node.resource_id
+        for node in nodes
+        if node.resource_type == "blog_post" and node.resource_id is not None
+    ]
+    if not post_ids:
+        return nodes
+
+    stmt = select(BlogPostModel.id, BlogPostModel.status).where(
+        BlogPostModel.id.in_(post_ids),
+        BlogPostModel.user_id == user_id,
+        BlogPostModel.deleted_at.is_(None),
+    )
+    statuses = dict((await db.execute(stmt)).all())
+    for node in nodes:
+        if node.resource_type == "blog_post" and node.resource_id is not None:
+            node.blog_status = statuses.get(node.resource_id)
+    return nodes
 
 
 async def _without_soft_deleted_resources(
