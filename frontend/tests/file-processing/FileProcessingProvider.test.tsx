@@ -57,7 +57,6 @@ function makeJob(overrides: Partial<FileProcessingJob> = {}): FileProcessingJob 
     source_document_id: null,
     result_document_id: null,
     original_name: "a.pdf",
-    category_id: null,
     error_code: null,
     error_message: null,
     created_at: "2026-07-14T00:00:00Z",
@@ -129,7 +128,7 @@ describe("FileProcessingProvider", () => {
     await user.click(screen.getByRole("button", { name: "upload" }));
     await waitFor(() => expect(mocks.listByRequestId).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId("upload-job")).toHaveTextContent(recovered.id);
-    const requestId = mocks.upload.mock.calls[0][2] as string;
+    const requestId = mocks.upload.mock.calls[0][1] as string;
     expect(requestId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
     first.unmount();
     sessionStorage.clear();

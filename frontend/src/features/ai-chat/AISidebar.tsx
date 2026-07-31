@@ -129,12 +129,12 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
 
   // 有选中上下文(AI 修改)时,自动切到 chat 视图(避免 list 视图下选中上下文丢失)
   useEffect(() => {
-    if (state.aiSelectionContext && sidebarView !== "chat") {
+    if ((state.aiSelectionContext || state.aiLeftbarEditContext) && sidebarView !== "chat") {
       // 选中上下文来自编辑器外部事件，需要在这里同步侧栏视图
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSidebarView("chat");
     }
-  }, [state.aiSelectionContext, sidebarView]);
+  }, [state.aiSelectionContext, state.aiLeftbarEditContext, sidebarView]);
 
   const handleNewChat = useCallback(async () => {
     const key = makeTempKey();

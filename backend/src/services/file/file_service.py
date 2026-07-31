@@ -152,7 +152,6 @@ async def vectorize_and_store(
     stored_filename: str,
     collection_name: str,
     original_name: str | None = None,
-    category_id: int | None = None,
     user_id: int | str = "default_user",
     progress_reporter=None,
 ) -> list[str]:
@@ -171,11 +170,10 @@ async def vectorize_and_store(
             await progress_reporter(stage, completed, total, unit)
 
     logger.info(
-        "KB vectorization parse started: stored_name=%s original_name=%s user_id=%s category_id=%s",
+        "KB vectorization parse started: stored_name=%s original_name=%s user_id=%s",
         stored_filename,
         original_name,
         user_id,
-        category_id,
     )
     loop = asyncio.get_running_loop()
 
@@ -232,8 +230,6 @@ async def vectorize_and_store(
             "total_chunks": len(chunks),
             "chunk_id": f"{stored_filename}:{index}",
         }
-        if category_id is not None:
-            metadata["category_id"] = category_id
         metadata_list.append(metadata)
         await report("metadata", index + 1, len(chunks), "chunk")
 
@@ -272,7 +268,6 @@ async def vectorize_text_and_store(
     original_name: str | None = None,
     user_id: int | str = "default_user",
     resource_type: str = "blog_post",
-    category_id: int | None = None,
     progress_reporter=None,
 ) -> list[str]:
     """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库。
@@ -334,8 +329,6 @@ async def vectorize_text_and_store(
             "total_chunks": len(chunks),
             "chunk_id": f"{source_id}:{index}",
         }
-        if category_id is not None:
-            metadata["category_id"] = category_id
         metadata_list.append(metadata)
         await report("metadata", index + 1, len(chunks), "chunk")
 

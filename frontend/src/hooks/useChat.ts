@@ -6,8 +6,6 @@ import {
   deleteConversation,
   getMessages,
   sendChat,
-  listFileDocuments,
-  deleteFileDocument,
 } from "../api/client";
 
 export function useChatHooks() {
@@ -70,25 +68,6 @@ export function useChatHooks() {
       }
     },
     [state.conversations, state.currentConversationId, dispatch],
-  );
-
-  const loadFileDocuments = useCallback(async () => {
-    try {
-      const data = await listFileDocuments();
-      dispatch({ type: "SET_FILE_DOCUMENTS", payload: data.documents });
-    } catch (error) {
-      console.error("Failed to load file library documents:", error);
-      throw error;
-    }
-  }, [dispatch]);
-
-  const removeFileDocument = useCallback(
-    async (id: number) => {
-      await deleteFileDocument(id);
-      dispatch({ type: "REMOVE_FILE_DOCUMENT", payload: id });
-      await loadFileDocuments();
-    },
-    [loadFileDocuments, dispatch],
   );
 
   const sendMessage = useCallback(
@@ -214,7 +193,5 @@ export function useChatHooks() {
     selectConversation,
     removeConversation,
     sendMessage,
-    loadFileDocuments,
-    removeFileDocument,
   };
 }

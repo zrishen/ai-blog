@@ -7,7 +7,7 @@ export interface AISidebarProps {
   contextText?: string;
   siteUsername?: string;
   postSlug?: string;
-  pageType?: "post" | "home" | "files" | "research" | "about" | "other";
+  pageType?: "post" | "home" | "research" | "about" | "other";
   postTitle?: string;
   onRequestClose?: () => void;
   forceExpanded?: boolean;

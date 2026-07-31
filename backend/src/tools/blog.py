@@ -495,6 +495,38 @@ async def blog_read_post(post_id: int, mode: str = "full", section_index: int = 
     return "错误: mode 只能是 full、outline 或 section。"
 
 
+@tool
+async def update_blog_sidebar(html: str) -> str:
+    """更新当前用户博客主页左栏的自定义 HTML，立即对博主与访客生效。
+    当用户要求设计、定制、修改博客左栏（侧边栏/侧栏）的外观与内容时调用此工具。
+    参数 html: 自包含 HTML 片段，须满足：
+      - 内联 CSS（<style> 写在片段内），不引用外部样式表；
+      - 颜色用语义变量跟随主题：var(--background)、var(--foreground)、var(--primary)、
+        var(--secondary)、var(--muted-foreground)、var(--border)、var(--card) 等；
+      - 宽度自适应窄列（容器约 240–320px），不写固定大宽度；
+      - 不写 <script>、不引用任何外部脚本/字体/图片域名；
+      - 不写 <html>/<head>/<body> 包裹，只输出正文片段；
+      - 文案用中文。"""
+    from src.database.models import BlogSidebarSettings as BlogSidebarSettingsModel
+
+    user_id = current_user_id_cv.get()
+    if user_id is None:
+        return "错误: 未认证用户无法更新左栏。"
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(BlogSidebarSettingsModel).where(BlogSidebarSettingsModel.user_id == user_id)
+        )
+        settings = result.scalar_one_or_none()
+        if settings is None:
+            settings = BlogSidebarSettingsModel(user_id=user_id, html=html)
+            db.add(settings)
+        else:
+            settings.html = html
+        await db.commit()
+        return "左栏已更新，博主与访客刷新后即可看到。"
+
+
 # ════════════════════════════════════════════════════════════════
 # 工具列表
 # ════════════════════════════════════════════════════════════════
@@ -506,4 +538,5 @@ BLOG_TOOLS = [
     blog_delete_post,
     blog_search_posts,
     blog_read_post,
+    update_blog_sidebar,
 ]

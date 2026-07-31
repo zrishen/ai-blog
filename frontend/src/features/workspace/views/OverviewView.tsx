@@ -1,7 +1,7 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { CheckCircle2, Database, FileText, Sparkles } from "lucide-react";
 import { BlogIcon, PublishedIcon } from "@/components/icons";
-import { getFileIcon } from "@/features/file/components/fileIcons";
+import { getFileIcon } from "@/components/fileIcons";
 import { listBlogPosts, listFileDocuments } from "../../../api/client";
 import { listAiKnowledge } from "../../../api/workspace";
 import { Badge } from "@/components/ui/badge";

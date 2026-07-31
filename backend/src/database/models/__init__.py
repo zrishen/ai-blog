@@ -9,7 +9,7 @@ from .auth import RefreshToken, User
 from .base import Base, _utcnow
 from .blog import BlogCategory, BlogPost
 from .chat import ChatAttachment, Conversation, Message
-from .file import FileCategory, FileDocument, FileProcessingJob
+from .file import FileDocument, FileProcessingJob
 from .plugin import PlatformPlugin, UserPlugin
 from .research import (
     BlogPostClaimLink,
@@ -24,6 +24,6 @@ from .research import (
     ResearchSource,
     ResearchTopic,
 )
-from .settings import LLMSettings, PublicChatDailyUsage
+from .settings import BlogSidebarSettings, LLMSettings, PublicChatDailyUsage
 from .subscription import RedemptionCode, SubscriptionWeeklyUsage
 from .workspace import RagSource, WorkspaceNode

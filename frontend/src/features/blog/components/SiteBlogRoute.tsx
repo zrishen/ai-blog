@@ -2,6 +2,7 @@ import { useEffect, useReducer } from "react";
 import { useParams } from "react-router-dom";
 import { getSiteUser } from "../../../api/client";
 import { useAuth } from "../../../stores/authStore";
+import { useChat } from "../../../stores/chatStore";
 import { BlogPage } from "./BlogPage";
 import { AlertCircle } from "lucide-react";
 
@@ -27,6 +28,7 @@ function reducer(_state: State, action: Action): State {
 export function SiteBlogRoute() {
   const { username } = useParams<{ username: string }>();
   const { user, isAuthenticated } = useAuth();
+  const { dispatch: chatDispatch } = useChat();
   const [state, dispatch] = useReducer(reducer, initialState);
 
   useEffect(() => {
@@ -37,6 +39,8 @@ export function SiteBlogRoute() {
     getSiteUser(username)
       .then((siteUser) => {
         if (!alive) return;
+        chatDispatch({ type: "SET_LEFTBAR_HTML", payload: siteUser.sidebar_html ?? null });
+        chatDispatch({ type: "SET_LEFTBAR_SHOW_TAGS", payload: siteUser.show_tags ?? true });
         dispatch({ type: "loaded", isOwner: Boolean(siteUser.is_owner) });
       })
       .catch(() => {
@@ -47,7 +51,7 @@ export function SiteBlogRoute() {
     return () => {
       alive = false;
     };
-  }, [username, isAuthenticated, user?.username]);
+  }, [username, isAuthenticated, user?.username, chatDispatch]);
 
   const { loading, error, isOwner } = state;
 

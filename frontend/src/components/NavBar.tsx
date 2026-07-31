@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -42,7 +43,7 @@ import {
 import { LoginDialog } from "@/features/auth/LoginDialog";
 import { SubscriptionPanel } from "@/features/subscription/components/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
-import { getLLMSettings, updateLLMSettings } from "../api/client";
+import { getLLMSettings, updateLLMSettings, updateSidebarSettings } from "../api/client";
 import type { LLMProtocol } from "../api/client";
 import { cn } from "@/lib/utils";
 import { navItemVariants } from "@/lib/visualVariants";
@@ -164,6 +165,19 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       setSettingsError(err instanceof Error ? err.message : "保存设置失败");
     } finally {
       setSettingsSaving(false);
+    }
+  };
+
+  const [sidebarSaving, setSidebarSaving] = useState(false);
+  const handleToggleSidebarTags = async (checked: boolean) => {
+    dispatch({ type: "SET_LEFTBAR_SHOW_TAGS", payload: checked });
+    setSidebarSaving(true);
+    try {
+      await updateSidebarSettings(checked);
+    } catch {
+      dispatch({ type: "SET_LEFTBAR_SHOW_TAGS", payload: !checked });
+    } finally {
+      setSidebarSaving(false);
     }
   };
 
@@ -416,6 +430,22 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
                 disabled={settingsLoading || settingsSaving}
               />
             </label>
+
+            <div className="block space-y-2 border-t border-border pt-4">
+              <div>
+                <h3 className="text-body font-semibold text-foreground">博客左栏</h3>
+                <p className="mt-1 text-meta text-muted-foreground">博主主页左侧栏的显示项。</p>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-body font-medium text-foreground">显示标签云</span>
+                <Switch
+                  checked={state.leftbarShowTags}
+                  onClick={() => handleToggleSidebarTags(!state.leftbarShowTags)}
+                  disabled={sidebarSaving}
+                  aria-label="显示标签云"
+                />
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="border-t border-border px-5 py-4">

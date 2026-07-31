@@ -9,15 +9,12 @@ const componentContracts = [
   ["src/features/research/ResearchPanel.tsx", "WorkspacePanel"],
   ["src/features/research/ResearchGraphPage.tsx", "EmptyState"],
   ["src/features/subscription/components/SubscriptionPanel.tsx", "surfaceVariants"],
-  ["src/features/file/components/FilePanel.tsx", "WorkspacePanel"],
   ["src/features/blog/components/BlogOverviewPanel.tsx", "WorkspacePanel"],
   ["src/features/blog/components/BlogPostCard.tsx", "surfaceVariants"],
-  ["src/features/file/panes/LibraryOverviewPane.tsx", "Surface"],
   ["src/features/research/tabs/OverviewTab.tsx", "SelectableSurface"],
   ["src/features/auth/LoginForm.tsx", "TabsTrigger"],
   ["src/features/auth/LoginForm.tsx", "Alert"],
   ["src/components/NavBar.tsx", "Select"],
-  ["src/features/file/components/FilePanel.tsx", "Select"],
   ["src/features/plugins/PluginCenterDialog.tsx", "DialogContent"],
   ["src/features/admin/components/PluginsPage.tsx", "Textarea"],
   ["src/features/subscription/components/SubscriptionPanel.tsx", "Alert"],
@@ -60,7 +57,6 @@ const rawNativeControlAllowlist = new Set([
   // 文件选择器没有可见视觉表面，保留原生隐藏 input。
   "src/features/ai-chat/ai-sidebar/ChatInputBar.tsx",
   "src/features/blog/components/BlogEditor.tsx",
-  "src/features/file/components/FilePanel.tsx",
   "src/features/workspace/WorkspaceNav.tsx",
 ]);
 
@@ -74,8 +70,7 @@ const rawRadiusAllowlist = new Set([
 // Everywhere else, color must come from semantic tokens (bg-/text-/border-<token>).
 const colorPaletteAllowlist = new Set([
   // 文件类型图标:颜色编码文件格式
-  "src/features/file/components/fileIcons.tsx",
-  "src/features/file/panes/filePaneUtils.tsx",
+  "src/components/fileIcons.tsx",
   // 研究图谱节点:颜色编码实体/证据/来源类型
   "src/features/research/nodes/EntityNode.tsx",
   "src/features/research/nodes/EvidenceNode.tsx",

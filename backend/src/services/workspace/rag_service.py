@@ -212,7 +212,6 @@ async def index_file_document(
         collection_name=doc.collection_name,
         original_name=doc.original_name,
         stored_name=doc.file_path,
-        category_id=doc.category_id,
     )
     schedule_job(job.id)
     return source, job
@@ -251,7 +250,6 @@ async def index_blog_post(
         collection_name=collection,
         original_name=post.title or f"文章 #{post_id}",
         stored_name=f"blog_post:{post_id}",
-        category_id=post.category_id,
     )
     schedule_job(job.id)
     return source, job

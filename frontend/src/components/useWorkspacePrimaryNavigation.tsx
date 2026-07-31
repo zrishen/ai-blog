@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FolderOpen, Home, LayoutDashboard, Network, type LucideIcon } from "lucide-react";
+import { Home, LayoutDashboard, Network, type LucideIcon } from "lucide-react";
 import { useChatDispatch } from "@/stores/chatStore";
 import { useAuth, type AuthUser } from "@/stores/authStore";
 
-export type PrimaryNavigationKey = "home" | "files" | "research" | "workspace";
+export type PrimaryNavigationKey = "home" | "research" | "workspace";
 type LoginDestination = Exclude<PrimaryNavigationKey, "home">;
 
 export interface PrimaryNavigationItem {
@@ -42,15 +42,6 @@ export function useWorkspacePrimaryNavigation() {
     navigate("/");
   }, [navigate, resetBlogList, user]);
 
-  const handleFiles = useCallback(() => {
-    if (!isAuthenticated) {
-      openLoginDialog("files");
-      return;
-    }
-    dispatch({ type: "SET_PAGE", payload: "files" });
-    navigate("/files");
-  }, [dispatch, isAuthenticated, navigate, openLoginDialog]);
-
   const handleResearch = useCallback(() => {
     if (!isAuthenticated) {
       openLoginDialog("research");
@@ -72,12 +63,6 @@ export function useWorkspacePrimaryNavigation() {
     const destination = pendingLoginDestination;
     setPendingLoginDestination(null);
 
-    if (destination === "files") {
-      dispatch({ type: "SET_PAGE", payload: "files" });
-      navigate("/files");
-      return;
-    }
-
     if (destination === "research") {
       dispatch({ type: "SET_PAGE", payload: "research" });
       navigate("/research");
@@ -95,9 +80,7 @@ export function useWorkspacePrimaryNavigation() {
 
   const activePrimaryPage: PrimaryNavigationKey | null = location.pathname === "/workspace"
     ? "workspace"
-    : location.pathname === "/files"
-      ? "files"
-      : location.pathname.startsWith("/research")
+    : location.pathname.startsWith("/research")
         ? "research"
         : location.pathname === "/" || location.pathname.startsWith("/u/")
           ? "home"
@@ -106,9 +89,8 @@ export function useWorkspacePrimaryNavigation() {
   const primaryNavigation = useMemo<PrimaryNavigationItem[]>(() => [
     { key: "home", label: "首页", icon: Home, onClick: handleHome },
     { key: "workspace", label: "创作", icon: LayoutDashboard, onClick: handleWorkspace },
-    { key: "files", label: "文件库", icon: FolderOpen, onClick: handleFiles },
     { key: "research", label: "研究图谱", icon: Network, onClick: handleResearch },
-  ], [handleFiles, handleHome, handleResearch, handleWorkspace]);
+  ], [handleHome, handleResearch, handleWorkspace]);
 
   return {
     activePrimaryPage,

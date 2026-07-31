@@ -229,7 +229,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     const task: UploadTask = {
       requestId: job.client_request_id || stored?.requestId || "",
       fileName: stored?.fileName || job.original_name,
-      categoryId: stored?.categoryId ?? job.category_id,
+      categoryId: stored?.categoryId ?? null,
       phase: "server",
       percent: Math.max(stored?.percent ?? 0, job.progress_percent),
       stage: jobStage(job),
@@ -360,7 +360,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     };
     setUploadTask(initial);
     saveUpload(initial);
-    const request = uploadToFileLibrary(file, categoryId, requestId, (progress) => {
+    const request = uploadToFileLibrary(file, requestId, (progress) => {
       setUploadTask((current) => {
         if (!current || current.requestId !== requestId) return current;
         const percent = progress.percent == null ? current.percent : Math.max(current.percent ?? 0, progress.percent);

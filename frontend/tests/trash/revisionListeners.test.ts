@@ -14,13 +14,6 @@ describe("trashRevision 监听器已就位", () => {
       effectCount: 1,
     },
     {
-      name: "FilePanel 监听 fileLibraryRevision 刷新文件",
-      rel: path.join("src", "features", "file", "components", "FilePanel.tsx"),
-      marker: "[isAuthenticated, state.currentPage, state.fileLibraryRevision, loadFileDocs]",
-      revisionKey: "state.fileLibraryRevision",
-      effectCount: 1,
-    },
-    {
       name: "BlogPage 监听 trashRevision 刷新文章列表",
       rel: path.join("src", "features", "blog", "components", "BlogPage.tsx"),
       marker: "[loadPosts, state.trashRevision]",

@@ -989,7 +989,7 @@ export function WorkspaceNav() {
           ? crypto.randomUUID()
           : `ws-${Date.now()}`;
       try {
-        const job = await uploadToFileLibrary(file, undefined, clientRequestId).promise;
+        const job = await uploadToFileLibrary(file, clientRequestId).promise;
         // 上传响应可能尚未处理完(result_document_id 为空),轮询直到拿到文档 id
         let docId = job.result_document_id;
         for (let i = 0; i < 20 && docId == null; i++) {

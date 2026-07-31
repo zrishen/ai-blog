@@ -31,7 +31,7 @@ function LocationProbe() {
   return <output aria-label="当前路径">{location.pathname}</output>;
 }
 
-function renderNav(initialPath = "/files") {
+function renderNav(initialPath = "/workspace") {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <AuthProvider>
@@ -60,18 +60,18 @@ describe("NavBar 一级导航", () => {
     vi.unstubAllGlobals();
   });
 
-  it("展示首页、文件库和研究图谱，并根据路由切换选中态", async () => {
+  it("展示首页、创作和研究图谱，并根据路由切换选中态", async () => {
     const user = userEvent.setup();
     renderNav();
 
     const navigation = screen.getByRole("group", { name: "主导航" });
     const homeButton = within(navigation).getByRole("button", { name: "首页" });
-    const filesButton = within(navigation).getByRole("button", { name: "文件库" });
+    const workspaceButton = within(navigation).getByRole("button", { name: "创作" });
     const researchButton = within(navigation).getByRole("button", { name: "研究图谱" });
 
     expect(navigation).not.toHaveClass("border");
     expect(homeButton).toHaveClass("h-9", "min-w-[92px]", "rounded-control");
-    expect(filesButton).toHaveAttribute("aria-current", "page");
+    expect(workspaceButton).toHaveAttribute("aria-current", "page");
     expect(homeButton).not.toHaveAttribute("aria-current");
     expect(researchButton).not.toHaveAttribute("aria-current");
 
@@ -83,7 +83,7 @@ describe("NavBar 一级导航", () => {
   });
 
   it.each([
-    ["文件库", "/files"],
+    ["创作", "/workspace"],
     ["研究图谱", "/research"],
   ])("未登录点击%s时打开登录框而不跳转", async (label) => {
     const user = userEvent.setup();
@@ -96,7 +96,7 @@ describe("NavBar 一级导航", () => {
   });
 
   it.each([
-    ["文件库", "/files"],
+    ["创作", "/workspace"],
     ["研究图谱", "/research"],
   ])("从%s登录成功后进入目标页面", async (label, destination) => {
     const user = userEvent.setup();

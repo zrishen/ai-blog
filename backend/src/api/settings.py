@@ -4,7 +4,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.engine import get_db
 from src.database.models import LLMSettings, User
-from src.schemas.settings import LLMSettingsResponse, LLMSettingsUpdate
+from src.schemas.settings import (
+    LLMSettingsResponse,
+    LLMSettingsUpdate,
+    SidebarSettingsResponse,
+    SidebarSettingsUpdate,
+)
 from src.services.llm.llm_settings_service import get_user_llm_settings, model_supports_thinking, normalize_llm_protocol
 from src.utils.auth import get_current_user
 from src.utils.secret_crypto import decrypt_secret, encrypt_secret
@@ -55,3 +60,26 @@ async def update_llm_settings(
     await db.commit()
     await db.refresh(record)
     return _response_from_settings(record)
+
+
+@router.put("/settings/sidebar", response_model=SidebarSettingsResponse)
+async def update_sidebar_settings(
+    data: SidebarSettingsUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
+
+    from src.database.models import BlogSidebarSettings
+
+    result = await db.execute(
+        select(BlogSidebarSettings).where(BlogSidebarSettings.user_id == user.id)
+    )
+    record = result.scalar_one_or_none()
+    if record is None:
+        record = BlogSidebarSettings(user_id=user.id, show_tags=data.show_tags)
+        db.add(record)
+    else:
+        record.show_tags = data.show_tags
+    await db.commit()
+    return SidebarSettingsResponse(show_tags=record.show_tags)

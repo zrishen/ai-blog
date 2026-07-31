@@ -16,7 +16,7 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.models import BlogPost, FileCategory, FileDocument, FileProcessingJob
+from src.database.models import BlogPost, FileDocument, FileProcessingJob
 from src.database.session import async_session
 from src.services.file.file_service import delete_uploaded_file, vectorize_and_store, vectorize_text_and_store
 from src.services.rag.vector_store import delete_document_chunks
@@ -189,7 +189,6 @@ async def create_or_reuse_upload_job(
     original_name: str,
     stored_name: str,
     collection_name: str,
-    category_id: int | None,
     processing_dir: Path,
     auto_index: bool = False,
 ) -> tuple[FileProcessingJob, bool]:
@@ -228,7 +227,6 @@ async def create_or_reuse_upload_job(
         original_name=original_name,
         stored_name=stored_name,
         collection_name=collection_name,
-        category_id=category_id,
         auto_index=auto_index,
         staging_path=str(processing_dir / f"{job_id}.part"),
         active_key=active_key,
@@ -294,7 +292,6 @@ async def create_or_reuse_restore_job(
         original_name=source_document.original_name,
         stored_name=source_document.file_path,
         collection_name=source_document.collection_name,
-        category_id=source_document.category_id,
         active_key=active_key,
         created_at=now,
         updated_at=now,
@@ -322,7 +319,6 @@ async def create_or_reuse_index_job(
     collection_name: str,
     original_name: str,
     stored_name: str,
-    category_id: int | None = None,
     client_request_id: str | None = None,
 ) -> FileProcessingJob:
     """创建「加入 AI 知识」索引 job（幂等：同一资源已有活跃 index job 则复用）。
@@ -360,7 +356,6 @@ async def create_or_reuse_index_job(
         original_name=original_name,
         stored_name=stored_name,
         collection_name=collection_name,
-        category_id=category_id,
         target_resource_type=target_resource_type,
         target_resource_id=target_resource_id,
         active_key=active_key,
@@ -531,7 +526,6 @@ async def _vectorize_blog_post(
         original_name=job.original_name,
         user_id=job.user_id,
         resource_type="blog_post",
-        category_id=post.category_id,
         progress_reporter=reporter,
     )
 
@@ -592,7 +586,6 @@ async def _run_job(job_id: str) -> None:
                         job.stored_name or "",
                         job.collection_name,
                         original_name=job.original_name,
-                        category_id=job.category_id,
                         user_id=job.user_id,
                         progress_reporter=reporter,
                     )
@@ -638,9 +631,6 @@ async def _finalize_success(
         # RagSource 已在 _run_job 推进；index 不创建/恢复 FileDocument。
         pass
     elif job.job_type == "upload":
-        category_id = job.category_id
-        if category_id is not None and await db.get(FileCategory, category_id) is None:
-            category_id = None
         doc = FileDocument(
             collection_name=job.collection_name,
             user_id=str(job.user_id),
@@ -648,7 +638,6 @@ async def _finalize_success(
             file_path=job.stored_name,
             chunk_content=f"{len(chunks)} chunks" if indexed else "not indexed",
             meta="",
-            category_id=category_id,
             created_at=utcnow(),
         )
         db.add(doc)
@@ -658,8 +647,6 @@ async def _finalize_success(
         doc = await db.get(FileDocument, job.source_document_id)
         if not doc or doc.user_id != str(job.user_id) or doc.deleted_at is None:
             raise RuntimeError("Restore source document is no longer available")
-        if doc.category_id is not None and await db.get(FileCategory, doc.category_id) is None:
-            doc.category_id = None
         doc.deleted_at = None
         doc.chunk_content = f"{len(chunks)} chunks"
         job.result_document_id = doc.id

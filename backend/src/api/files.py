@@ -10,23 +10,16 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.responses import FileResponse
-from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import FileDocument, get_db
-from src.database.models import BlogPost, FileCategory as FileCategoryModel, User
+from src.database.models import BlogPost, User
 from src.schemas.file_base import (
-    FileCategoryCreate,
-    FileCategoryUpdate,
-    FileCategoryResponse,
-    FileCategoryTreeResponse,
     FileCollectionResponse,
     FileDocumentListResponse,
     FileDocumentResponse,
     FileDocumentUpdate,
-    SetCategoryRequest,
 )
 from src.schemas.files import FileUploadResponse
 from src.schemas.file_processing import FileProcessingJobResponse
@@ -49,7 +42,6 @@ from src.services.file.file_service import (
 )
 from src.services.rag.vector_store import delete_document_chunks
 from src.utils.auth import get_current_user
-from src.utils.slug import slugify
 
 
 logger = logging.getLogger(__name__)
@@ -179,205 +171,6 @@ def _is_user_collection(name: str, user_id: int) -> bool:
     return name.startswith(f"user_{user_id}_")
 
 
-async def _get_owned_category(db: AsyncSession, category_id: int, user_id: int) -> FileCategoryModel | None:
-    cat = await db.get(FileCategoryModel, category_id)
-    if not cat or cat.user_id != user_id:
-        return None
-    return cat
-
-
-async def _ensure_category_owner(db: AsyncSession, category_id: int | None, user_id: int):
-    if category_id is None:
-        return
-    cat = await _get_owned_category(db, category_id, user_id)
-    if not cat:
-        raise HTTPException(status_code=400, detail="分类不存在")
-
-
-# ---- 文件库分类 ----
-
-
-@router.get("/files/categories")
-async def list_file_categories(
-    flat: bool = False,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """获取当前用户的分类列表。flat=true 返回扁平列表，否则返回树形结构。"""
-    result = await db.execute(
-        select(FileCategoryModel)
-        .where(FileCategoryModel.user_id == user.id)
-        .order_by(FileCategoryModel.name)
-    )
-    categories = result.scalars().all()
-
-    if flat:
-        return [FileCategoryResponse.model_validate(c) for c in categories]
-
-    cat_map: dict[int, FileCategoryTreeResponse] = {}
-    roots: list[FileCategoryTreeResponse] = []
-
-    for c in categories:
-        node = FileCategoryTreeResponse.model_validate(c)
-        node.children = []
-        cat_map[c.id] = node
-
-    for c in categories:
-        node = cat_map[c.id]
-        if c.parent_id and c.parent_id in cat_map:
-            cat_map[c.parent_id].children.append(node)
-        else:
-            roots.append(node)
-
-    return roots
-
-
-@router.post("/files/categories", response_model=FileCategoryResponse, status_code=201)
-async def create_file_category(
-    data: FileCategoryCreate,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    if data.parent_id:
-        parent = await _get_owned_category(db, data.parent_id, user.id)
-        if not parent:
-            raise HTTPException(status_code=400, detail="父分类不存在")
-
-    slug = slugify(data.name)
-    cat = FileCategoryModel(
-        name=data.name,
-        slug=slug,
-        description=data.description,
-        parent_id=data.parent_id,
-        user_id=user.id,
-    )
-    db.add(cat)
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="分类已存在")
-    await db.refresh(cat)
-    return FileCategoryResponse.model_validate(cat)
-
-
-@router.put("/files/categories/{category_id}", response_model=FileCategoryResponse)
-async def update_file_category(
-    category_id: int,
-    data: FileCategoryUpdate,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    cat = await _get_owned_category(db, category_id, user.id)
-    if not cat:
-        raise HTTPException(status_code=404, detail="Category not found")
-
-    if "parent_id" in data.model_fields_set and data.parent_id is not None:
-        if data.parent_id == category_id:
-            raise HTTPException(status_code=400, detail="不能将分类设为自己的子分类")
-        parent = await _get_owned_category(db, data.parent_id, user.id)
-        if not parent:
-            raise HTTPException(status_code=400, detail="父分类不存在")
-        # 禁止把节点移到自己的后代之下，否则会形成父子环，使遍历/删除无限循环
-        descendant_ids = await _collect_descendant_category_ids(db, category_id, user.id)
-        if data.parent_id in descendant_ids:
-            raise HTTPException(status_code=400, detail="不能将分类移到自己的子分类下")
-
-    if "name" in data.model_fields_set:
-        cat.name = data.name
-        cat.slug = slugify(data.name)
-    if "description" in data.model_fields_set:
-        cat.description = data.description
-    if "parent_id" in data.model_fields_set:
-        cat.parent_id = data.parent_id
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="分类已存在")
-    await db.refresh(cat)
-    return FileCategoryResponse.model_validate(cat)
-
-
-async def _collect_descendant_category_ids(
-    db: AsyncSession, root_id: int, user_id: int
-) -> list[int]:
-    """收集 root_id 及其所有后代分类的 id（含自身），BFS 遍历。"""
-    rows = await db.execute(
-        select(FileCategoryModel.id, FileCategoryModel.parent_id).where(
-            FileCategoryModel.user_id == user_id
-        )
-    )
-    children_map: dict[int | None, list[int]] = {}
-    for cat_id, parent_id in rows.all():
-        children_map.setdefault(parent_id, []).append(cat_id)
-
-    result: list[int] = [root_id]
-    queue = [root_id]
-    visited: set[int] = {root_id}
-    while queue:
-        current = queue.pop(0)
-        for child_id in children_map.get(current, []):
-            if child_id in visited:
-                # 环保护：历史坏数据可能存在父子环，已访问的节点不再入队，避免无限循环
-                continue
-            visited.add(child_id)
-            result.append(child_id)
-            queue.append(child_id)
-    return result
-
-
-@router.delete("/files/categories/{category_id}")
-async def delete_file_category(
-    category_id: int,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    cat = await _get_owned_category(db, category_id, user.id)
-    if not cat:
-        raise HTTPException(status_code=404, detail="Category not found")
-    descendant_ids = await _collect_descendant_category_ids(db, category_id, user.id)
-
-    docs_result = await db.execute(
-        select(FileDocument).where(
-            FileDocument.category_id.in_(descendant_ids),
-            FileDocument.user_id == str(user.id),
-            FileDocument.deleted_at.is_(None),
-        )
-    )
-    docs = docs_result.scalars().all()
-
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    if docs:
-        await db.execute(
-            update(FileDocument)
-            .where(
-                FileDocument.id.in_([d.id for d in docs]),
-                FileDocument.deleted_at.is_(None),
-            )
-            .values(deleted_at=now, category_id=None)
-        )
-        await db.commit()
-        for doc in docs:
-            try:
-                await delete_document_chunks(doc.collection_name, doc.file_path)
-            except Exception:
-                logger.exception(
-                    "Category delete chroma cleanup failed (best-effort): doc_id=%s stored_name=%s",
-                    doc.id,
-                    doc.file_path,
-                )
-
-    await db.execute(
-        sql_delete(FileCategoryModel).where(
-            FileCategoryModel.id.in_(descendant_ids),
-            FileCategoryModel.user_id == user.id,
-        )
-    )
-    await db.commit()
-    return {"status": "ok"}
-
-
 # ---- 文件库文档 ----
 
 
@@ -388,14 +181,12 @@ async def delete_file_category(
 )
 async def upload_to_file_library(
     file: UploadFile = File(...),
-    category_id: Optional[int] = Form(None),
     auto_index: Optional[bool] = Form(None),
     x_file_request_id: str = Header(..., alias="X-File-Request-Id"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """Stage a file upload and enqueue durable background vectorization."""
-    await _ensure_category_owner(db, category_id, user.id)
     try:
         request_id = str(uuid.UUID(x_file_request_id))
     except ValueError as exc:
@@ -419,7 +210,6 @@ async def upload_to_file_library(
             original_name=original_name,
             stored_name=stored_name,
             collection_name=collection_name,
-            category_id=category_id,
             processing_dir=processing_dir,
             auto_index=bool(auto_index),
         )
@@ -527,19 +317,14 @@ async def list_file_processing_jobs(
 
 @router.get("/files/documents", response_model=FileDocumentListResponse)
 async def list_file_documents(
-    category_id: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """List all file library documents, optionally filtered by category."""
-    await _ensure_category_owner(db, category_id, user.id)
-
+    """List all file library documents."""
     stmt = select(FileDocument).where(
         FileDocument.user_id == str(user.id),
         FileDocument.deleted_at.is_(None),
     ).order_by(FileDocument.created_at.desc())
-    if category_id is not None:
-        stmt = stmt.where(FileDocument.category_id == category_id)
     result = await db.execute(stmt)
     docs = result.scalars().all()
 
@@ -556,35 +341,10 @@ async def list_file_documents(
             original_name=d.original_name,
             file_path=d.file_path,
             chunk_count=chunk_count,
-            category_id=d.category_id,
             created_at=d.created_at,
         ))
 
     return FileDocumentListResponse(documents=documents)
-
-
-@router.patch("/files/documents/{doc_id}/category")
-async def set_document_category(
-    doc_id: int,
-    data: SetCategoryRequest,
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Set or clear a document's category."""
-    await _ensure_category_owner(db, data.category_id, user.id)
-    result = await db.execute(
-        select(FileDocument).where(
-            FileDocument.id == doc_id,
-            FileDocument.user_id == str(user.id),
-            FileDocument.deleted_at.is_(None),
-        )
-    )
-    doc = result.scalar_one_or_none()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-    doc.category_id = data.category_id
-    await db.commit()
-    return {"status": "ok"}
 
 
 @router.patch("/files/documents/{doc_id}")

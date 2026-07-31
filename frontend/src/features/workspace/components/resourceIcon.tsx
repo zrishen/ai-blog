@@ -1,5 +1,5 @@
 import { Network } from "lucide-react";
-import { getFileIcon } from "@/features/file/components/fileIcons";
+import { getFileIcon } from "@/components/fileIcons";
 import blogIcon from "@/components/icons/blog.svg";
 import type { WorkspaceNode } from "@/api/client";
 

@@ -30,6 +30,8 @@ export interface SiteUserData {
   username: string;
   created_at: string;
   is_owner: boolean;
+  sidebar_html?: string | null;
+  show_tags?: boolean;
 }
 
 export async function getSiteUser(username: string): Promise<SiteUserData> {
@@ -140,6 +142,15 @@ export async function publishBlogPost(id: number, publish: boolean): Promise<Blo
   });
   if (!res.ok) throw new Error("Failed to publish/unpublish blog post");
   return res.json();
+}
+
+export async function updateSidebarSettings(showTags: boolean): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/settings/sidebar`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ show_tags: showTags }),
+  });
+  if (!res.ok) throw new Error("Failed to update sidebar settings");
 }
 
 export async function generateBlogCover(id: number): Promise<BlogPostData> {

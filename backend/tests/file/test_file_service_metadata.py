@@ -70,7 +70,6 @@ async def test_vectorize_and_store_writes_rich_metadata():
             "stored.pdf",
             "kb_doc",
             original_name="kb_doc.pdf",
-            category_id=123,
         )
 
     assert chunks == ["第一段内容。\n第二段内容。"]
@@ -84,14 +83,13 @@ async def test_vectorize_and_store_writes_rich_metadata():
     assert metadata["stored_name"] == "stored.pdf"
     assert metadata["file_type"] == "pdf"
     assert metadata["collection_name"] == "kb_doc"
-    assert metadata["category_id"] == 123
     assert metadata["chunk_index"] == 0
     assert metadata["total_chunks"] == 1
     assert metadata["chunk_id"] == "stored.pdf:0"
 
 
 @pytest.mark.asyncio
-async def test_vectorize_and_store_omits_empty_category_metadata():
+async def test_vectorize_and_store_writes_default_metadata():
     captured = {}
 
     async def fake_add_documents(
@@ -111,7 +109,9 @@ async def test_vectorize_and_store_omits_empty_category_metadata():
     metadata = captured["metadata_list"][0]
     assert metadata["source"] == "stored.docx"
     assert metadata["file_type"] == "docx"
-    assert "category_id" not in metadata
+    assert metadata["collection_name"] == "doc_collection"
+    assert metadata["user_id"] == "default_user"
+    assert metadata["total_chunks"] == 1
 
 
 @pytest.mark.asyncio

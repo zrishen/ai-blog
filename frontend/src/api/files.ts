@@ -14,7 +14,6 @@ export interface FileDocument {
   original_name: string;
   file_path: string;
   chunk_count: number;
-  category_id: number | null;
   created_at: string;
 }
 
@@ -49,7 +48,6 @@ export interface FileProcessingJob {
   source_document_id: number | null;
   result_document_id: number | null;
   original_name: string;
-  category_id: number | null;
   target_resource_type: string | null;
   target_resource_id: number | null;
   error_code: string | null;
@@ -83,14 +81,12 @@ function handleUnauthorized() {
 
 export function uploadToFileLibrary(
   file: File,
-  categoryId: number | undefined,
   clientRequestId: string,
   onProgress?: (progress: FileUploadProgress) => void,
 ): FileUploadRequest {
   const xhr = new XMLHttpRequest();
   const formData = new FormData();
   formData.append("file", file);
-  if (categoryId != null) formData.append("category_id", String(categoryId));
 
   const promise = new Promise<FileProcessingJob>((resolve, reject) => {
     xhr.open("POST", `${API_BASE}/files/documents`);
@@ -159,20 +155,10 @@ export async function listFileProcessingJobsByRequestId(clientRequestId: string)
   return normalizeJobs(await res.json());
 }
 
-export async function listFileDocuments(categoryId?: number): Promise<FileDocumentsResponse> {
-  const q = categoryId ? `?category_id=${categoryId}` : "";
-  const res = await apiFetch(`${API_BASE}/files/documents${q}`);
+export async function listFileDocuments(): Promise<FileDocumentsResponse> {
+  const res = await apiFetch(`${API_BASE}/files/documents`);
   if (!res.ok) throw new Error("Failed to fetch file library documents");
   return res.json();
-}
-
-export async function setDocumentCategory(docId: number, categoryId: number | null): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/files/documents/${docId}/category`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ category_id: categoryId }),
-  });
-  if (!res.ok) throw new Error("Failed to set document category");
 }
 
 export async function updateFileDocument(docId: number, originalName: string): Promise<void> {
@@ -189,62 +175,5 @@ export async function deleteFileDocument(docId: number): Promise<void> {
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`Failed to delete file library document: ${err}`);
-  }
-}
-
-// ============ File Library Categories ============
-
-export interface FileCategoryData {
-  id: number;
-  name: string;
-  slug: string;
-  description?: string;
-  parent_id: number | null;
-  children?: FileCategoryData[];
-  created_at: string;
-}
-
-export async function listFileCategories(): Promise<FileCategoryData[]> {
-  const res = await apiFetch(`${API_BASE}/files/categories`);
-  if (!res.ok) throw new Error("Failed to fetch file library categories");
-  return res.json();
-}
-
-export async function createFileCategory(data: {
-  name: string;
-  description?: string;
-  parent_id?: number | null;
-}): Promise<FileCategoryData> {
-  const res = await apiFetch(`${API_BASE}/files/categories`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error("Failed to create file library category");
-  return res.json();
-}
-
-export async function updateFileCategory(id: number, data: {
-  name?: string;
-  description?: string;
-  parent_id?: number | null;
-}): Promise<FileCategoryData> {
-  const res = await apiFetch(`${API_BASE}/files/categories/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to update file library category: ${err}`);
-  }
-  return res.json();
-}
-
-export async function deleteFileCategory(id: number): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/files/categories/${id}`, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to delete file library category: ${err}`);
   }
 }

@@ -55,6 +55,24 @@ BLOG_MERMAID_GUIDE = (
 SYSTEM_TOOL_RULES += BLOG_MERMAID_GUIDE
 
 # ════════════════════════════════════════════════════════════════
+# 博客左栏（侧栏）定制规范
+# ════════════════════════════════════════════════════════════════
+# update_blog_sidebar 工具生成自包含 HTML，前端用 iframe 沙箱渲染。
+SIDEBAR_TOOL_RULES = (
+    "\n\n博客左栏（侧栏）定制规范："
+    "当用户要求设计或修改其博客主页左栏的外观与内容时，调用 update_blog_sidebar(html)，"
+    "html 为自包含片段，须满足："
+    "1) 内联 CSS（<style> 写在片段内），不引用外部样式表；"
+    "2) 颜色必须用语义变量跟随明暗主题：var(--background)、var(--foreground)、var(--primary)、"
+    "var(--secondary)、var(--muted-foreground)、var(--border)、var(--card) 等，禁止硬编码颜色；"
+    "3) 宽度自适应窄列（容器约 240–320px），用百分比或 flex，不写固定大宽度；"
+    "4) 禁止 <script>、禁止引用任何外部脚本/字体/图片域名；"
+    "5) 不写 <html>/<head>/<body> 包裹，只输出正文片段；"
+    "6) 文案用中文，内容贴合用户描述。"
+)
+SYSTEM_TOOL_RULES += SIDEBAR_TOOL_RULES
+
+# ════════════════════════════════════════════════════════════════
 # Research Graph 工具提示词
 # ════════════════════════════════════════════════════════════════
 

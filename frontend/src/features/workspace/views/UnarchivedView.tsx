@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Archive, Inbox, Trash2 } from "lucide-react";
 import { BlogIcon, PublishedIcon } from "@/components/icons";
-import { getFileIcon } from "@/features/file/components/fileIcons";
+import { getFileIcon } from "@/components/fileIcons";
 import {
   listBlogPosts,
   listFileDocuments,

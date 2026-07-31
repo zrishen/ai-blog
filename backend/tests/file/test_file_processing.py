@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.files import upload_to_file_library
-from src.database.models import FileCategory, FileDocument, FileProcessingJob, User
+from src.database.models import FileDocument, FileProcessingJob, User
 from src.main import app
 from src.services.file import file_processing_service, file_service
 from src.services.file.file_processing_service import (
@@ -148,7 +148,6 @@ async def test_upload_cancellation_cleans_staging_file_and_releases_active_job(
     with pytest.raises(asyncio.CancelledError):
         await upload_to_file_library(
             file=upload,
-            category_id=None,
             x_file_request_id=request_id,
             db=db_session,
             user=user,
@@ -402,48 +401,6 @@ async def test_upload_without_auto_index_skips_vectorization(
     doc = await db_session.get(FileDocument, job.result_document_id)
     assert doc.chunk_content == "not indexed"
     assert vectorize_calls == []
-
-
-@pytest.mark.asyncio
-async def test_deleted_category_does_not_block_restore_finalize(
-    client: AsyncClient,
-    db_session: AsyncSession,
-):
-    category = FileCategory(name="Temporary", slug=f"temporary-{uuid.uuid4().hex}", user_id=1)
-    db_session.add(category)
-    await db_session.flush()
-    source = file_service.get_user_upload_dir(1) / f"uncategorized-{uuid.uuid4().hex}.pdf"
-    source.write_bytes(b"%PDF-1.4 restore")
-    doc = FileDocument(
-        collection_name="user_1_file_test",
-        user_id="1",
-        original_name="restore.pdf",
-        file_path=source.name,
-        chunk_content="9 chunks",
-        meta="",
-        category_id=category.id,
-        deleted_at=datetime.now(timezone.utc).replace(tzinfo=None),
-    )
-    db_session.add(doc)
-    await db_session.commit()
-    category_id, doc_id = category.id, doc.id
-
-    deleted = await client.delete(f"/api/v1/files/categories/{category_id}")
-    assert deleted.status_code == 200
-    db_session.expire_all()
-    uncategorized = await db_session.get(FileDocument, doc_id)
-    # 已软删文档在分类删除时不被重复处理，category_id 暂留指向已删除分类；
-    # 由恢复 finalize 阶段检测分类不存在时清空。
-    assert uncategorized.category_id == category_id
-
-    restored = await client.post(f"/api/v1/trash/file_document/{doc_id}/restore")
-    assert restored.status_code == 202
-    await _run_job(restored.json()["id"])
-    db_session.expire_all()
-    finalized = await db_session.get(FileDocument, doc_id)
-    assert finalized.deleted_at is None
-    assert finalized.category_id is None
-    assert finalized.chunk_content == "0 chunks"
 
 
 @pytest.mark.asyncio

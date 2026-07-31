@@ -86,6 +86,14 @@ export function blogReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, aiSelectionContext: action.payload };
     case "CLEAR_AI_SELECTION_CONTEXT":
       return { ...state, aiSelectionContext: null };
+    case "SET_LEFTBAR_HTML":
+      return { ...state, leftbarHtml: action.payload };
+    case "SET_LEFTBAR_SHOW_TAGS":
+      return { ...state, leftbarShowTags: action.payload };
+    case "SET_AI_LEFTBAR_EDIT_CONTEXT":
+      return { ...state, aiLeftbarEditContext: action.payload };
+    case "CLEAR_AI_LEFTBAR_EDIT_CONTEXT":
+      return { ...state, aiLeftbarEditContext: null };
     case "START_BLOG_PATCH_STREAMING":
       return {
         ...state,

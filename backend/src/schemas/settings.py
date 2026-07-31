@@ -23,3 +23,11 @@ class LLMSettingsUpdate(BaseModel):
         if value not in SUPPORTED_LLM_PROTOCOLS:
             return "openai"
         return value
+
+
+class SidebarSettingsUpdate(BaseModel):
+    show_tags: bool = True
+
+
+class SidebarSettingsResponse(BaseModel):
+    show_tags: bool = True

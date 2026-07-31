@@ -176,4 +176,5 @@ def test_blog_tools_expose_read_edit_write_tools():
     assert "blog_get_post_section" not in names
     assert "blog_update_post" not in names
     assert "blog_patch_post" not in names
-    assert len(names) == 6
+    assert "update_blog_sidebar" in names
+    assert len(names) == 7

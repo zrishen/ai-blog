@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import {
   Plus,
-  Library,
   GitBranch,
   Blocks,
   ArrowUp,
@@ -35,7 +34,6 @@ interface ChatInputBarProps {
   onSelectAttachments: (files: FileList) => void;
   onRetryAttachment: (localId: string) => void;
   onRemoveAttachment: (localId: string) => void;
-  onPickFiles: () => void;
   onPickResearch: () => void;
   onOpenPlugins: () => void;
 }
@@ -56,7 +54,6 @@ export function ChatInputBar({
   onSelectAttachments,
   onRetryAttachment,
   onRemoveAttachment,
-  onPickFiles,
   onPickResearch,
   onOpenPlugins,
 }: ChatInputBarProps) {
@@ -116,10 +113,6 @@ export function ChatInputBar({
             >
               <Paperclip className="mr-2 h-4 w-4" />
               上传文件
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onPickFiles}>
-              <Library className="mr-2 h-4 w-4" />
-              文件库
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onPickResearch}>
               <GitBranch className="mr-2 h-4 w-4" />

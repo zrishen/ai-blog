@@ -598,6 +598,12 @@ async def stream_chat(
                                 )
                                 if research_link:
                                     payload["research_link"] = research_link
+                    elif tool_name == "update_blog_sidebar":
+                        # 把工具输入的 html 回传前端，左栏 iframe 即时渲染（无需改 SSE 协议）
+                        sidebar_input = _tool_call_input_by_id.get(call_id, _last_tool_input)
+                        sidebar_html = sidebar_input.get("html") if isinstance(sidebar_input, dict) else None
+                        if sidebar_html:
+                            payload["blog_meta"] = {"html": sidebar_html}
                     tool_input_for_call = _tool_call_input_by_id.get(call_id, _last_tool_input)
                     refs = _extract_references(tool_name, result_text, tool_input_for_call)
                     if refs:

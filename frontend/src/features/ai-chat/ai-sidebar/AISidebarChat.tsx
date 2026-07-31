@@ -236,7 +236,6 @@ export function AISidebarChat({
   const {
     loginDialogOpen,
     setLoginDialogOpen,
-    handleFiles,
     handleResearch,
     handleLoginSuccess,
   } = useAISidebarNavigation(isAuthenticated);
@@ -367,6 +366,10 @@ export function AISidebarChat({
             pageContext.section_index = state.aiSelectionContext.sectionIndex;
           }
           dispatch({ type: "CLEAR_AI_SELECTION_CONTEXT" });
+        }
+        if (state.aiLeftbarEditContext) {
+          pageContext.current_leftbar_html = state.aiLeftbarEditContext.html;
+          dispatch({ type: "CLEAR_AI_LEFTBAR_EDIT_CONTEXT" });
         }
 
         await sendChat(text, initialConversationId, {
@@ -516,6 +519,10 @@ export function AISidebarChat({
                 streamId: meta?.stream_id,
               }];
               updateAssistant({ toolEvents: runState.toolEvents });
+              if (toolName === "update_blog_sidebar") {
+                const html = (blogMeta as { html?: string } | undefined)?.html;
+                if (html) dispatch({ type: "SET_LEFTBAR_HTML", payload: html });
+              }
               const targetPostId = blogMeta?.post_id;
               if (toolName === "blog_edit_post" && activePatchStream && targetPostId === activePatchStream.postId) {
                 const completed = activePatchStream;
@@ -650,7 +657,7 @@ export function AISidebarChat({
       dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: activeKey, streaming: false } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachments, dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, refreshResearchTopicIfNeeded, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.researchCurrentTopic, state.researchCurrentTopicId, state.aiSelectionContext, state.trustWritingEnabled]);
+  }, [attachments, dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, refreshResearchTopicIfNeeded, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.researchCurrentTopic, state.researchCurrentTopicId, state.aiSelectionContext, state.aiLeftbarEditContext, state.trustWritingEnabled]);
 
   const handleSend = useCallback(async (textOverride?: string) => {
     const convKey = getActiveKey();
@@ -879,7 +886,7 @@ export function AISidebarChat({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <AnimatePresence>
-        {(contextText || state.aiSelectionContext || state.trustWritingEnabled) && (
+        {(contextText || state.aiSelectionContext || state.aiLeftbarEditContext || state.trustWritingEnabled) && (
           <motion.div
             initial={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
             animate={{ maxHeight: 120, opacity: 1, paddingTop: 8, paddingBottom: 8 }}
@@ -903,6 +910,18 @@ export function AISidebarChat({
                 <button
                   className="flex-shrink-0 rounded px-1.5 text-caption hover:bg-primary/20"
                   onClick={() => dispatch({ type: "CLEAR_AI_SELECTION_CONTEXT" })}
+                >
+                  取消
+                </button>
+              </div>
+            )}
+            {state.aiLeftbarEditContext && (
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-3 w-3 flex-shrink-0 text-primary" />
+                <span className="flex-1 truncate">正在编辑左栏 HTML</span>
+                <button
+                  className="flex-shrink-0 rounded px-1.5 text-caption hover:bg-primary/20"
+                  onClick={() => dispatch({ type: "CLEAR_AI_LEFTBAR_EDIT_CONTEXT" })}
                 >
                   取消
                 </button>
@@ -956,7 +975,6 @@ export function AISidebarChat({
         onKeyDown={handleKeyDown}
         onSend={handleSendClick}
         onStop={handleStop}
-        onPickFiles={handleFiles}
         onPickResearch={handleResearch}
         onOpenPlugins={handleOpenPlugins}
       />

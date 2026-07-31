@@ -10,7 +10,6 @@ import { AISidebar } from "./features/ai-chat/AISidebar";
 import { SiteBlogRoute } from "./features/blog/components/SiteBlogRoute";
 import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
-import { FileLibraryPage } from "./features/file/FileLibraryPage";
 import { WorkspacePage } from "./features/workspace/WorkspacePage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
 import { OverviewPage } from "./features/admin/components/OverviewPage";
@@ -76,16 +75,6 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
   }
 }
 
-function FilesRoute() {
-  const dispatch = useChatDispatch();
-
-  useEffect(() => {
-    dispatch({ type: "SET_PAGE", payload: "files" });
-  }, [dispatch]);
-
-  return <FileLibraryPage />;
-}
-
 function WorkspaceRoute() {
   const dispatch = useChatDispatch();
 
@@ -127,7 +116,6 @@ function MainContent() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/files" element={<FilesRoute />} />
       <Route path="/workspace" element={<WorkspaceRoute />} />
       <Route path="/research" element={<ResearchRoute />} />
       <Route path="/research/:topicId" element={<ResearchRoute />} />
@@ -180,17 +168,6 @@ function useAISidebarRouteContext() {
         siteUsername: undefined,
         postSlug: undefined,
         pageType: "home" as const,
-        postTitle: undefined,
-      };
-    }
-
-    if (location.pathname === "/files") {
-      return {
-        mode,
-        contextText: "当前上下文：文件库",
-        siteUsername: undefined,
-        postSlug: undefined,
-        pageType: "files" as const,
         postTitle: undefined,
       };
     }

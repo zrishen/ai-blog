@@ -22,7 +22,6 @@ class FileProcessingJobResponse(BaseModel):
     source_document_id: int | None = None
     result_document_id: int | None = None
     original_name: str
-    category_id: int | None = None
     target_resource_type: str | None = None
     target_resource_id: int | None = None
     error_code: str | None = None

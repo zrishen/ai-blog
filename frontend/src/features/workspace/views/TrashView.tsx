@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
 import { BlogIcon } from "@/components/icons";
-import { getFileIcon } from "@/features/file/components/fileIcons";
+import { getFileIcon } from "@/components/fileIcons";
 import {
   emptyTrash,
   listTrash,

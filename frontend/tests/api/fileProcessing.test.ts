@@ -34,7 +34,6 @@ const job = {
   source_document_id: null,
   result_document_id: null,
   original_name: "a.pdf",
-  category_id: null,
   error_code: null,
   error_message: null,
   created_at: "2026-07-13T00:00:00Z",
@@ -50,7 +49,7 @@ beforeEach(() => {
 describe("uploadToFileLibrary XHR", () => {
   it("将可计算上传进度映射到 0-25 并发送认证与 request id", async () => {
     const updates: Array<{ percent: number | null; stage: string }> = [];
-    const request = uploadToFileLibrary(new File(["data"], "a.pdf"), 3, "request-1", (value) => updates.push(value));
+    const request = uploadToFileLibrary(new File(["data"], "a.pdf"), "request-1", (value) => updates.push(value));
     const xhr = MockXhr.latest;
     xhr.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 } as ProgressEvent);
     xhr.upload.onload?.();
@@ -67,13 +66,13 @@ describe("uploadToFileLibrary XHR", () => {
 
   it("lengthComputable=false 时不伪造百分比", () => {
     const updates: Array<{ percent: number | null; stage: string }> = [];
-    uploadToFileLibrary(new File(["data"], "a.pdf"), undefined, "request-1", (value) => updates.push(value));
+    uploadToFileLibrary(new File(["data"], "a.pdf"),"request-1", (value) => updates.push(value));
     MockXhr.latest.upload.onprogress?.({ lengthComputable: false, loaded: 0, total: 0 } as ProgressEvent);
     expect(updates).toEqual([{ percent: null, stage: "正在上传文件" }]);
   });
 
   it("HTTP 错误保留服务端详情且不标记为网络错误", async () => {
-    const request = uploadToFileLibrary(new File(["data"], "a.pdf"), undefined, "request-1");
+    const request = uploadToFileLibrary(new File(["data"], "a.pdf"),"request-1");
     MockXhr.latest.status = 422;
     MockXhr.latest.responseText = JSON.stringify({ detail: "文件格式不受支持" });
     MockXhr.latest.onload?.();
@@ -82,11 +81,11 @@ describe("uploadToFileLibrary XHR", () => {
   });
 
   it("网络错误与成功响应丢失使用可重联错误类型", async () => {
-    const networkRequest = uploadToFileLibrary(new File(["data"], "a.pdf"), undefined, "request-1");
+    const networkRequest = uploadToFileLibrary(new File(["data"], "a.pdf"),"request-1");
     MockXhr.latest.onerror?.();
     await expect(networkRequest.promise).rejects.toBeInstanceOf(FileUploadNetworkError);
 
-    const lostResponseRequest = uploadToFileLibrary(new File(["data"], "a.pdf"), undefined, "request-2");
+    const lostResponseRequest = uploadToFileLibrary(new File(["data"], "a.pdf"),"request-2");
     MockXhr.latest.status = 202;
     MockXhr.latest.responseText = "";
     MockXhr.latest.onload?.();
@@ -96,7 +95,7 @@ describe("uploadToFileLibrary XHR", () => {
   it("401 清理 token 并派发 auth:logout", async () => {
     const logout = vi.fn();
     window.addEventListener("auth:logout", logout);
-    const request = uploadToFileLibrary(new File(["data"], "a.pdf"), undefined, "request-1");
+    const request = uploadToFileLibrary(new File(["data"], "a.pdf"),"request-1");
     MockXhr.latest.status = 401;
     MockXhr.latest.responseText = "unauthorized";
     MockXhr.latest.onload?.();

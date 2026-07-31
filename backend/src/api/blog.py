@@ -5,6 +5,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.engine import get_db
@@ -33,16 +34,24 @@ async def get_public_user(
     db: AsyncSession = Depends(get_db),
     viewer: Optional[User] = Depends(get_optional_user),
 ):
+    from src.database.models import BlogSidebarSettings
     from src.services.blog.blog_service import get_user_by_username
 
     owner = await get_user_by_username(db, username)
     if not owner:
         raise HTTPException(status_code=404, detail="User not found")
+    sidebar = (
+        await db.execute(
+            select(BlogSidebarSettings).where(BlogSidebarSettings.user_id == owner.id)
+        )
+    ).scalar_one_or_none()
     return {
         "id": owner.id,
         "username": owner.username,
         "created_at": owner.created_at.isoformat(),
         "is_owner": bool(viewer and viewer.id == owner.id),
+        "sidebar_html": sidebar.html if sidebar and sidebar.html else None,
+        "show_tags": True if sidebar is None else bool(sidebar.show_tags),
     }
 
 

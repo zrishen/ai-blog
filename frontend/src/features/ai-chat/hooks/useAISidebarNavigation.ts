@@ -8,17 +8,7 @@ export function useAISidebarNavigation(isAuthenticated: boolean) {
   const { dispatch } = useChat();
   const navigate = useNavigate();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [loginRedirectTarget, setLoginRedirectTarget] = useState<"files" | "research" | null>(null);
-
-  const handleFiles = useCallback(() => {
-    if (!isAuthenticated) {
-      setLoginRedirectTarget("files");
-      setLoginDialogOpen(true);
-      return;
-    }
-    dispatch({ type: "SET_PAGE", payload: "files" });
-    navigate("/files");
-  }, [dispatch, navigate, isAuthenticated]);
+  const [loginRedirectTarget, setLoginRedirectTarget] = useState<"research" | null>(null);
 
   const handleResearch = useCallback(() => {
     if (!isAuthenticated) {
@@ -31,12 +21,6 @@ export function useAISidebarNavigation(isAuthenticated: boolean) {
   }, [dispatch, navigate, isAuthenticated]);
 
   const handleLoginSuccess = useCallback(() => {
-    if (loginRedirectTarget === "files") {
-      setLoginRedirectTarget(null);
-      dispatch({ type: "SET_PAGE", payload: "files" });
-      navigate("/files");
-      return;
-    }
     if (loginRedirectTarget === "research") {
       setLoginRedirectTarget(null);
       dispatch({ type: "SET_PAGE", payload: "research" });
@@ -49,7 +33,6 @@ export function useAISidebarNavigation(isAuthenticated: boolean) {
   return {
     loginDialogOpen,
     setLoginDialogOpen,
-    handleFiles,
     handleResearch,
     handleLoginSuccess,
   };

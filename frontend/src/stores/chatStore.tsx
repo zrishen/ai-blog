@@ -16,12 +16,11 @@ import type {
 } from "../features/ai-chat/types";
 import { isDisplayableMessage } from "../features/ai-chat/types";
 import type { BlogPost, BlogView } from "../features/blog/types";
-import type { FileCategory, FileDocument } from "../features/file/types";
+import type { FileDocument } from "../api/client";
 import type { Page, Panel, Theme, WorkspaceView } from "./types";
 import { researchReducer } from "./slices/researchSlice";
 import { conversationReducer } from "./slices/conversationSlice";
 import { blogReducer } from "./slices/blogSlice";
-import { fileReducer } from "./slices/fileSlice";
 import { uiReducer } from "./slices/uiSlice";
 import { revisionReducer } from "./slices/revisionSlice";
 import { aiSidebarReducer } from "./slices/aiSidebarSlice";
@@ -46,7 +45,6 @@ interface ChatState {
   isLoading: boolean;
   isStreaming: boolean;
   theme: Theme;
-  fileDocuments: FileDocument[];
   activePanel: Panel;
 
   // Layout
@@ -81,9 +79,7 @@ interface ChatState {
   // Blog Patch Streaming (in-place replacement preview for blog_edit_post)
   blogPatchStreamingByPostId: Record<number, BlogPatchStreamingState>;
 
-  // File Library
-  fileCategories: FileCategory[];
-  fileSelectedCategoryId: number | null;
+  // 工作区内联预览选中的文件路径（FilePreviewView）
   fileSelectedFile: string | null;
 
   // Workspace
@@ -111,6 +107,11 @@ interface ChatState {
 
   // AI 知识索引完成/移除后递增，触发 AiKnowledgeView 刷新（进度条→徽章）
   aiKnowledgeRevision: number;
+
+  // 博客主页左栏：AI 生成的自定义 HTML + 标签云显隐 + AI 栏编辑上下文
+  leftbarHtml: string | null;
+  leftbarShowTags: boolean;
+  aiLeftbarEditContext: { html: string | null } | null;
 }
 
 type ChatAction =
@@ -123,8 +124,6 @@ type ChatAction =
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_STREAMING"; payload: boolean }
   | { type: "SET_THEME"; payload: Theme }
-  | { type: "SET_FILE_DOCUMENTS"; payload: FileDocument[] }
-  | { type: "REMOVE_FILE_DOCUMENT"; payload: number }
   | { type: "SET_ACTIVE_PANEL"; payload: Panel }
   // Layout
   | { type: "SET_PAGE"; payload: Page }
@@ -169,13 +168,16 @@ type ChatAction =
   // AI Selection Context
   | { type: "SET_AI_SELECTION_CONTEXT"; payload: { postId: number; selectedText: string; sectionIndex: number } }
   | { type: "CLEAR_AI_SELECTION_CONTEXT" }
+  // 博客左栏
+  | { type: "SET_LEFTBAR_HTML"; payload: string | null }
+  | { type: "SET_LEFTBAR_SHOW_TAGS"; payload: boolean }
+  | { type: "SET_AI_LEFTBAR_EDIT_CONTEXT"; payload: { html: string | null } | null }
+  | { type: "CLEAR_AI_LEFTBAR_EDIT_CONTEXT" }
   // Blog Patch Streaming
   | { type: "START_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; targetText: string } }
   | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; replacementDelta: string } }
   | { type: "CLEAR_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string } }
-  // File Library
-  | { type: "SET_FILE_CATEGORIES"; payload: FileCategory[] }
-  | { type: "SET_FILE_SELECTED_CATEGORY_ID"; payload: number | null }
+  // 工作区文件预览
   | { type: "SET_FILE_SELECTED_FILE"; payload: string | null }
   // Workspace
   | { type: "SET_WORKSPACE_TREE"; payload: WorkspaceNode[] }
@@ -204,7 +206,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   state = researchReducer(state, action);
   state = conversationReducer(state, action);
   state = blogReducer(state, action);
-  state = fileReducer(state, action);
   state = uiReducer(state, action);
   state = revisionReducer(state, action);
   state = aiSidebarReducer(state, action);
@@ -233,10 +234,10 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         blogSelectedTag: null,
         blogStreamingByPostId: {},
         aiSelectionContext: null,
+        leftbarHtml: null,
+        leftbarShowTags: true,
+        aiLeftbarEditContext: null,
         blogPatchStreamingByPostId: {},
-        fileCategories: [],
-        fileDocuments: [],
-        fileSelectedCategoryId: null,
         fileSelectedFile: null,
         workspaceTree: [],
         workspaceSelectedFolderId: null,
@@ -263,7 +264,6 @@ const savedTheme = (localStorage.getItem("theme") as Theme) || "light";
 
 function getInitialPage(): Page {
   const path = window.location.pathname;
-  if (path.startsWith("/files")) return "files";
   if (path.startsWith("/research")) return "research";
   if (path.startsWith("/workspace")) return "workspace";
   return "blog";
@@ -289,7 +289,6 @@ const initialState: ChatState = {
   isLoading: false,
   isStreaming: false,
   theme: savedTheme,
-  fileDocuments: [],
   activePanel: "conversations",
 
   // Layout
@@ -318,11 +317,12 @@ const initialState: ChatState = {
   blogSelectedTag: null,
   blogStreamingByPostId: {},
   aiSelectionContext: null,
+  leftbarHtml: null,
+  leftbarShowTags: true,
+  aiLeftbarEditContext: null,
   blogPatchStreamingByPostId: {},
 
-  // File Library
-  fileCategories: [],
-  fileSelectedCategoryId: null,
+  // 工作区文件预览
   fileSelectedFile: null,
 
   // Workspace
@@ -400,5 +400,5 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   dispatch({ type: "SET_THEME", payload: next });
 }
 
-export type { Message, Conversation, DraftAttachment, FileDocument, BlogPost, FileCategory, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference, ResearchTopicDetail };
+export type { Message, Conversation, DraftAttachment, FileDocument, BlogPost, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference, ResearchTopicDetail };
 export { isDisplayableMessage };

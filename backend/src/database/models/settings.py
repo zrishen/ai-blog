@@ -1,6 +1,7 @@
 """设置与计量模型：用户 LLM 设置 + 公开聊天日用量。"""
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
@@ -24,6 +25,20 @@ class LLMSettings(Base):
     base_url = Column(Text, nullable=True)
     api_key = Column(Text, nullable=True)
     model_name = Column(String(200), nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class BlogSidebarSettings(Base):
+    """博主博客主页左栏的自定义配置：AI 生成的 HTML + 内置项开关。"""
+
+    __tablename__ = "blog_sidebar_settings"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_blog_sidebar_settings_user_id"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    html = Column(Text, nullable=False, default="")
+    show_tags = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 

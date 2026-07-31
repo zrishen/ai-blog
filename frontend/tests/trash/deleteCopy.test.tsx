@@ -72,11 +72,6 @@ describe("四处删除确认文案都改为可在回收站恢复", () => {
       marker: "删除后可在回收站恢复。",
     },
     {
-      name: "FilePanel 删除文件确认",
-      rel: path.join("src", "features", "file", "components", "FilePanel.tsx"),
-      marker: "删除后可在回收站恢复。",
-    },
-    {
       name: "BlogPostView 删除文章确认",
       rel: path.join("src", "features", "blog", "components", "BlogPostView.tsx"),
       marker: "删除后可在回收站恢复。",

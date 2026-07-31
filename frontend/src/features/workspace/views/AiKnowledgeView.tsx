@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Network, Plus, Sparkles, X } from "lucide-react";
 import { BlogIcon } from "@/components/icons";
-import { getFileIcon } from "@/features/file/components/fileIcons";
+import { getFileIcon } from "@/components/fileIcons";
 import { leaveAiKnowledge, listAiKnowledge, type RagSource } from "../../../api/workspace";
 import { listBlogPosts, listFileDocuments, type BlogPostData, type FileDocument } from "../../../api/client";
 import { JoinAiKnowledgeDialog } from "../components/JoinAiKnowledgeDialog";
