@@ -1,12 +1,7 @@
 """统一领域异常。
 
-设计意图：service 层只抛领域异常（表达业务语义），由 main.py 注册的全局 exception_handler
-统一翻译成 JSON 响应，避免 service 层直接耦合 HTTPException（HTTP 是 api 层的事）。
-
+service 层只抛领域异常（表达业务语义），由 main.py 注册的全局 exception_handler 统一翻译成 JSON（HTTP 是 api 层的事）。
 响应格式：{"code": <str>, "message": <str>}
-
-Phase 1 仅定义基类，不替换现有 HTTPException 调用点；Phase 2/3 拆分 chat/research 时
-在新代码中直接使用，Phase 6 批量替换剩余 110 处 HTTPException 并注册 handler。
 """
 
 from typing import Any

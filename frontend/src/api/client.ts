@@ -41,8 +41,6 @@ function refreshOnce(): Promise<string | null> {
   return refreshPromise;
 }
 
-// ---- Auth-aware fetch wrapper ----
-
 async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
   const isAuthEndpoint = url.startsWith(`${API_BASE}/auth/`);
   const headers = new Headers(options?.headers);

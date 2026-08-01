@@ -1,8 +1,4 @@
-"""ORM 模型聚合门面：按域拆分子模块，统一 re-export。
-
-`from src.database.models import X` 对外路径不变（模块 → 包，__init__ 聚合 re-export）。
-模型间通过字符串 ForeignKey 关联，无 Python 级循环依赖。
-"""
+"""ORM 模型聚合门面：按域拆分子模块，统一 re-export（`from src.database.models import X` 对外路径不变）。"""
 
 # ruff: noqa: F401
 from .auth import RefreshToken, User

@@ -1,7 +1,6 @@
 """平台插件内部使用的 MCP 客户端。
 
-此模块保留 MCP 协议能力，但运行配置只来自 PlatformPlugin，
-不向普通用户暴露任何命令、URL 或环境变量入口。
+运行配置只来自 PlatformPlugin，不向普通用户暴露命令、URL 或环境变量入口。
 """
 
 import asyncio

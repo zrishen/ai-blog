@@ -1,7 +1,4 @@
-"""admin 用量统计 service：单用户周用量 + 全局概览指标。
-
-均为只读聚合查询，供 admin API 调用。
-"""
+"""admin 用量统计 service：单用户周用量 + 全局概览指标（只读聚合查询）。"""
 
 from datetime import datetime, timezone
 
@@ -23,11 +20,7 @@ def _naive_utc_now() -> datetime:
 
 
 async def get_user_weekly_usage(db: AsyncSession, user_id: int) -> dict:
-    """单用户本周用量概览。
-
-    用户不存在抛 LookupError。
-    返回 {user_id, username, active, period, used, limit, remaining}。
-    """
+    """单用户本周用量概览，返回 {user_id, username, active, period, used, limit, remaining}；用户不存在抛 LookupError。"""
     user = await db.get(User, user_id)
     if user is None:
         raise LookupError(f"用户不存在: user_id={user_id}")

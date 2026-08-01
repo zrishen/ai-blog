@@ -9,11 +9,6 @@ from src.config import settings
 RAG_MAX_CONTEXT_CHARS = 6000
 
 
-# ════════════════════════════════════════════════════════════════
-# RAG 辅助函数
-# ════════════════════════════════════════════════════════════════
-
-
 async def _get_active_file_whitelist(user_id: int | None = None) -> dict[str, set[str]]:
     """检索白名单：「加入 AI 知识」且索引 active 的资源（file + blog_post）。
 
@@ -157,11 +152,6 @@ def _format_empty_rag_context(reason: str) -> str:
     )
 
 
-# ════════════════════════════════════════════════════════════════
-# 文件库搜索工具
-# ════════════════════════════════════════════════════════════════
-
-
 @tool
 async def base_search_file(query: str) -> str:
     """搜索已加入 AI 知识的内容（文件库文档 + 博客文章）的语义相关片段。
@@ -187,10 +177,6 @@ async def base_search_file(query: str) -> str:
     results = _filter_and_dedupe_rag_results(results)
     return _format_rag_context(results)
 
-
-# ════════════════════════════════════════════════════════════════
-# 工具列表
-# ════════════════════════════════════════════════════════════════
 
 RAG_TOOLS = [
     base_search_file,

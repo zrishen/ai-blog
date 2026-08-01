@@ -1,7 +1,6 @@
 """工作区目录树服务：文件夹节点的建/改名/移动/删除/排序。
 
-folder 节点软删除（可从回收站恢复）；resource 挂靠点硬删除（资源本身不受影响，回到未归档）。
-所有操作 user-scoped，跨用户访问抛 OwnershipError。
+folder 软删（可从回收站恢复）；resource 挂靠点硬删（资源不受影响，回未归档）。所有操作 user-scoped。
 """
 
 import re
@@ -14,7 +13,6 @@ from src.database.models import BlogPost as BlogPostModel
 from src.database.models import WorkspaceNode as WorkspaceNodeModel
 from src.database.models import _utcnow
 
-# 非中文/字母/数字/下划线的字符折成 -
 _SLUG_RE = re.compile(r"[^\w一-龥]+")
 
 
@@ -209,9 +207,8 @@ async def list_children(
 async def list_all(db: AsyncSession, user_id: int) -> list[WorkspaceNodeModel]:
     """用户全部可见节点（扁平列表，前端组装树）。
 
-    resource 挂靠点是引用关系——底层资源进回收站（软删）后节点本身仍存留，
-    这里在返回前剔除底层已软删的 file/blog_post 挂靠点，使工作区与文件库/文章
-    的删除状态保持一致；从回收站恢复后自动重现，不丢归档位置。
+    resource 挂靠点是引用关系：底层资源进回收站后节点仍存留，返回前剔除已软删的
+    file/blog_post 挂靠点，使工作区与删除状态一致；恢复后自动重现。
     """
     stmt = select(WorkspaceNodeModel).where(
         WorkspaceNodeModel.user_id == user_id,

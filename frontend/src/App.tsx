@@ -107,7 +107,6 @@ function AdminLayout() {
   }, [canAccessAdmin, dispatch]);
   // 刷新时先等待 Cookie 会话恢复，避免权限尚未加载便误跳回首页。
   if (isInitializing) return null;
-  // 非管理员直接进 /admin → 跳回首页
   if (!canAccessAdmin) return <Navigate to="/" replace />;
   return <Outlet />;
 }

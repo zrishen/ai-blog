@@ -91,16 +91,11 @@ describe("UsersPage", () => {
 
     render(<UsersPage />);
 
-    // 关键用户名展示
     expect(await screen.findByText("alice")).toBeInTheDocument();
     expect(screen.getByText("bob")).toBeInTheDocument();
-    // 管理员徽标
     expect(screen.getByText("管理员")).toBeInTheDocument();
-    // 未订阅用户展示占位符
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
-    // 分页计数：第 1-2 条 / 共 2 条
     expect(screen.getByText("第 1-2 条 / 共 2 条")).toBeInTheDocument();
-    // 首页时“上一页”禁用
     expect(screen.getByRole("button", { name: /上一页/ })).toBeDisabled();
     expect(screen.getByRole("button", { name: /下一页/ })).toBeDisabled();
   });
@@ -137,20 +132,15 @@ describe("UsersPage", () => {
     render(<UsersPage />);
     await screen.findByText("alice");
 
-    // 打开延期对话框
     fireEvent.click(screen.getByRole("button", { name: "延期订阅" }));
-    // 对话框标题（heading）出现
     expect(
       await screen.findByRole("heading", { name: "延期订阅" }),
     ).toBeInTheDocument();
-    // 确认按钮
     fireEvent.click(screen.getByRole("button", { name: "确认延期" }));
 
-    // grant 被调用
     await waitFor(() => {
       expect(calls.some((c) => c.startsWith("GRANT:POST"))).toBe(true);
     });
-    // 内联成功提示
     expect(await screen.findByText(/已为 alice 延期至/)).toBeInTheDocument();
   });
 
@@ -184,9 +174,7 @@ describe("UsersPage", () => {
     await screen.findByRole("heading", { name: "延期订阅" });
     fireEvent.click(screen.getByRole("button", { name: "确认延期" }));
 
-    // 对话框内展示错误文案
     expect(await screen.findByText("余额不足")).toBeInTheDocument();
-    // 对话框仍在（标题仍可见）
     expect(screen.getByRole("heading", { name: "延期订阅" })).toBeInTheDocument();
   });
 

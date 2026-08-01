@@ -1,7 +1,4 @@
-"""工具结果解析：从工具返回文本中提取引用信息、博客元数据，并自动关联研究上下文。
-
-供 orchestrator 在 on_tool_end 事件中调用。
-"""
+"""工具结果解析：从工具返回文本提取引用信息、博客元数据，并自动关联研究上下文（orchestrator on_tool_end 调用）。"""
 
 import logging
 import re
@@ -36,8 +33,6 @@ def _extract_references(tool_name: str, result_text: str, tool_input: dict | Non
             refs.append({"type": "mcp", "server": server_name, "tool": tool_n})
     return refs
 
-
-# ── Blog meta extraction ──
 
 _BLOG_META_PATTERNS: dict[str, tuple[str, ...]] = {
     "blog_create_post": ("id", "slug", "title", "status"),

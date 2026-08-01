@@ -24,7 +24,6 @@ export function maskStreamingMarkdown(text: string): string {
   }
   if (fenceCount % 2 === 1) return text;
 
-  // 从末尾往前找连续表格行块
   const blockEnd = lines.length;
   let blockStart = blockEnd;
   while (blockStart > 0 && TABLE_ROW_RE.test(lines[blockStart - 1])) {

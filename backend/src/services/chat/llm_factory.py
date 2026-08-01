@@ -1,7 +1,6 @@
 """LLM 工厂：按协议（openai / anthropic / deepseek）构造 Chat 模型实例与请求参数。
 
-所有协议统一注入 stream_chunk_timeout（从 settings 读），调大到思考模型够用；
-避免触发 langchain 内部 watchdog 后被 astream_events 吞异常导致 stream 挂死。
+统一注入 stream_chunk_timeout（从 settings 读），避免 langchain watchdog 吞异常导致 stream 挂死。
 """
 
 import json
@@ -91,11 +90,7 @@ def _chat_model_kwargs(
 
 
 def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
-    """根据模型名选择 ChatDeepSeek 或 ChatOpenAI。
-
-    DeepSeek 模型无论深度/普通模式都使用 ChatDeepSeek，
-    以正确捕获 reasoning_content 推理链。
-    """
+    """按协议选择模型类；DeepSeek 模型始终用 ChatDeepSeek 以捕获 reasoning_content 推理链。"""
     protocol = model_kwargs.get("protocol", "openai")
     llm_kwargs = {k: v for k, v in model_kwargs.items() if k != "protocol"}
     stream_usage = llm_kwargs.pop("stream_usage", False)

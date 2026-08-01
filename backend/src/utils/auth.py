@@ -1,8 +1,6 @@
 """Auth utilities: password hashing, access/refresh tokens, dependencies.
 
-- access token：短期 JWT（payload 带 type=access），客户端存内存，用于接口鉴权。
-- refresh token：不透明随机串，DB 只存 SHA-256 哈希，客户端放 HttpOnly cookie，
-  用于换取新 access token；可吊销、可过期。
+access token 短期 JWT；refresh token 明文仅签发时返回一次，DB 只存 SHA-256 哈希。
 """
 
 import hashlib

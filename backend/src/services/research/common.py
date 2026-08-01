@@ -1,8 +1,4 @@
-"""研究图谱通用层：领域常量 + 共享工具函数（owned 查询、计数、归一化、证据校验等）。
-
-被 topic / entity / claim / relation / proposal / run / post_link 各模块复用，
-是 research 域的依赖根（不依赖其他 research 子模块）。
-"""
+"""研究图谱通用层：领域常量 + 共享工具函数（owned 查询、计数、归一化、证据校验等），research 域依赖根。"""
 
 import logging
 import re

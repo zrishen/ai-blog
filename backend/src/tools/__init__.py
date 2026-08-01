@@ -1,12 +1,7 @@
 """LangChain 工具统一导出。
 
-按领域组织:
-- blog: 博客文章 CRUD + 精准替换
-- file: 文件库 RAG 检索
-- mcp: 外部 MCP 能力调用
-- research: 研究图谱(可信写作模式)
-
-提示词(工具描述、system prompt)统一在 src/prompts.py。
+blog: 文章 CRUD + 精准替换；file: 文件库 RAG 检索；mcp: 外部 MCP 能力调用；research: 研究图谱。
+提示词（工具描述、system prompt）统一在 src/prompts.py。
 """
 
 from src.tools.blog import BLOG_TOOLS, current_user_id_cv

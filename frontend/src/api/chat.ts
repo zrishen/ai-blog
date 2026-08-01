@@ -314,7 +314,6 @@ export async function sendChat(
 
       const nextMarker = _findNextProtocolMarker(accumulated);
 
-      // --- ROUNDDELTA marker ---
       const rdIdx = nextMarker?.name === "ROUNDDELTA" ? nextMarker.index : -1;
       if (rdIdx !== -1) {
         const afterMarker = accumulated.substring(rdIdx + _ROUNDDELTA_MARKER.length);
@@ -331,7 +330,6 @@ export async function sendChat(
         continue;
       }
 
-      // --- ROUNDEND marker ---
       const reIdx = nextMarker?.name === "ROUNDEND" ? nextMarker.index : -1;
       if (reIdx !== -1) {
         const afterMarker = accumulated.substring(reIdx + _ROUNDEND_MARKER.length);
@@ -352,7 +350,6 @@ export async function sendChat(
         continue;
       }
 
-      // --- STREAMERROR marker ---
       const seIdx = nextMarker?.name === "STREAMERROR" ? nextMarker.index : -1;
       if (seIdx !== -1) {
         const afterMarker = accumulated.substring(seIdx + _STREAMERROR_MARKER.length);
@@ -367,7 +364,6 @@ export async function sendChat(
         continue;
       }
 
-      // --- BLOGSTART marker ---
       const bsIdx = nextMarker?.name === "BLOGSTART" ? nextMarker.index : -1;
       if (bsIdx !== -1) {
         if (bsIdx > 0) emitChunk?.(accumulated.substring(0, bsIdx));
@@ -385,7 +381,6 @@ export async function sendChat(
         continue;
       }
 
-      // --- BLOGDELTA marker ---
       const bdIdx = nextMarker?.name === "BLOGDELTA" ? nextMarker.index : -1;
       if (bdIdx !== -1) {
         if (bdIdx > 0) {
@@ -413,7 +408,6 @@ export async function sendChat(
         continue;
       }
 
-      // --- PATCHSTART marker (blog_edit_post 局部替换的目标文本) ---
       const psIdx = nextMarker?.name === "PATCHSTART" ? nextMarker.index : -1;
       if (psIdx !== -1) {
         if (psIdx > 0) {
@@ -441,7 +435,6 @@ export async function sendChat(
         continue;
       }
 
-      // --- PATCHDELTA marker (blog_edit_post 局部替换的增量文本) ---
       const pdIdx = nextMarker?.name === "PATCHDELTA" ? nextMarker.index : -1;
       if (pdIdx !== -1) {
         if (pdIdx > 0) {
@@ -469,7 +462,7 @@ export async function sendChat(
         continue;
       }
 
-      // --- TOOLPREP marker (工具参数开始流式生成，提前提示) ---
+      // TOOLPREP — 工具参数开始流式生成，提前提示
       const tpIdx = nextMarker?.name === "TOOLPREP" ? nextMarker.index : -1;
       if (tpIdx !== -1) {
         if (tpIdx > 0) emitChunk?.(accumulated.substring(0, tpIdx));
@@ -489,7 +482,6 @@ export async function sendChat(
 
       const toolIdx = nextMarker?.name === "TOOLDONE" ? nextMarker.index : -1;
       if (toolIdx !== -1) {
-        // Emit any text before the marker
         if (toolIdx > 0) {
           emitChunk?.(accumulated.substring(0, toolIdx));
         }
@@ -499,12 +491,11 @@ export async function sendChat(
         if (braceIdx === -1) {
           // JSON payload hasn't arrived yet — keep the marker + whatever follows
           accumulated = _TOOL_MARKER + afterMarker;
-          continue; // wait for next chunk
+          continue;
         }
 
         const fullJson = _findCompleteJson(afterMarker, braceIdx);
         if (!fullJson) {
-          // JSON not yet complete — keep marker + afterMarker for next chunk
           accumulated = _TOOL_MARKER + afterMarker;
           continue;
         }
@@ -527,18 +518,16 @@ export async function sendChat(
           }
         } catch { /* malformed JSON — skip */ }
 
-        // Consume marker + JSON, keep remainder
         const afterJson = afterMarker.substring(fullJson.endIndex);
         if (afterJson.startsWith("\n")) {
           accumulated = afterJson.substring(1);
         } else {
           accumulated = afterJson;
         }
-        processed = false; // reprocess remainder
+        processed = false;
         continue;
       }
 
-      // --- REASONING marker ---
       const rsIdx = nextMarker?.name === "REASONING" ? nextMarker.index : -1;
       if (rsIdx !== -1) {
         if (rsIdx > 0) {
@@ -562,7 +551,6 @@ export async function sendChat(
         continue;
       }
 
-      // --- LOOPSTEP marker (中间轮 LLM 输出) ---
       const lsIdx = nextMarker?.name === "LOOPSTEP" ? nextMarker.index : -1;
       if (lsIdx !== -1) {
         if (lsIdx > 0) {
@@ -625,7 +613,7 @@ export async function sendChat(
           /* malformed DONE metadata — consume the frame without applying it */
         }
         accumulated = afterDone.substring(jsonResult.endIndex);
-        processed = false; // reprocess
+        processed = false;
         continue;
       }
 

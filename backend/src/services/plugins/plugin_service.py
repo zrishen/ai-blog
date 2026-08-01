@@ -235,10 +235,7 @@ async def list_user_plugins(db, user_id: int) -> list[dict[str, Any]]:
 
 
 async def list_enabled_plugin_runtime_configs(db, user_id: int) -> list[dict[str, Any]]:
-    """返回 AI 可执行的配置。
-
-    此查询是插件权限边界：同时要求平台已发布、且当前用户明确启用。
-    """
+    """返回 AI 可执行的配置（插件权限边界：平台已发布且当前用户明确启用）。"""
     result = await db.execute(
         select(PlatformPlugin)
         .join(UserPlugin, UserPlugin.plugin_id == PlatformPlugin.id)

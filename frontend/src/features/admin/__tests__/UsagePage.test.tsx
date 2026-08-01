@@ -60,14 +60,11 @@ describe("UsagePage", () => {
 
     render(<UsagePage />);
 
-    // 左侧用户列表加载完成
     expect(await screen.findByText("alice")).toBeInTheDocument();
     expect(screen.getByText("bob")).toBeInTheDocument();
 
-    // 选中 alice → 右侧拉取周用量
     fireEvent.click(screen.getByText("alice"));
 
-    // 订阅生效 + 周期 + 用量数值
     await waitFor(() => {
       expect(screen.getByText("订阅生效")).toBeInTheDocument();
     });

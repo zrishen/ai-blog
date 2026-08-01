@@ -1,8 +1,4 @@
-"""统一回收站 schemas。
-
-支持三类资源：conversation / file_document / blog_post。
-列表按 deleted_at 倒序聚合，仅返回 deleted_at 非空且属于当前用户的记录。
-"""
+"""统一回收站 schemas：conversation / file_document / blog_post 三类，仅聚合当前用户已软删记录。"""
 
 from datetime import datetime
 from typing import Literal

@@ -1,15 +1,4 @@
-"""后端日志系统配置。
-
-输出格式：
-  [2026-05-21 13:40:44,123] [INFO] [src.services.chat_service] 消息内容
-
-包含文件:行号、日志级别、模块名。结构化字段（如工具调用）使用额外键。
-
-日志分流（按代码归属，不按业务含义）：
-  - app.log   我们自己写的代码（所有 `src.*` 模块）的日志
-  - http.log  后台框架/第三方自动打的日志（uvicorn 访问日志、uvicorn 生命周期、其他库）
-  - 控制台    全量输出（按级别过滤）
-"""
+"""后端日志系统配置：控制台 + 轮转文件分流（app.log 收 src.* 自有代码，http.log 收框架/第三方）。"""
 
 import logging
 import logging.handlers
@@ -65,11 +54,7 @@ def _is_own_code_record(record: logging.LogRecord) -> bool:
 
 
 class _OriginFilter(logging.Filter):
-    """按代码归属路由日志。
-
-    allow_own=True  → 仅放行 src.* 记录（→ app.log）
-    allow_own=False → 仅放行非 src.* 记录（→ http.log）
-    """
+    """按代码归属路由日志：allow_own=True 放行 src.*（→ app.log），False 放行其余（→ http.log）。"""
 
     def __init__(self, *, allow_own: bool) -> None:
         super().__init__()

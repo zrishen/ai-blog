@@ -74,7 +74,6 @@ export function useChatHooks() {
     async (content: string, image_url?: string, file_url?: string) => {
       const convId = state.currentConversationId;
 
-      // Add user message
       const userMsg: Message = {
         id: Date.now(),
         role: "user",
@@ -88,7 +87,6 @@ export function useChatHooks() {
       dispatch({ type: "ADD_MESSAGE", payload: userMsg });
       dispatch({ type: "SET_STREAMING", payload: true });
 
-      // Create placeholder for assistant message
       const assistantMsgId = Date.now() + 1;
       const assistantMsg: Message = {
         id: assistantMsgId,

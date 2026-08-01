@@ -1,12 +1,8 @@
-"""上下文压缩：历史 raw token 超阈值时，把较早消息 LLM 摘要，保留最近 N 条原文。
+"""上下文压缩：历史 raw token 超阈值时把较早消息 LLM 摘要，保留最近 N 条原文。
 
-产品级行为（订阅 / 非订阅都做；区别只在摘要用的 key，见 stream_chat 的 compact_summarizer）：
-- 触发：estimate_history_tokens(raw) > threshold（默认 compact_context_budget * compact_trigger_ratio）
-  且 len(raw) > recent_count
-- 增量摘要：只摘要 id > conv.summary_until_message_id 的消息，避免重复摘要
-- 摘要存储到 Conversation.summary / summary_until_message_id
-- 失败兜底由调用方（_build_messages）处理：捕获异常回退全 raw，绝不阻塞聊天
-- 配额：摘要真实 usage 由 stream_chat 计入订阅周配额（仅 use_platform_key）
+- 触发：estimate_history_tokens(raw) > threshold 且 len(raw) > recent_count
+- 增量摘要：只摘要 id > summary_until_message_id 的消息，避免重复摘要
+- 失败兜底由调用方（_build_messages）回退全 raw；摘要 usage 由 stream_chat 计入订阅配额
 """
 
 from collections.abc import Awaitable, Callable
@@ -41,10 +37,7 @@ def estimate_history_tokens(raw: list) -> int:
 
 
 def select_to_summarize(raw: list, conv: Any, recent_count: int) -> list:
-    """从 raw[:-recent_count] 中选出尚未摘要的消息（id > summary_until_message_id），保留顺序。
-
-    增量摘要：已经被摘要到 summary_until_message_id 的消息不再重复进入摘要。
-    """
+    """从 raw[:-recent_count] 中选出尚未摘要的消息（id > summary_until_message_id），保留顺序。"""
     until_id = getattr(conv, "summary_until_message_id", None) or 0
     head = list(raw[:-recent_count]) if recent_count > 0 else list(raw)
     return [m for m in head if (getattr(m, "id", None) or 0) > until_id]
@@ -64,12 +57,8 @@ async def compact_history(
 ) -> tuple[list, dict | None]:
     """压缩历史：超阈值时把较早消息摘要，返回 ``(recent_raw, usage|None)``。
 
-    - 未触发（token 不超阈值 / 消息不足 / 无新消息可摘要）：返回 ``(raw, None)``，不做任何改动。
-    - 触发：调用 summarizer 生成新摘要，持久化到 Conversation（重新 attach 到 db_session，
-      避免 conv detached 写不进去），并把最新 summary 同步到传入的 conv 对象，
-      便于调用方（_build_messages）读取后注入 system 摘要消息。
-
-    usage 为本次摘要的真实 usage（summarizer 返回），调用方据此计入订阅配额。
+    未触发返回 ``(raw, None)`` 不做改动；触发时持久化到 Conversation（重新 attach 避免
+    detached 写不进去）并同步到传入 conv，供调用方注入 system 摘要；usage 供其计入配额。
     """
     total = estimate_history_tokens(raw)
     if total <= threshold or len(raw) <= recent_count:

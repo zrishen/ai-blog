@@ -16,7 +16,6 @@ TAG_SUGGEST_RETRIES = 2
 
 
 async def _call_llm(client: AsyncOpenAI, prompt: str) -> str:
-    """调用 LLM 获取标签原始文本。"""
     async with asyncio.timeout(TAG_SUGGEST_TIMEOUT):
         resp = await client.chat.completions.create(
             model=settings.model_name,

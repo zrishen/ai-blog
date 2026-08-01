@@ -1,7 +1,4 @@
-"""管理员后台 API：所有端点需 require_admin 守卫。
-
-Phase 2 骨架：鉴权探活 ping。业务端点（用户管理 / 兑换码 / 用量统计）在后续 Phase 补。
-"""
+"""管理员后台 API：所有端点需 require_admin 守卫。"""
 
 from fastapi import APIRouter, Depends
 

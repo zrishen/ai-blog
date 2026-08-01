@@ -34,7 +34,6 @@ describe("SubscriptionPanel", () => {
       "border-border/60",
       "bg-background/55",
     );
-    // 用量 / 限额 / 剩余 / 周期
     expect(screen.getByText(/30.0M/)).toBeTruthy();
     expect(screen.getByText(/100.0M/)).toBeTruthy();
     expect(screen.getByText(/剩余 70.0M/)).toBeTruthy();

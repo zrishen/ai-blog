@@ -77,7 +77,6 @@ export function useResearchRuns(topicId: number): ResearchRunsState {
     };
   }, [loadRuns]);
 
-  // Auto-poll when selected run is active
   useEffect(() => {
     if (!isRunning) {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }

@@ -1,7 +1,4 @@
-"""研究运行（ResearchRun）编排：阶段化 Agent 执行 + 进度/日志记录 + 幂等创建。
-
-_run_agent_stage 驱动单阶段 ReAct Agent；create_research_run 幂等建 run 并后台异步执行。
-"""
+"""研究运行（ResearchRun）编排：阶段化 Agent 执行 + 进度/日志记录 + 幂等创建。"""
 
 import asyncio
 import logging

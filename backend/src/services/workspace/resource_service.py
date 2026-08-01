@@ -1,7 +1,6 @@
 """工作区资源挂靠服务：把博客/文件/研究挂进文件夹，或解绑回未归档（inbox）。
 
-resource 节点是「某资源位于某文件夹」的引用关系，不持有内容。解绑=硬删挂靠点，
-资源本身（blog/file/research）不受影响。一个资源至多一个挂靠点。
+resource 节点是引用关系（不持有内容，一个资源至多一个挂靠点）；解绑=硬删挂靠点，资源本身不受影响。
 """
 
 import logging
@@ -30,12 +29,7 @@ _SOFT_DELETABLE_MODELS = {"file": FileDocumentModel, "blog_post": BlogPostModel}
 async def soft_deleted_resource_ids(
     db: AsyncSession, resource_type: str, ids: list[int]
 ) -> set[int]:
-    """给定一批 resource_id，返回其中底层资源已软删（已进回收站）的 id 集合。
-
-    resource 挂靠点 / RAG 源都是引用关系，不随底层资源软删而消失；列出时需据此过滤，
-    使工作区、AI 知识与文件库/文章的删除状态保持一致。底层无 deleted_at 的类型（如
-    research_topic）直接返回空集。
-    """
+    """返回这批 resource_id 中底层资源已软删（进回收站）的集合；底层无 deleted_at 的类型（research_topic）返回空集。"""
     if not ids:
         return set()
     model = _SOFT_DELETABLE_MODELS.get(resource_type)
@@ -132,11 +126,7 @@ async def detach_resource(
 async def detach_resource_if_any(
     db: AsyncSession, user_id: int, resource_type: str, resource_id: int
 ) -> None:
-    """回收站还原用：若资源有工作区挂靠点则硬删，使其回到未分类（inbox）；无挂靠点则空操作。
-
-    与 detach_resource 的区别：不抛 NotFound（还原的资源可能从未归档过），
-    也不自行 commit（由调用方在同一事务内统一提交，避免与 deleted_at 清理割裂）。
-    """
+    """回收站还原用：若有挂靠点则硬删（回 inbox），无则空操作；与 detach_resource 的区别：不抛 NotFound、不自行 commit（由调用方统一提交）。"""
     node = await _resource_node(db, user_id, resource_type, resource_id)
     if node is not None:
         await db.delete(node)

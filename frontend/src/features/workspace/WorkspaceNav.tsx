@@ -152,17 +152,15 @@ function TreeConnectors({ mask }: { mask: ConnectorType[] }) {
     <span className="pointer-events-none absolute inset-y-0 left-0" aria-hidden>
       {mask.map((type, i) => {
         if (type === "empty") return null;
-        const x = baseX + i * unit + half; // 该层竖线 x（相对行）
+        const x = baseX + i * unit + half;
         return (
           <span key={i} className="absolute inset-y-0" style={{ left: x }}>
             {type === "corner" ? (
-              // 末项 ╰：竖线只画上半截，底部左下圆角自然转向横线，连到本节点（圆弧拐角，非直角）
               <span
                 className="absolute left-0 top-0 h-1/2 w-[5px] border-l border-b border-foreground/25"
                 style={{ borderBottomLeftRadius: "5px" }}
               />
             ) : (
-              // pipe │：贯穿竖线，上下各越界 4px 跨过行间 gap，与同列竖线无缝衔接（无隔断）
               <span className="absolute left-0 -top-1 -bottom-1 w-px bg-foreground/25" />
             )}
           </span>

@@ -6,8 +6,6 @@ export function getPreviewUrl(filename: string): string {
   return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
-// ============ File Library Documents & Collections ============
-
 export interface FileDocument {
   id: number;
   collection_name: string;

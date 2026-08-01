@@ -1,12 +1,8 @@
 """工作区组织层模型：目录树节点 + RAG 索引源。
 
-WorkspaceNode 既是文件夹（node_type=folder），也是「某资源挂在某文件夹下」的挂靠关系
-（node_type=resource + resource_type + resource_id）。无 node 的资源 = 未归档（inbox）。
-
-RagSource 记录用户主动「加入 AI 知识」的资源及其索引状态；与资源类型、存放位置正交。
-
-资源用多态关联（resource_type + resource_id），不加跨表 ForeignKey——因为一个挂靠点可指向
-blog_posts / file_documents / research_topics 中的任意一张表，FK 无法表达。
+WorkspaceNode 既是文件夹（folder），也是「某资源挂在某文件夹下」的挂靠关系（resource + resource_type + resource_id）；
+无 node 的资源 = 未归档（inbox）。RagSource 记录「加入 AI 知识」的资源及索引状态。
+资源用多态关联（resource_type + resource_id）不加跨表 FK——挂靠点可指向任意一张表，FK 无法表达。
 """
 
 from sqlalchemy import (
@@ -27,8 +23,7 @@ from .base import Base, _utcnow
 class WorkspaceNode(Base):
     """工作区目录树节点。
 
-    folder 节点：parent_id 自引用嵌套，组织目录结构。
-    resource 节点：resource_type + resource_id 指向被挂靠的实际内容，parent_id 是所在文件夹。
+    folder：parent_id 自引用嵌套组织目录；resource：resource_type + resource_id 指向实际内容。
     一个资源至多一个挂靠点（uq_workspace_nodes_resource），无挂靠点即未归档。
     """
 
@@ -55,12 +50,7 @@ class WorkspaceNode(Base):
 
 
 class RagSource(Base):
-    """RAG 索引源：用户主动加入 AI 知识的资源 + 索引状态机。
-
-    与资源类型、存放位置正交——文件/文章/研究事实均可成为 RagSource。
-    加入=建记录(pending)→索引(active)；内容变更=stale；移除=删记录+删向量。
-    一个资源至多一条 RagSource（uq_rag_sources_resource）。
-    """
+    """RAG 索引源：用户主动加入 AI 知识的资源 + 索引状态机（加入→pending→active，内容变更→stale，移除=删记录+删向量）。"""
 
     __tablename__ = "rag_sources"
     __table_args__ = (

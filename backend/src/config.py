@@ -7,10 +7,10 @@ from dotenv import load_dotenv
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 加载 .env 到 os.environ（不覆盖已有值），让 HF_ENDPOINT 等非 Settings 变量也能被第三方库（如 huggingface_hub）读到
+# 加载 .env（不覆盖已有值），让非 Settings 变量（如 HF_ENDPOINT）也能被第三方库读到
 load_dotenv()
 
-# 项目根目录（backend/），所有数据路径基于此绝对路径，不依赖 cwd
+# 项目根目录（backend/），所有数据路径基于此，不依赖 cwd
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 
@@ -42,23 +42,22 @@ class Settings(BaseSettings):
     rag_distance_threshold: float = 0.7
 
     # ---- 安全密钥 ----
-    # 不提供可工作的默认值：缺失或使用公开弱值时启动即失败，
-    # 部署必须通过 JWT_SECRET 环境变量（或本地 .env）注入高熵随机值。
+    # 无默认值：缺失或用公开弱值启动即失败；须通过 JWT_SECRET 注入高熵随机值
     jwt_secret: str = ""
     registration_invite_code: str = ""
     llm_settings_encryption_key: str
 
     # ---- Token 有效期 ----
-    # access token（短期 JWT，存客户端内存）；refresh token（不透明，存 DB 哈希，放 HttpOnly cookie）
+    # access 短期 JWT 存客户端内存；refresh 存 DB 哈希，放 HttpOnly cookie
     access_token_expire_seconds: int = 15 * 60
     refresh_token_expire_seconds: int = 30 * 24 * 3600
     refresh_cookie_name: str = "refresh_token"
 
     # ---- Cookie / CORS ----
-    # refresh cookie 属性：本地 http 开发 cookie_secure=False；生产用环境变量覆盖为 True
+    # 本地 http 开发 False；生产用环境变量覆盖为 True
     cookie_secure: bool = False
     cookie_samesite: str = "lax"
-    # CORS：同源部署留空即可（前端走 /api 相对路径）；跨域部署时填逗号分隔的具体 origin
+    # 同源部署留空（前端走 /api 相对路径）；跨域填逗号分隔 origin
     cors_allow_origins: str = ""
 
     # ---- 内容目录 ----
@@ -96,20 +95,20 @@ class Settings(BaseSettings):
     public_chat_daily_ip_limit: int = 10
 
     # ---- 订阅（平台 key 共享模式）----
-    # 兑换码激活订阅：订阅期用平台 key（固定 MODEL_NAME），按 token 周额度限制，超额/到期回退 BYOK
+    # 兑换码激活：订阅期用平台 key，按 token 周额度限制，超额/到期回退 BYOK
     subscription_duration_days: int = 30
-    # 周额度（token），周一 00:00 UTC+8 重置；100M ≈ 防滥用天花板（实际用不到）
+    # 周额度，周一 00:00 UTC+8 重置；100M 为防滥用上限
     subscription_weekly_token_limit: int = 100_000_000
-    # 单次请求 input token 上限（模型上下文口径：system+历史+当前+RAG+附件，防单条+附件爆炸）
+    # 单次请求 input token 上限（system+历史+当前+RAG+附件口径）
     subscription_per_request_token_limit: int = 100_000
-    # 超级管理员：首次启动时按账号密码自动创建；账号已存在时只提升权限，不覆盖原密码。
+    # 首次启动按账号密码自动创建；已存在则只提升权限，不覆盖密码
     super_admin_username: str | None = None
     super_admin_password: str | None = None
-    # 初始管理员：兼容既有部署，指定已存在的用户名后启动时幂等提升为普通 admin。留空不处理。
+    # 指定已存在的用户名，启动时幂等提升为普通 admin；留空不处理
     initial_admin_username: str | None = None
 
     # ---- 上下文压缩（compact 摘要）----
-    # 历史原文 token 超过 budget*ratio 时触发：保留最近 recent_count 条原文，更早的 LLM 摘要
+    # 超 budget*ratio 触发：保留最近 recent_count 条原文，更早的 LLM 摘要
     compact_context_budget: int = 20000
     compact_trigger_ratio: float = 0.7
     compact_recent_count: int = 12
@@ -130,9 +129,7 @@ class Settings(BaseSettings):
     mcp_call_timeout_seconds: float = 30.0
 
     # ---- 流式超时兜底 ----
-    # 思考模型思考阶段可能长时间不产生 event,这里给两个兜底:
-    # 1. langchain 内部 stream_chunk_timeout 调大,避免思考期间被误判卡死后异常被 astream_events 吞掉
-    # 2. 我们自己的 agent_stream_idle_timeout 作为最终兜底,N 秒无 event 主动 raise 让上层正常收尾
+    # 思考期可能长时间无 event：调大 langchain 超时防误判卡死；agent_stream_idle_timeout 做最终兜底
     langchain_stream_chunk_timeout: float | None = 600.0
     agent_stream_idle_timeout: float = 600.0
 

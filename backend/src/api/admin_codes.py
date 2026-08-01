@@ -1,7 +1,4 @@
-"""管理员兑换码管理 API：生成 / 列表 / 作废。所有端点需 require_admin。
-
-router prefix="/admin/codes"，由 wire agent 注册到 routes.py（挂在 /api/v1 下）。
-"""
+"""管理员兑换码管理 API：生成 / 列表 / 作废。所有端点需 require_admin。"""
 
 from datetime import datetime
 

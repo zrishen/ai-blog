@@ -29,7 +29,7 @@ class NodeMove(BaseModel):
 
 
 class ReorderRequest(BaseModel):
-    """同级节点重排：parent_id + 按顺序的节点 id 列表（folder/resource 各自在其层级内排）。"""
+    """同级节点重排（folder/resource 各自在其层级内排）。"""
     parent_id: Optional[int] = None
     ordered_ids: list[int]
 

@@ -1,12 +1,6 @@
 """Research Graph 内部工具 — 供 ReAct Agent 在可信写作模式下使用。
 
-规则（硬边界）：
-- 搜索摘要只能作为线索（source_type=search_summary），不能保存为最终 Evidence。
-- AI 自己总结的内容（kind=ai_generated_note）不能支撑 supported Claim。
-- 没有有效 Evidence（kind=web|knowledge_base|mcp_tool|manual 且有 quote）的 Claim 不能进入 supported。
-- Agent 写入的 Claim 满足自动采用条件时（有有效证据、无冲突、置信度≥85、无重复已采用声明）可自动进入 supported/adopted，否则为 pending 需用户审核。
-- 低可信来源（trust_level=low）不能自动 adopted。
-- 冲突 Claim 不能写成确定事实。
+硬边界：搜索摘要只能作线索；ai_generated_note 不能支撑 Claim；无有效 Evidence 的 Claim 不能进入 supported；低可信来源不能自动 adopted；冲突 Claim 不能写成确定事实。
 """
 
 import json
@@ -40,7 +34,6 @@ from src.services.research import (
     create_relation,
 )
 
-# Evidence kind 说明（供 Agent 参考）
 EVIDENCE_KIND_HELP = {
     "web": "从网页正文中摘录的原文片段（最常用的证据类型）",
     "knowledge_base": "从用户知识库文档中摘录的原文片段",
@@ -49,7 +42,6 @@ EVIDENCE_KIND_HELP = {
     "ai_generated_note": "AI 自己的总结或推理 — 不能用于支撑 supported Claim，只能作为备注",
 }
 
-# Source type 说明
 SOURCE_TYPE_HELP = {
     "official": "官方文档、官方公告、标准组织、法规、论文原文",
     "media": "权威媒体、专业数据库、主流技术媒体",
@@ -63,13 +55,10 @@ SOURCE_TYPE_HELP = {
     "search_summary": "搜索引擎摘要 — 只能作为线索，不能作为最终 Evidence",
 }
 
-# 可信等级
 TRUST_LEVELS = ["high", "medium", "low", "unverified"]
 
 
-# ═══════════════════════════════════════════════════
 # 研究主题工具
-# ═══════════════════════════════════════════════════
 
 @tool
 async def research_create_topic(title: str, description: str = "") -> str:
@@ -146,7 +135,6 @@ async def research_get_topic(topic_id: int = 0) -> str:
 
         summary = await _topic_summary(db, topic)
 
-        # 已确认的事实
         claims_result = await db.execute(
             select(ResearchClaim).where(
                 ResearchClaim.topic_id == topic_id,
@@ -155,7 +143,6 @@ async def research_get_topic(topic_id: int = 0) -> str:
         )
         claims = claims_result.scalars().all()
 
-        # 来源
         sources_result = await db.execute(
             select(ResearchSource).where(
                 ResearchSource.topic_id == topic_id,
@@ -164,7 +151,6 @@ async def research_get_topic(topic_id: int = 0) -> str:
         )
         sources = sources_result.scalars().all()
 
-        # 实体
         entities_result = await db.execute(
             select(ResearchEntity)
             .where(
@@ -249,7 +235,6 @@ async def research_get_topic(topic_id: int = 0) -> str:
                 lines.append(f"  {from_label} --{rel.relation_type}--> {to_label}")
             lines.append("")
 
-        # 冲突关系
         conflicts_result = await db.execute(
             select(ResearchRelation).where(
                 ResearchRelation.topic_id == topic_id,
@@ -266,9 +251,7 @@ async def research_get_topic(topic_id: int = 0) -> str:
         return "\n".join(lines)
 
 
-# ═══════════════════════════════════════════════════
 # 来源工具
-# ═══════════════════════════════════════════════════
 
 @tool
 async def research_add_source(
@@ -350,9 +333,7 @@ async def research_add_source(
         return f"来源已添加: [{source.id}] {source.title} (类型:{source.source_type}, 可信:{source.trust_level})"
 
 
-# ═══════════════════════════════════════════════════
 # 证据工具
-# ═══════════════════════════════════════════════════
 
 @tool
 async def research_add_evidence(
@@ -409,9 +390,7 @@ async def research_add_evidence(
         return f"证据已添加: [{evidence.id}] kind={kind}{note}"
 
 
-# ═══════════════════════════════════════════════════
 # 实体工具
-# ═══════════════════════════════════════════════════
 
 @tool
 async def research_add_entity(
@@ -469,9 +448,7 @@ async def research_add_entity(
         )
 
 
-# ═══════════════════════════════════════════════════
 # 事实声明工具
-# ═══════════════════════════════════════════════════
 
 @tool
 async def research_add_claim(
@@ -586,9 +563,7 @@ async def research_add_claim(
         )
 
 
-# ═══════════════════════════════════════════════════
 # 关系工具
-# ═══════════════════════════════════════════════════
 
 @tool
 async def research_add_relation(
@@ -642,9 +617,7 @@ async def research_add_relation(
         return f"关系已添加或复用: [{rel.id}] {from_type}#{from_id} --{relation_type}--> {to_type}#{to_id}"
 
 
-# ═══════════════════════════════════════════════════
 # 提案工具
-# ═══════════════════════════════════════════════════
 
 @tool
 async def research_add_proposal(
@@ -707,9 +680,7 @@ async def research_add_proposal(
         )
 
 
-# ═══════════════════════════════════════════════════
 # 工具列表
-# ═══════════════════════════════════════════════════
 
 RESEARCH_TOOLS = [
     research_create_topic,

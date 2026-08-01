@@ -62,7 +62,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; selectedText: string; sectionIndex: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // AI 修改相关
-  const aiModifySavingRef = useRef(false);                    // 防止保存期间重复触发
+  const aiModifySavingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const savedWorkingCopyRef = useRef({
     title: existingPost?.title || "",

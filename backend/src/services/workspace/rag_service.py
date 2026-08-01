@@ -1,7 +1,6 @@
 """RAG 索引源服务：管理「加入 AI 知识」的资源及其索引状态机。
 
-Phase 1 仅做 DB 层状态机（RagSource CRUD）；实际 embedding/向量库写入由 Phase 2 接入
-（file_service 解耦后，index 动作调用 vectorize 并回写状态）。collection_name 默认按用户隔离。
+索引动作通过 FileProcessingJob worker 执行向量化并回写状态；collection_name 默认按用户隔离。
 """
 
 from sqlalchemy import select
@@ -23,10 +22,7 @@ def default_collection_name(user_id: int) -> str:
 
 
 def blog_collection_name(user_id: int) -> str:
-    """文章向量集合：按用户 + embedding 模型隔离（与文件集合并列，便于单独清理）。
-
-    不要用 default_collection_name 的无后缀版本——换 embedding 模型后旧向量无法定位。
-    """
+    """文章向量集合：按用户 + embedding 模型隔离（不要用无后缀版本——换模型后旧向量无法定位）。"""
     from src.services.rag.embedding_service import get_embedding_collection_suffix
 
     return f"user_{user_id}_blog{get_embedding_collection_suffix()}"
@@ -186,11 +182,7 @@ async def _get_owned_file_document(
 async def index_file_document(
     db: AsyncSession, user_id: int, document_id: int
 ) -> tuple[RagSourceModel, FileProcessingJob]:
-    """对已上传文件触发异步索引：建 RagSource(pending) + 创建 index job 并调度。
-
-    向量化在 job worker 内执行（带进度），完成由 worker 回写 active；失败标 failed。
-    重新索引已加入的资源会覆盖旧向量（worker 先 cleanup）。
-    """
+    """对已上传文件触发异步索引：建 RagSource(pending) + 创建 index job 调度；worker 完成回写 active、失败标 failed，重新索引先 cleanup 覆盖旧向量。"""
     from src.services.file.file_processing_service import (
         create_or_reuse_index_job,
         schedule_job,
@@ -220,10 +212,7 @@ async def index_file_document(
 async def index_blog_post(
     db: AsyncSession, user_id: int, post_id: int
 ) -> tuple[RagSourceModel, FileProcessingJob]:
-    """对文章触发异步索引：建 RagSource(pending) + 创建 index job 并调度。
-
-    向量化在 worker 内读 MD 正文执行；完成回写 active，失败标 failed。
-    """
+    """对文章触发异步索引：建 RagSource(pending) + 创建 index job 调度；worker 读 MD 正文向量化并回写状态。"""
     from src.services.file.file_processing_service import (
         create_or_reuse_index_job,
         schedule_job,
@@ -287,10 +276,7 @@ async def unindex_blog_post(
 
 
 async def backfill_rag_sources_from_files(db: AsyncSession) -> int:
-    """存量迁移：已索引的 FileDocument（chunk_content 形如 'N chunks', N>0）补建 RagSource(active)。
-
-    幂等——已有 RagSource 的跳过。RAG 解耦上线后用于兼容历史已索引文件。
-    """
+    """存量迁移：为已索引文件（chunk_content 形如 'N chunks', N>0）补建 RagSource(active)，幂等跳过已有。"""
     stmt = select(FileDocumentModel).where(FileDocumentModel.deleted_at.is_(None))
     docs = (await db.execute(stmt)).scalars().all()
     count = 0

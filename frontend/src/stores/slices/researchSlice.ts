@@ -1,6 +1,5 @@
 import type { ChatState, ChatAction } from "../chatStore";
 
-// Research 领域切片：处理 research 相关 action，其它 action 原样返回。
 export function researchReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "SET_RESEARCH_TOPICS":

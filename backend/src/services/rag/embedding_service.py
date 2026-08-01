@@ -48,10 +48,7 @@ def _get_openai_client() -> AsyncOpenAI:
 
 
 def _get_local_model():
-    """懒加载本地 sentence-transformers 模型（首次调用时加载，常驻进程内存）。
-
-    加锁（double-check）防止后台预热与首次 RAG 请求并发时重复加载同一个模型。
-    """
+    """懒加载本地 sentence-transformers 模型（首次调用加载、常驻内存）；double-check 加锁防止预热与 RAG 并发重复加载。"""
     global _local_model
     if _local_model is None:
         with _local_model_lock:

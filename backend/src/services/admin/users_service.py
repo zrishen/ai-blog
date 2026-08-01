@@ -1,6 +1,6 @@
 """管理员用户管理：用户列表（username ilike 搜索）+ 直接延期订阅。
 
-延续 redemption_service.redeem 的续期范式：未过期 expires_at+days（叠加），过期/无 now+days。
+续期范式同 redemption_service.redeem：未过期叠加，过期/无 now+days。
 """
 
 from datetime import datetime, timedelta, timezone
@@ -18,10 +18,7 @@ async def list_users(
     offset: int = 0,
     limit: int = 50,
 ) -> tuple[list[User], int]:
-    """用户列表（username ilike 搜索，按 id 升序），返回 (items, total)。
-
-    search 为 None 或空时返回全部；total 用 select(func.count()) 独立计数。
-    """
+    """用户列表（username ilike 搜索，按 id 升序），返回 (items, total)；search 为空返回全部。"""
     stmt = select(User).order_by(User.id.asc())
     count_stmt = select(func.count(User.id))
     if search:
@@ -42,11 +39,7 @@ async def grant_subscription(
     *,
     now: datetime | None = None,
 ) -> datetime:
-    """管理员直接给用户延期订阅（不走兑换码），返回新的 subscription_expires_at（naive UTC）。
-
-    续期逻辑同 redemption_service.redeem：未过期 expires_at+days（叠加），过期/无 now+days。
-    用户不存在抛 LookupError。
-    """
+    """管理员直接延期订阅（不走兑换码），返回新 subscription_expires_at；续期逻辑同 redeem（未过期叠加）；用户不存在抛 LookupError。"""
     user = await db.get(User, user_id)
     if user is None:
         raise LookupError(f"用户不存在: {user_id}")

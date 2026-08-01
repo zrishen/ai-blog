@@ -261,7 +261,6 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
     }
   }, [patchStreaming, existingPost?.content, getEditorElement]);
 
-  // 超时从目标文本确定时开始计算；流式 replacementDelta 不应重置计时器
   useEffect(() => {
     if (!patchStreaming) return;
     const timer = window.setTimeout(() => {

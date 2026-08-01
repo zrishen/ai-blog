@@ -1,19 +1,6 @@
-"""统一回收站服务。
+"""统一回收站服务：聚合 conversation / file_document / blog_post 三类软删资源，提供列表、恢复与永久删除；严格当前用户隔离，仅作用于 deleted_at 非空记录。
 
-聚合 conversation / file_document / blog_post 三类已软删资源，提供列表、
-恢复与永久删除。所有操作严格当前用户隔离，且仅作用于 deleted_at 非空的记录。
-
-资源删除规则：
-- 恢复 file 时复用 file_service.vectorize_and_store 重建向量，成功才清 deleted_at；
-  失败时清新 chunks 以避免残留半向量，并保留在回收站中。
-- 永久删除遵循「DB 先提交、物理后清理」：先在数据库事务中硬删记录并 commit，
-  再 best-effort 清理物理资源（上传文件 / Chroma 向量）。物理清理失败
-  仅记录日志并保留孤儿，由 scripts/cleanup_orphans.py 回收，避免出现
-  「DB 仍可见、但正文/附件/向量已不可逆丢失」的不一致。
-- 永久删除 conversation 时清理独占的本地附件（Message.image_url/file_url）；
-  Message 经外键 CASCADE 同步删除。
-- 永久删除 file 时清理 Chroma chunks（幂等）与独占上传文件。
-- 永久删除 blog 时清理独占本地封面。
+永久删除遵循「DB 先提交、物理后清理」：先硬删记录并 commit，再 best-effort 清理物理资源（上传文件 / Chroma 向量），失败留孤儿由 scripts/cleanup_orphans.py 回收，避免「DB 仍可见、资源已丢」的不一致。
 """
 
 from __future__ import annotations
@@ -102,7 +89,7 @@ def _is_external_or_empty(value: Optional[str]) -> bool:
     return False
 
 
-# 兼容 /api/ 与 /api/v1/ 两种前缀：API 版本化迁移后，历史 markdown 内可能仍存旧前缀引用。
+# 兼容 /api/ 与 /api/v1/ 前缀（历史 markdown 可能存旧前缀引用）
 _UPLOAD_REF_RE = re.compile(r"^/api(?:/v1)?/(?:public/)?uploads/(?:([^/]+)/)?([^/]+)$")
 _COVER_REF_RE = re.compile(r"^/api(?:/v1)?/blog/cover/([^/]+)$")
 
@@ -284,8 +271,7 @@ async def _restore_conversation(db: AsyncSession, *, item_id: int, user_id: int)
     assert conv.deleted_at is not None
     deleted_at = conv.deleted_at
 
-    # Message 没有 deleted_at 字段；会话软删后消息记录保持不变，
-    # 列表/查询通过 Conversation.deleted_at 过滤即可。这里仅清父级软删。
+    # Message 无 deleted_at，靠 Conversation.deleted_at 过滤；这里仅清父级软删
     conv.deleted_at = None
     conv.updated_at = _now()
     await db.commit()
@@ -469,8 +455,7 @@ async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -
         user_id=user_id,
     )
 
-    # 先硬删 DB 并提交：DB 状态先进入「不可恢复」，物理资源之后再清理。
-    # 这样即便物理清理失败或进程退出，也不会出现「DB 仍可见、附件已丢失」的不一致。
+    # 先硬删 DB 并提交（状态先不可恢复），物理清理失败也不出现「DB 可见、附件已丢」
     await db.execute(
         sql_delete(ChatAttachmentModel).where(
             ChatAttachmentModel.user_id == user_id,
@@ -588,9 +573,7 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
         else None
     )
 
-    # Hard-delete DB records before best-effort cleanup of derived resources.
-    # SQLite does not guarantee the cyclic post/revision foreign keys are
-    # enforced in every existing deployment, so remove snapshots explicitly.
+    # 先硬删 DB；SQLite 不保证循环外键在旧部署中生效，故显式删 revisions
     await db.execute(
         sql_delete(BlogPostRevision).where(
             BlogPostRevision.post_id == post_id,
@@ -605,8 +588,7 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
     )
     await db.commit()
 
-    # commit 成功后 best-effort 清理；失败留孤儿，由清理脚本回收。
-    # Clear AI knowledge after the database deletion.
+    # commit 后 best-effort 清理；失败留孤儿，由清理脚本回收
     try:
         rag_source = await rag_service.get_rag_source(db, user_id, "blog_post", post_id)
         if rag_source is not None:

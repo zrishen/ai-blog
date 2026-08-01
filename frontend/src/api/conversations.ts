@@ -1,7 +1,5 @@
 import { API_BASE, apiFetch } from "./client";
 
-// ---- Conversations ----
-
 export async function fetchConversations() {
   const res = await apiFetch(`${API_BASE}/conversations`);
   if (!res.ok) throw new Error("Failed to fetch conversations");

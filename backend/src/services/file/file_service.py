@@ -24,7 +24,6 @@ def get_user_upload_dir(user_id: int | str) -> Path:
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 
-# Max 100MB per file
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
 DOCUMENT_TYPES = {
@@ -155,11 +154,7 @@ async def vectorize_and_store(
     user_id: int | str = "default_user",
     progress_reporter=None,
 ) -> list[str]:
-    """Parse, chunk, embed, and store documents in the vector store.
-
-    Returns:
-        List of chunk contents that were stored.
-    """
+    """Parse, chunk, embed, and store documents; returns the stored chunk contents."""
     from src.services.rag.embedding_service import get_embeddings
     from src.services.rag.vector_store import add_documents
 
@@ -270,12 +265,7 @@ async def vectorize_text_and_store(
     resource_type: str = "blog_post",
     progress_reporter=None,
 ) -> list[str]:
-    """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库。
-
-    与 vectorize_and_store 的差异：跳过文件解析（直接用传入 text），metadata 的
-    stored_name/chunk_id 用 source_id（资源稳定标识，如 "blog_post:123"），并附带
-    resource_type 便于检索侧按资源类型过滤。
-    """
+    """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库；跳过文件解析，metadata 的 stored_name/chunk_id 用 source_id（资源稳定标识，如 "blog_post:123"），附带 resource_type 便于检索过滤。"""
     from src.services.rag.embedding_service import get_embeddings
     from src.services.rag.vector_store import add_documents
     from src.utils.chunker import chunk_text
@@ -356,11 +346,7 @@ async def vectorize_text_and_store(
 
 
 async def convert_to_html(stored_filename: str, *, user_id: int | str = 1) -> str:
-    """Convert a stored file to HTML for browser preview.
-
-    Supports docx → HTML, xlsx → HTML table.
-    PDF is not converted (served as-is, browser renders natively).
-    """
+    """Convert a stored file to HTML for browser preview; PDF is served as-is (browser renders natively)."""
     path = get_user_upload_dir(user_id) / stored_filename
     ext = _get_extension(stored_filename)
     if ext == ".docx":

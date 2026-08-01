@@ -32,10 +32,8 @@ describe("OverviewPage", () => {
 
     render(<OverviewPage />);
 
-    // 标题
     expect(await screen.findByRole("heading", { name: "概览" })).toBeTruthy();
 
-    // KPI 卡片
     expect(await screen.findByText("1,234")).toBeTruthy(); // 用户总数
     expect(await screen.findByText("7")).toBeTruthy(); // 活跃订阅
     expect(await screen.findByText("5 / 10")).toBeTruthy(); // 兑换码 已用/共
@@ -55,11 +53,9 @@ describe("OverviewPage", () => {
 
     render(<OverviewPage />);
 
-    // 错误态：展示后端 detail 与重试按钮
     const retryBtn = await screen.findByRole("button", { name: /重试/ });
     expect(screen.getByText(/boom/)).toBeTruthy();
 
-    // 点击重试 → 第二次成功，KPI 数据出现
     fireEvent.click(retryBtn);
     expect(await screen.findByText("1,234")).toBeTruthy();
 
@@ -74,10 +70,8 @@ describe("OverviewPage", () => {
     render(<OverviewPage />);
 
     await waitFor(() => {
-      // 标题已渲染
       expect(screen.getByRole("heading", { name: "概览" })).toBeTruthy();
     });
-    // 数据文案尚未出现
     expect(screen.queryByText("1,234")).toBeNull();
   });
 

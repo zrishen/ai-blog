@@ -1,7 +1,5 @@
 import { API_BASE, apiFetch, readErrorDetail } from "./client";
 
-// ============ Research Graph Types ============
-
 export interface ResearchTopicSummary {
   id: number;
   title: string;
@@ -163,8 +161,6 @@ export interface ResearchDraftPreview {
   references: ResearchDraftReference[];
 }
 
-// ============ Research Topics ============
-
 export async function listResearchTopics(): Promise<ResearchTopicSummary[]> {
   const res = await apiFetch(`${API_BASE}/research/topics`);
   if (!res.ok) throw new Error("Failed to fetch research topics");
@@ -227,8 +223,6 @@ export async function draftResearch(topicId: number): Promise<ResearchDraftPrevi
   return res.json();
 }
 
-// ============ Research Claims ============
-
 export async function updateResearchClaim(claimId: number, data: {
   status?: string;
   confidence?: number;
@@ -280,8 +274,6 @@ export async function updateResearchProposal(proposalId: number, data: {
   }
   return res.json();
 }
-
-// ============ Blog × Research Linkage ============
 
 export async function attachResearchTopicToPost(postId: number, topicId: number): Promise<BlogPostResearchLink> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/research-topics`, {

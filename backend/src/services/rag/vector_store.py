@@ -41,14 +41,7 @@ async def add_documents(
     progress_callback=None,
     batch_size: int = 8,
 ) -> None:
-    """Add documents to a collection.
-
-    Args:
-        collection_name: Name of the ChromaDB collection.
-        documents: List of text documents to add.
-        metadata_list: Optional list of metadata dicts (one per document).
-        embeddings: Optional embedding vectors matching the documents.
-    """
+    """Add documents to a collection in batches, with optional embeddings and progress callback."""
     if not documents:
         return
 
@@ -86,17 +79,7 @@ async def search(
     query_embedding: list[float],
     top_k: int | None = None,
 ) -> list[SearchResult]:
-    """Search for similar documents.
-
-    Args:
-        collection_name: Name of the ChromaDB collection.
-        query: Original query text (for reference).
-        query_embedding: Embedding vector of the query.
-        top_k: Number of results to return. Defaults to settings.rag_top_k.
-
-    Returns:
-        List of SearchResult objects.
-    """
+    """Query by embedding, returning top_k nearest SearchResults (defaults to settings.rag_top_k)."""
     if top_k is None:
         top_k = settings.rag_top_k
 
@@ -138,11 +121,7 @@ async def delete_document_chunks(collection_name: str, stored_name: str) -> bool
 
 
 async def list_collections() -> list[str]:
-    """List all collection names.
-
-    Returns:
-        List of collection names.
-    """
+    """List all collection names."""
     client = await asyncio.to_thread(_get_client)
     collections = await asyncio.to_thread(client.list_collections)
     return [c.name for c in collections]

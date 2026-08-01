@@ -41,8 +41,7 @@ export function MobileDrawer({
   const panelRef = useRef<HTMLDivElement>(null);
   // 面板宽度（像素），用于把 translate 换算成屏外位移。min(88vw,380px) 随视口变化，需实测。
   const widthRef = useRef(380);
-  // 保持 onOpenChange 最新引用：调用方传入内联函数，身份每次渲染都变。手势/遮罩经 ref 读取，
-  // 避免把不稳定的回调写进 effect 依赖，从而打字触发的父级重渲染不会重跑焦点 effect 抢走输入框焦点。
+  // 经 ref 保持最新引用：避免不稳定回调进 effect 依赖，打字触发父级重渲染时不重跑焦点 effect 抢焦点。
   const onOpenChangeRef = useRef(onOpenChange);
   useEffect(() => {
     onOpenChangeRef.current = onOpenChange;

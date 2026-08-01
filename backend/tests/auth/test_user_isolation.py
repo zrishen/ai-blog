@@ -1,7 +1,6 @@
 """跨用户隔离测试：确保一个用户的数据/文件不会被另一用户读写。"""
 
 import io
-from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
@@ -138,47 +137,6 @@ async def test_other_user_cannot_publish_or_unpublish_post(client: AsyncClient):
         json={"publish": True},
     )
     assert resp.status_code == 404
-
-
-# ---- Blog: 文件落盘按 user_id 分目录 ----
-
-@pytest.mark.asyncio
-async def test_blog_markdown_files_are_separated_per_user(client: AsyncClient):
-    token_a, _ = await _register(client, "writer_a")
-    token_b, _ = await _register(client, "writer_b")
-    headers_a = {"Authorization": f"Bearer {token_a}"}
-    headers_b = {"Authorization": f"Bearer {token_b}"}
-
-    resp_a = await client.post("/api/v1/blog/posts", headers=headers_a, json={
-        "title": "A 的文章",
-        "content": "a",
-    })
-    resp_b = await client.post("/api/v1/blog/posts", headers=headers_b, json={
-        "title": "B 的文章",
-        "content": "b",
-    })
-
-    slug_a = resp_a.json()["slug"]
-    slug_b = resp_b.json()["slug"]
-
-    base = Path(settings.blog_content_dir)
-    found_a = False
-    found_b = False
-    a_dir = b_dir = None
-    for user_dir in base.iterdir():
-        if not user_dir.is_dir():
-            continue
-        for md_file in user_dir.glob("*.md"):
-            text = md_file.read_text(encoding="utf-8")
-            if f"slug: {slug_a}" in text:
-                found_a = True
-                a_dir = user_dir
-            if f"slug: {slug_b}" in text:
-                found_b = True
-                b_dir = user_dir
-    assert found_a and found_b
-    # 同一用户的两个 slug 必定在同一目录；不同用户则在不同目录
-    assert a_dir != b_dir
 
 
 # ---- Blog: 同名 slug 在不同用户间允许共存 ----

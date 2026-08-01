@@ -1,7 +1,5 @@
 import { API_BASE, apiFetch } from "./client";
 
-// ============ Blog API ============
-
 export interface BlogPostData {
   id: number;
   title: string;

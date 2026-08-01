@@ -622,7 +622,6 @@ function ActionNode({ tools }: { tools: ToolPair[] }) {
   );
 }
 
-/** 时间线单个节点 */
 function TimelineNode({ children }: { children: React.ReactNode }) {
   return (
     <motion.div

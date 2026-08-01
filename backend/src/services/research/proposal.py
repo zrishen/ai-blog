@@ -1,8 +1,4 @@
-"""研究提案（Proposal）审核 + payload 执行。
-
-_execute_proposal_payload 按 proposal_type 分发到 entity/relation/claim 的创建逻辑，
-是 research 域的上层编排（依赖 entity/relation/claim/common）。
-"""
+"""研究提案（Proposal）审核 + payload 执行（按 proposal_type 分发到 entity/relation/claim 的创建逻辑）。"""
 
 import logging
 from datetime import datetime, timezone
@@ -54,7 +50,6 @@ async def update_proposal(db: AsyncSession, proposal_id: int, data: dict, user_i
     await db.refresh(proposal)
     logger.info("提案审核完成 proposal_id=%s status=%s", proposal_id, proposal.status)
 
-    # 如果是 applied，执行提案的 payload
     if proposal.status == "applied" and proposal.payload_json:
         await _execute_proposal_payload(db, proposal, user_id)
 
@@ -62,7 +57,6 @@ async def update_proposal(db: AsyncSession, proposal_id: int, data: dict, user_i
 
 
 async def _execute_proposal_payload(db: AsyncSession, proposal: ResearchProposal, user_id: int):
-    """根据提案类型执行对应的操作。"""
     payload = proposal.payload_json or {}
     ptype = proposal.proposal_type
     topic_id = proposal.topic_id

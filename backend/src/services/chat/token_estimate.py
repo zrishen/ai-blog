@@ -1,7 +1,4 @@
-"""Token 估算：从消息 content / reasoning block 提取文本并粗估 token 数。
-
-CJK 字符按 0.5 token、其他按 0.25 token 估算（行为与原 chat_service 完全一致）。
-"""
+"""Token 估算：从消息 content / reasoning block 提取文本，CJK 按 0.5 token、其他按 0.25 token 粗估。"""
 
 from typing import Any
 

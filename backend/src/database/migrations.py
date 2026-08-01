@@ -1,8 +1,4 @@
-"""数据库初始化 + 幂等迁移（SQLite 兼容）。
-
-策略：使用 `Base.metadata.create_all` 创建缺失的表/列/索引（SQLAlchemy 对新增表会自动建；
-对已存在表中新增的列不会自动加列，所以这里手写幂等 ALTER TABLE / CREATE INDEX）。
-"""
+"""数据库初始化 + 幂等迁移（SQLite 兼容）：create_all 建缺失表，已存在表中新增的列/索引需手写幂等 ALTER/CREATE。"""
 
 import logging
 

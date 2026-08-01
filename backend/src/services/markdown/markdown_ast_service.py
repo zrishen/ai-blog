@@ -1,10 +1,6 @@
-"""Markdown 正文 AST 解析服务。
+"""Markdown 正文 AST 解析服务：把正文解析成块结构缓存到 DB（blocks_json），供 AI 章节定位（大纲提取/读单节）省 token。
 
-把博客正文(markdown 字符串)解析成业务友好的块结构,缓存到 DB(blocks_json)。
-供 AI 章节定位使用:大纲提取(不读全文)、读单节,大幅节省 token。
-
-事实源仍是 Markdown 文件,blocks_json 是派生缓存,可随时从 content 重建。
-解析用 markdown-it-py(已通过 rich 间接安装),正确处理代码块内的 # 等边界情况。
+事实源是 blog_posts.content（DB），blocks_json 是派生缓存，可随时从 content 重建。
 """
 
 import logging
@@ -21,15 +17,8 @@ _md = MarkdownIt("commonmark")
 def parse_to_blocks(body: str) -> list[dict]:
     """把 Markdown 正文解析成块数组。
 
-    每块结构:
-      {"type": "heading"|"paragraph"|"code"|"list"|"quote"|"other",
-       "level": int,        # 仅 heading(2/3/4),其余为 0
-       "text": str,          # heading 标题文字;其它块的纯文本摘要(首段文字)
-       "content": str,       # 该块对应的原始 markdown 文本(按行切出)
-       "lang": str,          # 仅 code(语言标识)
-       "char_count": int}    # 该块纯文字字数(去 markdown 符号)
-
-    解析失败时返回空列表(调用方应降级为读全文)。
+    块结构：{"type": "heading"|"paragraph"|"code"|"list"|"quote"|"other", "level", "text", "content", "lang", "char_count"}；
+    解析失败返回空列表（调用方应降级为读全文）。
     """
     if not body or not body.strip():
         return []
@@ -96,7 +85,6 @@ def parse_to_blocks(body: str) -> list[dict]:
         if token.type in ("bullet_list_open", "ordered_list_open") and token.map:
             start, end = token.map
             content = "\n".join(lines[start:end]).rstrip()
-            # 提取列表项文字
             items = _extract_list_items(tokens, i)
             text = "; ".join(items)[:120]
             blocks.append({
@@ -218,19 +206,15 @@ def _skip_until_close(tokens: list, start: int, open_type: str, close_type: str)
 
 
 def extract_outline(blocks: list[dict]) -> list[dict]:
-    """从块数组提取标题大纲(只含 heading 块)。
+    """从块数组提取标题大纲（只含 heading 块）。
 
-    返回:
-      [{"section_index": 1, "level": 2, "title": "引言", "char_count": 320, "first_sentence": "人工智能..."}]
-    section_index 是大纲中的序号(从 1 开始),level=2 为一级章节。
-    若文章无任何 heading,返回空列表。
+    返回 {"section_index"(从 1 开始), "level", "title", "char_count", "first_sentence"} 列表；无 heading 返回空列表。
     """
     outline: list[dict] = []
     for idx, block in enumerate(blocks):
         if block["type"] != "heading":
             continue
         section_index = len(outline) + 1
-        # 该章节字数 = 从此 heading 到下一个同级/更高级 heading 之间的非 heading 块字数
         char_count = _section_char_count(blocks, idx)
         first_sentence = _section_first_sentence(blocks, idx)
         outline.append({
@@ -266,11 +250,7 @@ def _section_first_sentence(blocks: list[dict], heading_idx: int) -> str:
 
 
 def get_section_text(blocks: list[dict], section_index: int) -> Optional[str]:
-    """按大纲序号(section_index,从 1 开始)返回该节的完整 markdown 文字。
-
-    章节范围 = heading 块 + 其后所有块,直到遇到同级或更高级 heading(或文章结束)。
-    序号无效或无 heading 时返回 None。
-    """
+    """按大纲序号（从 1 开始）返回该节的完整 markdown 文字；序号无效或无 heading 返回 None。"""
     headings = [(idx, b) for idx, b in enumerate(blocks) if b["type"] == "heading"]
     if section_index < 1 or section_index > len(headings):
         return None
@@ -286,14 +266,9 @@ def get_section_text(blocks: list[dict], section_index: int) -> Optional[str]:
 
 
 def get_section_char_range(body: str, blocks: list[dict], section_index: int) -> Optional[tuple[int, int]]:
-    """返回章节文本在 body 中的字符范围 [start, end)。
+    """返回章节文本在 body 中的字符范围 [start, end)，用于 blog_edit_post 把 target_text 搜索限定在单章节内。
 
-    用于 blog_edit_post 把 target_text 搜索限定在单章节内。
-    body 是原始 markdown 字符串,blocks 是 parse_to_blocks 的结果,
-    section_index 是 extract_outline 给出的 1-based 序号。
-
-    通过把 get_section_text 的结果在 body 中正向定位一次得到起点,
-    end 起点为 start + len(section_text)。无法定位时返回 None。
+    实现：get_section_text 结果在 body 中正向定位一次，end = start + len(section_text)；无法定位返回 None。
     """
     section_text = get_section_text(blocks, section_index)
     if not section_text:

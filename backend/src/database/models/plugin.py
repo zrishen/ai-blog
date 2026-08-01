@@ -1,8 +1,4 @@
-"""平台插件与用户启用关系。
-
-插件的 MCP 运行配置只属于平台管理员；用户记录仅保存是否启用，
-从数据模型层面隔离普通用户和后端执行配置。
-"""
+"""平台插件与用户启用关系：MCP 运行配置只属于平台管理员，用户仅保存是否启用（数据模型层隔离）。"""
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 

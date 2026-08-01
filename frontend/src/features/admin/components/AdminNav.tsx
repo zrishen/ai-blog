@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { to: "/admin/plugins", label: "插件", icon: Blocks, end: false },
 ] as const;
 
-/** 管理后台左侧导航：4 个子页（概览/用户/兑换码/用量），NavLink 高亮当前路由。 */
 export function AdminNav() {
   return (
     <nav className={cn(workspacePanelVariants({ side: "left" }), "gap-1 p-3")}>

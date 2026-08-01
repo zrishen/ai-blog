@@ -18,11 +18,7 @@ class User(Base):
 
 
 class RefreshToken(Base):
-    """Refresh token 记录：只存 SHA-256 哈希，支持吊销与过期。
-
-    明文 token 只在签发时返回一次给客户端（HttpOnly cookie），DB 不保存明文，
-    因此即便 DB 泄露，攻击者也无法直接复用 refresh token。
-    """
+    """Refresh token 记录：只存 SHA-256 哈希，支持吊销与过期；明文只在签发时返回一次，DB 泄露也无法复用。"""
 
     __tablename__ = "refresh_tokens"
 

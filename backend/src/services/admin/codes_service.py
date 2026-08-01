@@ -1,7 +1,4 @@
-"""兑换码管理 service：列表查询 + 作废（admin 后台用）。
-
-生成 / 激活在 services.subscription（create_codes / redeem）；本模块只补 admin 管理所需的查询与作废。
-"""
+"""兑换码管理 service：列表查询 + 作废（admin 后台用）；生成/激活在 services.subscription。"""
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,10 +13,7 @@ async def list_codes(
     offset: int = 0,
     limit: int = 50,
 ) -> list[RedemptionCode]:
-    """查询兑换码列表：按 created_at desc，支持 used 筛选 + offset/limit 分页。
-
-    used=None 不过滤；used=True/False 仅返回对应状态。
-    """
+    """查询兑换码列表：按 created_at desc，used 筛选（None 不过滤）+ offset/limit 分页。"""
     stmt = select(RedemptionCode).order_by(RedemptionCode.created_at.desc())
     if used is not None:
         stmt = stmt.where(RedemptionCode.is_used == used)
@@ -29,10 +23,7 @@ async def list_codes(
 
 
 async def revoke_code(db: AsyncSession, code_id: int) -> None:
-    """作废兑换码 = 删除未使用的码。
-
-    LookupError：码不存在；ValueError：码已使用，不能作废（保留兑换审计痕迹）。
-    """
+    """作废兑换码 = 删除未使用的码；码不存在抛 LookupError，已使用抛 ValueError（保留审计痕迹）。"""
     code = await db.get(RedemptionCode, code_id)
     if code is None:
         raise LookupError("兑换码不存在")

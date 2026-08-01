@@ -96,7 +96,6 @@ async def _build_post_snapshot(db: AsyncSession, topic: ResearchTopic, user_id: 
 
     claim_snapshots: list[dict[str, Any]] = []
     for claim in claims:
-        # 查找 supporting evidence
         ev_result = await db.execute(
             select(ResearchEvidence, ResearchRelation)
             .join(

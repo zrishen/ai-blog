@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, matchPath } from "react-router-dom";
 import { Sparkles, Tags } from "lucide-react";
 import { useChat } from "../../../stores/chatStore";
 import { useAuth } from "../../../stores/authStore";
@@ -14,11 +14,13 @@ import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 export function BlogOverviewPanel() {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated } = useAuth();
-  const { username } = useParams<{ username: string }>();
   const location = useLocation();
+  // LeftSidebar 渲染在 <Routes> 之外（三栏 Panel 布局），useParams 取不到路由参数，
+  // 改用 matchPath 从 location 解析当前博主用户名（与 useAISidebarRouteContext 同范式）。
+  const routeUsername = matchPath("/u/:username", location.pathname)?.params.username;
 
   // 仅博主自己可见编辑入口；客户端比对，比后端 is_owner 更可靠（token 过期不误判）
-  const isOwner = isAuthenticated && !!user && user.username === username;
+  const isOwner = isAuthenticated && !!user && !!routeUsername && user.username === routeUsername;
   const hasHtml = !!state.leftbarHtml;
   const showTags = state.leftbarShowTags;
   const isEmpty = !hasHtml && !showTags;

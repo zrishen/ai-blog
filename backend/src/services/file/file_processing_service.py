@@ -321,11 +321,7 @@ async def create_or_reuse_index_job(
     stored_name: str,
     client_request_id: str | None = None,
 ) -> FileProcessingJob:
-    """创建「加入 AI 知识」索引 job（幂等：同一资源已有活跃 index job 则复用）。
-
-    stored_name 同时是向量删除键（file=doc.file_path，blog=f"blog_post:{id}"），
-    使 _run_job 的 cleanup 与 _finalize_failure 对 file/blog 行为一致。
-    """
+    """创建「加入 AI 知识」索引 job（幂等：同一资源已有活跃 index job 则复用；stored_name 同时是向量删除键，file=doc.file_path，blog=f"blog_post:{id}"）。"""
     active_key = _active_key(
         "index",
         user_id,

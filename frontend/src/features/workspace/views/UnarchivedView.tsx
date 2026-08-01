@@ -172,7 +172,6 @@ export function UnarchivedView({
   const loading = files === null || unarchivedPosts === null;
   const total = (files?.length ?? 0) + (unarchivedPosts?.length ?? 0);
 
-  // 合并文章与文件，按时间倒序混排
   const rows = useMemo<InboxRow[]>(() => {
     if (loading) return [];
     type WithTs = InboxRow & { ts: number };

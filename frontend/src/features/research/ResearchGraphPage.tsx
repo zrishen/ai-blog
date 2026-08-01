@@ -54,7 +54,6 @@ export function ResearchGraphPage() {
     setSearchParams(nextSearchParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  // Sync URL topicId to state and load detail
   useEffect(() => {
     const routeTopicId = topicId ? Number(topicId) : null;
     if (routeTopicId && routeTopicId !== state.researchCurrentTopicId) {

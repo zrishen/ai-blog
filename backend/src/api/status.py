@@ -19,7 +19,6 @@ async def check_status():
     vector_status = "ok"
     overall_status = "ok"
 
-    # Check database
     try:
         from sqlalchemy import text
         from src.database.engine import engine
@@ -31,7 +30,6 @@ async def check_status():
         db_status = f"error: {str(e)}"
         overall_status = "degraded"
 
-    # Check upload directory
     try:
         UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
         file_count = sum(
@@ -44,7 +42,6 @@ async def check_status():
         uploads_status = f"error: {str(e)}"
         overall_status = "degraded"
 
-    # Check vector store
     try:
         from src.services.rag.vector_store import list_collections
 

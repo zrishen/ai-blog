@@ -1,16 +1,13 @@
 import { API_BASE, apiFetch, readErrorDetail } from "./client";
 
-// ============ Admin API ============
 // 对接后端 /api/v1/admin/*（全部 require_admin，403 由调用方处理）。
 // 端点清单见 backend/src/api/admin*.py。
 
-// ---- 守卫 ----
 export async function adminPing(): Promise<boolean> {
   const res = await apiFetch(`${API_BASE}/admin/ping`);
   return res.ok;
 }
 
-// ---- 概览 / 用量（/admin/usage）----
 export interface AdminOverview {
   total_users: number;
   active_subscriptions: number;
@@ -42,7 +39,6 @@ export async function getAdminUserUsage(userId: number): Promise<AdminUserWeekly
   return res.json();
 }
 
-// ---- 用户（/admin/users）----
 export interface AdminUserItem {
   id: number;
   username: string;
@@ -97,7 +93,6 @@ export async function setAdminUser(userId: number, isAdmin: boolean): Promise<Ad
   return res.json();
 }
 
-// ---- 兑换码（/admin/codes）----
 export interface AdminCodeItem {
   id: number;
   code: string;

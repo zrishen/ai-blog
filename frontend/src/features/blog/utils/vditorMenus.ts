@@ -433,11 +433,9 @@ export function installCodeLanguageMenu(editor: Vditor) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
-  // 判断一个元素是否已滚出滚动容器的可视区(完全在上方/下方/左右外)
   const isOutsideViewport = (rect: DOMRect) => {
     if (!scrollContainer) return false;
     const cr = scrollContainer.getBoundingClientRect();
-    // 完全在可视区上方、下方、左方、右方 → 视为不可见
     const above = rect.bottom <= cr.top + 1;
     const below = rect.top >= cr.bottom - 1;
     const left = rect.right <= cr.left + 1;
@@ -537,7 +535,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
     menu.style.display = "none";
   };
 
-  // 为单个代码块渲染高亮(常驻)
   const renderHighlightOverlay = async (codeBlock: HTMLElement) => {
     const ui = codeBlockUIs.get(codeBlock);
     if (!ui) return;
@@ -588,7 +585,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
     }
   };
 
-  // 为一个代码块创建 trigger + overlay
   const createUIForBlock = (codeBlock: HTMLElement) => {
     if (codeBlockUIs.has(codeBlock)) return codeBlockUIs.get(codeBlock)!;
 
@@ -630,7 +626,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
     return ui;
   };
 
-  // 初始化/刷新一个代码块(创建 UI + 渲染高亮 + 定位)
   const mountBlock = (codeBlock: HTMLElement) => {
     createUIForBlock(codeBlock);
     codeBlock.classList.add("blog-editor-code-block--highlighted");
@@ -639,7 +634,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
     void renderHighlightOverlay(codeBlock);
   };
 
-  // 销毁一个代码块的 UI
   const unmountBlock = (codeBlock: HTMLElement) => {
     const ui = codeBlockUIs.get(codeBlock);
     if (!ui) return;
@@ -653,16 +647,13 @@ export function installCodeLanguageMenu(editor: Vditor) {
     }
   };
 
-  // 全量同步:扫描编辑器内所有代码块,挂载新的、卸载消失的
   const syncAllBlocks = () => {
     const currentBlocks = new Set(
       Array.from(editorElement.querySelectorAll<HTMLElement>('div.vditor-wysiwyg__block[data-type="code-block"]'))
     );
-    // 卸载已删除的
     for (const block of Array.from(codeBlockUIs.keys())) {
       if (!currentBlocks.has(block)) unmountBlock(block);
     }
-    // 挂载新增的
     for (const block of currentBlocks) {
       if (!codeBlockUIs.has(block)) mountBlock(block);
     }
@@ -741,7 +732,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
   };
 
   const handleViewportChange = () => {
-    // 所有浮层与标签重新定位
     for (const block of codeBlockUIs.keys()) {
       positionTrigger(block);
       const codeElement = getCodeElement(block);

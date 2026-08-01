@@ -1,6 +1,5 @@
 import { API_BASE, apiFetch, readErrorDetail } from "./client";
 
-// ============ Subscription API ============
 // 对接后端 /api/v1/subscription/*（status 含周配额，redeem 激活兑换码）。
 
 export interface SubscriptionStatus {

@@ -1,8 +1,6 @@
 """Chat 主编排：LangGraph ReAct Agent 流式执行 + 附件 claim 生命周期 + 视觉兜底。
 
-stream_chat 是唯一对外入口：组装消息 → 建造 agent → 流式分发 SSE 事件 → 落库。
-所有被 stream_chat 调用 / 被测试 monkeypatch 的依赖均在此 import 进命名空间，
-使 `from src.services.chat import orchestrator as chat_service` 后 patch 生效。
+stream_chat 是唯一对外入口（组装消息→建 agent→流式 SSE→落库）。被测试 monkeypatch 的依赖必须在此 import，使 `from src.services.chat import orchestrator as chat_service` 后 patch 生效。
 """
 
 import asyncio
@@ -250,8 +248,7 @@ async def stream_chat(
     thinking_mode: str = "balanced",
     context: dict | None = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream a chat response via LangGraph ReAct Agent."""
-    # 1. Load MCP metadata from published platform plugins enabled by this user.
+    # 1. 加载用户启用的平台 MCP 插件
     from src.database.models import User
 
     mcp_plugins = []
@@ -301,7 +298,7 @@ async def stream_chat(
         ])
         return resp.content, getattr(resp, "usage_metadata", None)
 
-    # 2. Claim and build messages. Attachment failures are never silently ignored.
+    # 2. Claim 附件并组装消息（附件失败不静默忽略）
     try:
         if requested_attachment_ids:
             attachment_claim_token = str(uuid.uuid4())
@@ -384,7 +381,7 @@ async def stream_chat(
         agent_tools.extend(RESEARCH_TOOLS)
 
     if use_platform_key:
-        # 订阅有效：用平台 key（固定 MODEL_NAME，allow_official_fallback 走 .env）+ 开 stream_usage 拿真实 usage
+        # 订阅有效：用平台 key（allow_official_fallback 走 .env）+ 开 stream_usage 拿真实 usage
         model_kwargs = _chat_model_kwargs(thinking_mode, None, allow_official_fallback=True)
         model_kwargs["stream_usage"] = True
     else:
@@ -491,8 +488,7 @@ async def stream_chat(
                                 break
 
                 if parts:
-                    # Anthropic 协议要求 system 消息连续出现在最前;OpenAI 协议也支持放最前
-                    # 所以统一插入到列表头部,避免穿插导致 Anthropic 400
+                    # system 消息须连续置于最前（Anthropic 400 限制），统一插入列表头部
                     api_messages.insert(0, {"role": "system", "content": "\n".join(parts)})
 
             llm = _create_llm(model_kwargs, thinking_mode)

@@ -1,7 +1,7 @@
 import type { ChatState, ChatAction } from "../chatStore";
 import { applyStreamEvent } from "./streamEvent";
 
-// Conversation + MCP 切片：处理对话与 MCP 相关 action，其它原样返回。
+// Conversation 切片：处理对话与消息相关 action，其它原样返回。
 export function conversationReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "SET_CONVERSATIONS":

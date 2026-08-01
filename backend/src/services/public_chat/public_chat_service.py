@@ -27,10 +27,8 @@ _PROTOCOL_MARKERS = ("REASONING", "TOOLDONE", "BLOGDELTA", "PATCHSTART", "PATCHD
 def _strip_public_protocol_markers(text: str, *, final: bool = False) -> tuple[str, str]:
     """清理公开聊天输出中的协议标记，返回 (clean_text, remainder)。
 
-    - 命中标记且其后 JSON 完整：整段标记被清除。
-    - 命中标记但 JSON 不完整（chunk 边界切在标记中间）：
-      * final=False（流处理中）：把标记起到末尾作为 remainder 返回，留给下一 chunk 拼接后重处理；
-      * final=True（流结束）：标记作为普通文本输出，绝不截断后续内容。
+    命中标记且 JSON 完整则整段清除；JSON 不完整（chunk 边界切在中间）时：流处理中把标记起至
+    末尾留作 remainder 供下个 chunk 重处理，流结束时当普通文本输出、绝不截断后续内容。
     """
     normalized = text.replace("\x00", "").replace("�", "")
     decoder = json.JSONDecoder()

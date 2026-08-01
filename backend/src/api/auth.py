@@ -1,9 +1,6 @@
 """Auth API routes: register, login, refresh, logout, me.
 
-- access token：短期 JWT，通过响应体返回，客户端存内存。
-- refresh token：不透明随机串，通过 HttpOnly cookie 下发，仅随 /api/auth/* 请求携带；
-  /refresh 用它换新 access；/logout 吊销服务端记录并清 cookie。
-  路由前缀 /api/v1/auth。
+access token 短期 JWT 走响应体；refresh token 走 HttpOnly cookie（仅 /api/v1/auth 下携带），/refresh 换新、/logout 吊销。
 """
 
 import logging
@@ -99,8 +96,7 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户名已存在")
     await db.refresh(user)
 
-    # 入门文章为 best-effort：失败时仅记日志、不阻断注册，用户仍可正常登录，
-    # 文章可由后台或下次登录补建，避免「用户已建、注册接口 500」的半注册状态。
+    # 入门文章 best-effort：失败仅记日志不阻断注册，避免「用户已建、注册接口 500」的半注册状态
     try:
         await _seed_intro_article(db, user.id)
     except Exception:

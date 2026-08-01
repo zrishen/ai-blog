@@ -47,12 +47,10 @@ interface ChatState {
   theme: Theme;
   activePanel: Panel;
 
-  // Layout
   currentPage: Page;
   gearMenuOpen: boolean;
   pluginCenterOpen: boolean;
 
-  // AI Sidebar
   aiSidebarOpen: boolean;
   aiSidebarConversationId: number | null;
   aiSidebarSelectedKey: AISidebarConversationKey | null;
@@ -66,7 +64,6 @@ interface ChatState {
   aiSidebarThinkingMode: ThinkingMode;
   llmSupportsThinking: boolean;
 
-  // Blog
   blogPosts: BlogPost[];
   blogCurrentView: BlogView;
   blogCurrentPostId: number | null;
@@ -82,14 +79,12 @@ interface ChatState {
   // 工作区内联预览选中的文件路径（FilePreviewView）
   fileSelectedFile: string | null;
 
-  // Workspace
   workspaceTree: WorkspaceNode[];
   workspaceSelectedFolderId: number | null;
   workspaceSelectedView: WorkspaceView;
   // 工作区内联编辑的博客 id（null=不在编辑，显示视图列表）
   workspaceEditingBlogId: number | null;
 
-  // Research Graph
   researchTopics: ResearchTopicSummary[];
   researchCurrentTopicId: number | null;
   researchCurrentTopic: ResearchTopicDetail | null;
@@ -125,11 +120,9 @@ type ChatAction =
   | { type: "SET_STREAMING"; payload: boolean }
   | { type: "SET_THEME"; payload: Theme }
   | { type: "SET_ACTIVE_PANEL"; payload: Panel }
-  // Layout
   | { type: "SET_PAGE"; payload: Page }
   | { type: "TOGGLE_GEAR_MENU"; payload?: boolean }
   | { type: "TOGGLE_PLUGIN_CENTER"; payload?: boolean }
-  // AI Sidebar
   | { type: "SET_AI_SIDEBAR_OPEN"; payload: boolean }
   | { type: "SET_AI_SIDEBAR_CONV_ID"; payload: number | null }
   | { type: "SET_AI_SIDEBAR_SELECTED_KEY"; payload: AISidebarConversationKey | null }
@@ -155,7 +148,6 @@ type ChatAction =
   | { type: "REMOVE_AI_SIDEBAR_THREAD"; payload: { key: AISidebarConversationKey } }
   | { type: "SET_AI_SIDEBAR_THINKING_MODE"; payload: ThinkingMode }
   | { type: "SET_LLM_SUPPORTS_THINKING"; payload: boolean }
-  // Blog
   | { type: "SET_BLOG_POSTS"; payload: BlogPost[] }
   | { type: "SET_BLOG_VIEW"; payload: BlogView }
   | { type: "SET_BLOG_CURRENT_POST_ID"; payload: number | null }
@@ -165,26 +157,20 @@ type ChatAction =
   | { type: "START_BLOG_STREAMING"; payload: { postId: number; runId: string } }
   | { type: "APPEND_BLOG_STREAMING"; payload: { postId: number; runId: string; contentDelta: string } }
   | { type: "CLEAR_BLOG_STREAMING"; payload: { postId: number; runId: string } }
-  // AI Selection Context
   | { type: "SET_AI_SELECTION_CONTEXT"; payload: { postId: number; selectedText: string; sectionIndex: number } }
   | { type: "CLEAR_AI_SELECTION_CONTEXT" }
-  // 博客左栏
   | { type: "SET_LEFTBAR_HTML"; payload: string | null }
   | { type: "SET_LEFTBAR_SHOW_TAGS"; payload: boolean }
   | { type: "SET_AI_LEFTBAR_EDIT_CONTEXT"; payload: { html: string | null } | null }
   | { type: "CLEAR_AI_LEFTBAR_EDIT_CONTEXT" }
-  // Blog Patch Streaming
   | { type: "START_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; targetText: string } }
   | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; replacementDelta: string } }
   | { type: "CLEAR_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string } }
-  // 工作区文件预览
   | { type: "SET_FILE_SELECTED_FILE"; payload: string | null }
-  // Workspace
   | { type: "SET_WORKSPACE_TREE"; payload: WorkspaceNode[] }
   | { type: "SET_WORKSPACE_BLOG_STATUS"; payload: { id: number; status: string } }
   | { type: "SET_WORKSPACE_SELECTED_FOLDER"; payload: number | null }
   | { type: "SET_WORKSPACE_SELECTED_VIEW"; payload: WorkspaceView }
-  // Research Graph
   | { type: "SET_RESEARCH_TOPICS"; payload: ResearchTopicSummary[] }
   | { type: "SET_RESEARCH_CURRENT_TOPIC_ID"; payload: number | null }
   | { type: "SET_RESEARCH_CURRENT_TOPIC"; payload: ResearchTopicDetail | null }
@@ -193,14 +179,11 @@ type ChatAction =
   | { type: "SET_RESEARCH_SELECTED_PROPOSAL_ID"; payload: number | null }
   | { type: "SET_TRUST_WRITING_ENABLED"; payload: boolean }
   | { type: "SET_PENDING_RESEARCH_PROMPT"; payload: string | null }
-  // File processing / Trash
   | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
   | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
   | { type: "INCREMENT_TRASH_REVISION" }
   | { type: "INCREMENT_AI_KNOWLEDGE_REVISION" }
-  // Workspace 内联编辑博客
   | { type: "SET_WORKSPACE_EDITING_BLOG"; payload: number | null }
-  // Auth
   | { type: "LOGOUT" };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -292,7 +275,6 @@ const initialState: ChatState = {
   theme: savedTheme,
   activePanel: "conversations",
 
-  // Layout
   currentPage: getInitialPage(),
   gearMenuOpen: false,
   pluginCenterOpen: false,
@@ -311,7 +293,6 @@ const initialState: ChatState = {
   aiSidebarThinkingMode: "balanced",
   llmSupportsThinking: true,
 
-  // Blog
   blogPosts: [],
   blogCurrentView: "list",
   blogCurrentPostId: null,
@@ -323,16 +304,13 @@ const initialState: ChatState = {
   aiLeftbarEditContext: null,
   blogPatchStreamingByPostId: {},
 
-  // 工作区文件预览
   fileSelectedFile: null,
 
-  // Workspace
   workspaceTree: [],
   workspaceSelectedFolderId: loadWorkspaceFolder(),
   workspaceSelectedView: loadWorkspaceView(),
   workspaceEditingBlogId: null,
 
-  // Research Graph
   researchTopics: [],
   researchCurrentTopicId: null,
   researchCurrentTopic: null,
@@ -342,7 +320,6 @@ const initialState: ChatState = {
   trustWritingEnabled: false,
   pendingResearchPrompt: null,
 
-  // File processing / Trash
   fileLibraryRevision: 0,
   trashRevision: 0,
   aiKnowledgeRevision: 0,
@@ -359,7 +336,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("theme", state.theme);
   }, [state.theme]);
 
-  // 工作区视图/目录持久化到 localStorage，刷新后恢复
   useEffect(() => {
     localStorage.setItem("ws_view", state.workspaceSelectedView);
   }, [state.workspaceSelectedView]);

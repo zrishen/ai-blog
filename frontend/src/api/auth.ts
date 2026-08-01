@@ -1,7 +1,5 @@
 import { API_BASE, apiFetch, readErrorDetail } from "./client";
 
-// ---- User settings ----
-
 export type LLMProtocol = "openai" | "anthropic";
 
 export interface LLMSettings {

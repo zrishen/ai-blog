@@ -1,9 +1,7 @@
 """订阅配额核心：ISO 周窗口 + 订阅有效性 + 周用量累加 + 配额判断。
 
-订阅用户走平台 key（固定 MODEL_NAME），按 token 周额度限制；超额/到期回退 BYOK。
-- 额度窗口：ISO 周（周一 00:00 UTC+8 重置），period_yw 如 "2026-W30"
-- 配额模式：事后扣（请求后扣真实 usage）；超额则下次请求回退 BYOK
-- 累加用 SQLite upsert（on_conflict_do_update），范式同 PublicChatDailyUsage
+订阅用户走平台 key 按 token 周额度限制，超额/到期回退 BYOK；配额事后扣（请求后扣真实 usage）；
+窗口为 ISO 周（周一 00:00 UTC+8 重置），累加用 SQLite upsert（on_conflict_do_update）。
 """
 
 from datetime import datetime, timedelta, timezone

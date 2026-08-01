@@ -73,10 +73,8 @@ def build_llm_model_kwargs(
 ) -> dict[str, Any]:
     """构造 LLM 调用参数。
 
-    - allow_official_fallback=True：DB 无记录或缺字段时回退到 .env 官方配置，
-      用于访客公共聊天等"平台买单"场景。
-    - allow_official_fallback=False（默认）：要求 llm_settings 必须提供 api_key，
-      缺则 kwargs.api_key=None，由上层判断并拒绝调用。用于登录用户自有 key 场景。
+    allow_official_fallback=True 时 DB 缺字段回退 .env 官方配置（平台买单场景）；
+    False（默认）要求用户自备 api_key，缺则 kwargs.api_key=None 由上层拒绝调用。
     """
     protocol = normalize_llm_protocol(llm_settings.protocol if llm_settings else None)
     has_custom_model = bool(llm_settings and llm_settings.model_name)
@@ -114,8 +112,5 @@ def build_llm_model_kwargs(
 
 
 def has_usable_api_key(model_kwargs: dict[str, Any]) -> bool:
-    """判断 build_llm_model_kwargs 产出的 kwargs 是否带可用 api_key。
-
-    用于 allow_official_fallback=False 路径下,登录用户没自填 key 时拒绝调用。
-    """
+    """build_llm_model_kwargs 产出的 kwargs 是否带可用 api_key（用户未自填 key 时拒绝调用）。"""
     return bool(model_kwargs.get("api_key"))

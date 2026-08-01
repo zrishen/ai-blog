@@ -1,7 +1,4 @@
-"""统一路由注册入口。
-
-所有业务路由按功能模块拆分为独立文件，在此汇总并通过 prefix 挂载到 /api 下。
-"""
+"""统一路由注册入口：各业务路由模块在此汇总挂载到 /api 下。"""
 
 from fastapi import APIRouter
 
@@ -28,46 +25,34 @@ from src.api.subscription import router as subscription_router
 
 router = APIRouter()
 
-# 状态检查
 router.include_router(status_router)
 
-# 用户认证
 router.include_router(auth_router)
 router.include_router(settings_router)
 
-# 对话管理
 router.include_router(conversations_router)
 
-# 聊天（流式 / 非流式）
 router.include_router(chat_router)
 router.include_router(chat_attachments_router)
 router.include_router(public_chat_router)
 
-# 文件上传 + 文件库
 router.include_router(files_router)
 
-# MCP 服务配置
 router.include_router(plugins_router)
 
-# 博客
 router.include_router(blog_router)
 router.include_router(research_router)
 
-# 工作区（目录树 + 资源挂靠 + AI 知识）
 router.include_router(workspace_router)
 
-# 文件预览
 router.include_router(preview_router)
 
-# 回收站
 router.include_router(trash_router)
 
-# 管理员后台
 router.include_router(admin_router)
 router.include_router(admin_codes_router)
 router.include_router(admin_users_router)
 router.include_router(admin_usage_router)
 router.include_router(admin_plugins_router)
 
-# 订阅
 router.include_router(subscription_router)

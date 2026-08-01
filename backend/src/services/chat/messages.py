@@ -1,9 +1,4 @@
-"""消息构建：组装发给 LLM 的 messages 列表（历史 + 附件 + 图片）。
-
-正确处理 tool_calls / tool role 消息，确保发给 LLM 的历史消息符合 OpenAI 格式要求：
-- assistant 消息带 tool_calls 时必须有对应的 tool 消息回复每个 tool_call_id
-- 过滤掉不完整的 tool_calls 序列（防止 400 错误）
-"""
+"""消息构建：组装发给 LLM 的 messages 列表（历史 + 附件 + 图片），并规范化 tool_calls/tool 配对防止 400。"""
 
 import json
 import logging
@@ -118,15 +113,11 @@ async def _build_messages(
     compact_threshold: int | None = None,
     compact_recent_count: int | None = None,
 ) -> tuple[list[dict], str, int, dict | None]:
-    """Load conversation history and build messages for the agent.
+    """组装发给 LLM 的 messages：历史（tool_calls 配对不完整则跳过防 400）+ 附件/图片 + 当前消息。
 
-    正确处理 tool_calls / tool role 消息，确保发给 LLM 的历史消息符合 OpenAI 格式要求：
-    - assistant 消息带 tool_calls 时必须有对应的 tool 消息回复每个 tool_call_id
-    - 过滤掉不完整的 tool_calls 序列（防止 400 错误）
-
-    上下文压缩：传入 compact_summarizer 时，历史原文 token 超阈值则把较早消息摘要，
-    保留最近 compact_recent_count 条原文；摘要失败兜底回退全 raw，绝不阻塞。
-    返回第 4 个元素为本次摘要的真实 usage（未触发/失败时为 None）。
+    上下文压缩：传入 compact_summarizer 且历史超阈值时把较早消息摘要、保留最近
+    compact_recent_count 条原文，失败兜底回退全 raw；返回第 4 个元素为本次摘要真实 usage
+    （未触发/失败时为 None）。
     """
 
     conv = None
@@ -150,7 +141,6 @@ async def _build_messages(
     messages = []
     # 取最近 40 条（tool 调用会翻倍消息数）
     raw = list(db_messages[-40:])
-    # 上下文压缩：历史超阈值则把较早消息摘要，保留最近 N 条原文（失败兜底回退全 raw）
     compact_usage: dict | None = None
     if compact_summarizer and conv is not None and raw:
         threshold = (
@@ -183,9 +173,7 @@ async def _build_messages(
     while i < len(raw):
         m = raw[i]
         if m.role == "assistant" and m.tool_calls:
-            # assistant 带 tool_calls：记录待匹配的 id
             tc_ids = {tc["id"] for tc in (m.tool_calls or [])}
-            # 检查后续是否有足够的 tool 消息匹配
             j = i + 1
             matched_ids: set[str] = set()
             while j < len(raw) and raw[j].role == "tool" and len(matched_ids) < len(tc_ids):
@@ -194,7 +182,6 @@ async def _build_messages(
                 j += 1
 
             if matched_ids == tc_ids:
-                # 完整配对：全部输出
                 tool_msg_list = []
                 for k in range(i + 1, j):
                     tool_msg_list.append({
@@ -215,20 +202,17 @@ async def _build_messages(
                 i = j
                 continue
             else:
-                # 不完整配对：跳过这条 assistant 及其后不完整的 tool 消息
                 logger.warning(
                     "Skipping incomplete tool_calls sequence at message index %d: "
                     "expected ids=%s, matched=%s",
                     i, tc_ids, matched_ids,
                 )
-                # 跳到下一个非 tool 消息
                 i += 1
                 while i < len(raw) and raw[i].role == "tool":
                     i += 1
                 continue
 
         elif m.role == "tool":
-            # 孤立的 tool 消息（前面没有对应 assistant），跳过
             i += 1
             continue
         elif m.role in ("user", "assistant"):

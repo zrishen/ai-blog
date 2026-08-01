@@ -1,8 +1,4 @@
-"""SSE 流式协议层：marker 定义 + partial-JSON 增量解析。
-
-stream_chat 在工具参数 token 流式生成期间，用这里的解析器从尚未闭合的 JSON 里
-实时抽取 post_id / content / target_text / replacement_text，前端据此边生成边渲染。
-"""
+"""SSE 流式协议层：marker 定义 + partial-JSON 增量解析（工具参数边生成边抽取供前端渲染）。"""
 
 import json
 import re
@@ -61,10 +57,7 @@ def _extract_partial_content(args_json: str) -> str | None:
 
 
 def _extract_partial_json_string(args_json: str, field: str) -> str | None:
-    """从 partial JSON args 中提取指定字符串字段的值（已生成部分）。
-
-    与 _extract_partial_content 同样的转义处理，只是字段名可参数化。
-    """
+    """从 partial JSON args 中提取指定字符串字段的值（转义处理同 _extract_partial_content）。"""
     match = re.search(rf'"{field}"\s*:\s*"', args_json)
     if not match:
         return None

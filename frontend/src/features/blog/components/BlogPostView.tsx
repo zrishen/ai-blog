@@ -94,7 +94,6 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
   const scrollRef = useRef<HTMLDivElement>(null);
   const articleRef = useRef<HTMLDivElement>(null);
 
-  // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; selectedText: string; sectionIndex: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -232,7 +231,6 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
     if (username) navigate(`/u/${encodeURIComponent(username)}`);
   }, [onBack, dispatch, navigate, username]);
 
-  // 右键菜单处理
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     if (!isOwner || !post) { setContextMenu(null); return; }
@@ -245,7 +243,6 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
     }
   }, [isOwner, post]);
 
-  // 移动端长按处理
   const handleTouchStart = useCallback(() => {
     if (!isOwner || !post) return;
     longPressTimerRef.current = setTimeout(() => {

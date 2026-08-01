@@ -1,8 +1,6 @@
 """用户目录命名翻译：user_id → username。
 
-目录用 username 命名便于人工维护，但代码逻辑仍以 user_id 为主键。
-通过同步查询 SQLite 文件把 user_id 解析成 username；查不到（如测试
-内存 DB）则回退到 str(user_id)，保证调用链行为一致。
+目录用 username 命名便于人工维护；同步查询 SQLite 解析，查不到（如测试内存 DB）回退 str(user_id)。
 """
 
 import logging

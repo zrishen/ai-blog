@@ -28,7 +28,6 @@ function updateMessageWithPayload(
   };
 }
 
-// AI Sidebar 切片：侧栏会话/消息/流式/输入/错误/历史/思考模式 等 19 action，其它原样返回。
 export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "SET_AI_SIDEBAR_OPEN":

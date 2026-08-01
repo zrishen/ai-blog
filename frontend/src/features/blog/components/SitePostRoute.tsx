@@ -30,10 +30,8 @@ export function SitePostRoute() {
   const { state, dispatch } = useChat();
   const [local, localDispatch] = useReducer(reducer, initialState);
 
-  // isOwner 直接用前端登录态比对，不依赖后端 getSiteUser 返回的 is_owner。
-  // 后端 is_owner 基于请求携带的 access token 判断，token 过期/未就绪时公开接口会以匿名身份
-  // 返回 is_owner=false（且因公开接口返回 200 不触发 401 刷新），导致编辑/删除按钮不显示、
-  // 直到刷新页面才恢复。前端比对不受 token 时序影响。
+  // isOwner 用前端登录态比对，不用后端 is_owner：公开接口按 access token 判断，
+  // token 过期/未就绪时返回匿名 false 且不触发 401 刷新，按钮会直到刷新页面才显示。
   const isOwner = isAuthenticated && !!user && user.username === username;
 
   useEffect(() => {
