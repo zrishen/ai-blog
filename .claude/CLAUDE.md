@@ -22,7 +22,7 @@ AI 写作 + 知识库 RAG + 研究图谱；前后端分离 + LangGraph。
 后端 `backend/src/`：api(薄) / services(厚、按域聚合)。项目特定约定——
 - `prompts.py` 是 prompt 唯一源，别散落到别处
 - chat、research 是拆分聚合的大模块，流式入口 `services/chat/orchestrator.stream_chat`
-- 博客 Markdown 是事实源，DB 仅索引（改正文改 MD，别只改 DB）
+- 博客正文以 DB 为事实源（`blog_posts.content` + `blocks_json` AST 缓存），改正文直接改 DB
 - 路由前缀 `/api/v1`；SQLite(aiosqlite)+ChromaDB
 
 前端 `frontend/src/`：`features/<域>/` 自包含；`api/client.ts` 统一请求（双 token：access 内存 + refresh HttpOnly cookie，401 单飞刷新）；业务沉 hook；chatStore 拆 7 slice，改 reducer 注意 LOGOUT 跨域重置（范式 `features/research/hooks/`）。
@@ -32,3 +32,5 @@ AI 写作 + 知识库 RAG + 研究图谱；前后端分离 + LangGraph。
 原则：最小范围改；遵循架构/接口；不改无关代码，职责单一；数据 user-scoped；废弃代码要及时删除，不残留死代码。
 
 验证：前端 `npm run lint && npm run build && npm run test`，后端 `uv run pytest`（自动覆盖率、不设硬阈值）；按改动跑域测试即可。
+
+注释：注释简洁，没必要就不写
