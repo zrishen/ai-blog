@@ -83,7 +83,7 @@ from .token_estimate import _extract_reasoning_content, _extract_text_content, e
 
 logger = logging.getLogger(__name__)
 
-_MISSING_API_KEY_MESSAGE = "请先在「设置」页填写你自己的 API 密钥后再发起对话。"
+_MISSING_API_KEY_MESSAGE = "请先在「设置」页填写你自己的 API 密钥，或订阅后使用。"
 
 
 class _MissingApiKeyError(RuntimeError):
@@ -474,6 +474,23 @@ async def stream_chat(
                     if section_index > 0:
                         parts.append(CTX_SELECTED_SECTION.format(section_index=section_index))
                     page_context_parts.append(CTX_SELECTED_TEXT_LABEL.format(selected=selected))
+
+                # 博客左栏自定义编辑上下文：把当前 HTML + 卡片可用高度透传给 AI，
+                # 让其基于现状修改、并按高度生成刚好填满的内容
+                leftbar_html = context.get("current_leftbar_html")
+                leftbar_height = context.get("current_leftbar_height_px")
+                if leftbar_html is not None or leftbar_height:
+                    leftbar_lines: list[str] = []
+                    if leftbar_height:
+                        leftbar_lines.append(
+                            f"当前左栏卡片可用高度约 {leftbar_height}px（宽约 240–320px），"
+                            "请生成刚好填满该高度的内容（避免溢出或大片留白）。"
+                        )
+                    if leftbar_html:
+                        leftbar_lines.append(f"当前左栏 HTML（可基于其修改或重做）：\n{leftbar_html}")
+                    leftbar_info = "\n".join(leftbar_lines)
+                    parts.append(leftbar_info)
+                    page_context_parts.append(leftbar_info)
 
                 # 将页面上下文追加到用户消息（最高优先级）
                 if page_context_parts:

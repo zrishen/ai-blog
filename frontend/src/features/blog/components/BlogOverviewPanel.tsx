@@ -1,16 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, matchPath } from "react-router-dom";
 import { Sparkles, Tags } from "lucide-react";
 import { useChat } from "../../../stores/chatStore";
 import { useAuth } from "../../../stores/authStore";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { Surface } from "@/components/ui/surface";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/empty-state";
 import { LeftbarHtmlFrame } from "@/components/LeftbarHtmlFrame";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
+import { cn } from "@/lib/utils";
 
-// 博客主页左栏：博主用 AI 生成的自定义 HTML（iframe 沙箱）+ 标签云（可开关），叠加渲染。
+// 博客主页左栏：DIY 卡片（AI 生成 HTML，iframe 沙箱渲染）+ 标签云（可开关）。
+// DIY 卡片 hover 出编辑入口（仅博主）；编辑时把卡片当前高度传给 AI，
+// 让其生成刚好填满该高度的内容。
 export function BlogOverviewPanel() {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated } = useAuth();
@@ -23,7 +24,11 @@ export function BlogOverviewPanel() {
   const isOwner = isAuthenticated && !!user && !!routeUsername && user.username === routeUsername;
   const hasHtml = !!state.leftbarHtml;
   const showTags = state.leftbarShowTags;
-  const isEmpty = !hasHtml && !showTags;
+  // 当前 DIY 卡片实际渲染高度（iframe 内容高度），编辑时作为生成目标传给 AI
+  const [frameHeight, setFrameHeight] = useState<number | null>(null);
+  // hover 用 React state 而非 CSS group-hover：iframe 会吞掉父文档的 :hover，
+  // 改用 onMouseEnter/Leave 边界事件更可靠
+  const [cardHover, setCardHover] = useState(false);
 
   const introPost = state.blogPosts?.find((p) => p.slug === "ai-blog-intro");
   const introTags = useMemo(() => splitBlogTags(introPost?.tags), [introPost?.tags]);
@@ -44,14 +49,49 @@ export function BlogOverviewPanel() {
   }, [state.blogPosts, introTags, location.pathname]);
 
   const startAiEdit = () => {
-    dispatch({ type: "SET_AI_LEFTBAR_EDIT_CONTEXT", payload: { html: state.leftbarHtml } });
+    dispatch({
+      type: "SET_AI_LEFTBAR_EDIT_CONTEXT",
+      payload: { html: state.leftbarHtml, heightPx: frameHeight },
+    });
     dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: true });
   };
 
   return (
-    <WorkspacePanel className="overflow-y-auto">
-      <div className={isEmpty ? "flex h-full w-full flex-col items-center justify-center gap-4 p-4" : "flex flex-col gap-4 p-4"}>
-        {hasHtml && <LeftbarHtmlFrame html={state.leftbarHtml as string} theme={state.theme} />}
+    <WorkspacePanel className="overflow-y-auto select-none">
+      <div className="flex flex-col gap-4 p-4">
+        {/* DIY 卡片：AI 自定义内容；博主 hover 卡片右上角触发编辑 */}
+        <Surface
+          variant="card"
+          className="relative rounded-panel bg-card/80 p-3 shadow-sm"
+          onMouseEnter={() => setCardHover(true)}
+          onMouseLeave={() => setCardHover(false)}
+        >
+          {hasHtml ? (
+            <LeftbarHtmlFrame
+              html={state.leftbarHtml as string}
+              theme={state.theme}
+              onHeightChange={setFrameHeight}
+            />
+          ) : (
+            <div className="flex min-h-[120px] items-center justify-center px-2 py-6 text-center text-fine text-muted-foreground">
+              {isOwner ? "悬停卡片右上角「编辑」，用 AI 自定义左栏" : "博主暂未设置自定义左栏内容"}
+            </div>
+          )}
+          {isOwner && (
+            <button
+              type="button"
+              onClick={startAiEdit}
+              className={cn(
+                "absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-control bg-background/85 px-2 py-1 text-caption font-medium text-foreground shadow-sm ring-1 ring-border/60 backdrop-blur-sm transition-opacity hover:bg-background",
+                cardHover ? "opacity-100" : "opacity-0",
+              )}
+              aria-label="用 AI 编辑左栏"
+            >
+              <Sparkles className="h-3 w-3 text-primary" />
+              编辑
+            </button>
+          )}
+        </Surface>
 
         {showTags && (
           <Surface variant="card" className="rounded-panel bg-card/80 p-3 shadow-sm">
@@ -97,26 +137,6 @@ export function BlogOverviewPanel() {
               </div>
             )}
           </Surface>
-        )}
-
-        {isEmpty && (
-          <EmptyState
-            icon={Sparkles}
-            title={isOwner ? "定制你的博客左栏" : "博主暂未设置左栏内容"}
-            description={
-              isOwner
-                ? "用 AI 添加个人介绍、创作理念和更多内容。"
-                : "这里将展示博主的个人介绍与创作信息。"
-            }
-            variant="ai-chat"
-          />
-        )}
-
-        {isOwner && (
-          <Button variant="outline" size="sm" onClick={startAiEdit} className="flex-shrink-0">
-            <Sparkles className="h-3.5 w-3.5" />
-            用 AI 编辑
-          </Button>
         )}
       </div>
     </WorkspacePanel>

@@ -369,6 +369,9 @@ export function AISidebarChat({
         }
         if (state.aiLeftbarEditContext) {
           pageContext.current_leftbar_html = state.aiLeftbarEditContext.html;
+          if (state.aiLeftbarEditContext.heightPx != null) {
+            pageContext.current_leftbar_height_px = state.aiLeftbarEditContext.heightPx;
+          }
           dispatch({ type: "CLEAR_AI_LEFTBAR_EDIT_CONTEXT" });
         }
 

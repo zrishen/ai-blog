@@ -32,8 +32,9 @@ def _extract_reasoning_content(content: Any) -> str:
     return "".join(parts)
 
 
-def estimate_tokens(text: str | list) -> int:
-    if isinstance(text, list):
+def estimate_tokens(text: Any) -> int:
+    # content 可能是 None（assistant tool_calls 消息）或多模态 list，统一抽成文本再估算
+    if not isinstance(text, str):
         text = _extract_text_content(text)
     cjk = sum(1 for c in text if "一" <= c <= "鿿")
     return max(1, (cjk // 2) + ((len(text) - cjk) // 4))

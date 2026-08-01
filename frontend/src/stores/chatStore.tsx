@@ -106,7 +106,7 @@ interface ChatState {
   // 博客主页左栏：AI 生成的自定义 HTML + 标签云显隐 + AI 栏编辑上下文
   leftbarHtml: string | null;
   leftbarShowTags: boolean;
-  aiLeftbarEditContext: { html: string | null } | null;
+  aiLeftbarEditContext: { html: string | null; heightPx?: number | null } | null;
 }
 
 type ChatAction =
@@ -161,7 +161,7 @@ type ChatAction =
   | { type: "CLEAR_AI_SELECTION_CONTEXT" }
   | { type: "SET_LEFTBAR_HTML"; payload: string | null }
   | { type: "SET_LEFTBAR_SHOW_TAGS"; payload: boolean }
-  | { type: "SET_AI_LEFTBAR_EDIT_CONTEXT"; payload: { html: string | null } | null }
+  | { type: "SET_AI_LEFTBAR_EDIT_CONTEXT"; payload: { html: string | null; heightPx?: number | null } | null }
   | { type: "CLEAR_AI_LEFTBAR_EDIT_CONTEXT" }
   | { type: "START_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; targetText: string } }
   | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; replacementDelta: string } }

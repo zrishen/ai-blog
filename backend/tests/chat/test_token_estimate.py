@@ -64,3 +64,8 @@ def test_estimate_tokens(text: str, expected: int) -> None:
 def test_estimate_tokens_accepts_list_via_text_extraction() -> None:
     # list 输入 → 先 _extract_text_content 再估算
     assert estimate_tokens([{"type": "text", "text": "hello"}]) == 1
+
+
+def test_estimate_tokens_accepts_none_as_empty() -> None:
+    # assistant tool_calls 消息的 content 可能为 None（合法），不应崩溃（曾致 stream_chat 500）
+    assert estimate_tokens(None) == 1
