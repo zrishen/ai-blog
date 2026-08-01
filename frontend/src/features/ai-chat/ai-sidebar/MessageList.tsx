@@ -172,7 +172,8 @@ function MessageListComponent({
                   const hasStreamingRound = !!streamMessage.streamingRound?.trim();
                   const hasStreamError = !!streamMessage.streamError?.trim();
                   const streamActive = isStreaming && !streamMessage.streamFinalized;
-                  const showThinkingPanel = isAssistant && (streamActive || hasThinkingDuration || hasToolEvents || hasLoopSteps || meaningfulThinkingContent || meaningfulReasoning || hasStreamingRound || hasStreamError);
+                  const hasRealThinking = meaningfulReasoning || meaningfulThinkingContent || hasToolEvents || hasLoopSteps || hasStreamingRound;
+                  const showThinkingPanel = isAssistant && (streamActive || hasRealThinking || (hasThinkingDuration && !hasStreamError));
                   const showThinkingPlaceholder = streamActive
                     && !hasStreamingRound
                     && !messageContent
@@ -204,12 +205,12 @@ function MessageListComponent({
                         loopSteps={msg.loopSteps}
                         toolEvents={msg.toolEvents}
                         streamingRound={streamMessage.streamingRound}
-                        streamError={streamMessage.streamError}
                         durationMs={streamActive ? streamingDurationMs : msg.thinkingDurationMs}
                       />
                       {isAssistant ? (
                         <>
                           <MessageAttachments attachments={msg.attachments} />
+                          {hasStreamError && <StreamErrorBanner message={streamMessage.streamError ?? ""} />}
                           <MessageBody
                             messageContent={messageContent}
                             isAssistant
@@ -301,7 +302,6 @@ interface ThinkingPanelProps {
   loopSteps?: string[];
   toolEvents?: Message["toolEvents"];
   streamingRound?: string;
-  streamError?: string;
   durationMs?: number;
 }
 
@@ -316,7 +316,6 @@ function ThinkingPanel({
   loopSteps,
   toolEvents,
   streamingRound,
-  streamError,
   durationMs,
 }: ThinkingPanelProps) {
   const [open, setOpen] = useState(false);
@@ -343,7 +342,6 @@ function ThinkingPanel({
     toolEvents,
     fallbackProcessContent: processContent,
     streamingRound,
-    streamError,
   });
   const hasEntries = entries.length > 0;
 
@@ -409,8 +407,7 @@ type ToolPair = {
 type ThinkingEntry =
   | { type: "reasoning"; key: string; content: string }
   | { type: "process"; key: string; content: string }
-  | { type: "action"; key: string; tools: ToolPair[] }
-  | { type: "error"; key: string; content: string };
+  | { type: "action"; key: string; tools: ToolPair[] };
 
 function buildThinkingEntries({
   reasoningContent,
@@ -418,14 +415,12 @@ function buildThinkingEntries({
   toolEvents,
   fallbackProcessContent,
   streamingRound,
-  streamError,
 }: {
   reasoningContent?: string;
   loopSteps?: string[];
   toolEvents?: Message["toolEvents"];
   fallbackProcessContent?: string;
   streamingRound?: string;
-  streamError?: string;
 }): ThinkingEntry[] {
   const entries: ThinkingEntry[] = [];
   const reasoning = normalizeThinkingText(reasoningContent);
@@ -454,9 +449,6 @@ function buildThinkingEntries({
   if (temporaryRound && !streamingRoundPlaced && !processes.includes(temporaryRound)) {
     entries.push({ type: "process", key: "streaming-round-live", content: temporaryRound });
   }
-  const error = normalizeThinkingText(streamError);
-  if (error) entries.push({ type: "error", key: "stream-error", content: error });
-
   return entries;
 }
 
@@ -555,7 +547,6 @@ function ThinkingFlow({ entries }: { entries: ThinkingEntry[] }) {
           {entry.type === "reasoning" && <CollapsibleReasoningBlock content={entry.content} />}
           {entry.type === "process" && <ProcessText content={entry.content} />}
           {entry.type === "action" && <ActionNode tools={entry.tools} />}
-          {entry.type === "error" && <div className="px-1.5 text-reading leading-relaxed text-destructive">{entry.content}</div>}
         </TimelineNode>
       ))}
     </div>
@@ -703,6 +694,18 @@ const messageMermaidComponents: Components = {
     return <pre>{children}</pre>;
   },
 };
+
+function StreamErrorBanner({ message }: { message: string }) {
+  return (
+    <div
+      data-testid="stream-error-banner"
+      className="mb-2 flex items-start gap-2 rounded-panel border border-destructive/30 bg-destructive/5 px-3 py-2 text-reading leading-relaxed text-destructive"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+      <span className="min-w-0 break-words">{message}</span>
+    </div>
+  );
+}
 
 interface MessageBodyProps {
   messageContent: string;

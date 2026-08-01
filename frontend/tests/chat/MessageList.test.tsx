@@ -237,11 +237,25 @@ describe("MessageList 等待首字节占位", () => {
     expect(screen.queryByTestId("thinking-placeholder")).not.toBeInTheDocument();
   });
 
-  it("streamError 到达时不显示占位（走错误展示路径）", () => {
-    const message = assistantMessage({ streamError: "上游超时" });
+  it("streamError 到达时错误提示在折叠外显示，且不渲染思考面板", () => {
+    const message = assistantMessage({ streamError: "请先在「设置」页填写你自己的 API 密钥，或订阅后使用。" });
     renderMessage(message, true);
 
     expect(screen.queryByTestId("thinking-placeholder")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("thinking-panel")).not.toBeInTheDocument();
+    expect(screen.getByTestId("stream-error-banner")).toHaveTextContent("请先在「设置」页填写你自己的 API 密钥，或订阅后使用。");
+  });
+
+  it("错误结束（已记录耗时）时不显示思考折叠，错误在折叠外", () => {
+    const message = assistantMessage({
+      streamError: "无法获取回复，请稍后重试",
+      thinkingDurationMs: 1500,
+      streamFinalized: true,
+    });
+    renderMessage(message, false);
+
+    expect(screen.queryByTestId("thinking-panel")).not.toBeInTheDocument();
+    expect(screen.getByTestId("stream-error-banner")).toHaveTextContent("无法获取回复，请稍后重试");
   });
 });
 
