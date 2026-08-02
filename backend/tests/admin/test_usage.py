@@ -1,6 +1,6 @@
 """admin 用量统计测试：get_user_weekly_usage + get_overview + require_admin 守卫。
 
-service 层用 db_session fixture（内存 SQLite）；集成测试通过临时挂载 usage_router
+service 层用 db_session fixture（testcontainers PostgreSQL）；集成测试通过临时挂载 usage_router
 到 app（带 /api/v1 前缀，结束后清理）验证非 admin 403。
 """
 

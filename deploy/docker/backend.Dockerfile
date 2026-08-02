@@ -27,11 +27,12 @@ FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH=/app \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    TZ=Asia/Shanghai
 
 # node/npm and uv/uvx preserve support for user-configured stdio MCP servers.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libgomp1 \
+    && apt-get install -y --no-install-recommends ca-certificates libgomp1 tzdata \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
@@ -43,6 +44,8 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=builder --chown=app:app /app/.venv /app/.venv
 COPY --chown=app:app backend/src /app/src
+COPY --chown=app:app backend/alembic.ini /app/alembic.ini
+COPY --chown=app:app backend/alembic /app/alembic
 
 RUN mkdir -p /app/data && chown -R app:app /app/data
 

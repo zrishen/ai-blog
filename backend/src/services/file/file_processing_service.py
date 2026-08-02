@@ -16,10 +16,14 @@ from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.models import BlogPost, FileDocument, FileProcessingJob
+from src.config import settings
+from src.database.models import BlogPost, FileDocument, FileProcessingJob, User
 from src.database.session import async_session
+from src.services.chat.llm_factory import _chat_model_kwargs, _create_llm
 from src.services.file.file_service import delete_uploaded_file, vectorize_and_store, vectorize_text_and_store
-from src.services.rag.vector_store import delete_document_chunks
+from src.services.llm.llm_settings_service import get_user_llm_settings, has_usable_api_key
+from src.services.memory import consolidator, extractor, graph_store
+from src.services.subscription.subscription_service import should_use_platform_key
 
 logger = logging.getLogger(__name__)
 
@@ -519,8 +523,73 @@ async def _vectorize_blog_post(
         original_name=job.original_name,
         user_id=job.user_id,
         resource_type="blog_post",
+        resource_id=post.id,
         progress_reporter=reporter,
     )
+
+
+async def _get_document_memory_llm(db: AsyncSession, user_id: int):
+    user = await db.get(User, user_id)
+    if user is None:
+        logger.warning("Skipping document knowledge extraction because user %s no longer exists", user_id)
+        return None
+
+    use_platform_key = await should_use_platform_key(db, user)
+    llm_settings = await get_user_llm_settings(db, user_id)
+    if not use_platform_key and llm_settings is None:
+        logger.info("Skipping document knowledge extraction for user %s: no usable LLM settings", user_id)
+        return None
+
+    model_kwargs = _chat_model_kwargs(
+        "fast",
+        llm_settings,
+        allow_official_fallback=use_platform_key,
+    )
+    if not has_usable_api_key(model_kwargs):
+        logger.info("Skipping document knowledge extraction for user %s: no usable API key", user_id)
+        return None
+    return _create_llm(model_kwargs, "fast")
+
+
+async def _index_document_knowledge(
+    db: AsyncSession,
+    job: FileProcessingJob,
+    chunks: list[str],
+) -> None:
+    """Extract document knowledge after raw chunks are safely present in the brain."""
+    if (
+        not settings.memory_enabled
+        or job.job_type != "index"
+        or not chunks
+        or not job.target_resource_type
+        or job.target_resource_id is None
+    ):
+        return
+
+    llm = await _get_document_memory_llm(db, job.user_id)
+    if llm is None:
+        return
+
+    doc_id = await graph_store.link_document(
+        user_id=job.user_id,
+        resource_type=job.target_resource_type,
+        resource_id=job.target_resource_id,
+        title=job.original_name or job.stored_name or str(job.target_resource_id),
+    )
+    stored_name = job.stored_name or ""
+    for chunk_index, chunk in enumerate(chunks):
+        extracted = await extractor.extract(chunk, llm)
+        extracted["episodes"] = []
+        for fact in extracted.get("facts", []):
+            fact["source_doc_id"] = doc_id
+        consolidated = await consolidator.consolidate(user_id=job.user_id, extracted=extracted)
+        entity_ids = [entity_id for entity_id, _ in consolidated["entities"]]
+        await graph_store.link_chunk_entities(stored_name, chunk_index, entity_ids)
+        await graph_store.link_document_knowledge(
+            doc_id=doc_id,
+            entity_ids=entity_ids,
+            fact_ids=consolidated["facts"],
+        )
 
 
 async def _run_job(job_id: str) -> None:
@@ -542,7 +611,7 @@ async def _run_job(job_id: str) -> None:
                 if job.job_type == "upload" and not job.auto_index:
                     await _finalize_success(db, job.id, token, [], indexed=False)
                     return
-                await delete_document_chunks(job.collection_name, job.stored_name or "")
+                await graph_store.delete_document_chunks(job.collection_name, job.stored_name or "")
                 await _update_progress(db, job.id, token, "cleanup_index", 1, 1, "operation")
                 progress_state["stages"]["cleanup_index"] = {
                     "completed": 1,
@@ -580,9 +649,12 @@ async def _run_job(job_id: str) -> None:
                         job.collection_name,
                         original_name=job.original_name,
                         user_id=job.user_id,
+                        resource_type=job.target_resource_type if job.job_type == "index" else None,
+                        resource_id=job.target_resource_id if job.job_type == "index" else None,
                         progress_reporter=reporter,
                     )
                 if job.job_type == "index":
+                    await _index_document_knowledge(db, job, chunks)
                     # 推进 RagSource 状态；file 顺带回写 chunk 数到 FileDocument。
                     from src.services.workspace import rag_service
 
@@ -675,7 +747,7 @@ async def _finalize_failure(job_id: str, token: str, exc: Exception) -> None:
         target_resource_type = job.target_resource_type
         target_resource_id = job.target_resource_id
     try:
-        await delete_document_chunks(collection_name, stored_name)
+        await graph_store.delete_document_chunks(collection_name, stored_name)
     except Exception:
         logger.exception("Failed to clean partial chunks for job %s", job_id)
     if job_type == "upload" and stored_name:

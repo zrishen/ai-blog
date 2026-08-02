@@ -6,11 +6,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .base import Base, _utcnow
 
@@ -57,7 +57,7 @@ class BlogPost(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     # AST 缓存(派生数据,可随时从 content 重建):文章正文的块结构数组,
     # 供 AI 章节定位(大纲/读单节)使用,避免读全文消耗 token。
-    blocks_json = Column(JSON, nullable=True)
+    blocks_json = Column(JSONB, nullable=True)
     # The editable working copy lives on BlogPost. Public readers use this
     # immutable revision instead, so editing a published post is private until
     # the next explicit publish.

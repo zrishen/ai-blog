@@ -12,6 +12,7 @@ import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
 import { WorkspacePage } from "./features/workspace/WorkspacePage";
 import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
+import { BrainPage } from "./features/brain/BrainPage";
 import { OverviewPage } from "./features/admin/components/OverviewPage";
 import { UsersPage } from "./features/admin/components/UsersPage";
 import { CodesPage } from "./features/admin/components/CodesPage";
@@ -118,6 +119,7 @@ function MainContent() {
       <Route path="/workspace" element={<WorkspaceRoute />} />
       <Route path="/research" element={<ResearchRoute />} />
       <Route path="/research/:topicId" element={<ResearchRoute />} />
+      <Route path="/brain" element={<BrainPage />} />
       <Route path="/u/:username" element={<SiteBlogRoute />} />
       <Route path="/u/:username/posts/:slug" element={<SitePostRoute />} />
       <Route path="/admin" element={<AdminLayout />}>

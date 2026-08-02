@@ -358,17 +358,17 @@ async def test_file_document_restore_success_invokes_vectorize(
 
 
 @pytest.mark.asyncio
-async def test_file_purge_chroma_failure_still_deletes_record(
+async def test_file_purge_vector_cleanup_failure_still_deletes_record(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch,
 ):
-    """倒序后：DB 先硬删并提交成功，Chroma 清理失败仅留孤儿向量，记录不再保留。"""
-    doc_id = await _upload_document(client, db_session, "purge-chroma.pdf")
+    """倒序后：DB 先硬删并提交成功，向量清理失败仅留孤儿，记录不再保留。"""
+    doc_id = await _upload_document(client, db_session, "purge-vector.pdf")
     await client.delete(f"/api/v1/files/documents/{doc_id}")
 
     async def fail_cleanup(*args, **kwargs):
-        raise RuntimeError("chroma unavailable")
+        raise RuntimeError("vector store unavailable")
 
     monkeypatch.setattr("src.services.trash.trash_service.delete_document_chunks", fail_cleanup)
 

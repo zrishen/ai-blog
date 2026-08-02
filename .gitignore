@@ -62,7 +62,7 @@ backups
 =0.1.0
 logs/
 
-
+.codex
 AGENTS.md
 .playwright-mcp
 

@@ -64,7 +64,7 @@ class RagSource(Base):
     resource_id = Column(Integer, nullable=False)
     index_status = Column(String(20), nullable=False, default="pending")  # pending / active / stale / failed
     indexed_version = Column(String(60), nullable=True)  # 内容版本指纹，判断是否 stale
-    collection_name = Column(String(200), nullable=False)  # ChromaDB 集合名
+    collection_name = Column(String(200), nullable=False)  # RAG collection key
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)

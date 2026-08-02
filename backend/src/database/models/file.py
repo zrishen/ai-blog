@@ -7,11 +7,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .base import Base, _utcnow
 
@@ -48,7 +48,7 @@ class FileProcessingJob(Base):
     current_stage = Column(String(40), nullable=False)
     progress_model_version = Column(String(30), nullable=False)
     progress_percent = Column(Integer, nullable=False, default=0)
-    progress_json = Column(JSON, nullable=False, default=dict)
+    progress_json = Column(JSONB, nullable=False, default=dict)
     client_request_id = Column(String(36), nullable=False)
     source_document_id = Column(Integer, ForeignKey("file_documents.id", ondelete="SET NULL"), nullable=True)
     result_document_id = Column(Integer, ForeignKey("file_documents.id", ondelete="SET NULL"), nullable=True)

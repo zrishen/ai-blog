@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.database.models import BlogPost, FileDocument, FileProcessingJob
-from src.services.file import file_processing_service, file_service
+from src.services.file import file_processing_service
 from src.services.workspace import node_service, rag_service, resource_service
 
 TEST_USER_ID = 1

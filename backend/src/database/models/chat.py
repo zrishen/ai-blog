@@ -8,11 +8,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .base import Base, _utcnow
 
@@ -42,12 +42,12 @@ class Message(Base):
     image_url = Column(Text, nullable=True)
     file_url = Column(Text, nullable=True)
     token_count = Column(Integer, default=0)
-    tool_calls = Column(JSON, nullable=True)
+    tool_calls = Column(JSONB, nullable=True)
     tool_call_id = Column(String(100), nullable=True)
     reasoning_content = Column(Text, nullable=True)
     thinking_content = Column(Text, nullable=True)
-    tool_events = Column(JSON, nullable=True)
-    loop_steps = Column(JSON, nullable=True)
+    tool_events = Column(JSONB, nullable=True)
+    loop_steps = Column(JSONB, nullable=True)
     thinking_duration_ms = Column(Integer, nullable=True)
     thinking_mode = Column(String(20), nullable=True)
     created_at = Column(DateTime, default=_utcnow)

@@ -1,43 +1,44 @@
 """用户目录命名翻译：user_id → username。
 
-目录用 username 命名便于人工维护；同步查询 SQLite 解析，查不到（如测试内存 DB）回退 str(user_id)。
+目录用 username 命名便于人工维护。主库是 PostgreSQL(asyncpg)，无法在同步路径直接查，
+故启动时全量加载 user_id → username 到内存缓存，`resolve_username` 同步查缓存；
+注册/改名时 `refresh_user_in_cache` 保持新鲜。缓存 miss（如测试未 warm）回退 str(user_id)。
 """
 
 import logging
-import sqlite3
-from functools import lru_cache
 
-from src.config import settings
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.database.models import User
 
 logger = logging.getLogger(__name__)
 
-
-def _sqlite_db_path() -> str | None:
-    url = settings.database_url
-    for prefix in ("sqlite+aiosqlite:///", "sqlite:///"):
-        if url.startswith(prefix):
-            return url[len(prefix):]
-    return None
+# user_id → username 内存缓存：bootstrap 启动 warm，注册/改名 refresh
+_username_cache: dict[int, str] = {}
 
 
-@lru_cache(maxsize=1024)
 def resolve_username(user_id: int | str) -> str:
-    """user_id → username，找不到回退到 str(user_id)。"""
+    """user_id → username，缓存 miss 回退 str(user_id)。字符串直接返回（已是 username）。"""
     if isinstance(user_id, str):
-        # 已经是字符串（如 FileDocument.user_id），可能是历史 username 直接传入
         return user_id
+    return _username_cache.get(user_id) or str(user_id)
 
-    db_path = _sqlite_db_path()
-    if not db_path or db_path == ":memory:":
-        return str(user_id)
 
-    try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        row = conn.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
-        conn.close()
-        if row and row[0]:
-            return row[0]
-    except Exception:
-        logger.debug("resolve_username 查询失败，回退到 str(user_id): user_id=%s", user_id, exc_info=True)
+async def warm_username_cache(db: AsyncSession) -> int:
+    """全量加载 user_id → username 到缓存（bootstrap 启动调），返回加载数。"""
+    rows = (await db.execute(select(User.id, User.username))).all()
+    _username_cache.clear()
+    for uid, uname in rows:
+        if uname:
+            _username_cache[uid] = uname
+    return len(_username_cache)
 
-    return str(user_id)
+
+async def refresh_user_in_cache(db: AsyncSession, user_id: int) -> None:
+    """单用户刷新（注册/改名后调）；用户已删则从缓存移除。"""
+    uname = (await db.execute(select(User.username).where(User.id == user_id))).scalar_one_or_none()
+    if uname:
+        _username_cache[user_id] = uname
+    else:
+        _username_cache.pop(user_id, None)

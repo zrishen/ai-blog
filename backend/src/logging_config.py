@@ -114,26 +114,24 @@ def setup_logging(level: str = "INFO") -> None:
     root.addHandler(app_file_handler)
     root.addHandler(http_file_handler)
 
+    # HTTP access logs are emitted by our application middleware. Configure
+    # this logger directly so Uvicorn's later logging setup cannot silence it.
+    access_logger = logging.getLogger("http.access")
+    access_logger.handlers.clear()
+    access_logger.setLevel(logging.INFO)
+    access_logger.propagate = False
+    access_logger.addHandler(console)
+    access_logger.addHandler(http_file_handler)
+
     # 压低第三方库日志噪音
     for noisy in (
         "openai._base_client",
         "httpx",
-        "aiosqlite",
         "asyncio",
         "watchfiles",
         "markdown_it",
     ):
         logging.getLogger(noisy).setLevel(logging.WARNING)
-
-    # uvicorn 默认给 uvicorn / uvicorn.access / uvicorn.error / uvicorn.asgi
-    # 都挂了 StreamHandler 并设 propagate=False，导致记录被卡在 uvicorn 家族
-    # 内部，永远到不了 root。清掉它们的私有 handler 并打开传播，
-    # 让所有 uvicorn 记录顺着继承链升到 root，由 _OriginFilter 统一路由。
-    for name in ("uvicorn", "uvicorn.access", "uvicorn.error", "uvicorn.asgi"):
-        uv_logger = logging.getLogger(name)
-        uv_logger.handlers.clear()
-        uv_logger.setLevel(logging.DEBUG)
-        uv_logger.propagate = True
 
     logging.getLogger(__name__).info(
         "日志系统已初始化 → %s + %s (level=%s)",

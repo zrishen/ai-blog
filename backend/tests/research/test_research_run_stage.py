@@ -5,16 +5,16 @@ import pytest
 from src.database import engine as db_engine_module
 from src.database.models import ResearchRun, ResearchTopic
 from src.services import research as research_service
-from tests.conftest import TestSessionLocal
+from tests import conftest as test_conftest
 
 
 @pytest.fixture(autouse=True)
 def patch_session_factory(monkeypatch):
-    monkeypatch.setattr(db_engine_module, "async_session", TestSessionLocal)
+    monkeypatch.setattr(db_engine_module, "async_session", test_conftest.TestSessionLocal)
 
 
 async def _seed_topic_and_run(stage: str):
-    async with TestSessionLocal() as db:
+    async with test_conftest.TestSessionLocal() as db:
         topic = ResearchTopic(title="测试主题", status="draft", user_id=1)
         db.add(topic)
         await db.commit()
@@ -66,7 +66,7 @@ async def test_stage_completes_when_tool_called_but_no_table_rows_added(monkeypa
     ]
     _patch_agent(monkeypatch, events)
 
-    async with TestSessionLocal() as db:
+    async with test_conftest.TestSessionLocal() as db:
         ok = await research_service._run_agent_stage(
             db, run_id, topic_id, 1, "search_sources", "instruction"
         )
@@ -85,7 +85,7 @@ async def test_stage_fails_when_no_tool_call_and_no_output(monkeypatch):
 
     _patch_agent(monkeypatch, events=[])  # 没有任何事件，连 tool_start 都没有
 
-    async with TestSessionLocal() as db:
+    async with test_conftest.TestSessionLocal() as db:
         ok = await research_service._run_agent_stage(
             db, run_id, topic_id, 1, "search_sources", "instruction"
         )
@@ -114,7 +114,7 @@ async def test_stage_fails_when_agent_stream_raises(monkeypatch):
 
     topic_id, run_id = await _seed_topic_and_run("search_sources")
 
-    async with TestSessionLocal() as db:
+    async with test_conftest.TestSessionLocal() as db:
         ok = await research_service._run_agent_stage(
             db, run_id, topic_id, 1, "search_sources", "instruction"
         )

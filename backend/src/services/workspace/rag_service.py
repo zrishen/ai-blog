@@ -164,7 +164,7 @@ async def _without_soft_deleted_sources(
     return [s for s in sources if (s.resource_type, s.resource_id) not in hidden]
 
 
-# ---- file 资源的真实索引（接 vectorize / ChromaDB）----
+# ---- file 资源的真实索引（接 vectorize / FalkorDB）----
 
 
 async def _get_owned_file_document(
@@ -248,7 +248,7 @@ async def unindex_file_document(
     db: AsyncSession, user_id: int, document_id: int
 ) -> None:
     """从 AI 知识移除文件：删向量 + 删 RagSource，文件本身保留并标记 not indexed。"""
-    from src.services.rag.vector_store import delete_document_chunks
+    from src.services.memory.graph_store import delete_document_chunks
 
     doc = await _get_owned_file_document(db, user_id, document_id)
     source = await get_rag_source(db, user_id, "file", document_id)
@@ -265,7 +265,7 @@ async def unindex_blog_post(
     db: AsyncSession, user_id: int, post_id: int
 ) -> None:
     """从 AI 知识移除文章：删向量 + 删 RagSource，文章本身保留。"""
-    from src.services.rag.vector_store import delete_document_chunks
+    from src.services.memory.graph_store import delete_document_chunks
 
     source = await get_rag_source(db, user_id, "blog_post", post_id)
     if source is None:

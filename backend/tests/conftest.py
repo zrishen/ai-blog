@@ -1,4 +1,4 @@
-"""共享测试 fixtures。"""
+"""共享测试 fixtures。testcontainers PostgreSQL（与生产同引擎）。"""
 
 import os
 
@@ -17,27 +17,61 @@ from unittest.mock import patch
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+from testcontainers.postgres import PostgresContainer
 
 from src.config import settings
+import src.database.engine as database_engine_module
+import src.database.session as database_session_module
 from src.database.engine import get_db
 from src.database.models import Base
 from src.main import app
 from src.utils.auth import get_current_user
 
-# 内存数据库，每个测试隔离
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+# 由 session 级 _pg fixture 赋值（testcontainers PostgreSQL，与生产同引擎）
+engine = None
+TestSessionLocal = None
 
-# 让 _resolve_username 也走 :memory: 回退分支（用 str(user_id) 命名目录），
-# 避免 unit test 的目录命名受真实 SQLite 文件里 user 数据影响。
-settings.database_url = TEST_DATABASE_URL
 
-engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-TestSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+@pytest.fixture(scope="session")
+def _pg():
+    """session 级 PostgreSQL 容器，赋值 module-level engine / TestSessionLocal / settings.database_url。"""
+    original_session_engine = database_session_module.engine
+    original_session_factory = database_session_module.async_session
+    original_engine_export = database_engine_module.engine
+    original_session_export = database_engine_module.async_session
+    with PostgresContainer("postgres:16-alpine") as pg:
+        host = pg.get_container_host_ip()
+        port = pg.get_exposed_port(5432)
+        url = f"postgresql+asyncpg://test:test@{host}:{port}/test"
+        settings.database_url = url  # user_dir 等也指向测试 PG
+        global engine, TestSessionLocal
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
+        TestSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        database_session_module.engine = engine
+        database_session_module.async_session = TestSessionLocal
+        database_engine_module.engine = engine
+        database_engine_module.async_session = TestSessionLocal
+        yield url
+    database_session_module.engine = original_session_engine
+    database_session_module.async_session = original_session_factory
+    database_engine_module.engine = original_engine_export
+    database_engine_module.async_session = original_session_export
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _require_pg(_pg):
+    """确保测试 PG 引擎在所有测试前就绪。"""
+    yield
 
 
 async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
     async with TestSessionLocal() as session:
+        # 测试连接禁用 FK/触发器：测试套件多处直接插入子记录而不先建父记录。
+        # session_replication_role=replica 仅用于测试数据库。
+        await session.execute(text("SET session_replication_role = replica"))
         yield session
 
 
@@ -62,16 +96,20 @@ app.dependency_overrides[get_current_user] = override_get_current_user
 
 
 @pytest.fixture(scope="session")
-def event_loop():
+def event_loop(_pg):
     loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def setup_database():
-    """每个测试前创建表，测试后清理。"""
+async def setup_database(_pg):
+    """每个测试前建表，测试后清表（testcontainers PG）。"""
     async with engine.begin() as conn:
+        # 测试用户使用 replica 角色以禁用 FK/触发器。NullPool 每次连接会新建会话，
+        # 因而所有测试 session（含 file_processing_service 后台 mock session）均会继承该设置。
+        # 仅作用于测试库，生产 PostgreSQL 的 FK 正常启用。
+        await conn.execute(text("ALTER USER test SET session_replication_role = replica"))
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with engine.begin() as conn:
@@ -88,6 +126,7 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 @pytest_asyncio.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with TestSessionLocal() as session:
+        await session.execute(text("SET session_replication_role = replica"))
         yield session
 
 
@@ -114,9 +153,10 @@ def mock_external_services():
          patch("src.services.trash.trash_service.schedule_job", return_value=None), \
          patch("src.services.file.file_processing_service.vectorize_and_store", return_value=[]), \
          patch("src.api.files.delete_document_chunks", return_value=True), \
-         patch("src.services.rag.vector_store.list_collections", return_value=[]), \
-         patch("src.services.rag.vector_store.search", return_value=[]), \
-         patch("src.services.rag.vector_store.delete_document_chunks", return_value=True), \
+         patch("src.services.memory.graph_store.add_document_chunks", return_value=None), \
+         patch("src.services.memory.graph_store.search_documents", return_value=[]), \
+         patch("src.services.memory.graph_store.delete_document_chunks", return_value=True), \
+         patch("src.services.memory.graph_store.ping", return_value=True), \
          patch("src.services.rag.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
          patch("src.services.trash.trash_service.delete_document_chunks", return_value=True):
         yield

@@ -139,7 +139,7 @@ async def create_admin_plugin(db, admin_id: int, data: Mapping[str, Any]) -> dic
         await db.rollback()
         raise ValueError("插件标识已存在") from exc
 
-    # 工具发现会启动外部 MCP 进程或连接远程服务，不能在 SQLite 写事务中等待。
+    # 工具发现会启动外部 MCP 进程或连接远程服务，不能在写事务中等待。
     # 先保存为未发布状态，避免一个慢插件阻塞用户开关等其他写操作。
     await db.commit()
     ready = await _discover_and_store_tools(db, plugin)
@@ -197,7 +197,7 @@ async def update_admin_plugin(db, plugin_id: int, data: Mapping[str, Any]) -> di
     elif "is_published" in changes:
         plugin.is_published = requested_published and bool(plugin.tools)
 
-    # 与创建逻辑相同：先释放 SQLite 写锁，再执行可能很慢的外部发现。
+    # 与创建逻辑相同：先提交当前写事务，再执行可能很慢的外部发现。
     await db.commit()
     if needs_discovery:
         ready = await _discover_and_store_tools(db, plugin)

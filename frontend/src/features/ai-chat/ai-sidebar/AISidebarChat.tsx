@@ -921,7 +921,7 @@ export function AISidebarChat({
             {state.aiLeftbarEditContext && (
               <div className="flex items-center gap-2">
                 <Sparkles className="h-3 w-3 flex-shrink-0 text-primary" />
-                <span className="flex-1 truncate">正在编辑左栏 HTML</span>
+                <span className="flex-1 truncate">正在编辑主页侧栏</span>
                 <button
                   className="flex-shrink-0 rounded px-1.5 text-caption hover:bg-primary/20"
                   onClick={() => dispatch({ type: "CLEAR_AI_LEFTBAR_EDIT_CONTEXT" })}

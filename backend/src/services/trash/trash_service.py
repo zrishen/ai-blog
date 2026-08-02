@@ -1,6 +1,6 @@
 """统一回收站服务：聚合 conversation / file_document / blog_post 三类软删资源，提供列表、恢复与永久删除；严格当前用户隔离，仅作用于 deleted_at 非空记录。
 
-永久删除遵循「DB 先提交、物理后清理」：先硬删记录并 commit，再 best-effort 清理物理资源（上传文件 / Chroma 向量），失败留孤儿由 scripts/cleanup_orphans.py 回收，避免「DB 仍可见、资源已丢」的不一致。
+永久删除遵循「DB 先提交、物理后清理」：先硬删记录并 commit，再 best-effort 清理物理资源（上传文件 / FalkorDB 向量），失败留孤儿由维护任务回收，避免「DB 仍可见、资源已丢」的不一致。
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from src.services.file.file_processing_service import (
     schedule_job,
 )
 from src.services.file.file_service import get_user_upload_dir
-from src.services.rag.vector_store import delete_document_chunks
+from src.services.memory.graph_store import delete_document_chunks
 from src.services.workspace import rag_service
 from src.services.workspace.resource_service import detach_resource_if_any
 
@@ -573,7 +573,7 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
         else None
     )
 
-    # 先硬删 DB；SQLite 不保证循环外键在旧部署中生效，故显式删 revisions
+    # 先删除关联 revisions，再删除文章本体，避免依赖数据库级联行为。
     await db.execute(
         sql_delete(BlogPostRevision).where(
             BlogPostRevision.post_id == post_id,

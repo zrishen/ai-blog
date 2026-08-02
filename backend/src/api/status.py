@@ -43,13 +43,26 @@ async def check_status():
         overall_status = "degraded"
 
     try:
-        from src.services.rag.vector_store import list_collections
+        from src.services.memory import graph_store
 
-        collections = await list_collections()
-        vector_status = f"ok ({len(collections)} collections)"
+        if not await graph_store.ping():
+            raise RuntimeError("FalkorDB unreachable")
+        vector_status = "ok (FalkorDB)"
     except Exception as e:
         vector_status = f"error: {str(e)}"
         overall_status = "degraded"
+
+    brain_status = "disabled"
+    if settings.memory_enabled:
+        try:
+            from src.services.memory import graph_store
+
+            brain_status = "ok" if await graph_store.ping() else "error: falkordb unreachable"
+            if brain_status != "ok":
+                overall_status = "degraded"
+        except Exception as e:
+            brain_status = f"error: {str(e)}"
+            overall_status = "degraded"
 
     return StatusResponse(
         status=overall_status,
@@ -59,5 +72,6 @@ async def check_status():
             database=db_status,
             uploads=uploads_status,
             vector_store=vector_status,
+            brain=brain_status,
         ),
     )

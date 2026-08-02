@@ -5,7 +5,6 @@
 注意：工具返回文本以空格分隔字段（正则 \\S+ 取值、rstrip 剥中英文标点）。
 """
 
-import pytest
 
 from src.services.chat.references import (
     _extract_blog_meta,

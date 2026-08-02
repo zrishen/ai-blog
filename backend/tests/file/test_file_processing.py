@@ -5,6 +5,7 @@ import io
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import UploadFile
@@ -20,6 +21,7 @@ from src.services.file.file_processing_service import (
     PROGRESS_MODELS,
     STALE_RUNNING_AFTER,
     _claim_job,
+    _index_document_knowledge,
     _run_job,
     calculate_progress_percent,
     empty_progress,
@@ -30,6 +32,79 @@ from src.utils.auth import get_current_user
 
 def _request_headers() -> dict[str, str]:
     return {"X-File-Request-Id": str(uuid.uuid4())}
+
+
+@pytest.mark.asyncio
+async def test_index_document_knowledge_links_chunks_to_consolidated_knowledge(
+    db_session: AsyncSession,
+    monkeypatch,
+):
+    monkeypatch.setattr(file_processing_service.settings, "memory_enabled", True)
+    llm = object()
+
+    async def get_llm(*args, **kwargs):
+        return llm
+
+    async def link_document(**kwargs):
+        assert kwargs["resource_type"] == "file"
+        assert kwargs["resource_id"] == 42
+        return "document-1"
+
+    extracted_payloads: list[dict] = []
+
+    async def extract(chunk, received_llm):
+        assert received_llm is llm
+        return {
+            "entities": [{"name": chunk}],
+            "facts": [{"subject_name": chunk, "predicate": "mentions", "object_text": "knowledge"}],
+            "episodes": [{"kind": "chat", "summary": "must not persist"}],
+        }
+
+    async def consolidate(*, user_id, extracted):
+        assert user_id == 7
+        extracted_payloads.append(extracted)
+        count = len(extracted_payloads)
+        return {"entities": [(f"entity-{count}", True)], "facts": [f"fact-{count}"], "episodes": []}
+
+    mentions: list[tuple[str, int, list[str]]] = []
+    sources: list[tuple[str, list[str], list[str]]] = []
+
+    async def link_mentions(stored_name, chunk_index, entity_ids):
+        mentions.append((stored_name, chunk_index, entity_ids))
+
+    async def link_sources(*, doc_id, entity_ids, fact_ids):
+        sources.append((doc_id, entity_ids, fact_ids))
+
+    monkeypatch.setattr(file_processing_service, "_get_document_memory_llm", get_llm)
+    monkeypatch.setattr(file_processing_service.graph_store, "link_document", link_document)
+    monkeypatch.setattr(file_processing_service.extractor, "extract", extract)
+    monkeypatch.setattr(file_processing_service.consolidator, "consolidate", consolidate)
+    monkeypatch.setattr(file_processing_service.graph_store, "link_chunk_entities", link_mentions)
+    monkeypatch.setattr(file_processing_service.graph_store, "link_document_knowledge", link_sources)
+
+    job = SimpleNamespace(
+        job_type="index",
+        target_resource_type="file",
+        target_resource_id=42,
+        user_id=7,
+        original_name="source.pdf",
+        stored_name="source.pdf",
+    )
+    await _index_document_knowledge(db_session, job, ["first chunk", "second chunk"])
+
+    assert mentions == [
+        ("source.pdf", 0, ["entity-1"]),
+        ("source.pdf", 1, ["entity-2"]),
+    ]
+    assert sources == [
+        ("document-1", ["entity-1"], ["fact-1"]),
+        ("document-1", ["entity-2"], ["fact-2"]),
+    ]
+    assert [payload["episodes"] for payload in extracted_payloads] == [[], []]
+    assert [payload["facts"][0]["source_doc_id"] for payload in extracted_payloads] == [
+        "document-1",
+        "document-1",
+    ]
 
 
 def test_progress_models_match_contract_and_finalize_caps_before_success():
@@ -357,7 +432,7 @@ async def test_upload_failure_cleans_document_chunks_and_file(
     async def fail_vectorize(*args, **kwargs):
         raise RuntimeError("embedding unavailable")
 
-    monkeypatch.setattr(file_processing_service, "delete_document_chunks", cleanup)
+    monkeypatch.setattr(file_processing_service.graph_store, "delete_document_chunks", cleanup)
     monkeypatch.setattr(file_processing_service, "vectorize_and_store", fail_vectorize)
     await _run_job(job_id)
 

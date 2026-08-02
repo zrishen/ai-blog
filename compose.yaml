@@ -7,6 +7,33 @@ x-logging: &default-logging
     max-file: "3"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cortex}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - app-network
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    volumes:
+      - falkordbdata:/data
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - app-network
+
   backend:
     image: ai-blog-backend:local
     build:
@@ -21,6 +48,19 @@ services:
     environment:
       # 本地 embedding 模型缓存落到挂载的 data volume，避免容器重建重新下载（容器路径，勿放 .env）
       - HF_HOME=/app/data/hf_cache
+      # 指向 compose 内的 postgres 服务（覆盖 .env 的本地 DATABASE_URL）
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-cortex}
+      # 指向 compose 内的 falkordb 服务（AI 大脑）
+      - FALKORDB_URL=redis://falkordb:6379
+      # AI 大脑默认开启；仅在紧急回退时显式设为 false。
+      - MEMORY_ENABLED=${MEMORY_ENABLED:-true}
+      # 容器日志默认使用上海时区；部署环境可通过 TZ 覆盖。
+      - TZ=${TZ:-Asia/Shanghai}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      falkordb:
+        condition: service_started
     volumes:
       - type: bind
         source: ./backend/data
@@ -60,3 +100,7 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  pgdata:
+  falkordbdata:

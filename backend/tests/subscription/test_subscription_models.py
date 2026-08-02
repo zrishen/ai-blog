@@ -2,7 +2,7 @@
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.database.models import (
     RedemptionCode,
@@ -56,7 +56,7 @@ async def test_weekly_usage_upsert_accumulates_tokens(db_session):
     async def consume(tokens: int) -> None:
         now = _utcnow()
         stmt = (
-            sqlite_insert(SubscriptionWeeklyUsage)
+            pg_insert(SubscriptionWeeklyUsage)
             .values(
                 user_id=user.id,
                 period_yw=period,

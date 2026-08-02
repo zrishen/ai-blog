@@ -24,8 +24,22 @@ class Settings(BaseSettings):
     model_name: str = "Qwen3.6-35B"
 
     # ---- 存储路径 ----
-    database_url: str = f"sqlite+aiosqlite:///{(DATA_DIR / 'ai-blog.db').as_posix()}"
-    chroma_db_path: str = str(DATA_DIR / "chroma_db")
+    database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/cortex"
+
+    # ---- FalkorDB（AI 大脑）----
+    # redis://[user:pass@]host:port；graph 名 cortex（与 PG 库同名）
+    falkordb_url: str = "redis://localhost:6379"
+    falkordb_username: str = ""
+    falkordb_password: str = ""
+    falkordb_graph_name: str = "cortex"
+    # 默认启用；仅在 FalkorDB 故障等紧急回退场景显式设为 False。
+    memory_enabled: bool = True
+    memory_recall_top_k: int = 8
+    memory_recall_hops: int = 2
+    memory_decay_days: int = 90
+    memory_maintenance_interval_seconds: float = 86400
+    # 抽取档位：light=仅 Entity / deep=Entity+Fact+关系
+    memory_extract_depth: str = "light"
 
     # ---- Embedding / 向量化 ----
     embedding_model: str = "Qwen3-Embedding-8B"

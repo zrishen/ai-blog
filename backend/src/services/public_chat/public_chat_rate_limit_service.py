@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -23,7 +23,7 @@ async def consume_public_chat_request(
     timestamp = current.astimezone(timezone.utc).replace(tzinfo=None)
 
     statement = (
-        sqlite_insert(PublicChatDailyUsage)
+        pg_insert(PublicChatDailyUsage)
         .values(
             ip_address=ip_address,
             usage_date=usage_date,

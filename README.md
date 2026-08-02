@@ -13,8 +13,8 @@
 | 图谱 | @xyflow/react + dagre（研究知识图谱可视化） |
 | 后端 | FastAPI + SQLAlchemy 2.x（async）+ Pydantic v2 + uvicorn |
 | AI 编排 | LangChain + LangGraph（含 langchain-openai / langchain-anthropic / langchain-deepseek / langchain-mcp-adapters） |
-| 数据库 | SQLite（aiosqlite） |
-| 向量库 | ChromaDB（持久化到本地磁盘） |
+| 数据库 | PostgreSQL（业务数据） |
+| 向量与认知记忆 | FalkorDB（Chunk 向量检索 + 知识图谱） |
 | MCP | mcp + langchain-mcp-adapters（stdio / streamable-http） |
 | 认证 | JWT + bcrypt |
 | 包管理 | 前端 pnpm，后端 uv |
@@ -141,8 +141,6 @@ pnpm dev
 ai-blog/
 ├── backend/
 │   ├── data/                       # 所有运行时数据统一在此（路径基于 backend/，不依赖 cwd）
-│   │   ├── ai-blog.db              # SQLite 关系库（会话、文章、知识库、研究图谱…）
-│   │   ├── chroma_db/              # ChromaDB 向量索引
 │   │   ├── content/
 │   │   │   ├── blog/<username>/    # 博客 Markdown 文件（按用户名分目录）
 │   │   │   └── uploads/<username>/ # 用户上传的文件（按用户名分目录）
@@ -176,7 +174,7 @@ ai-blog/
 │   │   │   ├── research_service.py         # 研究图谱 + Agent 流程
 │   │   │   ├── file_service.py             # 上传/读取/向量化
 │   │   │   ├── embedding_service.py        # ONNX 或 API embedding
-│   │   │   ├── vector_store.py             # ChromaDB 封装
+│   │   │   ├── memory/                     # FalkorDB 向量检索与认知记忆
 │   │   │   ├── llm_settings_service.py     # 用户级 LLM 配置
 │   │   │   ├── user_service.py
 │   │   │   ├── official_intro_service.py   # 项目介绍模板
@@ -278,8 +276,8 @@ pnpm test
 | `BASE_URL` | 默认 LLM Base URL | 必填 |
 | `MODEL_NAME` | 默认对话模型 | `Qwen3.6-35B` |
 | `DEEP_THINKING_MODEL_NAME` | 深度思考模型 | 同上 |
-| `DATABASE_URL` | SQLite 路径 | 自动指向 `data/ai-blog.db`，一般无需设置 |
-| `CHROMA_DB_PATH` | 向量库路径 | 自动 `data/chroma_db` |
+| `DATABASE_URL` | PostgreSQL 连接串 | `postgresql+asyncpg://postgres:postgres@localhost:5432/cortex` |
+| `FALKORDB_URL` | FalkorDB 连接串 | `redis://localhost:6379` |
 | `BLOG_CONTENT_DIR` | 博客文件根目录 | `data/content/blog` |
 | `UPLOAD_DIR` | 上传根目录 | `data/content/uploads` |
 | `JWT_SECRET` | JWT 签名密钥 | 生产环境务必修改 |

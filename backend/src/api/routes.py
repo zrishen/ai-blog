@@ -22,6 +22,7 @@ from src.api.admin_usage import router as admin_usage_router
 from src.api.admin_users import router as admin_users_router
 from src.api.admin_plugins import router as admin_plugins_router
 from src.api.subscription import router as subscription_router
+from src.api.brain import router as brain_router
 
 router = APIRouter()
 
@@ -56,3 +57,5 @@ router.include_router(admin_usage_router)
 router.include_router(admin_plugins_router)
 
 router.include_router(subscription_router)
+
+router.include_router(brain_router)

@@ -16,9 +16,9 @@ deploy/docker/
 backend/data/               # 宿主机持久数据，不进入镜像
 ```
 
-后端固定运行一个 Uvicorn worker。当前 SQLite、ChromaDB、Markdown 与上传文件共享同一数据目录，不要横向启动多个后端容器。
+后端固定运行一个 Uvicorn worker。PostgreSQL 与 FalkorDB 使用 Compose 命名卷，Markdown 和上传文件保存在 `backend/data`。
 
-不要让本地开发后端和 Docker 后端同时读写同一个 `backend/data`，否则 SQLite 与 ChromaDB 可能出现写入竞争。
+不要让本地开发后端和 Docker 后端同时读写同一个 `backend/data`，以免内容文件发生写入竞争。
 
 ## 首次启动
 
@@ -91,7 +91,7 @@ Compose 为两个服务配置了健康检查、自动重启和日志轮转。后
 
 ## 备份与恢复
 
-为保证 SQLite WAL 与 ChromaDB 文件一致，完整目录备份前先停止后端写入：
+备份 `backend/data` 前先停止后端写入；PostgreSQL 与 FalkorDB 命名卷需使用各自的数据库备份流程：
 
 ```bash
 docker compose stop backend

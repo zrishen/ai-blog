@@ -40,7 +40,7 @@ from src.services.file.file_service import (
     is_hidden_soft_deleted_file,
     save_file,
 )
-from src.services.rag.vector_store import delete_document_chunks
+from src.services.memory.graph_store import delete_document_chunks
 from src.utils.auth import get_current_user
 
 
@@ -380,7 +380,7 @@ async def delete_file_document(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Soft-delete a file library document (hide immediately; Chroma cleanup deferred)."""
+    """Soft-delete a file library document after removing its graph chunks."""
     result = await db.execute(
         select(FileDocument).where(
             FileDocument.id == doc_id,
@@ -404,7 +404,7 @@ async def delete_file_document(
         await delete_document_chunks(collection_name, stored_name)
     except Exception:
         logger.exception(
-            "File library soft-delete chroma cleanup failed: doc_id=%s stored_name=%s",
+            "File library soft-delete vector cleanup failed: doc_id=%s stored_name=%s",
             doc_id,
             stored_name,
         )
@@ -468,7 +468,7 @@ async def delete_file_collection(
             await delete_document_chunks(name, doc.file_path)
         except Exception:
             logger.exception(
-                "File collection soft-delete chroma cleanup failed: collection=%s doc_id=%s",
+                "File collection soft-delete vector cleanup failed: collection=%s doc_id=%s",
                 name,
                 doc.id,
             )

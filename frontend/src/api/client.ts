@@ -91,3 +91,4 @@ export * from "./chatAttachments";
 export * from "./trash";
 export * from "./admin";
 export * from "./subscription";
+export * from "./brain";

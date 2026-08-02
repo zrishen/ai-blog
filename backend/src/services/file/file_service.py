@@ -24,6 +24,35 @@ def get_user_upload_dir(user_id: int | str) -> Path:
     user_dir.mkdir(parents=True, exist_ok=True)
     return user_dir
 
+
+async def _store_document_chunks(
+    *,
+    collection_name: str,
+    chunks: list[str],
+    metadata_list: list[dict],
+    embeddings: list[list[float]],
+    user_id: int | str,
+    progress_callback=None,
+) -> None:
+    if not isinstance(user_id, int):
+        raise ValueError("Document indexing requires a numeric user ID")
+
+    from src.services.memory.graph_store import add_document_chunks
+    from src.services.rag.embedding_service import get_embedding_collection_suffix
+
+    await add_document_chunks(
+        user_id=user_id,
+        collection_name=collection_name,
+        stored_name=str(metadata_list[0]["stored_name"]),
+        chunks=chunks,
+        embeddings=embeddings,
+        metadata_list=metadata_list,
+        embedding_model=get_embedding_collection_suffix().lstrip("_"),
+        vector_dim=len(embeddings[0]),
+        progress_callback=progress_callback,
+    )
+
+
 MAX_FILE_SIZE = 100 * 1024 * 1024
 
 DOCUMENT_TYPES = {
@@ -151,12 +180,13 @@ async def vectorize_and_store(
     stored_filename: str,
     collection_name: str,
     original_name: str | None = None,
-    user_id: int | str = "default_user",
+    user_id: int | str = 1,
+    resource_type: str | None = None,
+    resource_id: int | None = None,
     progress_reporter=None,
 ) -> list[str]:
     """Parse, chunk, embed, and store documents; returns the stored chunk contents."""
     from src.services.rag.embedding_service import get_embeddings
-    from src.services.rag.vector_store import add_documents
 
     from src.utils.chunker import chunk_text
 
@@ -221,6 +251,8 @@ async def vectorize_and_store(
             "file_type": file_type,
             "collection_name": collection_name,
             "user_id": user_id,
+            "resource_type": resource_type,
+            "resource_id": resource_id,
             "chunk_index": index,
             "total_chunks": len(chunks),
             "chunk_id": f"{stored_filename}:{index}",
@@ -229,7 +261,7 @@ async def vectorize_and_store(
         await report("metadata", index + 1, len(chunks), "chunk")
 
     logger.info(
-        "KB vectorization chroma upsert started: stored_name=%s collection=%s chunks=%s",
+        "KB vectorization store started: stored_name=%s collection=%s chunks=%s",
         stored_filename,
         collection_name,
         len(chunks),
@@ -238,15 +270,16 @@ async def vectorize_and_store(
         await report("vector_store", completed, total, unit)
 
     await report("vector_store", 0, len(chunks), "chunk")
-    await add_documents(
-        collection_name,
-        chunks,
-        metadata_list,
+    await _store_document_chunks(
+        collection_name=collection_name,
+        chunks=chunks,
+        metadata_list=metadata_list,
         embeddings=embeddings,
+        user_id=user_id,
         progress_callback=vector_progress,
     )
     logger.info(
-        "KB vectorization chroma upsert completed: stored_name=%s collection=%s chunks=%s",
+        "KB vectorization store completed: stored_name=%s collection=%s chunks=%s",
         stored_filename,
         collection_name,
         len(chunks),
@@ -261,13 +294,13 @@ async def vectorize_text_and_store(
     *,
     source_id: str,
     original_name: str | None = None,
-    user_id: int | str = "default_user",
+    user_id: int | str = 1,
     resource_type: str = "blog_post",
+    resource_id: int | None = None,
     progress_reporter=None,
 ) -> list[str]:
     """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库；跳过文件解析，metadata 的 stored_name/chunk_id 用 source_id（资源稳定标识，如 "blog_post:123"），附带 resource_type 便于检索过滤。"""
     from src.services.rag.embedding_service import get_embeddings
-    from src.services.rag.vector_store import add_documents
     from src.utils.chunker import chunk_text
 
     async def report(stage: str, completed: int, total: int, unit: str) -> None:
@@ -313,6 +346,7 @@ async def vectorize_text_and_store(
             "original_name": display_name,
             "stored_name": source_id,
             "resource_type": resource_type,
+            "resource_id": resource_id,
             "collection_name": collection_name,
             "user_id": user_id,
             "chunk_index": index,
@@ -326,11 +360,12 @@ async def vectorize_text_and_store(
         await report("vector_store", completed, total, unit)
 
     await report("vector_store", 0, len(chunks), "chunk")
-    await add_documents(
-        collection_name,
-        chunks,
-        metadata_list,
+    await _store_document_chunks(
+        collection_name=collection_name,
+        chunks=chunks,
+        metadata_list=metadata_list,
         embeddings=embeddings,
+        user_id=user_id,
         progress_callback=vector_progress,
     )
     logger.info(

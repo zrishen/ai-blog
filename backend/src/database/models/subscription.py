@@ -23,7 +23,7 @@ class RedemptionCode(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     code = Column(String(64), unique=True, nullable=False, index=True)
     duration_days = Column(Integer, nullable=False)
-    is_used = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    is_used = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     used_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     used_at = Column(DateTime, nullable=True)
     created_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)

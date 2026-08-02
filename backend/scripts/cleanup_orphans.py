@@ -1,7 +1,7 @@
 """孤儿物理资源清理脚本。
 
 回收站永久删除采用「DB 先提交、物理后清理」：数据库硬删记录并 commit 之后，
-物理资源（上传文件 / Chroma 向量）以 best-effort 方式清理；一旦
+物理资源（上传文件 / FalkorDB 向量）以 best-effort 方式清理；一旦
 物理删除失败或进程中途退出，会留下「无数据库引用的孤儿资源」。本脚本扫描并
 删除这些孤儿，幂等可重复运行，建议配合定时任务周期性执行。
 
@@ -33,7 +33,6 @@ from src.database.models import (
 )
 from src.database.session import async_session
 from src.services.trash.trash_service import _extract_local_filename
-from src.services.rag.vector_store import _get_client, delete_document_chunks, list_collections
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cleanup_orphans")
@@ -109,39 +108,6 @@ async def cleanup_chat_attachment_orphans(db, *, dry_run: bool) -> int:
     return removed
 
 
-async def cleanup_chroma_orphans(db, *, dry_run: bool) -> int:
-    removed = 0
-    client = await asyncio.to_thread(_get_client)
-    for collection_name in await list_collections():
-        rows = (
-            await db.execute(
-                select(FileDocumentModel.file_path).where(
-                    FileDocumentModel.collection_name == collection_name
-                )
-            )
-        ).all()
-        referenced = {stored for (stored,) in rows if stored}
-        try:
-            collection = await asyncio.to_thread(client.get_collection, name=collection_name)
-        except Exception:
-            logger.warning("无法打开 collection: %s", collection_name, exc_info=True)
-            continue
-        data = await asyncio.to_thread(collection.get, include=["metadatas"])
-        stored_names = {
-            m.get("stored_name")
-            for m in (data.get("metadatas") or [])
-            if m.get("stored_name")
-        }
-        for stored in stored_names:
-            if stored in referenced:
-                continue
-            logger.info("发现孤儿向量 chunks: collection=%s stored_name=%s", collection_name, stored)
-            removed += 1
-            if not dry_run:
-                await delete_document_chunks(collection_name, stored)
-    return removed
-
-
 async def main() -> None:
     parser = argparse.ArgumentParser(description="清理无数据库引用的孤儿物理资源")
     parser.add_argument("--dry-run", action="store_true", help="只列出孤儿，不实际删除")
@@ -150,14 +116,12 @@ async def main() -> None:
     async with async_session() as db:
         uploads = await cleanup_upload_orphans(db, dry_run=args.dry_run)
         chat_attachments = await cleanup_chat_attachment_orphans(db, dry_run=args.dry_run)
-        vectors = await cleanup_chroma_orphans(db, dry_run=args.dry_run)
     mode = "dry-run" if args.dry_run else "deleted"
     logger.info(
-        "完成（%s）：上传孤儿 %d，聊天附件孤儿 %d，向量孤儿 %d",
+        "完成（%s）：上传孤儿 %d，聊天附件孤儿 %d",
         mode,
         uploads,
         chat_attachments,
-        vectors,
     )
 
 

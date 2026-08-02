@@ -115,9 +115,9 @@ export function BlogOverviewPanel() {
               </div>
             </div>
             {tagEntries.length === 0 ? (
-              <Surface variant="dashed" className="rounded-control bg-secondary/45 px-3 py-5 text-center text-fine">
+              <p className="px-3 py-5 text-center text-fine text-muted-foreground">
                 暂无标签
-              </Surface>
+              </p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {tagEntries.map(([tag, count]) => {

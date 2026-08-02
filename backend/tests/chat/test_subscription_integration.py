@@ -65,7 +65,7 @@ async def test_stream_chat_charges_subscription_platform_key(monkeypatch):
     async def fake_save(*args, **kwargs):
         return 1, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
-    monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "async_session", lambda: FakeSession())
     monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda *a, **kw: FakeAgent())

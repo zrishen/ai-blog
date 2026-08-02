@@ -1,5 +1,6 @@
 """聊天测试。"""
 
+import asyncio
 import inspect
 import json
 import logging
@@ -153,6 +154,108 @@ async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
     assert "base_search_file" in prompt_text
     assert "文件库" in prompt_text
     assert not any("[检索到的参考内容]" in m["content"] for m in captured["agent_messages"])
+
+
+@pytest.mark.asyncio
+async def test_memory_enabled_persists_saved_chat_in_background(monkeypatch):
+    from langchain_core.messages import AIMessage
+    from src.config import settings
+    from src.services.chat import orchestrator as chat_service
+
+    persisted = {}
+
+    class _Scalars:
+        def all(self):
+            return []
+
+    class _Result:
+        def scalars(self):
+            return _Scalars()
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def execute(self, stmt):
+            return _Result()
+
+        async def get(self, model, identifier):
+            return None
+
+    class FakeAgent:
+        async def astream_events(self, payload, version, config=None):
+            yield {"event": "on_chat_model_end", "data": {"output": AIMessage(content="记忆回复")}}
+
+    async def fake_save_chat_turn(*args, **kwargs):
+        return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
+
+    async def fake_persist(**kwargs):
+        persisted.update(kwargs)
+
+    monkeypatch.setattr(settings, "memory_enabled", True)
+    monkeypatch.setattr(chat_service, "async_session", lambda: FakeSession())
+    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
+    monkeypatch.setattr(chat_service, "create_react_agent", lambda *args, **kwargs: FakeAgent())
+    monkeypatch.setattr(chat_service, "save_chat_turn", fake_save_chat_turn)
+    monkeypatch.setattr(chat_service, "update_conversation_title", lambda *args, **kwargs: None)
+    monkeypatch.setattr(chat_service, "_persist_chat_memory", fake_persist)
+
+    _ = [chunk async for chunk in chat_service.stream_chat("记住这个问题", None, 1)]
+    await asyncio.sleep(0)
+
+    assert persisted["conversation_id"] == 7
+    assert persisted["message_id"] == 8
+    assert persisted["user_message"] == "记住这个问题"
+    assert persisted["assistant_message"] == "记忆回复"
+
+
+@pytest.mark.asyncio
+async def test_persist_chat_memory_consolidates_episode_and_extracted_knowledge(monkeypatch):
+    from src.services.chat import orchestrator as chat_service
+    from src.services.memory import consolidator, extractor
+
+    captured = {}
+
+    async def fake_extract(text, llm):
+        captured["text"] = text
+        captured["llm"] = llm
+        return {
+            "entities": [{"name": "FalkorDB", "entity_type": "technology"}],
+            "facts": [{"subject_name": "FalkorDB", "predicate": "is", "object_text": "graph database"}],
+            "episodes": [{"kind": "discarded", "summary": "old"}],
+        }
+
+    async def fake_consolidate(*, user_id, extracted):
+        captured["user_id"] = user_id
+        captured["extracted"] = extracted
+
+    monkeypatch.setattr(extractor, "extract", fake_extract)
+    monkeypatch.setattr(consolidator, "consolidate", fake_consolidate)
+
+    llm = object()
+    await chat_service._persist_chat_memory(
+        user_id=3,
+        conversation_id=4,
+        message_id=5,
+        user_message="什么是 FalkorDB？",
+        assistant_message="它是图数据库。",
+        llm=llm,
+    )
+
+    assert captured["user_id"] == 3
+    assert captured["llm"] is llm
+    assert captured["text"] == "用户：什么是 FalkorDB？\n助手：它是图数据库。"
+    assert captured["extracted"]["entities"][0]["name"] == "FalkorDB"
+    assert captured["extracted"]["episodes"] == [{
+        "kind": "chat",
+        "summary": "用户：什么是 FalkorDB？\n助手：它是图数据库。",
+        "conversation_id": 4,
+        "message_id": 5,
+    }]
 
 
 @pytest.mark.asyncio

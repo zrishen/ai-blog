@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Home, LayoutDashboard, Network, type LucideIcon } from "lucide-react";
+import { BrainCircuit, Home, LayoutDashboard, Network, type LucideIcon } from "lucide-react";
 import { useChatDispatch } from "@/stores/chatStore";
 import { useAuth, type AuthUser } from "@/stores/authStore";
 
-export type PrimaryNavigationKey = "home" | "research" | "workspace";
+export type PrimaryNavigationKey = "home" | "research" | "workspace" | "brain";
 type LoginDestination = Exclude<PrimaryNavigationKey, "home">;
 
 export interface PrimaryNavigationItem {
@@ -51,6 +51,14 @@ export function useWorkspacePrimaryNavigation() {
     navigate("/research");
   }, [dispatch, isAuthenticated, navigate, openLoginDialog]);
 
+  const handleBrain = useCallback(() => {
+    if (!isAuthenticated) {
+      openLoginDialog("brain");
+      return;
+    }
+    navigate("/brain");
+  }, [isAuthenticated, navigate, openLoginDialog]);
+
   const handleWorkspace = useCallback(() => {
     if (!isAuthenticated) {
       openLoginDialog("workspace");
@@ -74,6 +82,11 @@ export function useWorkspacePrimaryNavigation() {
       return;
     }
 
+    if (destination === "brain") {
+      navigate("/brain");
+      return;
+    }
+
     resetBlogList();
     navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
   }, [dispatch, navigate, pendingLoginDestination, resetBlogList]);
@@ -86,15 +99,18 @@ export function useWorkspacePrimaryNavigation() {
     ? "workspace"
     : activePath.startsWith("/research")
         ? "research"
-        : activePath === "/" || activePath.startsWith("/u/")
-          ? "home"
-          : null;
+        : activePath.startsWith("/brain")
+          ? "brain"
+          : activePath === "/" || activePath.startsWith("/u/")
+            ? "home"
+            : null;
 
   const primaryNavigation = useMemo<PrimaryNavigationItem[]>(() => [
     { key: "home", label: "首页", icon: Home, onClick: handleHome },
     { key: "workspace", label: "创作", icon: LayoutDashboard, onClick: handleWorkspace },
     { key: "research", label: "研究图谱", icon: Network, onClick: handleResearch },
-  ], [handleHome, handleResearch, handleWorkspace]);
+    { key: "brain", label: "AI 大脑", icon: BrainCircuit, onClick: handleBrain },
+  ], [handleBrain, handleHome, handleResearch, handleWorkspace]);
 
   return {
     activePrimaryPage,

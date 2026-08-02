@@ -1,13 +1,13 @@
 """订阅配额核心：ISO 周窗口 + 订阅有效性 + 周用量累加 + 配额判断。
 
 订阅用户走平台 key 按 token 周额度限制，超额/到期回退 BYOK；配额事后扣（请求后扣真实 usage）；
-窗口为 ISO 周（周一 00:00 UTC+8 重置），累加用 SQLite upsert（on_conflict_do_update）。
+窗口为 ISO 周（周一 00:00 UTC+8 重置），累加用 PostgreSQL upsert（on_conflict_do_update）。
 """
 
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
@@ -62,7 +62,7 @@ async def consume_tokens(
     period = period or current_period_yw()
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     stmt = (
-        sqlite_insert(SubscriptionWeeklyUsage)
+        pg_insert(SubscriptionWeeklyUsage)
         .values(
             user_id=user_id,
             period_yw=period,

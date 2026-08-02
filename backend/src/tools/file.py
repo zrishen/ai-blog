@@ -58,12 +58,22 @@ async def _search_collections(
     active_files: dict[str, set[str]],
     query: str,
     query_embedding: list[float],
+    *,
+    user_id: int,
 ) -> list[tuple[str, object]]:
-    from src.services.rag.vector_store import search
+    from src.services.memory import graph_store
+    from src.services.rag.embedding_service import get_embedding_collection_suffix
 
     async def search_one(name: str, stored_names: set[str]) -> list[tuple[str, object]]:
         try:
-            results = await search(name, query, query_embedding, settings.rag_top_k)
+            results = await graph_store.search_documents(
+                user_id=user_id,
+                collection_name=name,
+                query_embedding=query_embedding,
+                embedding_model=get_embedding_collection_suffix().lstrip("_"),
+                top_k=settings.rag_top_k,
+                whitelist_stored_names=stored_names,
+            )
         except Exception:
             return []
         return [
@@ -92,7 +102,8 @@ def _filter_and_dedupe_rag_results(results: list[tuple[str, object]]) -> list[tu
         if not content:
             continue
 
-        distance = getattr(result, "distance", None)
+        score = getattr(result, "score", None)
+        distance = 1 - score if score is not None else None
         if distance is not None and distance > settings.rag_distance_threshold:
             continue
 
@@ -104,8 +115,8 @@ def _filter_and_dedupe_rag_results(results: list[tuple[str, object]]) -> list[tu
 
     filtered.sort(
         key=lambda item: (
-            getattr(item[1], "distance", None)
-            if getattr(item[1], "distance", None) is not None
+            -getattr(item[1], "score", float("-inf"))
+            if getattr(item[1], "score", None) is not None
             else float("inf")
         )
     )
@@ -124,7 +135,8 @@ def _format_rag_context(results: list[tuple[str, object]]) -> str:
     ):
         metadata = getattr(result, "metadata", None) or {}
         source = metadata.get("source") or metadata.get("file_name") or "unknown"
-        distance = getattr(result, "distance", None)
+        score = getattr(result, "score", None)
+        distance = 1 - score if score is not None else None
         content = getattr(result, "content", "").strip()
 
         block = (
@@ -173,7 +185,7 @@ async def base_search_file(query: str) -> str:
     except Exception:
         return "无法生成查询嵌入"
 
-    results = await _search_collections(active_files, query, embeddings[0])
+    results = await _search_collections(active_files, query, embeddings[0], user_id=user_id)
     results = _filter_and_dedupe_rag_results(results)
     return _format_rag_context(results)
 

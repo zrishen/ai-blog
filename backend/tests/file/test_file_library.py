@@ -1,7 +1,6 @@
 """文件库测试。"""
 
 import io
-import sqlite3
 import uuid
 
 import pytest
@@ -9,11 +8,10 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import settings
 from src.database.models import FileDocument, FileProcessingJob
 from src.services.file import file_service
 from src.services.file.file_processing_service import _run_job
-from src.utils.user_dir import resolve_username
+from src.utils import user_dir
 
 
 # ---- Documents ----
@@ -55,26 +53,12 @@ async def test_upload_file_document_passes_numeric_user_id_to_vectorizer(
 
 
 def test_numeric_user_id_resolves_username_upload_directory(tmp_path, monkeypatch):
-    database_path = tmp_path / "users.db"
-    connection = sqlite3.connect(database_path)
-    connection.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT NOT NULL)")
-    connection.execute("INSERT INTO users (id, username) VALUES (?, ?)", (7, "named-user"))
-    connection.commit()
-    connection.close()
-
     upload_root = tmp_path / "uploads"
-    monkeypatch.setattr(
-        settings,
-        "database_url",
-        f"sqlite+aiosqlite:///{database_path.as_posix()}",
-    )
     monkeypatch.setattr(file_service, "UPLOAD_DIR", upload_root)
-    resolve_username.cache_clear()
-    try:
-        assert file_service.get_user_upload_dir(7) == upload_root / "named-user"
-        assert file_service.get_user_upload_dir("7") == upload_root / "7"
-    finally:
-        resolve_username.cache_clear()
+    monkeypatch.setitem(user_dir._username_cache, 7, "named-user")
+
+    assert file_service.get_user_upload_dir(7) == upload_root / "named-user"
+    assert file_service.get_user_upload_dir("7") == upload_root / "7"
 
 
 @pytest.mark.asyncio
@@ -164,7 +148,7 @@ async def test_delete_file_collection_keeps_failed_document_active(
         nonlocal calls
         calls += 1
         if calls == 2:
-            raise RuntimeError("chroma unavailable")
+            raise RuntimeError("vector store unavailable")
         return True
 
     monkeypatch.setattr("src.api.files.delete_document_chunks", delete_chunks)

@@ -1,16 +1,16 @@
 import pytest
 
+from src.services.memory.graph_store import MemoryHit
 from src.tools.file import _filter_and_dedupe_rag_results, _format_rag_context, _search_collections
-from src.services.rag.vector_store import SearchResult
 
 
 def test_rag_filter_dedupe_and_format():
     duplicate = "安装步骤：先运行 uv sync，再启动 uvicorn。"
     results = [
-        ("doc_a", SearchResult(content=duplicate, metadata={"source": "a.pdf"}, distance=0.2)),
-        ("doc_b", SearchResult(content=duplicate, metadata={"source": "b.pdf"}, distance=0.3)),
-        ("doc_c", SearchResult(content="无关内容", metadata={"source": "c.pdf"}, distance=0.95)),
-        ("doc_d", SearchResult(content="配置 MCP 工具需要填写 command 和 args。", metadata={"source": "d.pdf"}, distance=0.1)),
+        ("doc_a", MemoryHit(content=duplicate, kind="chunk", metadata={"source": "a.pdf"}, score=0.8)),
+        ("doc_b", MemoryHit(content=duplicate, kind="chunk", metadata={"source": "b.pdf"}, score=0.7)),
+        ("doc_c", MemoryHit(content="无关内容", kind="chunk", metadata={"source": "c.pdf"}, score=0.05)),
+        ("doc_d", MemoryHit(content="配置 MCP 工具需要填写 command 和 args。", kind="chunk", metadata={"source": "d.pdf"}, score=0.9)),
     ]
 
     filtered = _filter_and_dedupe_rag_results(results)
@@ -35,19 +35,20 @@ def test_rag_empty_context_prevents_fabrication():
 
 @pytest.mark.asyncio
 async def test_search_collections_only_returns_active_stored_names(monkeypatch):
-    async def fake_search(name, query, embedding, top_k):
+    async def fake_search(**kwargs):
         return [
-            SearchResult(content="active", metadata={"stored_name": "active.pdf"}, distance=0.1),
-            SearchResult(content="deleted", metadata={"stored_name": "deleted.pdf"}, distance=0.1),
-            SearchResult(content="legacy", metadata={"source": "legacy.pdf"}, distance=0.1),
+            MemoryHit(content="active", kind="chunk", metadata={"stored_name": "active.pdf"}, score=0.9),
+            MemoryHit(content="deleted", kind="chunk", metadata={"stored_name": "deleted.pdf"}, score=0.9),
+            MemoryHit(content="legacy", kind="chunk", metadata={"source": "legacy.pdf"}, score=0.9),
         ]
 
-    monkeypatch.setattr("src.services.rag.vector_store.search", fake_search)
+    monkeypatch.setattr("src.services.memory.graph_store.search_documents", fake_search)
 
     results = await _search_collections(
         {"user_1_file": {"active.pdf"}},
         "query",
         [0.1],
+        user_id=1,
     )
 
     assert [result.content for _, result in results] == ["active"]

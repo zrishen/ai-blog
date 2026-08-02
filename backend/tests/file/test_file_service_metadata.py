@@ -24,19 +24,13 @@ async def test_vectorize_reports_black_box_stages_before_first_completed_unit():
         await progress_callback(len(texts), len(texts), "chunk")
         return [[0.1] * 384 for _ in texts]
 
-    async def fake_add_documents(
-        collection_name,
-        documents,
-        metadata_list=None,
-        embeddings=None,
-        progress_callback=None,
-    ):
-        await progress_callback(len(documents), len(documents), "chunk")
+    async def fake_add_document_chunks(**kwargs):
+        await kwargs["progress_callback"](len(kwargs["chunks"]), len(kwargs["chunks"]), "chunk")
 
     with patch("src.utils.file_parser.parse_path", side_effect=fake_parse), \
          patch("src.utils.chunker.chunk_text", return_value=["第一片段", "第二片段"]), \
          patch("src.services.rag.embedding_service.get_embeddings", side_effect=fake_embeddings), \
-         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         await vectorize_and_store(
             "stored.pdf",
             "kb_progress",
@@ -52,20 +46,12 @@ async def test_vectorize_reports_black_box_stages_before_first_completed_unit():
 async def test_vectorize_and_store_writes_rich_metadata():
     captured = {}
 
-    async def fake_add_documents(
-        collection_name,
-        documents,
-        metadata_list=None,
-        embeddings=None,
-        progress_callback=None,
-    ):
-        captured["collection_name"] = collection_name
-        captured["documents"] = documents
-        captured["metadata_list"] = metadata_list
+    async def fake_add_document_chunks(**kwargs):
+        captured.update(kwargs)
 
     with patch("src.utils.file_parser.parse_path", return_value="第一段内容。\n第二段内容。"), \
          patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
-         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         chunks = await vectorize_and_store(
             "stored.pdf",
             "kb_doc",
@@ -74,7 +60,7 @@ async def test_vectorize_and_store_writes_rich_metadata():
 
     assert chunks == ["第一段内容。\n第二段内容。"]
     assert captured["collection_name"] == "kb_doc"
-    assert captured["documents"] == chunks
+    assert captured["chunks"] == chunks
 
     metadata = captured["metadata_list"][0]
     assert metadata["source"] == "kb_doc.pdf"
@@ -92,25 +78,19 @@ async def test_vectorize_and_store_writes_rich_metadata():
 async def test_vectorize_and_store_writes_default_metadata():
     captured = {}
 
-    async def fake_add_documents(
-        collection_name,
-        documents,
-        metadata_list=None,
-        embeddings=None,
-        progress_callback=None,
-    ):
-        captured["metadata_list"] = metadata_list
+    async def fake_add_document_chunks(**kwargs):
+        captured.update(kwargs)
 
     with patch("src.utils.file_parser.parse_path", return_value="测试内容"), \
          patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
-         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         await vectorize_and_store("stored.docx", "doc_collection")
 
     metadata = captured["metadata_list"][0]
     assert metadata["source"] == "stored.docx"
     assert metadata["file_type"] == "docx"
     assert metadata["collection_name"] == "doc_collection"
-    assert metadata["user_id"] == "default_user"
+    assert metadata["user_id"] == 1
     assert metadata["total_chunks"] == 1
 
 
@@ -118,25 +98,46 @@ async def test_vectorize_and_store_writes_default_metadata():
 async def test_vectorize_and_store_metadata_matches_multiple_chunks():
     captured = {}
 
-    async def fake_add_documents(
-        collection_name,
-        documents,
-        metadata_list=None,
-        embeddings=None,
-        progress_callback=None,
-    ):
-        captured["documents"] = documents
-        captured["metadata_list"] = metadata_list
+    async def fake_add_document_chunks(**kwargs):
+        captured.update(kwargs)
 
     long_text = "这是一个用于测试递归字符分割的句子。" * 80
     with patch("src.utils.file_parser.parse_path", return_value=long_text), \
          patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
-         patch("src.services.rag.vector_store.add_documents", side_effect=fake_add_documents):
+         patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         chunks = await vectorize_and_store("stored.pdf", "kb_long", original_name="long.pdf")
 
     assert len(chunks) > 1
-    assert len(captured["documents"]) == len(chunks)
+    assert len(captured["chunks"]) == len(chunks)
     assert len(captured["metadata_list"]) == len(chunks)
     assert captured["metadata_list"][0]["chunk_index"] == 0
     assert captured["metadata_list"][-1]["chunk_index"] == len(chunks) - 1
     assert all(metadata["total_chunks"] == len(chunks) for metadata in captured["metadata_list"])
+
+
+@pytest.mark.asyncio
+async def test_vectorize_and_store_writes_chunks_to_graph():
+    captured = {}
+
+    async def fake_add_document_chunks(**kwargs):
+        captured["memory"] = kwargs
+
+    with patch("src.utils.file_parser.parse_path", return_value="memory content"), \
+         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
+        await vectorize_and_store(
+            "stored.pdf",
+            "user_17_kb",
+            original_name="memory.pdf",
+            user_id=17,
+            resource_type="file",
+            resource_id=21,
+        )
+
+    assert captured["memory"]["user_id"] == 17
+    assert captured["memory"]["collection_name"] == "user_17_kb"
+    assert captured["memory"]["stored_name"] == "stored.pdf"
+    assert captured["memory"]["chunks"] == ["memory content"]
+    assert captured["memory"]["vector_dim"] == 384
+    assert captured["memory"]["metadata_list"][0]["resource_type"] == "file"
+    assert captured["memory"]["metadata_list"][0]["resource_id"] == 21

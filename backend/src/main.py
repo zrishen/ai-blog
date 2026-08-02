@@ -1,6 +1,8 @@
 """FastAPI 应用入口：仅 app 装配（实例 + 中间件 + 路由）。启动逻辑见 bootstrap.py。"""
 
 from contextlib import asynccontextmanager
+import logging
+from time import perf_counter
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +12,8 @@ from src.api.routes import router
 from src.bootstrap import startup
 from src.config import settings
 from src.core.exceptions import DomainError
+
+http_logger = logging.getLogger("http.access")
 
 
 @asynccontextmanager
@@ -32,6 +36,32 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/v1")
+
+
+@app.middleware("http")
+async def _log_http_request(request: Request, call_next):
+    """Write application-level HTTP access records independently of Uvicorn."""
+    started_at = perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        http_logger.exception(
+            "%s %s failed after %.3fs",
+            request.method,
+            request.url.path,
+            perf_counter() - started_at,
+        )
+        raise
+
+    if request.url.path != "/health":
+        http_logger.info(
+            "%s %s %s %.3fs",
+            request.method,
+            request.url.path,
+            response.status_code,
+            perf_counter() - started_at,
+        )
+    return response
 
 
 @app.exception_handler(DomainError)

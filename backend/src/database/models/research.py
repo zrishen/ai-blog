@@ -7,11 +7,11 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .base import Base, _utcnow
 
@@ -53,7 +53,7 @@ class ResearchSource(Base):
     trust_level = Column(String(30), nullable=False, default="unknown")
     status = Column(String(30), nullable=False, default="pending")
     raw_excerpt = Column(Text, nullable=True)
-    metadata_json = Column(JSON, nullable=True)
+    metadata_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -71,7 +71,7 @@ class ResearchEvidence(Base):
     quote = Column(Text, nullable=False)
     location = Column(String(300), nullable=True)
     kind = Column(String(50), nullable=False, default="manual")
-    metadata_json = Column(JSON, nullable=True)
+    metadata_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
 
@@ -108,7 +108,7 @@ class ResearchEntity(Base):
     name = Column(String(300), nullable=False)
     entity_type = Column(String(80), nullable=True)
     description = Column(Text, nullable=True)
-    aliases_json = Column(JSON, nullable=True)
+    aliases_json = Column(JSONB, nullable=True)
     confidence = Column(Integer, nullable=False, default=0)
     status = Column(String(30), nullable=False, default="active")
     created_at = Column(DateTime, default=_utcnow)
@@ -149,7 +149,7 @@ class ResearchRelation(Base):
     to_type = Column(String(50), nullable=False)
     to_id = Column(Integer, nullable=False)
     relation_type = Column(String(50), nullable=False)
-    metadata_json = Column(JSON, nullable=True)
+    metadata_json = Column(JSONB, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
 
 
@@ -165,7 +165,7 @@ class ResearchProposal(Base):
     proposal_type = Column(String(50), nullable=False)
     title = Column(String(300), nullable=False)
     description = Column(Text, nullable=True)
-    payload_json = Column(JSON, nullable=True)
+    payload_json = Column(JSONB, nullable=True)
     status = Column(String(30), nullable=False, default="pending")
     created_at = Column(DateTime, default=_utcnow)
     reviewed_at = Column(DateTime, nullable=True)
@@ -184,7 +184,7 @@ class ResearchRun(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     idempotency_key = Column(String(120), nullable=False)
     status = Column(String(30), nullable=False, default="queued")
-    progress_json = Column(JSON, nullable=True)
+    progress_json = Column(JSONB, nullable=True)
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
@@ -203,7 +203,7 @@ class BlogPostResearchLink(Base):
     post_id = Column(Integer, ForeignKey("blog_posts.id", ondelete="CASCADE"), nullable=False)
     topic_id = Column(Integer, ForeignKey("research_topics.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    snapshot_json = Column(JSON, nullable=False)
+    snapshot_json = Column(JSONB, nullable=False)
     created_at = Column(DateTime, default=_utcnow)
 
 

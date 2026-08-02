@@ -7,7 +7,6 @@ save_chat_turn 涉及全局 session + 附件 claim，留待后续。
 
 from datetime import datetime, timezone
 
-import pytest
 
 from src.database.models import Conversation, Message
 from src.services.conversation.conversation_service import (

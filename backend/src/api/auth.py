@@ -96,6 +96,11 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户名已存在")
     await db.refresh(user)
 
+    # 刷新用户目录命名缓存（user_id → username），注册后立即用 username 命名上传目录
+    from src.utils.user_dir import refresh_user_in_cache
+
+    await refresh_user_in_cache(db, user.id)
+
     # 入门文章 best-effort：失败仅记日志不阻断注册，避免「用户已建、注册接口 500」的半注册状态
     try:
         await _seed_intro_article(db, user.id)

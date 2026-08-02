@@ -4,7 +4,6 @@
 及归属隔离（他人操作返回 None/False）。
 """
 
-import pytest
 
 from src.services.research.topic import (
     archive_topic,

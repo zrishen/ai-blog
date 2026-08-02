@@ -90,6 +90,42 @@ class _MissingApiKeyError(RuntimeError):
     """登录用户未填写自有 API 密钥时抛出，由 stream_chat 主流程捕获并返回提示。"""
 
 
+def _memory_episode_text(user_message: str, assistant_message: str) -> str:
+    return f"用户：{user_message}\n助手：{assistant_message}".strip()
+
+
+async def _persist_chat_memory(
+    *,
+    user_id: int,
+    conversation_id: int,
+    message_id: int,
+    user_message: str,
+    assistant_message: str,
+    llm: Any,
+) -> None:
+    """Best-effort 地将已保存对话转化为 Episode 与抽取到的知识。"""
+    try:
+        from src.services.memory import consolidator, extractor
+
+        text = _memory_episode_text(user_message, assistant_message)
+        extracted = await extractor.extract(text, llm)
+        extracted["episodes"] = [{
+            "kind": "chat",
+            "summary": text,
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+        }]
+        await consolidator.consolidate(user_id=user_id, extracted=extracted)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        logger.exception(
+            "Failed to persist chat memory conversation_id=%s message_id=%s",
+            conversation_id,
+            message_id,
+        )
+
+
 # ── Attachment claim lifecycle ──
 
 async def _keep_attachment_claim_alive(
@@ -371,6 +407,11 @@ async def stream_chat(
     # 3. Build agent
     agent_tools = list(BLOG_TOOLS)
     agent_tools.append(base_search_file)
+    if settings.memory_enabled:
+        # 大脑 recall 工具（GraphRAG）：回忆过往对话/偏好/实体关系，与 base_search_file 并列
+        from src.tools.memory import base_recall_memory
+
+        agent_tools.append(base_recall_memory)
     if mcp_capabilities:
         agent_tools.append(build_mcp_call_tool(mcp_plugins, mcp_capabilities))
 
@@ -917,6 +958,18 @@ async def stream_chat(
                     await update_conversation_title(new_conv_id, user_id, user_message[:50])
                 except Exception:
                     pass
+            if settings.memory_enabled and full_content:
+                asyncio.create_task(
+                    _persist_chat_memory(
+                        user_id=user_id,
+                        conversation_id=new_conv_id,
+                        message_id=message_id,
+                        user_message=user_message,
+                        assistant_message=full_content,
+                        llm=llm,
+                    ),
+                    name=f"persist-chat-memory:{user_id}:{message_id}",
+                )
         except asyncio.CancelledError:
             await _stop_claim_heartbeat(claim_heartbeat_task)
             await _release_claim_best_effort(

@@ -26,6 +26,20 @@ def _extract_references(tool_name: str, result_text: str, tool_input: dict | Non
                 except ValueError:
                     pass
             refs.append(ref)
+    elif tool_name == "base_recall_memory":
+        for m in re.finditer(r"来源[：:]\s*(\S+)", result_text):
+            source = m.group(1).rstrip("，。")
+            kind_m = re.search(r"记忆类型[：:]\s*(\S+)", result_text[m.start():m.start() + 200])
+            distance_m = re.search(r"相关距离[：:]\s*([\d.]+|unknown)", result_text[m.start():m.start() + 200])
+            ref: dict[str, Any] = {"type": "memory", "source": source}
+            if kind_m:
+                ref["kind"] = kind_m.group(1).rstrip("，。")
+            if distance_m and distance_m.group(1) != "unknown":
+                try:
+                    ref["distance"] = float(distance_m.group(1))
+                except ValueError:
+                    pass
+            refs.append(ref)
     elif tool_name == "mcp_call_tool" and tool_input:
         tool_ref = str(tool_input.get("tool_ref", ""))
         if "/" in tool_ref:

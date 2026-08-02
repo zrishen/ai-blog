@@ -73,6 +73,33 @@ async def startup() -> None:
         await ensure_intro_post(session, build_intro_post_payload(), user.id)
         await _ensure_super_admin(session)
         await _ensure_initial_admin(session)
+        from src.utils.user_dir import warm_username_cache
+
+        await warm_username_cache(session)
+
+    # FalkorDB 承载 RAG 向量；初始化空图以支持空态读取。
+    from src.services.memory import graph_store
+
+    graph_ready = await graph_store.ping()
+    if not graph_ready:
+        logger.error("FalkorDB ping failed——向量检索与 AI 大脑不可用")
+    else:
+        try:
+            await graph_store.ensure_graph()
+        except Exception:
+            graph_ready = False
+            logger.exception("FalkorDB graph initialization failed")
+
+    # AI 大脑灰度开启时启动维护任务；维护失败不阻止应用提供其余能力。
+    if settings.memory_enabled and graph_ready:
+        from src.services.memory import jobs
+
+        logger.info("FalkorDB brain connected: graph=%s", settings.falkordb_graph_name)
+        try:
+            await jobs.run_maintenance()
+        except Exception:
+            logger.exception("FalkorDB maintenance startup run failed")
+        jobs.schedule_maintenance()
 
     if settings.embedding_provider == "local":
         import threading
