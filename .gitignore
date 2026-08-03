@@ -71,3 +71,6 @@ task_plan.md
 findings.md
 progress.md
 .planning/
+
+# Architecture diagrams (kept local, not tracked)
+/AI_BRAIN_ARCHITECTURE.*
