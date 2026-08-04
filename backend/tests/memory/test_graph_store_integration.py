@@ -311,3 +311,40 @@ async def test_consolidate_preference_first_write_then_versions(monkeypatch, fal
         }
     finally:
         graph.delete()
+
+
+@pytest.mark.asyncio
+async def test_recall_touch_and_decay_close_the_loop(monkeypatch, falkordb_client):
+    """衰减闭环（真实 FalkorDB）：节点旧化→decay 降权→recall 命中 touch 刷新→decay 不再降权。"""
+    from src.services.memory import jobs
+    from src.services.memory import schema as S
+
+    graph_name = f"decay_loop_test_{uuid.uuid4().hex}"
+    graph = falkordb_client.select_graph(graph_name)
+    monkeypatch.setattr(graph_store, "_client", falkordb_client)
+    monkeypatch.setattr(graph_store.settings, "falkordb_graph_name", graph_name)
+    monkeypatch.setattr(graph_store.settings, "memory_decay_days", 1)
+    await graph_store.ensure_graph()
+
+    try:
+        entity_id = await graph_store.add_entity(
+            user_id=101, name="Stale Entity", entity_type="concept", confidence=0.9,
+        )
+        # 旧化：last_accessed_at 设到 decay 阈值（now - 1d）之前
+        await graph_store._write(
+            f"MATCH (e:{S.ENTITY} {{entity_id:$eid}}) SET e.last_accessed_at=$stale",
+            {"eid": entity_id, "stale": "2000-01-01T00:00:00"},
+        )
+
+        assert await jobs.decay_memories() >= 1  # 长期未访问节点 confidence 被降权
+
+        # recall 命中后 touch 刷新 last_accessed_at（模拟 base_recall_memory 行为）
+        hit = graph_store.MemoryHit(
+            content="Stale Entity", kind="entity", score=0.1, metadata={"id": entity_id},
+        )
+        await graph_store.touch_memories(user_id=101, hits=[hit])
+
+        # 再次 decay：刚被 recall 访问的节点不再降权
+        assert await jobs.decay_memories() == 0
+    finally:
+        graph.delete()

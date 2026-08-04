@@ -339,7 +339,7 @@ async def add_fact(
     await _write(
         f"CREATE (f:{S.FACT} {{fact_id:$fid, user_id:$uid, subject_id:$sid, predicate:$pred, "
         f"object_text:$obj, object_id:$oid, valid_from:$vf, valid_to:$vt, confidence:$conf, "
-        f"source_doc_id:$sdoc, created_at:$now}})",
+        f"source_doc_id:$sdoc, created_at:$now, last_accessed_at:$now}})",
         params,
     )
     if object_id:
@@ -370,7 +370,8 @@ async def add_episode(
     }
     await _write(
         f"CREATE (e:{S.EPISODE} {{episode_id:$eid, user_id:$uid, kind:$kind, summary:$summary, "
-        f"occurred_at:$occ, conversation_id:$cid, message_id:$mid, participants:$parts, created_at:$now}})",
+        f"occurred_at:$occ, conversation_id:$cid, message_id:$mid, participants:$parts, "
+        f"created_at:$now, last_accessed_at:$now}})",
         params,
     )
     return eid
@@ -380,7 +381,7 @@ async def add_preference(*, user_id: int, key: str, value: str, confidence: floa
     pid = _new_id()
     await _write(
         f"CREATE (p:{S.PREFERENCE} {{pref_id:$pid, user_id:$uid, key:$key, value:$val, "
-        f"confidence:$conf, valid_from:$vf, valid_to:$vt}})",
+        f"confidence:$conf, valid_from:$vf, valid_to:$vt, last_accessed_at:$vf}})",
         {"pid": pid, "uid": user_id, "key": key, "val": value, "conf": confidence,
          "vf": _now_iso(), "vt": None},
     )
@@ -1008,6 +1009,30 @@ async def recall(
         return ranked[:top_k]
 
     return await asyncio.to_thread(_do)
+
+
+async def touch_memories(*, user_id: int, hits: list[MemoryHit]) -> None:
+    """刷新被 recall 命中节点的 last_accessed_at，驱动衰减闭环（best-effort，调用方包 try）。
+
+    Chunk 是原文层、不参与记忆衰减，跳过；其余类型按 (kind, node id) 批量更新访问时间。
+    """
+    refs: dict[str, list[str]] = {}
+    for hit in hits:
+        if hit.kind == "chunk":
+            continue
+        node_id = (hit.metadata or {}).get("id")
+        if node_id:
+            refs.setdefault(hit.kind, []).append(str(node_id))
+    if not refs:
+        return
+    now = _now_iso()
+    for kind, ids in refs.items():
+        label, id_key = _vector_spec(kind)
+        await _write(
+            f"MATCH (node:{label}) WHERE node.user_id=$uid AND node.{id_key} IN $ids "
+            "SET node.last_accessed_at=$now",
+            {"uid": user_id, "ids": ids, "now": now},
+        )
 
 
 def _node_kind(labels: Any) -> str | None:

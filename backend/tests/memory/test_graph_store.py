@@ -282,6 +282,75 @@ async def test_update_preference_versions_existing_value(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_touch_memories_refreshes_last_accessed_skipping_chunk(monkeypatch):
+    """touch_memories 按 kind 批量刷新知识层 last_accessed_at；Chunk 与无 id 命中跳过。"""
+    writes = []
+
+    async def fake_write(cypher, params):
+        writes.append((cypher, params))
+
+    monkeypatch.setattr(graph_store, "_write", fake_write)
+
+    hits = [
+        graph_store.MemoryHit(content="chunk", kind="chunk", score=0.1, metadata={"id": "chunk-1"}),
+        graph_store.MemoryHit(content="fact", kind="fact", score=0.2, metadata={"id": "fact-1"}),
+        graph_store.MemoryHit(content="ea", kind="entity", score=0.3, metadata={"id": "entity-1"}),
+        graph_store.MemoryHit(content="eb", kind="entity", score=0.4, metadata={"id": "entity-2"}),
+        graph_store.MemoryHit(content="pref", kind="preference", score=0.5, metadata={}),
+    ]
+    await graph_store.touch_memories(user_id=7, hits=hits)
+
+    assert len(writes) == 2  # fact 一批、entity 一批；chunk 与无 id preference 跳过
+    fact_params = next(p for c, p in writes if ":Fact" in c)
+    entity_params = next(p for c, p in writes if ":Entity" in c)
+    assert fact_params["ids"] == ["fact-1"]
+    assert entity_params["ids"] == ["entity-1", "entity-2"]
+    for cypher, params in writes:
+        assert "SET node.last_accessed_at=$now" in cypher
+        assert "node.user_id=$uid" in cypher
+        assert params["uid"] == 7
+        assert "now" in params
+    assert all(":Chunk" not in c and ":Preference" not in c for c, _ in writes)
+
+
+@pytest.mark.asyncio
+async def test_touch_memories_noop_for_empty_or_chunk_only(monkeypatch):
+    """空命中或全 Chunk 命中时不产生写。"""
+    wrote = []
+
+    async def fake_write(cypher, params):
+        wrote.append((cypher, params))
+
+    monkeypatch.setattr(graph_store, "_write", fake_write)
+
+    await graph_store.touch_memories(user_id=7, hits=[])
+    await graph_store.touch_memories(user_id=7, hits=[
+        graph_store.MemoryHit(content="c", kind="chunk", score=0.1, metadata={"id": "c1"}),
+    ])
+    assert wrote == []
+
+
+@pytest.mark.asyncio
+async def test_touch_memories_tolerates_none_metadata_and_nonstring_ids(monkeypatch):
+    """metadata 为 None 或 id 非字符串时不报错；无 id 命中跳过，id 按 str() 收集。"""
+    writes = []
+
+    async def fake_write(cypher, params):
+        writes.append((cypher, params))
+
+    monkeypatch.setattr(graph_store, "_write", fake_write)
+
+    hits = [
+        graph_store.MemoryHit(content="a", kind="entity", score=0.1, metadata=None),
+        graph_store.MemoryHit(content="b", kind="fact", score=0.2, metadata={"id": 12345}),
+    ]
+    await graph_store.touch_memories(user_id=7, hits=hits)
+
+    assert len(writes) == 1  # entity 无 id 跳过，仅 fact 一批
+    assert writes[0][1]["ids"] == ["12345"]  # str(12345)
+
+
+@pytest.mark.asyncio
 async def test_delete_memory_uses_user_scoped_label(monkeypatch):
     writes = []
 

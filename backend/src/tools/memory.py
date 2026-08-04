@@ -5,9 +5,13 @@
 让 services/chat/references.py 无需改解析正则即可解析（额外加 记忆类型： 字段供区分）。
 """
 
+import logging
+
 from langchain_core.tools import tool
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 MEMORY_MAX_CONTEXT_CHARS = 6000
 
@@ -39,6 +43,11 @@ async def base_recall_memory(query: str) -> str:
         top_k=settings.memory_recall_top_k,
         hops=settings.memory_recall_hops,
     )
+    if hits:
+        try:
+            await graph_store.touch_memories(user_id=user_id, hits=hits)
+        except Exception:
+            logger.warning("touch_memories failed; decay loop degraded", exc_info=True)
     return _format_memory_context(hits)
 
 
