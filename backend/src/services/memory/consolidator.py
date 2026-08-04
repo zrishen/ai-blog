@@ -2,6 +2,7 @@
 
 - Entity：按 user+name(+type) 查现有；存在则新建并建 SAME_AS 指向现有（保留两次抽取痕迹，待后续合并视图）
 - Fact：同 subject+predicate 的现存有效 Fact，object 不同 → 新 Fact SUPERSEDES 旧 Fact（旧 Fact valid_to 置位，可回溯）
+- Preference：同 key 当前有效偏好，value 不同 → 版本化（旧值 valid_to 置位并新建）；value 相同则跳过
 """
 
 import logging
@@ -50,15 +51,46 @@ async def consolidate_fact(
     return new_id
 
 
+async def consolidate_preference(
+    *, user_id: int, key: str, value: str, confidence: float = 1.0,
+) -> str | None:
+    """仲裁偏好：key 归一化 + 置信度门槛 + 查图判断首次/重复/版本化。返回 pref_id 或 None（跳过）。
+
+    - 该 key 无当前有效偏好 → 首次创建（add_preference）。
+    - 已存在且 value 相同 → 跳过（重复）。
+    - 已存在且 value 不同 → 版本化（update_preference 置位旧值并新建新版本）。
+    """
+    norm_key = (key or "").strip().lower()
+    norm_value = (value or "").strip()
+    if not norm_key or not norm_value:
+        return None
+    if confidence < 0.7:
+        return None
+    existing = await graph_store.find_active_preference(user_id=user_id, key=norm_key)
+    if existing is None:
+        return await graph_store.add_preference(
+            user_id=user_id, key=norm_key, value=norm_value, confidence=confidence,
+        )
+    if existing["value"] == norm_value:
+        logger.info("Preference 重复跳过: key=%s", norm_key)
+        return None
+    updated = await graph_store.update_preference(
+        user_id=user_id, pref_id=existing["pref_id"], value=norm_value, confidence=confidence,
+    )
+    logger.info("Preference 版本化: key=%s old_pref_id=%s", norm_key, existing["pref_id"])
+    return updated["pref_id"] if updated else None
+
+
 async def consolidate(*, user_id: int, extracted: dict) -> dict:
-    """批量巩固抽取产物 {entities, facts, episodes}。
+    """批量巩固抽取产物 {entities, facts, episodes, preferences}。
 
     entities 项: {name, entity_type?, aliases?, description?, confidence?}
     facts 项:    {subject_name|subject_id, predicate, object_text, confidence?, source_doc_id?}
     episodes 项: {kind, summary, occurred_at?, conversation_id?, message_id?, participants?}
-    返回 {entities: [(id,is_new)], facts: [id], episodes: [id]}。
+    preferences 项: {key, value, confidence?}
+    返回 {entities: [(id,is_new)], facts: [id], episodes: [id], preferences: [id]}。
     """
-    result = {"entities": [], "facts": [], "episodes": []}
+    result = {"entities": [], "facts": [], "episodes": [], "preferences": []}
 
     name_to_id: dict[str, str] = {}
     for ent in extracted.get("entities", []):
@@ -85,6 +117,16 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
         if participants:
             await graph_store.link_episode_entities(eid, participants)
 
+    for pref in extracted.get("preferences", []):
+        pid = await consolidate_preference(
+            user_id=user_id,
+            key=pref.get("key", ""),
+            value=pref.get("value", ""),
+            confidence=pref.get("confidence", 1.0),
+        )
+        if pid:
+            result["preferences"].append(pid)
+
     refs = [
         memory_embeddings.MemoryNodeRef(kind="entity", user_id=user_id, memory_id=eid)
         for eid in dict.fromkeys(entity_id for entity_id, _ in result["entities"])
@@ -96,6 +138,10 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
     refs.extend(
         memory_embeddings.MemoryNodeRef(kind="episode", user_id=user_id, memory_id=eid)
         for eid in result["episodes"]
+    )
+    refs.extend(
+        memory_embeddings.MemoryNodeRef(kind="preference", user_id=user_id, memory_id=pid)
+        for pid in result["preferences"]
     )
     await memory_embeddings.index_node_refs_best_effort(refs)
 

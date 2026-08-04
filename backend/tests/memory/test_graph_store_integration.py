@@ -271,3 +271,43 @@ async def test_knowledge_node_recall_supports_kinds_validity_and_user_isolation(
         )
     finally:
         graph.delete()
+
+
+@pytest.mark.asyncio
+async def test_consolidate_preference_first_write_then_versions(monkeypatch, falkordb_client):
+    """方案 A 端到端（真实 FalkorDB）：首次创建 → 重复跳过 → value 变更版本化。
+
+    find_active_preference 只返回当前有效偏好，验证 arbitrator 与 graph_store 闭环。
+    """
+    from src.services.memory import consolidator
+
+    graph_name = f"pref_consolidate_test_{uuid.uuid4().hex}"
+    graph = falkordb_client.select_graph(graph_name)
+    monkeypatch.setattr(graph_store, "_client", falkordb_client)
+    monkeypatch.setattr(graph_store.settings, "falkordb_graph_name", graph_name)
+    await graph_store.ensure_graph()
+
+    try:
+        pid1 = await consolidator.consolidate_preference(
+            user_id=101, key="Reply Language", value="中文", confidence=0.9,
+        )
+        assert pid1
+        assert await graph_store.find_active_preference(user_id=101, key="reply language") == {
+            "pref_id": pid1, "value": "中文",
+        }
+
+        # 重复：同 key 同 value → 跳过
+        assert await consolidator.consolidate_preference(
+            user_id=101, key="reply language", value="中文", confidence=0.9,
+        ) is None
+
+        # value 变更 → 版本化，当前有效切到新值，旧版本保留可回溯
+        pid2 = await consolidator.consolidate_preference(
+            user_id=101, key="reply language", value="English", confidence=0.85,
+        )
+        assert pid2 and pid2 != pid1
+        assert await graph_store.find_active_preference(user_id=101, key="reply language") == {
+            "pref_id": pid2, "value": "English",
+        }
+    finally:
+        graph.delete()

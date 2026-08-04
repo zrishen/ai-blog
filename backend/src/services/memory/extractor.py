@@ -1,7 +1,7 @@
-"""大脑抽取：LLM 从文本抽取 Entity/Fact/Episode，供 consolidator 巩固入图。
+"""大脑抽取：LLM 从文本抽取 Entity/Fact/Episode/Preference，供 consolidator 巩固入图。
 
 抽取档位（settings.memory_extract_depth，默认 deep）：
-- deep=Entity+Fact(主谓宾)+Episode；Fact 是大脑时序记忆核心，默认开启。
+- deep=Entity+Fact(主谓宾)+Episode+Preference；Fact 是大脑时序记忆核心，默认开启。
 - light=仅 Entity+Episode；仅在显式降级（成本/噪音）时使用。
 prompt 唯一源：services/memory/prompts.py。
 LLM 由调用方传入（对话用用户的 LLM；文档用 fast 档 LLM）。
@@ -26,7 +26,7 @@ _MAX_INPUT_CHARS = 8000
 
 
 async def extract(text: str, llm: BaseChatModel, *, depth: str | None = None) -> dict:
-    """从 text 抽取 {entities, facts, episodes}。
+    """从 text 抽取 {entities, facts, episodes, preferences}。
 
     Args:
         text: 待抽取文本（对话/文档片段），超 _MAX_INPUT_CHARS 截断。
@@ -44,12 +44,12 @@ async def extract(text: str, llm: BaseChatModel, *, depth: str | None = None) ->
         return _parse(str(resp.content))
     except Exception:
         logger.exception("extract LLM call failed")
-        return {"entities": [], "facts": [], "episodes": []}
+        return {"entities": [], "facts": [], "episodes": [], "preferences": []}
 
 
 def _parse(content: str) -> dict:
-    """解析 LLM JSON 输出为 {entities, facts, episodes}，容忍 ```json fence 与多余文本。"""
-    empty = {"entities": [], "facts": [], "episodes": []}
+    """解析 LLM JSON 输出为 {entities, facts, episodes, preferences}，容忍 ```json fence 与多余文本。"""
+    empty = {"entities": [], "facts": [], "episodes": [], "preferences": []}
     text = content.strip()
     if "```" in text:
         parts = text.split("```")
@@ -65,4 +65,5 @@ def _parse(content: str) -> dict:
         "entities": data.get("entities", []),
         "facts": data.get("facts", []),
         "episodes": data.get("episodes", []),
+        "preferences": data.get("preferences", []),
     }

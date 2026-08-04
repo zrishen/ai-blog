@@ -1385,6 +1385,19 @@ async def find_active_facts(*, user_id: int, subject_id: str, predicate: str) ->
     return [{"fact_id": r[0], "object_text": r[1]} for r in _rows(rs)]
 
 
+async def find_active_preference(*, user_id: int, key: str) -> dict | None:
+    """找该 user+key 的当前有效 Preference（valid_to 为空），供首次/重复/版本化仲裁。"""
+    cypher = (
+        f"MATCH (p:{S.PREFERENCE} {{user_id:$uid, key:$key}}) "
+        f"WHERE p.valid_to IS NULL RETURN p.pref_id, p.value"
+    )
+    rs = await _read(cypher, {"uid": user_id, "key": key})
+    rows = _rows(rs)
+    if not rows:
+        return None
+    return {"pref_id": rows[0][0], "value": rows[0][1]}
+
+
 # ---------------- 内部：Cypher 执行辅助 ----------------
 
 def _run(graph, cypher: str, params: dict | None = None):

@@ -42,6 +42,7 @@ async def test_consolidate_indexes_canonical_entities_facts_and_episodes(monkeyp
         "entities": [("entity-1", False), ("entity-1", False)],
         "facts": ["fact-1"],
         "episodes": ["episode-1"],
+        "preferences": [],
     }
     assert {(ref.kind, ref.memory_id) for ref in captured} == {
         ("entity", "entity-1"),

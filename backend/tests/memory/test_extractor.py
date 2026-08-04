@@ -35,6 +35,7 @@ async def test_extract_default_uses_deep_prompt(monkeypatch):
     human = llm.messages[1].content
     assert "深度抽取" in human
     assert "facts" in human
+    assert "preferences" in human
 
 
 @pytest.mark.asyncio
@@ -55,7 +56,7 @@ async def test_extract_returns_empty_on_llm_failure(monkeypatch):
             raise RuntimeError("llm down")
 
     result = await extract("text", BoomLLM())
-    assert result == {"entities": [], "facts": [], "episodes": []}
+    assert result == {"entities": [], "facts": [], "episodes": [], "preferences": []}
 
 
 def test_parse_tolerates_json_fence_and_extra_text():
@@ -65,7 +66,7 @@ def test_parse_tolerates_json_fence_and_extra_text():
 
 
 def test_parse_returns_empty_on_invalid_json():
-    assert _parse("not json") == {"entities": [], "facts": [], "episodes": []}
+    assert _parse("not json") == {"entities": [], "facts": [], "episodes": [], "preferences": []}
 
 
 def test_extractor_module_reexports_extract():
