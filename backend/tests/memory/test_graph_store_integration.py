@@ -5,7 +5,8 @@ import uuid
 import pytest
 from falkordb import FalkorDB
 
-from src.services.memory import graph_store, memory_embeddings
+from src.services.memory import consolidator, graph_store, memory_embeddings
+from src.services.memory import schema as S
 from src.services.memory.graph_store import add_document_chunks as add_document_chunks_impl
 from src.services.memory.graph_store import recall as recall_impl
 from src.services.memory.graph_store import upsert_node_embeddings as upsert_node_embeddings_impl
@@ -357,6 +358,59 @@ async def test_recall_fact_annotates_superseded_values(monkeypatch, falkordb_cli
         old_hit = next(h for h in all_hits if h.metadata["id"] == old_fact_id)
         assert old_hit.metadata["replaced"] == []
         assert old_hit.metadata["valid_to"] is not None
+    finally:
+        graph.delete()
+
+
+@pytest.mark.asyncio
+async def test_consolidate_builds_object_and_involves_edges(monkeypatch, falkordb_client):
+    """写入侧图结构（D/G 验证）：fact 的 object 命中已抽取 entity → OBJECT 边；episode INVOLVES 参与实体。"""
+    graph_name = f"consolidate_edges_test_{uuid.uuid4().hex}"
+    graph = falkordb_client.select_graph(graph_name)
+    monkeypatch.setattr(graph_store, "_client", falkordb_client)
+    monkeypatch.setattr(graph_store.settings, "falkordb_graph_name", graph_name)
+
+    async def fake_index(refs):
+        return memory_embeddings.EmbeddingIndexReport()
+
+    monkeypatch.setattr(memory_embeddings, "index_node_refs_best_effort", fake_index)
+
+    try:
+        await graph_store.ensure_graph()
+        result = await consolidator.consolidate(
+            user_id=101,
+            extracted={
+                "entities": [
+                    {"name": "Zhang San", "entity_type": "person"},
+                    {"name": "Google", "entity_type": "company"},
+                ],
+                "facts": [
+                    {"subject_name": "Zhang San", "predicate": "works_at", "object_text": "Google"},
+                ],
+                "episodes": [{
+                    "kind": "chat",
+                    "summary": "discussed Zhang San at Google",
+                    "participants": ["Zhang San", "Google"],
+                }],
+                "preferences": [],
+            },
+        )
+
+        fact_id = result["facts"][0]
+        # D: fact 的 object 命中已抽取实体 → OBJECT 边
+        object_edges = graph_store._rows(await graph_store._read(
+            f"MATCH (f:{S.FACT} {{fact_id:$fid}})-[:{S.OBJECT}]->(e:{S.ENTITY}) RETURN e.name",
+            {"fid": fact_id},
+        ))
+        assert object_edges and object_edges[0][0] == "Google"
+
+        # G: episode INVOLVES 参与实体（2 个，user-scoped）
+        episode_id = result["episodes"][0]
+        involves = graph_store._rows(await graph_store._read(
+            f"MATCH (ep:{S.EPISODE} {{episode_id:$eid}})-[:{S.INVOLVES}]->(e:{S.ENTITY}) RETURN count(e)",
+            {"eid": episode_id},
+        ))
+        assert involves[0][0] == 2
     finally:
         graph.delete()
 

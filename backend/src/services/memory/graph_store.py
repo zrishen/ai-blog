@@ -679,15 +679,16 @@ async def delete_memory(*, user_id: int, memory_type: str, memory_id: str) -> bo
     return True
 
 
-async def link_episode_entities(episode_id: str, entity_ids: list[str]) -> None:
-    """Episode INVOLVES 实体（对话涉及了哪些实体）。"""
+async def link_episode_entities(*, user_id: int, episode_id: str, entity_ids: list[str]) -> None:
+    """Episode INVOLVES 实体（对话涉及了哪些实体），严格 user-scoped；MERGE 防重复边。"""
     if not entity_ids:
         return
     for eid in entity_ids:
         await _write(
-            f"MATCH (e:{S.EPISODE} {{episode_id:$ep}}), (n:{S.ENTITY} {{entity_id:$eid}}) "
-            f"CREATE (e)-[:{S.INVOLVES}]->(n)",
-            {"ep": episode_id, "eid": eid},
+            f"MATCH (e:{S.EPISODE} {{user_id:$uid, episode_id:$ep}}), "
+            f"(n:{S.ENTITY} {{user_id:$uid, entity_id:$eid}}) "
+            f"MERGE (e)-[:{S.INVOLVES}]->(n)",
+            {"uid": user_id, "ep": episode_id, "eid": eid},
         )
 
 

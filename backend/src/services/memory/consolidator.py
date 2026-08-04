@@ -35,16 +35,16 @@ async def consolidate_entity(
 
 async def consolidate_fact(
     *, user_id: int, subject_id: str, predicate: str, object_text: str,
-    confidence: float = 1.0, source_doc_id: str | None = None,
+    object_id: str | None = None, confidence: float = 1.0, source_doc_id: str | None = None,
 ) -> str:
-    """冲突检测：同主体+谓词的有效 Fact 若 object 相同 → 复用（去重）；object 不同 → 新建并 SUPERSEDES 旧 Fact。返回 fact_id。"""
+    """冲突检测：同主体+谓词的有效 Fact 若 object 相同 → 复用（去重）；object 不同 → 新建并 SUPERSEDES 旧 Fact。object_id 非空时建 OBJECT 边。返回 fact_id。"""
     active = await graph_store.find_active_facts(user_id=user_id, subject_id=subject_id, predicate=predicate)
     for old in active:
         if old["object_text"] == object_text:
             return old["fact_id"]  # 相同事实已存在，复用避免重复累积
     new_id = await graph_store.add_fact(
         user_id=user_id, subject_id=subject_id, predicate=predicate, object_text=object_text,
-        confidence=confidence, source_doc_id=source_doc_id,
+        object_id=object_id, confidence=confidence, source_doc_id=source_doc_id,
     )
     for old in active:
         if old["object_text"] != object_text:
@@ -109,9 +109,11 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
             sid = fact.get("subject_id") or name_to_id.get(fact.get("subject_name", ""))
             if not sid:
                 continue
+            object_id = name_to_id.get(fact.get("object_text", ""))  # object 命中已抽取实体则建 OBJECT 边
             fid = await consolidate_fact(
                 user_id=user_id, subject_id=sid, predicate=fact["predicate"],
-                object_text=fact["object_text"], confidence=fact.get("confidence", 1.0),
+                object_text=fact["object_text"], object_id=object_id,
+                confidence=fact.get("confidence", 1.0),
                 source_doc_id=fact.get("source_doc_id"),
             )
         except (TypeError, KeyError, ValueError) as e:
@@ -128,7 +130,9 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
         result["episodes"].append(eid)
         participants = [name_to_id[n] for n in ep.get("participants", []) if n in name_to_id]
         if participants:
-            await graph_store.link_episode_entities(eid, participants)
+            await graph_store.link_episode_entities(
+                user_id=user_id, episode_id=eid, entity_ids=participants,
+            )
 
     for pref in extracted.get("preferences", []):
         pid = await consolidate_preference(
