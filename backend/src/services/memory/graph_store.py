@@ -119,9 +119,25 @@ def _recency_score(value: Any, *, now: datetime) -> float:
     return math.exp(-age_days / 90.0)
 
 
+# Overfetch 缓解共享 label 全局 ANN 的跨租户候选饥饿（实测 50 噪声即可饿死 candidate_k=32）。
+_RECALL_OVERFETCH_FLOOR = 128
+
+
+def _candidate_overfetch(top_k: int) -> int:
+    return max(_RECALL_OVERFETCH_FLOOR, top_k * 16)
+
+
 def _rerank_score(hit: MemoryHit, *, now: datetime) -> float:
     metadata = hit.metadata or {}
-    distance = hit.score if isinstance(hit.score, (int, float)) and math.isfinite(hit.score) else 2.0
+    graph_distance = int(metadata.get("graph_distance") or 0)
+    if isinstance(hit.score, (int, float)) and math.isfinite(hit.score):
+        distance = hit.score
+    elif graph_distance > 0:
+        # 图扩展节点无直接向量证据：用图距离作语义代理（越近间接相关性越强），
+        # 否则 semantic 恒 0 会让跨类型证据在 Top-K 里被直接命中永久压制。
+        distance = 0.8 + 0.4 * graph_distance
+    else:
+        distance = 2.0
     semantic = max(0.0, min(1.0, 1.0 - distance / 2.0))
     confidence = metadata.get("confidence")
     confidence_score = (
@@ -131,7 +147,6 @@ def _rerank_score(hit: MemoryHit, *, now: datetime) -> float:
     )
     timestamp = metadata.get("occurred_at") or metadata.get("valid_from")
     recency = _recency_score(timestamp, now=now) if timestamp else 1.0
-    graph_distance = int(metadata.get("graph_distance") or 0)
     graph_score = 1.0 / (1.0 + max(0, graph_distance))
     validity = 0.55 if metadata.get("valid_to") else 1.0
     source_quality = 1.0 if metadata.get("source") not in {None, "memory"} else 0.85
@@ -768,10 +783,7 @@ async def search_documents(
 
     def _do() -> list[MemoryHit]:
         g = _graph()
-        # Overfetch 缓解共享 label 全局 ANN 的候选饥饿：跨租户极相似节点可能占满候选，
-        # 致目标用户召回不全（实测 50 噪声即可饿死 candidate_k=32）。128 覆盖典型多租户密度；
-        # 极端高密度需 per-user 索引分区（见 findings 多租户隔离评估）。
-        candidate_k = max(128, top_k * 16)
+        candidate_k = _candidate_overfetch(top_k)
         where = "node.user_id=$uid AND node.stored_name IN $wl"
         if collection_name is not None:
             where += " AND node.collection_name=$collection"
@@ -845,10 +857,7 @@ async def recall(
     prop = _safe_prop(embedding_model)
     text_prop = _safe_text_prop(embedding_model)
     wl = list(whitelist_stored_names) if whitelist_stored_names else None
-    # Overfetch 缓解共享 label 全局 ANN 的候选饥饿：跨租户极相似节点可能占满候选，
-    # 致目标用户召回不全（实测 50 噪声即可饿死 candidate_k=32）。128 覆盖典型多租户密度；
-    # 极端高密度需 per-user 索引分区（见 findings 多租户隔离评估）。
-    candidate_k = max(128, top_k * 16)
+    candidate_k = _candidate_overfetch(top_k)
 
     def _do() -> list[MemoryHit]:
         graph = _graph()
@@ -1065,7 +1074,10 @@ async def touch_memories(*, user_id: int, hits: list[MemoryHit]) -> None:
         label, id_key = _vector_spec(kind)
         await _write(
             f"MATCH (node:{label}) WHERE node.user_id=$uid AND node.{id_key} IN $ids "
-            "SET node.last_accessed_at=$now",
+            "SET node.last_accessed_at=$now, "
+            "node.confidence = CASE WHEN node.confidence IS NULL THEN 0.5 "
+            "WHEN node.confidence + 0.05 > 1.0 THEN 1.0 "
+            "ELSE node.confidence + 0.05 END",
             {"uid": user_id, "ids": ids, "now": now},
         )
 

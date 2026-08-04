@@ -388,3 +388,24 @@ async def test_recall_rejects_unknown_kind():
             embedding_model="_test_model",
             kinds=["unknown"],
         )
+
+
+def test_rerank_score_gives_expanded_nodes_semantic_proxy():
+    """图扩展节点（score=None, graph_distance>0）用图距离作 semantic 代理，
+    不再恒 0，使其能在 Top-K 与直接命中竞争；近的代理更强。"""
+    from datetime import datetime
+    now = datetime(2026, 8, 4)
+    MemoryHit = graph_store.MemoryHit
+
+    depth1 = MemoryHit(
+        content="x", kind="fact", score=None,
+        metadata={"id": "f1", "graph_distance": 1, "confidence": 0.9},
+    )
+    depth2 = MemoryHit(
+        content="x", kind="fact", score=None,
+        metadata={"id": "f2", "graph_distance": 2, "confidence": 0.9},
+    )
+    score1 = graph_store._rerank_score(depth1, now=now)
+    score2 = graph_store._rerank_score(depth2, now=now)
+    assert score1 > score2  # 近的扩展节点语义代理更强
+    assert score1 > 0.3  # 不再恒 0：有竞争力（直接命中低相似度 ~0.5-0.6）

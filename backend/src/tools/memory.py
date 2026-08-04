@@ -88,11 +88,14 @@ def _format_memory_context(hits) -> str:
             break
         parts.append(block)
         total += len(block)
-    if len(parts) == 1:
+    shown = len(parts) - 1
+    if shown <= 0:
         return (
             "[大脑记忆结果]\n"
             "检索到的记忆超过上下文限制，未能注入有效内容。\n"
         )
+    if shown < len(hits):
+        parts.append(f"（另有 {len(hits) - shown} 条记忆因超出上下文限制未展示）")
     return "\n".join(parts)
 
 
