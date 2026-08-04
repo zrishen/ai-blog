@@ -149,3 +149,56 @@ async def test_consolidate_processes_preferences_and_indexes(monkeypatch):
 
     assert result["preferences"] == ["pref-1", "pref-1"]
     assert ("preference", "pref-1") in {(ref.kind, ref.memory_id) for ref in captured}
+
+
+@pytest.mark.asyncio
+async def test_consolidate_fact_reuses_identical_object(monkeypatch):
+    """相同 subject+predicate+object 的有效 Fact 已存在 → 复用，不新建不 supersede（去重）。"""
+    actions: list = []
+
+    async def find_active_facts(**kwargs):
+        return [{"fact_id": "fact-existing", "object_text": "Google"}]
+
+    async def add_fact(**kwargs):
+        actions.append(("add", kwargs))
+        return "fact-new"
+
+    async def supersede_fact(**kwargs):
+        actions.append(("supersede", kwargs))
+
+    monkeypatch.setattr(consolidator.graph_store, "find_active_facts", find_active_facts)
+    monkeypatch.setattr(consolidator.graph_store, "add_fact", add_fact)
+    monkeypatch.setattr(consolidator.graph_store, "supersede_fact", supersede_fact)
+
+    result = await consolidator.consolidate_fact(
+        user_id=1, subject_id="e1", predicate="works_at", object_text="Google",
+    )
+    assert result == "fact-existing"  # 复用已有
+    assert actions == []  # 不新建、不 supersede
+
+
+@pytest.mark.asyncio
+async def test_consolidate_fact_creates_and_supersedes_different_object(monkeypatch):
+    """object 不同 → 新建并 SUPERSEDE 旧 Fact（冲突版本化）。"""
+    actions: list = []
+
+    async def find_active_facts(**kwargs):
+        return [{"fact_id": "fact-old", "object_text": "Apple"}]
+
+    async def add_fact(**kwargs):
+        actions.append(("add", kwargs))
+        return "fact-new"
+
+    async def supersede_fact(**kwargs):
+        actions.append(("supersede", kwargs))
+
+    monkeypatch.setattr(consolidator.graph_store, "find_active_facts", find_active_facts)
+    monkeypatch.setattr(consolidator.graph_store, "add_fact", add_fact)
+    monkeypatch.setattr(consolidator.graph_store, "supersede_fact", supersede_fact)
+
+    result = await consolidator.consolidate_fact(
+        user_id=1, subject_id="e1", predicate="works_at", object_text="Google",
+    )
+    assert result == "fact-new"
+    assert actions[0][0] == "add"
+    assert actions[1] == ("supersede", {"new_fact_id": "fact-new", "old_fact_id": "fact-old"})

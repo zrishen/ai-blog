@@ -1393,10 +1393,10 @@ async def stats(user_id: int) -> dict:
 # ---------------- 巩固辅助查询 ----------------
 
 async def find_entity_by_name(*, user_id: int, name: str, entity_type: str | None = None) -> str | None:
-    """按 user + name(+type) 找现有 Entity id，供消歧去重。"""
+    """按 user + name(+type) 找现有规范 Entity id（排除 SAME_AS 源节点），供消歧去重。"""
     cypher = (
         f"MATCH (e:{S.ENTITY} {{user_id:$uid, name:$name}}) "
-        f"WHERE $etype IS NULL OR e.entity_type = $etype "
+        f"WHERE ($etype IS NULL OR e.entity_type = $etype) AND NOT (e)-[:{S.SAME_AS}]->() "
         f"RETURN e.entity_id LIMIT 1"
     )
     rs = await _read(cypher, {"uid": user_id, "name": name, "etype": entity_type})

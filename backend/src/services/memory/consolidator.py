@@ -37,14 +37,16 @@ async def consolidate_fact(
     *, user_id: int, subject_id: str, predicate: str, object_text: str,
     confidence: float = 1.0, source_doc_id: str | None = None,
 ) -> str:
-    """冲突检测：新建 Fact；同主体+谓词的有效 Fact 若 object 不同 → SUPERSEDES 旧 Fact。返回新 fact_id。"""
+    """冲突检测：同主体+谓词的有效 Fact 若 object 相同 → 复用（去重）；object 不同 → 新建并 SUPERSEDES 旧 Fact。返回 fact_id。"""
+    active = await graph_store.find_active_facts(user_id=user_id, subject_id=subject_id, predicate=predicate)
+    for old in active:
+        if old["object_text"] == object_text:
+            return old["fact_id"]  # 相同事实已存在，复用避免重复累积
     new_id = await graph_store.add_fact(
         user_id=user_id, subject_id=subject_id, predicate=predicate, object_text=object_text,
         confidence=confidence, source_doc_id=source_doc_id,
     )
-    for old in await graph_store.find_active_facts(user_id=user_id, subject_id=subject_id, predicate=predicate):
-        if old["fact_id"] == new_id:
-            continue
+    for old in active:
         if old["object_text"] != object_text:
             await graph_store.supersede_fact(new_fact_id=new_id, old_fact_id=old["fact_id"])
             logger.info("Fact 冲突 SUPERSEDE: %s -> %s", new_id, old["fact_id"])
