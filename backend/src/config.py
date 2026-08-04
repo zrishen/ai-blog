@@ -38,8 +38,10 @@ class Settings(BaseSettings):
     memory_recall_hops: int = 2
     memory_decay_days: int = 90
     memory_maintenance_interval_seconds: float = 86400
-    # 抽取档位：light=仅 Entity / deep=Entity+Fact+关系
-    memory_extract_depth: str = "light"
+    # 抽取档位：light=仅 Entity+Episode / deep=Entity+Fact+关系。
+    # 默认 deep：Fact 是大脑时序记忆的核心（SUPERSEDES/valid_from-to/correct_fact），
+    # light 会让 Fact 召回与事实管理无数据可用。light 仅作显式降级。
+    memory_extract_depth: str = "deep"
 
     # ---- Embedding / 向量化 ----
     embedding_model: str = "Qwen3-Embedding-8B"

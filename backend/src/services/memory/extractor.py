@@ -1,8 +1,10 @@
 """大脑抽取：LLM 从文本抽取 Entity/Fact/Episode，供 consolidator 巩固入图。
 
-抽取档位：light=仅 Entity+Episode / deep=Entity+Fact+关系（settings.memory_extract_depth）。
+抽取档位（settings.memory_extract_depth，默认 deep）：
+- deep=Entity+Fact(主谓宾)+Episode；Fact 是大脑时序记忆核心，默认开启。
+- light=仅 Entity+Episode；仅在显式降级（成本/噪音）时使用。
 prompt 唯一源：services/memory/prompts.py。
-LLM 由调用方传入（Phase 3 在 orchestrator 用用户的 LLM；Phase 2 只定义接口）。
+LLM 由调用方传入（对话用用户的 LLM；文档用 fast 档 LLM）。
 """
 
 import json
