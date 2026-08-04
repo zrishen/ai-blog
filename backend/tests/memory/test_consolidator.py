@@ -202,3 +202,45 @@ async def test_consolidate_fact_creates_and_supersedes_different_object(monkeypa
     assert result == "fact-new"
     assert actions[0][0] == "add"
     assert actions[1] == ("supersede", {"new_fact_id": "fact-new", "old_fact_id": "fact-old"})
+
+
+@pytest.mark.asyncio
+async def test_consolidate_skips_malformed_items(monkeypatch):
+    """LLM 返回的 entity/fact 项缺必需字段时跳过，合法项仍入图，整体不崩溃。"""
+
+    async def consolidate_entity(**kwargs):
+        return ("ent-" + kwargs["name"], True)
+
+    async def consolidate_fact(**kwargs):
+        return "fact-ok"
+
+    async def add_episode(**kwargs):
+        return "ep-ok"
+
+    async def link_episode_entities(*a, **k):
+        return None
+
+    async def index_refs(refs):
+        return None
+
+    monkeypatch.setattr(consolidator, "consolidate_entity", consolidate_entity)
+    monkeypatch.setattr(consolidator, "consolidate_fact", consolidate_fact)
+    monkeypatch.setattr(consolidator.graph_store, "add_episode", add_episode)
+    monkeypatch.setattr(consolidator.graph_store, "link_episode_entities", link_episode_entities)
+    monkeypatch.setattr(consolidator.memory_embeddings, "index_node_refs_best_effort", index_refs)
+
+    result = await consolidator.consolidate(
+        user_id=1,
+        extracted={
+            "entities": [{"name": "Alpha"}, {"entity_type": "x"}],  # 后者缺 name
+            "facts": [
+                {"subject_name": "Alpha", "predicate": "uses", "object_text": "X"},  # 合法
+                {"subject_name": "Alpha", "object_text": "Y"},  # 缺 predicate
+            ],
+            "episodes": [{"kind": "chat", "summary": "ok"}],
+            "preferences": [],
+        },
+    )
+    assert [eid for eid, _ in result["entities"]] == ["ent-Alpha"]
+    assert result["facts"] == ["fact-ok"]
+    assert result["episodes"] == ["ep-ok"]

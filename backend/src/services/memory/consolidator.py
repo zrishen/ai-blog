@@ -96,24 +96,35 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
 
     name_to_id: dict[str, str] = {}
     for ent in extracted.get("entities", []):
-        eid, is_new = await consolidate_entity(user_id=user_id, **ent)
+        try:
+            eid, is_new = await consolidate_entity(user_id=user_id, **ent)
+        except (TypeError, KeyError, ValueError) as e:
+            logger.warning("跳过格式异常的 entity 项 %r: %s", ent, e)
+            continue
         result["entities"].append((eid, is_new))
         name_to_id[ent["name"]] = eid
 
     for fact in extracted.get("facts", []):
-        sid = fact.get("subject_id") or name_to_id.get(fact.get("subject_name", ""))
-        if not sid:
+        try:
+            sid = fact.get("subject_id") or name_to_id.get(fact.get("subject_name", ""))
+            if not sid:
+                continue
+            fid = await consolidate_fact(
+                user_id=user_id, subject_id=sid, predicate=fact["predicate"],
+                object_text=fact["object_text"], confidence=fact.get("confidence", 1.0),
+                source_doc_id=fact.get("source_doc_id"),
+            )
+        except (TypeError, KeyError, ValueError) as e:
+            logger.warning("跳过格式异常的 fact 项 %r: %s", fact, e)
             continue
-        fid = await consolidate_fact(
-            user_id=user_id, subject_id=sid, predicate=fact["predicate"],
-            object_text=fact["object_text"], confidence=fact.get("confidence", 1.0),
-            source_doc_id=fact.get("source_doc_id"),
-        )
         result["facts"].append(fid)
-        # Fact 的 SUBJECT/OBJECT 边在 graph_store.add_fact 内部按 subject_id/object_id 建立
 
     for ep in extracted.get("episodes", []):
-        eid = await graph_store.add_episode(user_id=user_id, **ep)
+        try:
+            eid = await graph_store.add_episode(user_id=user_id, **ep)
+        except (TypeError, KeyError, ValueError) as e:
+            logger.warning("跳过格式异常的 episode 项 %r: %s", ep, e)
+            continue
         result["episodes"].append(eid)
         participants = [name_to_id[n] for n in ep.get("participants", []) if n in name_to_id]
         if participants:

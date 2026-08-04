@@ -61,6 +61,9 @@ def _parse(content: str) -> dict:
     except json.JSONDecodeError:
         logger.warning("extract output not valid JSON, returning empty")
         return empty
+    if not isinstance(data, dict):
+        logger.warning("extract output JSON is not an object: %s", type(data).__name__)
+        return empty
     return {
         "entities": data.get("entities", []),
         "facts": data.get("facts", []),
