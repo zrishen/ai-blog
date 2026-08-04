@@ -1,6 +1,6 @@
 """大脑巩固：抽取产物入图前去重、冲突检测、实体消歧。
 
-- Entity：按 user+name(+type) 查现有；存在则新建并建 SAME_AS 指向现有（保留两次抽取痕迹，待后续合并视图）
+- Entity：按 user+name(+type) 查现有；存在则复用 canonical（confidence 取 max，不新建重复节点避免图膨胀）
 - Fact：同 subject+predicate 的现存有效 Fact，object 不同 → 新 Fact SUPERSEDES 旧 Fact（旧 Fact valid_to 置位，可回溯）
 - Preference：同 key 当前有效偏好，value 不同 → 版本化（旧值 valid_to 置位并新建）；value 相同则跳过
 """
@@ -16,15 +16,13 @@ async def consolidate_entity(
     *, user_id: int, name: str, entity_type: str | None = None,
     aliases: list[str] | None = None, description: str | None = None, confidence: float = 1.0,
 ) -> tuple[str, bool]:
-    """去重：同名同类型已存在 → 新建并 SAME_AS 现有，返回 (现有 id, False)；否则新建返回 (新 id, True)。"""
+    """去重：同名同类型已存在 → 复用 canonical（confidence 取 max，不新建重复节点避免图膨胀）；否则新建。返回 (entity_id, is_new)。"""
     existing = await graph_store.find_entity_by_name(user_id=user_id, name=name, entity_type=entity_type)
     if existing:
-        new_id = await graph_store.add_entity(
-            user_id=user_id, name=name, entity_type=entity_type,
-            aliases=aliases, description=description, confidence=confidence,
-        )
-        await graph_store.merge_entities(source_id=new_id, target_id=existing)
-        logger.info("Entity 去重 SAME_AS: %s -> %s", new_id, existing)
+        if confidence and confidence > 0:
+            await graph_store.bump_entity_confidence(
+                user_id=user_id, entity_id=existing, confidence=confidence,
+            )
         return existing, False
     new_id = await graph_store.add_entity(
         user_id=user_id, name=name, entity_type=entity_type,

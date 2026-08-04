@@ -416,6 +416,49 @@ async def test_consolidate_builds_object_and_involves_edges(monkeypatch, falkord
 
 
 @pytest.mark.asyncio
+async def test_consolidate_entity_dedup_no_bloat(monkeypatch, falkordb_client):
+    """B（真实 FalkorDB）：同名实体抽取 2 次 → 复用 canonical（1 个节点，不膨胀），confidence 取 max。"""
+    graph_name = f"dedup_bloat_test_{uuid.uuid4().hex}"
+    graph = falkordb_client.select_graph(graph_name)
+    monkeypatch.setattr(graph_store, "_client", falkordb_client)
+    monkeypatch.setattr(graph_store.settings, "falkordb_graph_name", graph_name)
+
+    async def fake_index(refs):
+        return memory_embeddings.EmbeddingIndexReport()
+
+    monkeypatch.setattr(memory_embeddings, "index_node_refs_best_effort", fake_index)
+
+    try:
+        await graph_store.ensure_graph()
+        common = {"facts": [], "episodes": [], "preferences": []}
+        r1 = await consolidator.consolidate(
+            user_id=101,
+            extracted={"entities": [{"name": "FalkorDB", "entity_type": "tech", "confidence": 0.6}], **common},
+        )
+        r2 = await consolidator.consolidate(
+            user_id=101,
+            extracted={"entities": [{"name": "FalkorDB", "entity_type": "tech", "confidence": 0.9}], **common},
+        )
+
+        # 复用：两次返回同一 entity_id
+        assert r1["entities"][0][0] == r2["entities"][0][0]
+        # 不膨胀：该 name 只有 1 个 entity（无 SAME_AS 重复源）
+        count = graph_store._rows(await graph_store._read(
+            f"MATCH (e:{S.ENTITY} {{user_id:$uid, name:$name}}) RETURN count(e)",
+            {"uid": 101, "name": "FalkorDB"},
+        ))
+        assert count[0][0] == 1
+        # confidence 取 max（0.9）
+        conf = graph_store._rows(await graph_store._read(
+            f"MATCH (e:{S.ENTITY} {{user_id:$uid, name:$name}}) RETURN e.confidence",
+            {"uid": 101, "name": "FalkorDB"},
+        ))
+        assert conf[0][0] == 0.9
+    finally:
+        graph.delete()
+
+
+@pytest.mark.asyncio
 async def test_consolidate_preference_first_write_then_versions(monkeypatch, falkordb_client):
     """方案 A 端到端（真实 FalkorDB）：首次创建 → 重复跳过 → value 变更版本化。
 

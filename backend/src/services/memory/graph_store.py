@@ -731,14 +731,13 @@ async def supersede_fact(*, new_fact_id: str, old_fact_id: str) -> None:
     )
 
 
-async def merge_entities(*, source_id: str, target_id: str) -> int:
-    """实体消歧：source SAME_AS target（不删 source，标注等价；前端/查询可合并视图）。"""
+async def bump_entity_confidence(*, user_id: int, entity_id: str, confidence: float) -> None:
+    """合并抽取置信度到 canonical entity（取 max，不新建重复节点）。COALESCE 防 null confidence。"""
     await _write(
-        f"MATCH (s:{S.ENTITY} {{entity_id:$sid}}), (t:{S.ENTITY} {{entity_id:$tid}}) "
-        f"CREATE (s)-[:{S.SAME_AS}]->(t)",
-        {"sid": source_id, "tid": target_id},
+        f"MATCH (e:{S.ENTITY} {{user_id:$uid, entity_id:$eid}}) "
+        "SET e.confidence = CASE WHEN $conf > COALESCE(e.confidence, 0) THEN $conf ELSE e.confidence END",
+        {"uid": user_id, "eid": entity_id, "conf": confidence},
     )
-    return 1
 
 
 # ---------------- 原文层（承接旧 vector_store 契约）----------------

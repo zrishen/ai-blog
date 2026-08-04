@@ -244,3 +244,58 @@ async def test_consolidate_skips_malformed_items(monkeypatch):
     assert [eid for eid, _ in result["entities"]] == ["ent-Alpha"]
     assert result["facts"] == ["fact-ok"]
     assert result["episodes"] == ["ep-ok"]
+
+
+@pytest.mark.asyncio
+async def test_consolidate_entity_reuses_canonical_and_bumps_confidence(monkeypatch):
+    """B: 同名同类型 entity 已存在 → 复用 canonical，confidence 取 max，不新建重复节点。"""
+    actions: list = []
+
+    async def find_entity_by_name(**kwargs):
+        return "ent-existing"
+
+    async def add_entity(**kwargs):
+        actions.append(("add", kwargs))
+        return "ent-new"
+
+    async def bump_entity_confidence(*, user_id, entity_id, confidence):
+        actions.append(("bump", entity_id, confidence))
+
+    monkeypatch.setattr(consolidator.graph_store, "find_entity_by_name", find_entity_by_name)
+    monkeypatch.setattr(consolidator.graph_store, "add_entity", add_entity)
+    monkeypatch.setattr(consolidator.graph_store, "bump_entity_confidence", bump_entity_confidence)
+
+    eid, is_new = await consolidator.consolidate_entity(
+        user_id=1, name="FalkorDB", entity_type="tech", confidence=0.9,
+    )
+    assert eid == "ent-existing"
+    assert is_new is False
+    assert actions == [("bump", "ent-existing", 0.9)]  # 复用 + bump，不新建
+
+
+@pytest.mark.asyncio
+async def test_consolidate_entity_creates_when_absent(monkeypatch):
+    """首次（无同名）→ 新建，不 bump。"""
+    actions: list = []
+
+    async def find_entity_by_name(**kwargs):
+        return None
+
+    async def add_entity(**kwargs):
+        actions.append(("add", kwargs))
+        return "ent-new"
+
+    async def bump_entity_confidence(**kwargs):
+        actions.append(("bump", kwargs))
+
+    monkeypatch.setattr(consolidator.graph_store, "find_entity_by_name", find_entity_by_name)
+    monkeypatch.setattr(consolidator.graph_store, "add_entity", add_entity)
+    monkeypatch.setattr(consolidator.graph_store, "bump_entity_confidence", bump_entity_confidence)
+
+    eid, is_new = await consolidator.consolidate_entity(
+        user_id=1, name="FalkorDB", entity_type="tech", confidence=0.9,
+    )
+    assert eid == "ent-new"
+    assert is_new is True
+    assert actions[0][0] == "add"
+    assert not any(a[0] == "bump" for a in actions)
