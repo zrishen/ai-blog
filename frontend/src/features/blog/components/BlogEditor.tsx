@@ -145,9 +145,20 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
   }, [applyWorkingCopy]);
 
   const onAutosaveCreated = useCallback((post: BlogPostData) => {
-    dispatch({ type: "UPSERT_BLOG_POST", payload: post });
+    // 新建成功瞬间用编辑器当前值回写 store，而非 createBlogPost 的提交快照：
+    // 否则下方 [existingPost?.id] 初始化 effect 会拿滞后快照覆盖正在输入的编辑器。
+    dispatch({
+      type: "UPSERT_BLOG_POST",
+      payload: {
+        ...post,
+        title: title.trim() || post.title,
+        content: getContent(),
+        tags: tags.trim() || undefined,
+        cover_image: coverImage || null,
+      },
+    });
     dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: post.id });
-  }, [dispatch]);
+  }, [coverImage, dispatch, getContent, tags, title]);
   const onAutosaveSaved = useCallback((post: { id: number; updated_at?: string }) => {
     dispatch({ type: "UPDATE_BLOG_POST", payload: post });
   }, [dispatch]);
