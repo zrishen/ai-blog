@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Archive, Inbox, Trash2 } from "lucide-react";
+import { Archive, Inbox, Plus, Trash2 } from "lucide-react";
 import { BlogIcon, PublishedIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../../../api/client";
 import { useChat } from "../../../stores/chatStore";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Button } from "@/components/ui/button";
 import { ArchiveToFolderDialog, type ArchiveTarget } from "../components/ArchiveToFolderDialog";
 import { DeleteResourceDialog, type DeleteResourceTarget } from "../components/DeleteResourceDialog";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
@@ -100,9 +101,11 @@ function InboxRowItem({
 export function UnarchivedView({
   onOpenFile,
   onOpenBlog,
+  onCreateBlog,
 }: {
   onOpenFile: (filePath: string) => void;
   onOpenBlog: (id: number) => void;
+  onCreateBlog: () => void;
 }) {
   const { state } = useChat();
   const [docs, setDocs] = useState<FileDocument[] | null>(null);
@@ -213,24 +216,33 @@ export function UnarchivedView({
 
   return (
     <WorkspaceView>
-      {loading ? (
-        <LoadingState />
-      ) : total === 0 ? (
-        <EmptyState
-          icon={Inbox}
-          title="没有未分类的内容"
-          description="所有文件和文章都已归入文件夹。"
-          className="flex-1 p-10"
-        />
-      ) : (
-        <SectionCard title={`未分类 · ${total}`} icon={Inbox}>
+      <SectionCard
+        title={`未分类 · ${loading ? 0 : total}`}
+        icon={Inbox}
+        actions={
+          <Button size="sm" variant="ghost" onClick={onCreateBlog}>
+            <Plus className="h-3.5 w-3.5" />
+            新建文章
+          </Button>
+        }
+      >
+        {loading ? (
+          <LoadingState />
+        ) : total === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title="没有未分类的内容"
+            description="所有文件和文章都已归入文件夹。"
+            className="flex-1 p-10"
+          />
+        ) : (
           <ul className="flex flex-col">
             {rows.map((r) => (
               <InboxRowItem key={r.key} {...r} />
             ))}
           </ul>
-        </SectionCard>
-      )}
+        )}
+      </SectionCard>
       <ArchiveToFolderDialog
         open={archiveTarget !== null}
         target={archiveTarget}

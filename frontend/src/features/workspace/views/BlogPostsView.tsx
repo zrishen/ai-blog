@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Archive, FileText, Trash2 } from "lucide-react";
+import { Archive, FileText, Plus, Trash2 } from "lucide-react";
 import { listBlogPosts, type BlogPostData } from "../../../api/client";
 import { useChat } from "../../../stores/chatStore";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { BlogIcon, PublishedIcon } from "@/components/icons";
 import { ArchiveToFolderDialog, type ArchiveTarget } from "../components/ArchiveToFolderDialog";
 import { DeleteResourceDialog, type DeleteResourceTarget } from "../components/DeleteResourceDialog";
@@ -14,10 +15,12 @@ export function BlogPostsView({
   status,
   title,
   onOpen,
+  onCreate,
 }: {
   status: "draft" | "published";
   title: string;
   onOpen: (id: number) => void;
+  onCreate: () => void;
 }) {
   const { state } = useChat();
   const [posts, setPosts] = useState<BlogPostData[] | null>(null);
@@ -64,17 +67,26 @@ export function BlogPostsView({
 
   return (
     <WorkspaceView>
-      {posts === null ? (
-        <LoadingState />
-      ) : posts.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title={`暂无${title}`}
-          description={status === "draft" ? "新建一篇草稿开始创作。" : "还没有发布过文章。"}
-          className="flex-1 p-10"
-        />
-      ) : (
-        <SectionCard title={`${title} · ${posts.length}`} icon={FileText}>
+      <SectionCard
+        title={`${title} · ${posts?.length ?? 0}`}
+        icon={FileText}
+        actions={
+          <Button size="sm" variant="ghost" onClick={onCreate}>
+            <Plus className="h-3.5 w-3.5" />
+            新建文章
+          </Button>
+        }
+      >
+        {posts === null ? (
+          <LoadingState />
+        ) : posts.length === 0 ? (
+          <EmptyState
+            icon={FileText}
+            title={`暂无${title}`}
+            description={status === "draft" ? "新建一篇草稿开始创作。" : "还没有发布过文章。"}
+            className="flex-1 p-10"
+          />
+        ) : (
           <ul className="flex flex-col">
             {posts.map((p) => (
               <li key={p.id} className="group relative">
@@ -140,8 +152,8 @@ export function BlogPostsView({
               </li>
             ))}
           </ul>
-        </SectionCard>
-      )}
+        )}
+      </SectionCard>
       <ArchiveToFolderDialog
         open={archiveTarget !== null}
         target={archiveTarget}

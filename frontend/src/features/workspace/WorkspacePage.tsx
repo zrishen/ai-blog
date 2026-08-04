@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { useChat } from "../../stores/chatStore";
 import { getBlogPost } from "../../api/client";
@@ -15,11 +15,13 @@ export function WorkspacePage() {
   const { state, dispatch } = useChat();
   const folderId = state.workspaceSelectedFolderId;
   const view = state.workspaceSelectedView;
+  const [isCreatingBlog, setIsCreatingBlog] = useState(false);
 
   // 工作区内联打开博客编辑：拉取单篇塞入 store，设编辑态 + 当前文章，中柱切到 BlogEditor
   //（不跳路由、不改 page/view，目录树常驻）。
   const openBlog = useCallback(
     async (id: number) => {
+      setIsCreatingBlog(false);
       try {
         const post = await getBlogPost(id);
         dispatch({ type: "UPSERT_BLOG_POST", payload: post });
@@ -33,9 +35,19 @@ export function WorkspacePage() {
   );
 
   const exitBlogEdit = useCallback(
-    () => dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null }),
+    () => {
+      setIsCreatingBlog(false);
+      dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null });
+    },
     [dispatch],
   );
+
+  const createBlog = useCallback(() => {
+    setIsCreatingBlog(true);
+    dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: null });
+    dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null });
+    dispatch({ type: "SET_FILE_SELECTED_FILE", payload: null });
+  }, [dispatch]);
 
   const openFile = useCallback(
     (filePath: string) => {
@@ -59,7 +71,7 @@ export function WorkspacePage() {
     state.workspaceEditingBlogId != null
       ? state.blogPosts.find((p) => p.id === state.workspaceEditingBlogId)
       : undefined;
-  if (editingPost) return <BlogEditor onBack={exitBlogEdit} />;
+  if (editingPost || isCreatingBlog) return <BlogEditor onBack={exitBlogEdit} />;
 
   if (state.fileSelectedFile) return <FilePreviewView onBack={exitFilePreview} />;
 
@@ -78,11 +90,11 @@ export function WorkspacePage() {
     case "overview":
       return <OverviewView onOpenBlog={openBlog} onOpenFile={openFile} />;
     case "drafts":
-      return <BlogPostsView status="draft" title="草稿" onOpen={openBlog} />;
+      return <BlogPostsView key={view} status="draft" title="草稿" onOpen={openBlog} onCreate={createBlog} />;
     case "published":
-      return <BlogPostsView status="published" title="已发布" onOpen={openBlog} />;
+      return <BlogPostsView key={view} status="published" title="已发布" onOpen={openBlog} onCreate={createBlog} />;
     case "inbox":
-      return <UnarchivedView onOpenFile={openFile} onOpenBlog={openBlog} />;
+      return <UnarchivedView onOpenFile={openFile} onOpenBlog={openBlog} onCreateBlog={createBlog} />;
     case "ai_knowledge":
       return <AiKnowledgeView onOpenBlog={openBlog} onOpenFile={openFile} />;
     default:

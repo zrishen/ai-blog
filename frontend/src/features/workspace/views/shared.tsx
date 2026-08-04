@@ -70,7 +70,7 @@ export function SectionCard({
         <span className="flex-1">{title}</span>
         {actions}
       </div>
-      <div className="flex-1 overflow-y-auto py-1">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-1">{children}</div>
     </section>
   );
 }
