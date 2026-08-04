@@ -768,7 +768,10 @@ async def search_documents(
 
     def _do() -> list[MemoryHit]:
         g = _graph()
-        candidate_k = max(32, top_k * 4)
+        # Overfetch 缓解共享 label 全局 ANN 的候选饥饿：跨租户极相似节点可能占满候选，
+        # 致目标用户召回不全（实测 50 噪声即可饿死 candidate_k=32）。128 覆盖典型多租户密度；
+        # 极端高密度需 per-user 索引分区（见 findings 多租户隔离评估）。
+        candidate_k = max(128, top_k * 16)
         where = "node.user_id=$uid AND node.stored_name IN $wl"
         if collection_name is not None:
             where += " AND node.collection_name=$collection"
@@ -842,7 +845,10 @@ async def recall(
     prop = _safe_prop(embedding_model)
     text_prop = _safe_text_prop(embedding_model)
     wl = list(whitelist_stored_names) if whitelist_stored_names else None
-    candidate_k = max(32, top_k * 4)
+    # Overfetch 缓解共享 label 全局 ANN 的候选饥饿：跨租户极相似节点可能占满候选，
+    # 致目标用户召回不全（实测 50 噪声即可饿死 candidate_k=32）。128 覆盖典型多租户密度；
+    # 极端高密度需 per-user 索引分区（见 findings 多租户隔离评估）。
+    candidate_k = max(128, top_k * 16)
 
     def _do() -> list[MemoryHit]:
         graph = _graph()

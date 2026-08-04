@@ -348,3 +348,128 @@ async def test_recall_touch_and_decay_close_the_loop(monkeypatch, falkordb_clien
         assert await jobs.decay_memories() == 0
     finally:
         graph.delete()
+
+
+@pytest.mark.asyncio
+async def test_recall_quality_baseline(monkeypatch, falkordb_client):
+    """召回质量基线：相似度梯度排序 + 用户隔离 + 延迟/上下文长度记录。
+
+    延迟与上下文长度仅记录供后续优化对照（task_plan：不在测量前凭空设定阈值）。
+    """
+    import time
+
+    graph_name = f"quality_baseline_{uuid.uuid4().hex}"
+    graph = falkordb_client.select_graph(graph_name)
+    monkeypatch.setattr(graph_store, "_client", falkordb_client)
+    monkeypatch.setattr(graph_store.settings, "falkordb_graph_name", graph_name)
+    await graph_store.ensure_graph()
+
+    try:
+        # 相似度梯度：A 最相关、B 次相关、C 正交；另注入其他用户同向量验证隔离
+        entity_a = await graph_store.add_entity(user_id=101, name="Cortex", description="memory brain")
+        entity_b = await graph_store.add_entity(user_id=101, name="FalkorDB", description="graph db")
+        entity_c = await graph_store.add_entity(user_id=101, name="Orthogonal", description="unrelated")
+        leak_id = await graph_store.add_entity(user_id=202, name="Leak", description="other user")
+        await upsert_node_embeddings_impl(
+            kind="entity",
+            embedding_model="_baseline",
+            vector_dim=2,
+            rows=[
+                {"user_id": 101, "memory_id": entity_a, "text": "name: Cortex", "embedding": [1.0, 0.0]},
+                {"user_id": 101, "memory_id": entity_b, "text": "name: FalkorDB", "embedding": [0.9, 0.436]},
+                {"user_id": 101, "memory_id": entity_c, "text": "name: Orthogonal", "embedding": [0.0, 1.0]},
+                {"user_id": 202, "memory_id": leak_id, "text": "name: Leak", "embedding": [1.0, 0.0]},
+            ],
+        )
+
+        query = [1.0, 0.0]
+        start = time.monotonic()
+        hits = []
+        for _ in range(20):
+            hits = await recall_impl(
+                user_id=101, query_embedding=query, embedding_model="_baseline",
+                top_k=3, kinds=["entity"], hops=0,
+            )
+            if hits:
+                break
+            await asyncio.sleep(0.1)
+        latency_ms = (time.monotonic() - start) * 1000
+
+        assert hits, "baseline: expected recall hits"
+        ids = [hit.metadata["id"] for hit in hits]
+        # 排序质量：最相关 A 排第一；正交 C 排在 A 后（若被召回）
+        assert ids[0] == entity_a
+        if entity_c in ids:
+            assert ids.index(entity_c) > ids.index(entity_a)
+        # 用户隔离：其他用户不泄漏
+        assert leak_id not in ids
+
+        from src.tools.memory import _format_memory_context
+
+        context = _format_memory_context(hits)
+        ctx_chars = len(context)
+        print(
+            f"\n[recall-baseline] latency={latency_ms:.1f}ms "
+            f"hits={len(hits)} ranking={ids} context_chars={ctx_chars}"
+        )
+        # 上下文不超预算（宽松上限防退化，非性能目标）
+        assert ctx_chars <= 6200
+    finally:
+        graph.delete()
+
+
+@pytest.mark.asyncio
+async def test_recall_tenant_starvation_boundary(monkeypatch, falkordb_client):
+    """多租户候选饥饿边界：跨租户大量极相似节点是否挤占目标用户召回。
+
+    评估当前 overfetch（max(32, top_k*4)）的隔离强度；暴露候选饥饿风险。
+    """
+    graph_name = f"tenant_starvation_{uuid.uuid4().hex}"
+    graph = falkordb_client.select_graph(graph_name)
+    monkeypatch.setattr(graph_store, "_client", falkordb_client)
+    monkeypatch.setattr(graph_store.settings, "falkordb_graph_name", graph_name)
+    await graph_store.ensure_graph()
+
+    try:
+        # 目标用户 101：3 个 entity，向量与 query 相近（cosine 距离≈0.1）
+        target_ids = [
+            await graph_store.add_entity(user_id=101, name=f"Target{i}") for i in range(3)
+        ]
+        # 10 个其他用户各 5 个噪声 entity，向量 = query（距离 0，抢占全局 ANN 候选）
+        rows = [
+            {"user_id": 101, "memory_id": eid, "text": f"name: Target{i}", "embedding": [0.9, 0.436]}
+            for i, eid in enumerate(target_ids)
+        ]
+        for uid in range(202, 212):
+            for j in range(5):
+                nid = await graph_store.add_entity(user_id=uid, name=f"Noise{uid}_{j}")
+                rows.append({
+                    "user_id": uid, "memory_id": nid,
+                    "text": f"name: Noise{uid}_{j}", "embedding": [1.0, 0.0],
+                })
+        await upsert_node_embeddings_impl(
+            kind="entity", embedding_model="_starve", vector_dim=2, rows=rows,
+        )
+
+        query = [1.0, 0.0]
+        hits = []
+        for _ in range(20):
+            hits = await recall_impl(
+                user_id=101, query_embedding=query, embedding_model="_starve",
+                top_k=3, kinds=["entity"], hops=0,
+            )
+            if hits:
+                break
+            await asyncio.sleep(0.1)
+
+        target_hits = [h for h in hits if h.metadata["id"] in target_ids]
+        # 隔离硬断言：召回的绝不泄漏噪声用户
+        assert all(h.metadata["id"] in target_ids for h in hits), "跨用户泄漏"
+        # 候选饥饿：目标用户应至少召回 1 条（若为 0，说明 overfetch 不足，需缓解）
+        print(
+            f"\n[tenant-starvation] target_hits={len(target_hits)}/3 "
+            f"candidate_k>=128 noise_nodes=50"
+        )
+        assert len(target_hits) >= 1, "候选饥饿：目标用户被噪声完全挤占，overfetch 不足"
+    finally:
+        graph.delete()
