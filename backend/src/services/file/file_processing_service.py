@@ -584,7 +584,10 @@ async def _index_document_knowledge(
             fact["source_doc_id"] = doc_id
         consolidated = await consolidator.consolidate(user_id=job.user_id, extracted=extracted)
         entity_ids = [entity_id for entity_id, _ in consolidated["entities"]]
-        await graph_store.link_chunk_entities(stored_name, chunk_index, entity_ids)
+        await graph_store.link_chunk_entities(
+            user_id=job.user_id, stored_name=stored_name,
+            chunk_index=chunk_index, entity_ids=entity_ids,
+        )
         await graph_store.link_document_knowledge(
             doc_id=doc_id,
             entity_ids=entity_ids,

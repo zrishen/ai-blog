@@ -823,16 +823,17 @@ async def delete_document_chunks(collection_name: str, stored_name: str) -> bool
     return True
 
 
-async def link_chunk_entities(stored_name: str, chunk_index: int, entity_ids: list[str]) -> None:
-    """Chunk MENTIONS 实体（抽取出的实体锚定到原文片段）。"""
+async def link_chunk_entities(*, user_id: int, stored_name: str, chunk_index: int, entity_ids: list[str]) -> None:
+    """Chunk MENTIONS 实体（抽取出的实体锚定到原文片段），严格 user-scoped。"""
     if not entity_ids:
         return
     cid = f"{stored_name}:{chunk_index}"
     for eid in entity_ids:
         await _write(
-            f"MATCH (c:{S.CHUNK} {{chunk_id:$cid}}), (e:{S.ENTITY} {{entity_id:$eid}}) "
+            f"MATCH (c:{S.CHUNK} {{user_id:$uid, chunk_id:$cid}}), "
+            f"(e:{S.ENTITY} {{user_id:$uid, entity_id:$eid}}) "
             f"MERGE (c)-[:{S.MENTIONS}]->(e)",
-            {"cid": cid, "eid": eid},
+            {"uid": user_id, "cid": cid, "eid": eid},
         )
 
 
@@ -1376,7 +1377,7 @@ async def graph_neighborhood(*, user_id: int, limit: int = 80) -> dict:
 async def stats(user_id: int) -> dict:
     """各类记忆节点计数。"""
     cypher = (
-        "MATCH (n) WHERE n.user_id=$uid "
+        f"MATCH (n) WHERE n.user_id=$uid AND NOT (n)-[:{S.SAME_AS}]->() "
         "RETURN labels(n)[0] AS label, count(n) AS cnt"
     )
     rs = await _read(cypher, {"uid": user_id})

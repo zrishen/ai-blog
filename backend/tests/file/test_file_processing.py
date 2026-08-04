@@ -69,7 +69,7 @@ async def test_index_document_knowledge_links_chunks_to_consolidated_knowledge(
     mentions: list[tuple[str, int, list[str]]] = []
     sources: list[tuple[str, list[str], list[str]]] = []
 
-    async def link_mentions(stored_name, chunk_index, entity_ids):
+    async def link_mentions(*, user_id, stored_name, chunk_index, entity_ids):
         mentions.append((stored_name, chunk_index, entity_ids))
 
     async def link_sources(*, doc_id, entity_ids, fact_ids):
