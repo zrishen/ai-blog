@@ -15,7 +15,7 @@ from src.schemas.brain import (
     BrainPreferenceUpdate,
     BrainStats,
 )
-from src.services.brain_service import (
+from src.services.memory.brain_service import (
     correct_fact,
     delete_memory,
     get_graph,

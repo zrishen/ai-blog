@@ -18,7 +18,7 @@ async def base_recall_memory(query: str) -> str:
     当需要回忆用户曾说过的事、用户偏好、或实体间关系时使用此工具
     （区别于文件库文档检索 base_search_file——后者检索上传的文档原文）。
     参数 query: 回忆查询字符串。"""
-    from src.services.rag.embedding_service import get_embedding_collection_suffix, get_embeddings
+    from src.services.embeddings.embedding_service import get_embedding_collection_suffix, get_embeddings
     from src.tools.blog import current_user_id_cv
 
     user_id = current_user_id_cv.get()

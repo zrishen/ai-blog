@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogPost, FileDocument, FileProcessingJob, User
 from src.database.session import async_session
-from src.services.chat.llm_factory import _chat_model_kwargs, _create_llm
+from src.services.llm.llm_factory import _chat_model_kwargs, _create_llm
 from src.services.file.file_service import delete_uploaded_file, vectorize_and_store, vectorize_text_and_store
 from src.services.llm.llm_settings_service import get_user_llm_settings, has_usable_api_key
 from src.services.memory import consolidator, extractor, graph_store

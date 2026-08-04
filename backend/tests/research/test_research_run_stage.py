@@ -43,7 +43,7 @@ class _FakeAgent:
 
 
 def _patch_agent(monkeypatch, events):
-    from src.services.chat import llm_factory as chat_service
+    from src.services.llm import llm_factory as chat_service
     monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode, llm_settings=None: {"api_key": "test-key"})
     monkeypatch.setattr(chat_service, "_create_llm", lambda kw, mode: object())
     from src.services.research import run
@@ -102,7 +102,7 @@ async def test_stage_fails_when_agent_stream_raises(monkeypatch):
             raise RuntimeError("agent crashed")
             yield  # pragma: no cover - 让 astream_events 成为 async generator
 
-    from src.services.chat import llm_factory as chat_service
+    from src.services.llm import llm_factory as chat_service
     monkeypatch.setattr(chat_service, "_chat_model_kwargs", lambda mode, llm_settings=None: {"api_key": "test-key"})
     monkeypatch.setattr(chat_service, "_create_llm", lambda kw, mode: object())
     from src.services.research import run

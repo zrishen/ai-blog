@@ -16,7 +16,7 @@ from src.schemas.brain import (
     BrainPreference,
     BrainStats,
 )
-from src.services.memory import graph_store, memory_embeddings
+from . import graph_store, memory_embeddings
 
 
 def _require_memory_enabled() -> None:

@@ -124,7 +124,7 @@ async def _count_stage_output(db: AsyncSession, stage: str, topic_id: int, user_
 async def _run_agent_stage(db: AsyncSession, run_id: int, topic_id: int, user_id: int,
                            stage: str, instruction: str) -> bool:
     """返回 False 仅在 agent 抛异常/超时，或全程零工具调用且零产出；零产出但有过工具调用视为 completed。"""
-    from src.services.chat.llm_factory import _chat_model_kwargs, _create_llm
+    from src.services.llm.llm_factory import _chat_model_kwargs, _create_llm
     from src.services.llm.llm_settings_service import get_user_llm_settings, has_usable_api_key
     from src.tools.research import RESEARCH_TOOLS
 

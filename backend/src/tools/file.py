@@ -63,7 +63,7 @@ async def _search_collections(
     user_id: int,
 ) -> list[tuple[str, object]]:
     from src.services.memory import graph_store
-    from src.services.rag.embedding_service import get_embedding_collection_suffix
+    from src.services.embeddings.embedding_service import get_embedding_collection_suffix
 
     async def search_one(name: str, stored_names: set[str]) -> list[tuple[str, object]]:
         try:
@@ -170,7 +170,7 @@ async def base_search_file(query: str) -> str:
     """搜索已加入 AI 知识的内容（文件库文档 + 博客文章）的语义相关片段。
     当需要从用户上传的文件或博客文章中查找信息、回答事实性问题时使用此工具。
     参数 query: 搜索查询字符串。"""
-    from src.services.rag.embedding_service import get_embeddings
+    from src.services.embeddings.embedding_service import get_embeddings
     from src.tools.blog import current_user_id_cv
 
     user_id = current_user_id_cv.get()

@@ -54,7 +54,7 @@ from src.tools.file import base_search_file
 from src.tools.mcp import build_mcp_call_tool, format_mcp_capabilities, normalize_mcp_capabilities
 from src.tools.research import RESEARCH_TOOLS
 
-from .llm_factory import _chat_model_kwargs, _create_llm, _system_prompt
+from src.services.llm.llm_factory import _chat_model_kwargs, _create_llm, _system_prompt
 from .messages import (
     _build_current_user_content,  # noqa: F401  # 供 test 直接单测调用
     _build_messages,

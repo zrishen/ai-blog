@@ -162,7 +162,7 @@ async def get_uploaded_file(filename: str, user: User = Depends(get_current_user
 
 
 def _user_collection(user_id: int) -> str:
-    from src.services.rag.embedding_service import get_embedding_collection_suffix
+    from src.services.embeddings.embedding_service import get_embedding_collection_suffix
 
     return f"user_{user_id}_file{get_embedding_collection_suffix()}"
 

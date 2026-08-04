@@ -38,7 +38,7 @@ async def _store_document_chunks(
         raise ValueError("Document indexing requires a numeric user ID")
 
     from src.services.memory.graph_store import add_document_chunks
-    from src.services.rag.embedding_service import get_embedding_collection_suffix
+    from src.services.embeddings.embedding_service import get_embedding_collection_suffix
 
     await add_document_chunks(
         user_id=user_id,
@@ -186,7 +186,7 @@ async def vectorize_and_store(
     progress_reporter=None,
 ) -> list[str]:
     """Parse, chunk, embed, and store documents; returns the stored chunk contents."""
-    from src.services.rag.embedding_service import get_embeddings
+    from src.services.embeddings.embedding_service import get_embeddings
 
     from src.utils.chunker import chunk_text
 
@@ -300,7 +300,7 @@ async def vectorize_text_and_store(
     progress_reporter=None,
 ) -> list[str]:
     """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库；跳过文件解析，metadata 的 stored_name/chunk_id 用 source_id（资源稳定标识，如 "blog_post:123"），附带 resource_type 便于检索过滤。"""
-    from src.services.rag.embedding_service import get_embeddings
+    from src.services.embeddings.embedding_service import get_embeddings
     from src.utils.chunker import chunk_text
 
     async def report(stage: str, completed: int, total: int, unit: str) -> None:

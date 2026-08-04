@@ -5,7 +5,7 @@ from src.api import brain as brain_api
 from src.config import settings
 from src.core.exceptions import ConflictError
 from src.schemas.brain import BrainFact, BrainPreference
-from src.services import brain_service
+from src.services.memory import brain_service
 
 
 @pytest.mark.asyncio

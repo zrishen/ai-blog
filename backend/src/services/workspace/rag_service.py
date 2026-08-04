@@ -23,7 +23,7 @@ def default_collection_name(user_id: int) -> str:
 
 def blog_collection_name(user_id: int) -> str:
     """文章向量集合：按用户 + embedding 模型隔离（不要用无后缀版本——换模型后旧向量无法定位）。"""
-    from src.services.rag.embedding_service import get_embedding_collection_suffix
+    from src.services.embeddings.embedding_service import get_embedding_collection_suffix
 
     return f"user_{user_id}_blog{get_embedding_collection_suffix()}"
 

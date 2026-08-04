@@ -8,7 +8,7 @@ async def test_local_embedding_uses_sentence_transformers(monkeypatch):
 
     直接测 _embed_local：conftest autouse mock 接管了 get_embeddings 入口（见 conftest）。
     """
-    from src.services.rag import embedding_service
+    from src.services.embeddings import embedding_service
     from src.config import settings
     import sentence_transformers
 
@@ -36,7 +36,7 @@ async def test_local_embedding_uses_sentence_transformers(monkeypatch):
 
 def test_collection_suffix_follows_provider(monkeypatch):
     """provider=local 时 collection suffix 用本地模型名（换 provider 即换 collection/向量空间）。"""
-    from src.services.rag import embedding_service
+    from src.services.embeddings import embedding_service
     from src.config import settings
 
     monkeypatch.setattr(settings, "embedding_provider", "local")

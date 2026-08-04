@@ -157,7 +157,7 @@ def mock_external_services():
          patch("src.services.memory.graph_store.search_documents", return_value=[]), \
          patch("src.services.memory.graph_store.delete_document_chunks", return_value=True), \
          patch("src.services.memory.graph_store.ping", return_value=True), \
-         patch("src.services.rag.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
+         patch("src.services.embeddings.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
          patch("src.services.trash.trash_service.delete_document_chunks", return_value=True):
         yield
 

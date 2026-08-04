@@ -29,7 +29,7 @@ async def test_vectorize_reports_black_box_stages_before_first_completed_unit():
 
     with patch("src.utils.file_parser.parse_path", side_effect=fake_parse), \
          patch("src.utils.chunker.chunk_text", return_value=["第一片段", "第二片段"]), \
-         patch("src.services.rag.embedding_service.get_embeddings", side_effect=fake_embeddings), \
+         patch("src.services.embeddings.embedding_service.get_embeddings", side_effect=fake_embeddings), \
          patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         await vectorize_and_store(
             "stored.pdf",
@@ -50,7 +50,7 @@ async def test_vectorize_and_store_writes_rich_metadata():
         captured.update(kwargs)
 
     with patch("src.utils.file_parser.parse_path", return_value="第一段内容。\n第二段内容。"), \
-         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.embeddings.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
          patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         chunks = await vectorize_and_store(
             "stored.pdf",
@@ -82,7 +82,7 @@ async def test_vectorize_and_store_writes_default_metadata():
         captured.update(kwargs)
 
     with patch("src.utils.file_parser.parse_path", return_value="测试内容"), \
-         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.embeddings.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
          patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         await vectorize_and_store("stored.docx", "doc_collection")
 
@@ -103,7 +103,7 @@ async def test_vectorize_and_store_metadata_matches_multiple_chunks():
 
     long_text = "这是一个用于测试递归字符分割的句子。" * 80
     with patch("src.utils.file_parser.parse_path", return_value=long_text), \
-         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.embeddings.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
          patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         chunks = await vectorize_and_store("stored.pdf", "kb_long", original_name="long.pdf")
 
@@ -123,7 +123,7 @@ async def test_vectorize_and_store_writes_chunks_to_graph():
         captured["memory"] = kwargs
 
     with patch("src.utils.file_parser.parse_path", return_value="memory content"), \
-         patch("src.services.rag.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
+         patch("src.services.embeddings.embedding_service.get_embeddings", side_effect=_fake_embeddings), \
          patch("src.services.memory.graph_store.add_document_chunks", side_effect=fake_add_document_chunks):
         await vectorize_and_store(
             "stored.pdf",

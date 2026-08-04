@@ -31,7 +31,7 @@ from src.prompts import (
     SYSTEM_DATE,
     SYSTEM_TOOL_RULES,
 )
-from src.services.llm.llm_settings_service import build_llm_model_kwargs
+from .llm_settings_service import build_llm_model_kwargs
 
 logger = logging.getLogger(__name__)
 

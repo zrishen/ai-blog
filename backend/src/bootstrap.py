@@ -104,7 +104,7 @@ async def startup() -> None:
     if settings.embedding_provider == "local":
         import threading
 
-        from src.services.rag.embedding_service import _get_local_model
+        from src.services.embeddings.embedding_service import _get_local_model
 
         def _preload_local_model() -> None:
             try:
