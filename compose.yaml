@@ -29,6 +29,11 @@ services:
     image: falkordb/falkordb:latest
     volumes:
       - falkordbdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     logging: *default-logging
     networks:
@@ -60,7 +65,7 @@ services:
       postgres:
         condition: service_healthy
       falkordb:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - type: bind
         source: ./backend/data
