@@ -56,8 +56,9 @@ export function useWorkspacePrimaryNavigation() {
       openLoginDialog("brain");
       return;
     }
+    dispatch({ type: "SET_PAGE", payload: "brain" });
     navigate("/brain");
-  }, [isAuthenticated, navigate, openLoginDialog]);
+  }, [dispatch, isAuthenticated, navigate, openLoginDialog]);
 
   const handleWorkspace = useCallback(() => {
     if (!isAuthenticated) {

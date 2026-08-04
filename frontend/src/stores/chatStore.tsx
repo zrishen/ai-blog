@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
-import type { ResearchTopicDetail, ResearchTopicSummary, WorkspaceNode } from "../api/client";
+import type { BrainStats, ResearchTopicDetail, ResearchTopicSummary, WorkspaceNode } from "../api/client";
 import type { TrustChoiceOption } from "../features/ai-chat/trustPrompts";
 import type { ThinkingMode } from "../api/chat";
 import type {
@@ -17,7 +17,7 @@ import type {
 import { isDisplayableMessage } from "../features/ai-chat/types";
 import type { BlogPost, BlogView } from "../features/blog/types";
 import type { FileDocument } from "../api/client";
-import type { Page, Panel, Theme, WorkspaceView } from "./types";
+import type { BrainTab, Page, Panel, Theme, WorkspaceView } from "./types";
 import { researchReducer } from "./slices/researchSlice";
 import { conversationReducer } from "./slices/conversationSlice";
 import { blogReducer } from "./slices/blogSlice";
@@ -25,6 +25,7 @@ import { uiReducer } from "./slices/uiSlice";
 import { revisionReducer } from "./slices/revisionSlice";
 import { aiSidebarReducer } from "./slices/aiSidebarSlice";
 import { workspaceReducer } from "./slices/workspaceSlice";
+import { brainReducer } from "./slices/brainSlice";
 
 export interface BlogStreamingState {
   runId: string;
@@ -84,6 +85,10 @@ interface ChatState {
   workspaceSelectedView: WorkspaceView;
   // 工作区内联编辑的博客 id（null=不在编辑，显示视图列表）
   workspaceEditingBlogId: number | null;
+
+  // AI 大脑：左栏当前视图 + 概览统计（跨 LeftSidebar/BrainPage 兄弟组件共享）
+  brainTab: BrainTab;
+  brainStats: BrainStats | null;
 
   researchTopics: ResearchTopicSummary[];
   researchCurrentTopicId: number | null;
@@ -184,6 +189,9 @@ type ChatAction =
   | { type: "INCREMENT_TRASH_REVISION" }
   | { type: "INCREMENT_AI_KNOWLEDGE_REVISION" }
   | { type: "SET_WORKSPACE_EDITING_BLOG"; payload: number | null }
+  | { type: "SET_BRAIN_TAB"; payload: BrainTab }
+  | { type: "SET_BRAIN_STATS"; payload: BrainStats | null }
+  | { type: "DECREMENT_BRAIN_STATS"; payload: { field: "entities" | "facts" | "episodes" | "preferences"; by?: number } }
   | { type: "LOGOUT" };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -194,6 +202,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   state = revisionReducer(state, action);
   state = aiSidebarReducer(state, action);
   state = workspaceReducer(state, action);
+  state = brainReducer(state, action);
   switch (action.type) {
     // Auth — 登出时清除用户级别 UI 状态（不删后端数据）
     case "LOGOUT":
@@ -227,6 +236,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         workspaceSelectedFolderId: null,
         workspaceSelectedView: "overview",
         workspaceEditingBlogId: null,
+        brainTab: "graph",
+        brainStats: null,
         researchTopics: [],
         researchCurrentTopicId: null,
         researchCurrentTopic: null,
@@ -250,6 +261,7 @@ function getInitialPage(): Page {
   const path = window.location.pathname;
   if (path.startsWith("/research")) return "research";
   if (path.startsWith("/workspace")) return "workspace";
+  if (path.startsWith("/brain")) return "brain";
   return "blog";
 }
 
@@ -310,6 +322,9 @@ const initialState: ChatState = {
   workspaceSelectedFolderId: loadWorkspaceFolder(),
   workspaceSelectedView: loadWorkspaceView(),
   workspaceEditingBlogId: null,
+
+  brainTab: "graph",
+  brainStats: null,
 
   researchTopics: [],
   researchCurrentTopicId: null,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Boxes, BrainCircuit, Clock, Heart, Network, Pencil, Trash2, type LucideIcon } from "lucide-react";
+import { AlertCircle, Boxes, BrainCircuit, Clock, Heart, Pencil, Trash2, type LucideIcon } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/stores/authStore";
+import { useChat } from "@/stores/chatStore";
 import { LoginDialog } from "@/features/auth/LoginDialog";
 import {
   correctBrainFact,
@@ -24,7 +25,6 @@ import {
   type BrainGraphNode,
   type BrainMemoryType,
   type BrainPreference,
-  type BrainStats,
   updateBrainPreference,
 } from "@/api/client";
 import { BrainManagementDialog, type BrainManagementAction } from "./BrainManagementDialog";
@@ -32,24 +32,17 @@ import { BrainGraphView } from "./BrainGraphView";
 import { EntityDetailPanel } from "./EntityDetailPanel";
 import { entityTypeColor, kindLabel } from "./utils/brainStyle";
 
-type BrainTab = "graph" | "entities" | "episodes" | "preferences";
-
-const TABS: Array<{ key: BrainTab; label: string; icon: LucideIcon }> = [
-  { key: "graph", label: "知识图谱", icon: Network },
-  { key: "entities", label: "实体", icon: Boxes },
-  { key: "episodes", label: "记忆", icon: Clock },
-  { key: "preferences", label: "偏好", icon: Heart },
-];
-
 export function BrainPage() {
   const { isAuthenticated } = useAuth();
+  const { state, dispatch } = useChat();
+  // tab/概览统计进 chatStore，与左栏 BrainNav 兄弟共享；其余重数据本地持有
+  const tab = state.brainTab;
+  const stats = state.brainStats;
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [stats, setStats] = useState<BrainStats | null>(null);
   const [graph, setGraph] = useState<BrainGraph>({ nodes: [], edges: [] });
   const [entities, setEntities] = useState<BrainEntity[]>([]);
   const [episodes, setEpisodes] = useState<BrainEpisode[]>([]);
   const [preferences, setPreferences] = useState<BrainPreference[]>([]);
-  const [tab, setTab] = useState<BrainTab>("graph");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedEntity, setSelectedEntity] = useState<BrainGraphNode | null>(null);
@@ -72,7 +65,7 @@ export function BrainPage() {
           listBrainPreferences(),
         ]);
         if (cancelled) return;
-        setStats(s);
+        dispatch({ type: "SET_BRAIN_STATS", payload: s });
         setGraph(g);
         setEntities(ents);
         setEpisodes(eps);
@@ -87,7 +80,7 @@ export function BrainPage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, dispatch]);
 
   const handleSelectEntity = useCallback(async (node: BrainGraphNode | null) => {
     setSelectedEntity(node);
@@ -112,13 +105,13 @@ export function BrainPage() {
       await deleteBrainMemory(memoryType, memoryId);
       if (memoryType === "episode") {
         setEpisodes((current) => current.filter((episode) => episode.episode_id !== memoryId));
-        setStats((current) => current ? { ...current, episodes: Math.max(0, current.episodes - 1) } : current);
+        dispatch({ type: "DECREMENT_BRAIN_STATS", payload: { field: "episodes" } });
       } else if (memoryType === "fact") {
         setEntityFacts((current) => current.filter((fact) => fact.fact_id !== memoryId));
-        setStats((current) => current ? { ...current, facts: Math.max(0, current.facts - 1) } : current);
+        dispatch({ type: "DECREMENT_BRAIN_STATS", payload: { field: "facts" } });
       } else {
         setPreferences((current) => current.filter((preference) => preference.pref_id !== memoryId));
-        setStats((current) => current ? { ...current, preferences: Math.max(0, current.preferences - 1) } : current);
+        dispatch({ type: "DECREMENT_BRAIN_STATS", payload: { field: "preferences" } });
       }
       setManagementAction(null);
     } catch (cause) {
@@ -192,47 +185,20 @@ export function BrainPage() {
     <div className="flex h-full min-h-0 flex-col bg-background p-2">
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-shell border border-border/70 bg-card/86 shadow-xl shadow-foreground/5 backdrop-blur-xl">
         <div className="border-b border-border/70 p-3 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-meta font-semibold text-primary">
-                <BrainCircuit className="h-3.5 w-3.5" />
-                认知记忆
-              </div>
-              <SectionTitle as="h1" size="2xl" className="sm:text-3xl">AI 大脑</SectionTitle>
-              <p className="mt-2 max-w-2xl text-body-lg leading-relaxed text-muted-foreground">
-                实体、事实、对话记忆与偏好织成一张会生长的星图——AI 越用越懂你。
-              </p>
-            </div>
-            {enabled && stats && (
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline" className="rounded-full">实体 {stats.entities}</Badge>
-                <Badge variant="outline" className="rounded-full">事实 {stats.facts}</Badge>
-                <Badge variant="outline" className="rounded-full">记忆 {stats.episodes}</Badge>
-                <Badge variant="outline" className="rounded-full">偏好 {stats.preferences}</Badge>
-              </div>
-            )}
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/10 px-3 py-1 text-meta font-semibold text-primary">
+            <BrainCircuit className="h-3.5 w-3.5" />
+            认知记忆
           </div>
+          <SectionTitle as="h1" size="2xl" className="sm:text-3xl">AI 大脑</SectionTitle>
+          <p className="mt-2 max-w-2xl text-body-lg leading-relaxed text-muted-foreground">
+            实体、事实、对话记忆与偏好织成一张会生长的星图——AI 越用越懂你。
+          </p>
           {error && (
             <Alert variant="destructive" role="alert" className="mt-4 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
               {error}
             </Alert>
           )}
-        </div>
-
-        <div className="flex gap-1 overflow-x-auto border-b border-border/70 px-3 py-2 sm:px-4">
-          {TABS.map(({ key, label, icon: Icon }) => (
-            <Button
-              key={key}
-              variant={tab === key ? "default" : "ghost"}
-              size="sm"
-              className="flex-shrink-0 rounded-full"
-              onClick={() => setTab(key)}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </Button>
-          ))}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">

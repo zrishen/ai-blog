@@ -99,6 +99,16 @@ function ResearchRoute() {
   return <ResearchGraphPage />;
 }
 
+function BrainRoute() {
+  const dispatch = useChatDispatch();
+
+  useEffect(() => {
+    dispatch({ type: "SET_PAGE", payload: "brain" });
+  }, [dispatch]);
+
+  return <BrainPage />;
+}
+
 function AdminLayout() {
   const dispatch = useChatDispatch();
   const { user, isInitializing } = useAuth();
@@ -119,7 +129,7 @@ function MainContent() {
       <Route path="/workspace" element={<WorkspaceRoute />} />
       <Route path="/research" element={<ResearchRoute />} />
       <Route path="/research/:topicId" element={<ResearchRoute />} />
-      <Route path="/brain" element={<BrainPage />} />
+      <Route path="/brain" element={<BrainRoute />} />
       <Route path="/u/:username" element={<SiteBlogRoute />} />
       <Route path="/u/:username/posts/:slug" element={<SitePostRoute />} />
       <Route path="/admin" element={<AdminLayout />}>
