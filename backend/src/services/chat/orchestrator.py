@@ -109,11 +109,13 @@ async def _persist_chat_memory(
 
         text = _memory_episode_text(user_message, assistant_message)
         extracted = await extractor.extract(text, llm)
+        participant_names = [e["name"] for e in extracted.get("entities", []) if e.get("name")]
         extracted["episodes"] = [{
             "kind": "chat",
             "summary": text,
             "conversation_id": conversation_id,
             "message_id": message_id,
+            "participants": participant_names,
         }]
         await consolidator.consolidate(user_id=user_id, extracted=extracted)
     except asyncio.CancelledError:

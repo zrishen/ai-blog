@@ -255,6 +255,7 @@ async def test_persist_chat_memory_consolidates_episode_and_extracted_knowledge(
         "summary": "用户：什么是 FalkorDB？\n助手：它是图数据库。",
         "conversation_id": 4,
         "message_id": 5,
+        "participants": ["FalkorDB"],
     }]
 
 
