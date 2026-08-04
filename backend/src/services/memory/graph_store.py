@@ -1270,6 +1270,7 @@ async def list_entities(*, user_id: int, limit: int = 200, offset: int = 0) -> l
     """列出用户全部实体（按创建时间倒序）。"""
     cypher = (
         f"MATCH (e:{S.ENTITY} {{user_id:$uid}}) "
+        f"WHERE NOT (e)-[:{S.SAME_AS}]->() "
         f"RETURN e.entity_id, e.name, e.entity_type, e.aliases, e.description, "
         f"e.confidence, e.created_at, e.last_accessed_at "
         f"ORDER BY e.created_at DESC SKIP $skip LIMIT $limit"
@@ -1319,7 +1320,7 @@ async def list_facts(
     valid_filter = " AND f.valid_to IS NULL" if only_valid else ""
     if entity_id:
         cypher = (
-            f"MATCH (f:{S.FACT})-[:{S.SUBJECT}|{S.OBJECT}]->(e:{S.ENTITY} {{entity_id:$eid}}) "
+            f"MATCH (f:{S.FACT})-[:{S.SUBJECT}|{S.OBJECT}]->(e:{S.ENTITY} {{user_id:$uid, entity_id:$eid}}) "
             f"WHERE f.user_id=$uid{valid_filter} "
             f"RETURN f.fact_id, f.subject_id, f.predicate, f.object_text, f.valid_from, "
             f"f.valid_to, f.confidence, f.source_doc_id "
@@ -1360,11 +1361,11 @@ async def graph_neighborhood(*, user_id: int, limit: int = 80) -> dict:
         return {"nodes": [], "edges": []}
     ids = [e["id"] for e in entities]
     edges_q = (
-        f"MATCH (a:{S.ENTITY})-[r:{S.RELATES_TO}|{S.SAME_AS}]->(b:{S.ENTITY}) "
+        f"MATCH (a:{S.ENTITY} {{user_id:$uid}})-[r:{S.RELATES_TO}|{S.SAME_AS}]->(b:{S.ENTITY} {{user_id:$uid}}) "
         f"WHERE a.entity_id IN $ids AND b.entity_id IN $ids "
         f"RETURN a.entity_id, type(r), b.entity_id, coalesce(r.weight, 1.0)"
     )
-    edges_rs = await _read(edges_q, {"ids": ids})
+    edges_rs = await _read(edges_q, {"uid": user_id, "ids": ids})
     edges = [
         {"source": r[0], "type": r[1], "target": r[2], "weight": r[3]}
         for r in _rows(edges_rs)
