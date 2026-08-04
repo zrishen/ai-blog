@@ -201,6 +201,7 @@ async def test_consolidate_fact_creates_and_supersedes_different_object(monkeypa
     )
     assert result == "fact-new"
     assert actions[0][0] == "add"
+    assert actions[0][1]["protected"] is True  # SUPERSEDES 是事实纠正，新 Fact 标 protected 不衰减
     assert actions[1] == ("supersede", {"new_fact_id": "fact-new", "old_fact_id": "fact-old"})
 
 

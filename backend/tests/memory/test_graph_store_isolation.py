@@ -33,7 +33,7 @@ class _RecallGraph:
     def query(self, cypher, params):
         self.cypher = cypher
         self.params = params
-        return _Result([["remembered content", "memory.pdf", 0.93, ["Project Cortex"], "memory.pdf:0"]])
+        return _Result([["remembered content", "memory.pdf", 0.93, ["Project Cortex"], "memory.pdf:0", "2026-08-01T00:00:00"]])
 
 
 class _ExistingVectorIndexGraph:
@@ -267,6 +267,7 @@ async def test_recall_kinds_and_only_valid_control_queries(monkeypatch):
                     None,
                     0.9,
                     "document-1",
+                    "2026-08-01T00:00:00",
                 ]])
             return _Result([[
                 "kind: chat\nsummary: discussed FalkorDB",
@@ -314,7 +315,7 @@ async def test_recall_expands_user_scoped_graph_and_reranks(monkeypatch):
             self.calls.append((cypher, params))
             if "queryNodes('Entity'" in cypher:
                 return _Result([[
-                    "name: Cortex", 0.2, "entity-1", "Cortex", "concept", 0.8,
+                    "name: Cortex", 0.2, "entity-1", "Cortex", "concept", 0.8, "2026-08-03T00:00:00",
                 ]])
             if "MATCH (seed:Entity" in cypher:
                 return _Result([[

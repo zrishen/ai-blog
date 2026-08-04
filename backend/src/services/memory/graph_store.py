@@ -343,18 +343,18 @@ async def add_entity(
 async def add_fact(
     *, user_id: int, subject_id: str, predicate: str, object_text: str,
     object_id: str | None = None, valid_from: str | None = None, valid_to: str | None = None,
-    confidence: float = 1.0, source_doc_id: str | None = None,
+    confidence: float = 1.0, source_doc_id: str | None = None, protected: bool = False,
 ) -> str:
     fid = _new_id()
     params = {
         "fid": fid, "uid": user_id, "sid": subject_id, "pred": predicate, "obj": object_text,
         "oid": object_id, "vf": valid_from or _now_iso(), "vt": valid_to, "conf": confidence,
-        "sdoc": source_doc_id, "now": _now_iso(),
+        "sdoc": source_doc_id, "prot": protected, "now": _now_iso(),
     }
     await _write(
         f"CREATE (f:{S.FACT} {{fact_id:$fid, user_id:$uid, subject_id:$sid, predicate:$pred, "
         f"object_text:$obj, object_id:$oid, valid_from:$vf, valid_to:$vt, confidence:$conf, "
-        f"source_doc_id:$sdoc, created_at:$now, last_accessed_at:$now}})",
+        f"source_doc_id:$sdoc, protected:$prot, created_at:$now, last_accessed_at:$now}})",
         params,
     )
     if object_id:
@@ -392,13 +392,17 @@ async def add_episode(
     return eid
 
 
-async def add_preference(*, user_id: int, key: str, value: str, confidence: float = 1.0) -> str:
+async def add_preference(
+    *, user_id: int, key: str, value: str, confidence: float = 1.0, protected: bool = False,
+) -> str:
     pid = _new_id()
+    now = _now_iso()
     await _write(
         f"CREATE (p:{S.PREFERENCE} {{pref_id:$pid, user_id:$uid, key:$key, value:$val, "
-        f"confidence:$conf, valid_from:$vf, valid_to:$vt, last_accessed_at:$vf}})",
+        f"confidence:$conf, valid_from:$vf, valid_to:$vt, protected:$prot, "
+        f"created_at:$now, last_accessed_at:$now}})",
         {"pid": pid, "uid": user_id, "key": key, "val": value, "conf": confidence,
-         "vf": _now_iso(), "vt": None},
+         "vf": now, "vt": None, "prot": protected, "now": now},
     )
     return pid
 
@@ -594,6 +598,7 @@ async def correct_fact(
         object_text=object_text,
         confidence=new_confidence,
         source_doc_id=existing["source_doc_id"],
+        protected=True,
     )
     await supersede_fact(new_fact_id=new_id, old_fact_id=fact_id)
     return {
@@ -644,6 +649,7 @@ async def update_preference(
         key=existing["key"],
         value=value,
         confidence=new_confidence,
+        protected=True,
     )
     return {
         "pref_id": new_id,
@@ -759,12 +765,13 @@ async def add_document_chunks(
             "cid": cid, "uid": user_id, "col": collection_name, "stored": stored_name,
             "content": text, "emb": emb, "rt": meta.get("resource_type"),
             "rid": meta.get("resource_id"), "src": meta.get("source") or meta.get("file_name"),
-            "idx": i, "total": len(chunks),
+            "idx": i, "total": len(chunks), "now": _now_iso(),
         }
         await _write(
             f"MERGE (c:{S.CHUNK} {{chunk_id:$cid, user_id:$uid}}) SET c.collection_name=$col, "
             f"c.stored_name=$stored, c.content=$content, c.{prop}=vecf32($emb), c.resource_type=$rt, "
-            f"c.resource_id=$rid, c.source=$src, c.chunk_index=$idx, c.total_chunks=$total",
+            f"c.resource_id=$rid, c.source=$src, c.chunk_index=$idx, c.total_chunks=$total, "
+            f"c.created_at=$now",
             params,
         )
         if progress_callback:
@@ -886,7 +893,7 @@ async def recall(
                     prefix
                     + f"WHERE {' AND '.join(where_parts)} "
                     + f"OPTIONAL MATCH (node)-[:{S.MENTIONS}]->(e:{S.ENTITY} {{user_id:$uid}}) "
-                    + "RETURN node.content, node.source, score, collect(e.name), node.chunk_id "
+                    + "RETURN node.content, node.source, score, collect(e.name), node.chunk_id, node.created_at "
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
@@ -900,6 +907,7 @@ async def recall(
                         score=row[2],
                         metadata={
                             "id": row[4], "source": row[1], "entities": entities,
+                            "ingested_at": row[5],
                             "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
                         },
                     ))
@@ -910,7 +918,7 @@ async def recall(
                     + f"OPTIONAL MATCH (node)-[:{S.SAME_AS}]->(canonical:{S.ENTITY}) "
                     + "WITH node, score, canonical WHERE canonical IS NULL "
                     + f"RETURN node.{text_prop}, score, node.{id_key}, node.name, "
-                    + "node.entity_type, node.confidence "
+                    + "node.entity_type, node.confidence, node.created_at "
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
@@ -921,6 +929,7 @@ async def recall(
                         metadata={
                             "id": row[2], "source": row[3], "name": row[3],
                             "entity_type": row[4], "confidence": row[5],
+                            "ingested_at": row[6],
                             "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
                         },
                     ))
@@ -929,7 +938,8 @@ async def recall(
                     prefix
                     + f"WHERE {' AND '.join(where_parts)} "
                     + f"RETURN node.{text_prop}, score, node.{id_key}, node.subject_id, "
-                    + "node.predicate, node.valid_from, node.valid_to, node.confidence, node.source_doc_id "
+                    + "node.predicate, node.valid_from, node.valid_to, node.confidence, node.source_doc_id, "
+                    + "node.created_at "
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
@@ -942,6 +952,7 @@ async def recall(
                             "subject_id": row[3], "predicate": row[4],
                             "valid_from": row[5], "valid_to": row[6],
                             "confidence": row[7], "source_doc_id": row[8],
+                            "ingested_at": row[9],
                             "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
                         },
                     ))
@@ -950,7 +961,8 @@ async def recall(
                     prefix
                     + f"WHERE {' AND '.join(where_parts)} "
                     + f"RETURN node.{text_prop}, score, node.{id_key}, node.kind, "
-                    + "node.occurred_at, node.conversation_id, node.message_id, node.confidence "
+                    + "node.occurred_at, node.conversation_id, node.message_id, node.confidence, "
+                    + "node.created_at "
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
@@ -963,6 +975,7 @@ async def recall(
                             "episode_kind": row[3], "occurred_at": row[4],
                             "conversation_id": row[5], "message_id": row[6],
                             "confidence": row[7] if len(row) > 7 else None,
+                            "ingested_at": row[8] if len(row) > 8 else None,
                             "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
                         },
                     ))
@@ -971,7 +984,7 @@ async def recall(
                     prefix
                     + f"WHERE {' AND '.join(where_parts)} "
                     + f"RETURN node.{text_prop}, score, node.{id_key}, node.key, "
-                    + "node.valid_from, node.valid_to, node.confidence "
+                    + "node.valid_from, node.valid_to, node.confidence, node.created_at "
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
@@ -982,6 +995,7 @@ async def recall(
                         metadata={
                             "id": row[2], "source": "preference", "key": row[3],
                             "valid_from": row[4], "valid_to": row[5], "confidence": row[6],
+                            "ingested_at": row[7],
                             "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
                         },
                     ))
@@ -1075,6 +1089,7 @@ async def touch_memories(*, user_id: int, hits: list[MemoryHit]) -> None:
         label, id_key = _vector_spec(kind)
         await _write(
             f"MATCH (node:{label}) WHERE node.user_id=$uid AND node.{id_key} IN $ids "
+            "AND NOT COALESCE(node.protected, false) "
             "SET node.last_accessed_at=$now, "
             "node.confidence = CASE WHEN node.confidence IS NULL THEN 0.5 "
             "WHEN node.confidence + 0.05 > 1.0 THEN 1.0 "
@@ -1179,6 +1194,7 @@ def _expand_memory_seeds_sync(
                     "occurred_at": properties.get("occurred_at"),
                     "valid_from": properties.get("valid_from"),
                     "valid_to": properties.get("valid_to"),
+                    "ingested_at": properties.get("created_at"),
                     "graph_distance": depth,
                     "evidence": {"seed_kind": seed_kind, "seed_id": seed_id},
                     "path": [{

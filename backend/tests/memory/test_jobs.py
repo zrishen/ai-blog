@@ -119,3 +119,81 @@ async def test_decay_memories_returns_graph_count(monkeypatch):
     assert await jobs.decay_memories() == 3
     assert "SET n.confidence" in captured["cypher"]
     assert "threshold" in captured["params"]
+
+
+class _FakeResult:
+    def __init__(self, rows):
+        self.result_set = rows
+
+
+@pytest.mark.asyncio
+async def test_decay_memories_skips_protected_nodes(monkeypatch):
+    """decay 只降未保护节点：cypher 必须含 NOT COALESCE(n.protected, false) 跳过 brain 手动修正的记忆。"""
+    captured = {}
+
+    async def fake_write(cypher, params):
+        captured["cypher"] = cypher
+        return _FakeResult([[0]])
+
+    monkeypatch.setattr(jobs.graph_store, "_write", fake_write)
+    monkeypatch.setattr(
+        jobs.graph_store, "_utcnow", lambda: datetime(2026, 8, 1, tzinfo=timezone.utc)
+    )
+
+    await jobs.decay_memories()
+    assert "COALESCE(n.protected, false)" in captured["cypher"]  # protected 节点不衰减
+
+
+@pytest.mark.asyncio
+async def test_merge_same_as_dry_run_counts_sources_without_writes(monkeypatch):
+    """dry_run 只统计 SAME_AS 源数量，不执行任何写。"""
+    writes = []
+
+    async def fake_read(cypher, params):
+        return _FakeResult([["src-1", "canon-1", 7], ["src-2", "canon-2", 7]])
+
+    async def fake_write(cypher, params):
+        writes.append((cypher, params))
+
+    monkeypatch.setattr(jobs.graph_store, "_read", fake_read)
+    monkeypatch.setattr(jobs.graph_store, "_write", fake_write)
+
+    result = await jobs.merge_same_as(user_id=7, dry_run=True)
+    assert result == {"mode": "dry_run", "source_nodes": 2}
+    assert writes == []
+
+
+@pytest.mark.asyncio
+async def test_merge_same_as_redirects_edges_merges_props_and_deletes_source(monkeypatch):
+    """execute：每个源节点重定向 5 入边 + 1 出边、合并属性、DETACH DELETE 源。"""
+    writes = []
+
+    async def fake_read(cypher, params):
+        if "RETURN src.entity_id" in cypher:
+            return _FakeResult([["src-1", "canon-1", 7]])
+        return _FakeResult([[[], "src note", 0.5, ["canon-alias"], "", 0.9]])
+
+    async def fake_write(cypher, params):
+        writes.append(cypher)
+
+    monkeypatch.setattr(jobs.graph_store, "_read", fake_read)
+    monkeypatch.setattr(jobs.graph_store, "_write", fake_write)
+
+    result = await jobs.merge_same_as(user_id=7)
+    assert result == {"mode": "execute", "source_nodes_merged": 1}
+    assert sum("MERGE" in w for w in writes) == 6  # 5 入边 + 1 出边
+    assert any("SET canon.aliases" in w for w in writes)
+    assert any("DETACH DELETE src" in w for w in writes)
+
+
+def test_merge_same_as_cli_requires_explicit_scope():
+    parser = jobs._build_cli_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["merge-same-as"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["merge-same-as", "--user-id", "0"])
+    args = parser.parse_args(["merge-same-as", "--user-id", "7", "--dry-run"])
+    assert args.user_id == 7
+    assert args.dry_run is True
+    assert parser.parse_args(["merge-same-as", "--all-users"]).all_users is True

@@ -244,6 +244,7 @@ async def test_correct_fact_preserves_history_with_supersedes(monkeypatch):
         "object_text": "New company",
         "confidence": 0.9,
         "source_doc_id": "document-1",
+        "protected": True,
     }
     assert captured["supersedes"] == {"new_fact_id": "new-fact", "old_fact_id": "old-fact"}
 
@@ -266,7 +267,7 @@ async def test_update_preference_versions_existing_value(monkeypatch):
         writes.append((cypher, params))
 
     async def add_preference(**kwargs):
-        assert kwargs == {"user_id": 7, "key": "tone", "value": "detailed", "confidence": 0.8}
+        assert kwargs == {"user_id": 7, "key": "tone", "value": "detailed", "confidence": 0.8, "protected": True}
         return "new-pref"
 
     monkeypatch.setattr(graph_store, "get_preference", get_preference)
@@ -308,6 +309,7 @@ async def test_touch_memories_refreshes_last_accessed_skipping_chunk(monkeypatch
     for cypher, params in writes:
         assert "SET node.last_accessed_at=$now" in cypher
         assert "node.user_id=$uid" in cypher
+        assert "COALESCE(node.protected, false)" in cypher  # protected 节点不 touch
         assert params["uid"] == 7
         assert "now" in params
     assert all(":Chunk" not in c and ":Preference" not in c for c, _ in writes)
@@ -366,3 +368,40 @@ async def test_delete_memory_uses_user_scoped_label(monkeypatch):
     assert await graph_store.delete_memory(user_id=7, memory_type="episode", memory_id="episode-1")
     assert "Episode" in writes[0][0]
     assert writes[0][1] == {"uid": 7, "mid": "episode-1"}
+
+
+@pytest.mark.asyncio
+async def test_add_fact_persists_protected_flag(monkeypatch):
+    """add_fact(protected=True) 写入 protected 属性，保护 brain 手动修正的事实不被衰减。"""
+    writes = []
+
+    async def fake_write(cypher, params):
+        writes.append((cypher, params))
+
+    monkeypatch.setattr(graph_store, "_write", fake_write)
+
+    await graph_store.add_fact(
+        user_id=7, subject_id="e1", predicate="works_at", object_text="Acme", protected=True,
+    )
+
+    create_cypher, create_params = writes[0]
+    assert "protected:$prot" in create_cypher
+    assert create_params["prot"] is True
+
+
+@pytest.mark.asyncio
+async def test_add_preference_persists_created_at_and_protected(monkeypatch):
+    """add_preference 写入 created_at（transaction time）与 protected 标记。"""
+    writes = []
+
+    async def fake_write(cypher, params):
+        writes.append((cypher, params))
+
+    monkeypatch.setattr(graph_store, "_write", fake_write)
+
+    await graph_store.add_preference(user_id=7, key="tone", value="concise", protected=True)
+
+    cypher, params = writes[0]
+    assert "created_at:$now" in cypher
+    assert "protected:$prot" in cypher
+    assert params["prot"] is True

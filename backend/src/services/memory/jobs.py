@@ -26,11 +26,19 @@ def _positive_int(value: str) -> int:
 
 
 async def decay_memories() -> int:
-    """Lower confidence for memories that have not been accessed recently."""
+    """衰减长期未访问记忆的 confidence（用进废退：recall 命中 touch 强化对冲 decay）。
+
+    作用范围由节点属性隐式界定（FalkorDB 不支持多 label，无需显式匹配）：
+    - Entity / Fact / Preference：有 confidence + last_accessed_at，参与用进废退（高频 touch 强化、低频衰减）。
+    - Episode 隐式排除：无 confidence（n.confidence > 0.1 对 null 为 false），其遗忘靠 rerank recency。
+    - Chunk 隐式排除：原文层无 last_accessed_at。
+    - protected 排除：brain 手动修正 / SUPERSEDES 权威值不衰减。
+    """
     threshold = (graph_store._utcnow() - timedelta(days=settings.memory_decay_days)).isoformat()
     rs = await graph_store._write(
         "MATCH (n) WHERE n.last_accessed_at IS NOT NULL AND n.last_accessed_at < $threshold "
-        "AND n.confidence > 0.1 SET n.confidence = n.confidence * 0.5 RETURN count(n)",
+        "AND n.confidence > 0.1 AND NOT COALESCE(n.protected, false) "
+        "SET n.confidence = n.confidence * 0.5 RETURN count(n)",
         {"threshold": threshold},
     )
     rows = graph_store._rows(rs)
@@ -175,6 +183,96 @@ async def reindex_all(
     )
 
 
+# SAME_AS 源节点的边重定向到 canonical：(edge, 对端 label, 方向)。FalkorDB 要求节点带 label，
+# 故按边类型固定对端 label（MENTIONS←Chunk / SUBJECT|OBJECT←Fact / INVOLVES←Episode /
+# SOURCES←Document / RELATES_TO→Entity）；SAME_AS 自身边不迁移。
+_SAME_AS_REDIRECTS = (
+    (schema.MENTIONS, schema.CHUNK, "in"),
+    (schema.SUBJECT, schema.FACT, "in"),
+    (schema.OBJECT, schema.FACT, "in"),
+    (schema.INVOLVES, schema.EPISODE, "in"),
+    (schema.SOURCES, schema.DOCUMENT, "in"),
+    (schema.RELATES_TO, schema.ENTITY, "out"),
+)
+
+
+async def merge_same_as(*, user_id: int | None = None, dry_run: bool = False) -> dict:
+    """合并 SAME_AS 历史源实体到 canonical：边重定向 + 属性合并 + 删源。
+
+    B 修复前 consolidate_entity 会新建重复实体 src 并 src-[:SAME_AS]->canonical；修复后
+    不再产生新源，本命令清理存量——把 src 的图边 MERGE 到 canonical（去重），合并 src 的
+    aliases/description/confidence，再 DETACH DELETE src。recall/find/list 已只用 canonical，
+    迁移仅为消脏边、统一锚点。dry_run 只统计不执行。
+    """
+    where = "WHERE src.user_id = canonical.user_id"
+    params: dict = {}
+    if user_id is not None:
+        where += " AND src.user_id = $uid"
+        params["uid"] = user_id
+    pairs_rs = await graph_store._read(
+        f"MATCH (src:{schema.ENTITY})-[:{schema.SAME_AS}]->(canonical:{schema.ENTITY}) "
+        f"{where} RETURN src.entity_id, canonical.entity_id, src.user_id",
+        params,
+    )
+    pairs = graph_store._rows(pairs_rs)
+
+    if dry_run:
+        return {"mode": "dry_run", "source_nodes": len(pairs)}
+
+    merged = 0
+    for src_id, canon_id, uid in pairs:
+        sp: dict = {"uid": uid, "sid": src_id, "cid": canon_id}
+        pair_match = (
+            f"MATCH (src:{schema.ENTITY} {{user_id:$uid, entity_id:$sid}})"
+            f"-[:{schema.SAME_AS}]->(canon:{schema.ENTITY} {{user_id:$uid, entity_id:$cid}}) "
+        )
+        for edge, label, direction in _SAME_AS_REDIRECTS:
+            if direction == "in":
+                await graph_store._write(
+                    pair_match + f"MATCH (x:{label} {{user_id:$uid}})-[:{edge}]->(src) "
+                    f"MERGE (x)-[:{edge}]->(canon)",
+                    sp,
+                )
+            else:
+                await graph_store._write(
+                    pair_match + f"MATCH (src)-[:{edge}]->(y:{label} {{user_id:$uid}}) "
+                    f"WHERE y.entity_id <> $cid "  # 防自环：src-RELATES_TO->canon 不重定向成 canon->canon
+                    f"MERGE (canon)-[:{edge}]->(y)",
+                    sp,
+                )
+        prop_rs = await graph_store._read(
+            f"MATCH (src:{schema.ENTITY} {{user_id:$uid, entity_id:$sid}}), "
+            f"(canon:{schema.ENTITY} {{user_id:$uid, entity_id:$cid}}) "
+            f"RETURN src.aliases, src.description, src.confidence, "
+            f"canon.aliases, canon.description, canon.confidence",
+            sp,
+        )
+        prop_rows = graph_store._rows(prop_rs)
+        if prop_rows:
+            s_aliases, s_desc, s_conf, c_aliases, c_desc, c_conf = prop_rows[0]
+            merged_aliases: list = []
+            for alias in (*(c_aliases or []), *(s_aliases or [])):
+                if alias and alias not in merged_aliases:
+                    merged_aliases.append(alias)
+            merged_desc = c_desc or s_desc or ""
+            confs = [c for c in (c_conf, s_conf) if isinstance(c, (int, float))]
+            merged_conf = max(confs) if confs else 0
+            await graph_store._write(
+                f"MATCH (canon:{schema.ENTITY} {{user_id:$uid, entity_id:$cid}}) "
+                "SET canon.aliases = $aliases, canon.description = $desc, canon.confidence = $conf",
+                {**sp, "aliases": merged_aliases, "desc": merged_desc, "conf": merged_conf},
+            )
+        await graph_store._write(
+            f"MATCH (src:{schema.ENTITY} {{user_id:$uid, entity_id:$sid}}) DETACH DELETE src",
+            sp,
+        )
+        merged += 1
+
+    if merged:
+        logger.info("Brain SAME_AS merge: %d source node(s) merged into canonical", merged)
+    return {"mode": "execute", "source_nodes_merged": merged}
+
+
 async def run_maintenance() -> None:
     await decay_memories()
     await reconcile_orphans()
@@ -221,31 +319,44 @@ def _build_cli_parser() -> argparse.ArgumentParser:
     )
     reindex.add_argument("--batch-size", type=_positive_int)
     reindex.add_argument("--force", action="store_true")
+
+    merge = subparsers.add_parser("merge-same-as", help="合并 SAME_AS 历史源实体到 canonical")
+    merge_scope = merge.add_mutually_exclusive_group(required=True)
+    merge_scope.add_argument("--user-id", type=_positive_int)
+    merge_scope.add_argument("--all-users", action="store_true")
+    merge.add_argument("--dry-run", action="store_true")
     return parser
 
 
 async def _run_cli() -> int:
     args = _build_cli_parser().parse_args()
-    if args.command != "reindex-all":
-        return 2
     if not await graph_store.ping():
-        logger.error("FalkorDB unavailable; reindex aborted")
+        logger.error("FalkorDB unavailable; %s aborted", args.command)
         return 1
-    report = await reindex_all(
-        user_id=None if args.all_users else args.user_id,
-        kinds=args.kinds,
-        batch_size=args.batch_size,
-        force=args.force,
-    )
-    logger.info(
-        "Brain reindex completed: selected=%d embedded=%d skipped=%d failed=%d by_kind=%s",
-        report.selected,
-        report.embedded,
-        report.skipped,
-        report.failed,
-        report.by_kind,
-    )
-    return 0
+    if args.command == "reindex-all":
+        report = await reindex_all(
+            user_id=None if args.all_users else args.user_id,
+            kinds=args.kinds,
+            batch_size=args.batch_size,
+            force=args.force,
+        )
+        logger.info(
+            "Brain reindex completed: selected=%d embedded=%d skipped=%d failed=%d by_kind=%s",
+            report.selected,
+            report.embedded,
+            report.skipped,
+            report.failed,
+            report.by_kind,
+        )
+        return 0
+    if args.command == "merge-same-as":
+        result = await merge_same_as(
+            user_id=None if args.all_users else args.user_id,
+            dry_run=args.dry_run,
+        )
+        logger.info("Brain SAME_AS merge result: %s", result)
+        return 0
+    return 2
 
 
 if __name__ == "__main__":

@@ -11,6 +11,9 @@ from src.services.memory import graph_store, memory_embeddings
 
 logger = logging.getLogger(__name__)
 
+# Preference 抽取置信度门槛：低于此值丢弃。与 prompts.py 抽取 prompt 的 "≥0.7" 保持一致（人工同步）。
+_PREFERENCE_MIN_CONFIDENCE = 0.7
+
 
 async def consolidate_entity(
     *, user_id: int, name: str, entity_type: str | None = None,
@@ -35,14 +38,17 @@ async def consolidate_fact(
     *, user_id: int, subject_id: str, predicate: str, object_text: str,
     object_id: str | None = None, confidence: float = 1.0, source_doc_id: str | None = None,
 ) -> str:
-    """冲突检测：同主体+谓词的有效 Fact 若 object 相同 → 复用（去重）；object 不同 → 新建并 SUPERSEDES 旧 Fact。object_id 非空时建 OBJECT 边。返回 fact_id。"""
+    """冲突检测：同主体+谓词的有效 Fact 若 object 相同 → 复用（去重）；object 不同 → 新建并 SUPERSEDES 旧 Fact。
+    SUPERSEDES 表示事实纠正/更新，新 Fact 是当前权威值，标 protected 不参与衰减。object_id 非空时建 OBJECT 边。返回 fact_id。"""
     active = await graph_store.find_active_facts(user_id=user_id, subject_id=subject_id, predicate=predicate)
     for old in active:
         if old["object_text"] == object_text:
             return old["fact_id"]  # 相同事实已存在，复用避免重复累积
+    will_supersede = any(old["object_text"] != object_text for old in active)
     new_id = await graph_store.add_fact(
         user_id=user_id, subject_id=subject_id, predicate=predicate, object_text=object_text,
         object_id=object_id, confidence=confidence, source_doc_id=source_doc_id,
+        protected=will_supersede,
     )
     for old in active:
         if old["object_text"] != object_text:
@@ -64,7 +70,7 @@ async def consolidate_preference(
     norm_value = (value or "").strip()
     if not norm_key or not norm_value:
         return None
-    if confidence < 0.7:
+    if confidence < _PREFERENCE_MIN_CONFIDENCE:
         return None
     existing = await graph_store.find_active_preference(user_id=user_id, key=norm_key)
     if existing is None:
