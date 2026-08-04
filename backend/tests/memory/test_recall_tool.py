@@ -128,3 +128,33 @@ async def test_base_recall_memory_handles_embedding_failure(monkeypatch):
     result = await memory_tool.base_recall_memory.ainvoke("query")
     assert "无法生成查询嵌入" in result
     assert recalled == []
+
+
+def test_format_memory_context_renders_fact_evolution():
+    """_format_memory_context：fact 带 replaced 时渲染'演化（取代旧值）'，
+    非 fact 或无 replaced 的 fact 不渲染该行。"""
+    from src.tools.memory import _format_memory_context
+
+    evolved = MemoryHit(
+        content="张三在谷歌工作",
+        kind="fact",
+        score=0.1,
+        metadata={"id": "f2", "replaced": ["苹果"]},
+    )
+    plain = MemoryHit(
+        content="用户偏好简短回答",
+        kind="preference",
+        score=0.2,
+        metadata={"id": "p1"},
+    )
+    no_replace = MemoryHit(
+        content="某独立事实",
+        kind="fact",
+        score=0.3,
+        metadata={"id": "f3"},
+    )
+
+    out = _format_memory_context([evolved, plain, no_replace])
+    assert "演化（取代旧值）：苹果" in out
+    # 只有 evolved 命中 replaced，演化行全局仅出现一次
+    assert out.count("演化（取代旧值）") == 1

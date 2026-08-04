@@ -1014,7 +1014,36 @@ async def recall(
         )
         return ranked[:top_k]
 
-    return await asyncio.to_thread(_do)
+    ranked = await asyncio.to_thread(_do)
+    return await _annotate_superseded_replacements(user_id=user_id, hits=ranked)
+
+
+async def _annotate_superseded_replacements(
+    *, user_id: int, hits: list[MemoryHit]
+) -> list[MemoryHit]:
+    """Fact 演化标注：为命中的当前 Fact 回填它取代的旧值（metadata.replaced）。
+    拆到独立纯 MATCH 查询：queryNodes YIELD 内做 OPTIONAL MATCH + 聚合/路径表达式会让
+    FalkorDB SDK 迭代异常（StopIteration），纯 MATCH 批量查询稳定。"""
+    fact_ids = [
+        str((h.metadata or {}).get("id"))
+        for h in hits
+        if h.kind == "fact" and (h.metadata or {}).get("id")
+    ]
+    if not fact_ids:
+        return hits
+    rs = await _read(
+        f"MATCH (f:{S.FACT} {{user_id:$uid}})-[:{S.SUPERSEDES}]->(old:{S.FACT}) "
+        "WHERE f.fact_id IN $ids RETURN f.fact_id, old.object_text",
+        {"uid": user_id, "ids": fact_ids},
+    )
+    replaced_map: dict[str, list[str]] = {}
+    for fid, old_obj in _rows(rs):
+        if old_obj:
+            replaced_map.setdefault(fid, []).append(old_obj)
+    for hit in hits:
+        if hit.kind == "fact" and hit.metadata:
+            hit.metadata["replaced"] = replaced_map.get(str(hit.metadata.get("id")), [])
+    return hits
 
 
 async def touch_memories(*, user_id: int, hits: list[MemoryHit]) -> None:

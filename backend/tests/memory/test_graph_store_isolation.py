@@ -79,6 +79,11 @@ class _RacingVectorIndexGraph:
         raise ResponseError("Attribute 'embedding_baai_bge_m3' is already indexed")
 
 
+async def _empty_read(cypher, params=None):
+    """recall 演化标注的 SUPERSEDES 查询在 mock 隔离测试里无意义，返回空。"""
+    return _Result([])
+
+
 @pytest.mark.asyncio
 async def test_ensure_vector_index_skips_existing_vector_index(monkeypatch):
     graph = _ExistingVectorIndexGraph()
@@ -280,6 +285,7 @@ async def test_recall_kinds_and_only_valid_control_queries(monkeypatch):
         return {"fact", "episode"}
 
     monkeypatch.setattr(graph_store, "list_vector_indexed_kinds", indexed_kinds)
+    monkeypatch.setattr(graph_store, "_read", _empty_read)
 
     hits = await recall_impl(
         user_id=7,
@@ -335,6 +341,7 @@ async def test_recall_expands_user_scoped_graph_and_reranks(monkeypatch):
         return {"entity"}
 
     monkeypatch.setattr(graph_store, "list_vector_indexed_kinds", indexed_kinds)
+    monkeypatch.setattr(graph_store, "_read", _empty_read)
 
     hits = await recall_impl(
         user_id=7,

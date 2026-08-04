@@ -274,6 +274,94 @@ async def test_knowledge_node_recall_supports_kinds_validity_and_user_isolation(
 
 
 @pytest.mark.asyncio
+async def test_recall_fact_annotates_superseded_values(monkeypatch, falkordb_client):
+    """SUPERSEDES 演化标注：correct_fact 后，recall 默认（only_valid=True）返回当前 Fact，
+    metadata.replaced 列出它取代的旧值，让模型理解事实演化；历史旧 Fact 不带 replaced。"""
+    graph_name = f"supersede_recall_test_{uuid.uuid4().hex}"
+    graph = falkordb_client.select_graph(graph_name)
+    monkeypatch.setattr(graph_store, "_client", falkordb_client)
+    monkeypatch.setattr(graph_store.settings, "falkordb_graph_name", graph_name)
+
+    try:
+        await graph_store.ensure_graph()
+        entity_id = await graph_store.add_entity(
+            user_id=101,
+            name="Zhang San",
+            entity_type="person",
+            description="engineer",
+        )
+        old_fact_id = await graph_store.add_fact(
+            user_id=101,
+            subject_id=entity_id,
+            predicate="works_at",
+            object_text="Apple",
+        )
+        new_fact_id = await graph_store.add_fact(
+            user_id=101,
+            subject_id=entity_id,
+            predicate="works_at",
+            object_text="Google",
+        )
+        await graph_store.supersede_fact(new_fact_id=new_fact_id, old_fact_id=old_fact_id)
+        await upsert_node_embeddings_impl(
+            kind="fact",
+            embedding_model="_test_model",
+            vector_dim=2,
+            rows=[
+                {
+                    "user_id": 101,
+                    "memory_id": new_fact_id,
+                    "text": "subject: Zhang San\npredicate: works_at\nobject: Google",
+                    "embedding": [1.0, 0.0],
+                },
+                {
+                    "user_id": 101,
+                    "memory_id": old_fact_id,
+                    "text": "subject: Zhang San\npredicate: works_at\nobject: Apple",
+                    "embedding": [0.9, 0.1],
+                },
+            ],
+        )
+
+        hits = []
+        for _ in range(20):
+            hits = await recall_impl(
+                user_id=101,
+                query_embedding=[1.0, 0.0],
+                embedding_model="_test_model",
+                top_k=8,
+                kinds=["fact"],
+                hops=0,
+            )
+            if hits:
+                break
+            await asyncio.sleep(0.1)
+
+        # 默认 only_valid=True：旧 fact（valid_to 置位）被过滤，只剩当前 fact。
+        fact_hits = [hit for hit in hits if hit.kind == "fact"]
+        assert len(fact_hits) == 1
+        assert fact_hits[0].metadata["id"] == new_fact_id
+        assert fact_hits[0].metadata["replaced"] == ["Apple"]
+        assert fact_hits[0].metadata["valid_to"] is None
+
+        # only_valid=False：历史旧 fact 也返回，但它没取代任何东西，replaced 为空。
+        all_hits = await recall_impl(
+            user_id=101,
+            query_embedding=[1.0, 0.0],
+            embedding_model="_test_model",
+            top_k=8,
+            kinds=["fact"],
+            only_valid=False,
+            hops=0,
+        )
+        old_hit = next(h for h in all_hits if h.metadata["id"] == old_fact_id)
+        assert old_hit.metadata["replaced"] == []
+        assert old_hit.metadata["valid_to"] is not None
+    finally:
+        graph.delete()
+
+
+@pytest.mark.asyncio
 async def test_consolidate_preference_first_write_then_versions(monkeypatch, falkordb_client):
     """方案 A 端到端（真实 FalkorDB）：首次创建 → 重复跳过 → value 变更版本化。
 

@@ -70,6 +70,7 @@ def _format_memory_context(hits) -> str:
         status = "历史" if metadata.get("valid_to") else "当前"
         evidence = metadata.get("evidence")
         path = metadata.get("path")
+        replaced = metadata.get("replaced") if hit.kind == "fact" else None
         block = (
             f"\n[来源 {index}]\n"
             f"记忆类型：{hit.kind}\n"
@@ -77,7 +78,8 @@ def _format_memory_context(hits) -> str:
             f"相关距离：{score}\n"
             f"排序分：{metadata.get('rank_score', 'unknown')}\n"
             f"有效状态：{status}\n"
-            f"时间：{time_value or 'unknown'}\n"
+            + (f"演化（取代旧值）：{'; '.join(replaced)}\n" if replaced else "")
+            + f"时间：{time_value or 'unknown'}\n"
             f"证据：{evidence or 'direct-vector-match'}\n"
             f"图路径：{path or '[]'}\n"
             f"内容：\n{content}\n"
