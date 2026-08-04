@@ -1,5 +1,6 @@
-"""Periodic maintenance for the AI brain."""
+"""Periodic maintenance and explicit reindexing for the AI brain."""
 
+import argparse
 import asyncio
 import logging
 from datetime import timedelta
@@ -10,11 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogPost, FileDocument, RagSource
 from src.database.session import async_session
-from src.services.memory import graph_store
+from src.services.memory import graph_store, memory_embeddings, schema
 
 logger = logging.getLogger(__name__)
 
 _maintenance_task: asyncio.Task | None = None
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
 
 
 async def decay_memories() -> int:
@@ -151,6 +159,22 @@ async def reconcile_orphans(db: AsyncSession | None = None) -> int:
         return await _reconcile_orphans_in_session(session)
 
 
+async def reindex_all(
+    *,
+    user_id: int | None = None,
+    kinds: list[str] | None = None,
+    batch_size: int | None = None,
+    force: bool = False,
+) -> memory_embeddings.EmbeddingIndexReport:
+    """显式补齐当前 embedding 模型空间，不加入周期维护以避免意外成本。"""
+    return await memory_embeddings.reindex_all(
+        user_id=user_id,
+        kinds=kinds,
+        batch_size=batch_size,
+        force=force,
+    )
+
+
 async def run_maintenance() -> None:
     await decay_memories()
     await reconcile_orphans()
@@ -180,3 +204,49 @@ def schedule_maintenance() -> None:
             _maintenance_task = None
 
     task.add_done_callback(clear_finished)
+
+
+def _build_cli_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="AI 大脑维护任务")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    reindex = subparsers.add_parser("reindex-all", help="补齐当前 embedding 模型的节点向量")
+    scope = reindex.add_mutually_exclusive_group(required=True)
+    scope.add_argument("--user-id", type=_positive_int)
+    scope.add_argument("--all-users", action="store_true")
+    reindex.add_argument(
+        "--kind",
+        action="append",
+        choices=list(schema.VECTOR_KIND_ORDER),
+        dest="kinds",
+    )
+    reindex.add_argument("--batch-size", type=_positive_int)
+    reindex.add_argument("--force", action="store_true")
+    return parser
+
+
+async def _run_cli() -> int:
+    args = _build_cli_parser().parse_args()
+    if args.command != "reindex-all":
+        return 2
+    if not await graph_store.ping():
+        logger.error("FalkorDB unavailable; reindex aborted")
+        return 1
+    report = await reindex_all(
+        user_id=None if args.all_users else args.user_id,
+        kinds=args.kinds,
+        batch_size=args.batch_size,
+        force=args.force,
+    )
+    logger.info(
+        "Brain reindex completed: selected=%d embedded=%d skipped=%d failed=%d by_kind=%s",
+        report.selected,
+        report.embedded,
+        report.skipped,
+        report.failed,
+        report.by_kind,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(_run_cli()))

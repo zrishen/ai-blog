@@ -52,6 +52,49 @@ async def test_brain_write_endpoints_are_user_scoped(client: AsyncClient, monkey
 
 
 @pytest.mark.asyncio
+async def test_brain_service_indexes_new_fact_and_preference_versions(monkeypatch):
+    indexed = []
+
+    async def correct_fact(**kwargs):
+        return {
+            "fact_id": "new-fact",
+            "subject_id": "entity-1",
+            "predicate": "works_at",
+            "object_text": "New company",
+            "confidence": 0.9,
+            "source_doc_id": None,
+            "valid_from": "2026-08-03T00:00:00",
+            "valid_to": None,
+        }
+
+    async def update_preference(**kwargs):
+        return {
+            "pref_id": "new-pref",
+            "key": "tone",
+            "value": "detailed",
+            "confidence": 0.8,
+            "valid_from": "2026-08-03T00:00:00",
+        }
+
+    async def index_refs(refs):
+        indexed.extend(refs)
+
+    monkeypatch.setattr(brain_service.graph_store, "correct_fact", correct_fact)
+    monkeypatch.setattr(brain_service.graph_store, "update_preference", update_preference)
+    monkeypatch.setattr(
+        brain_service.memory_embeddings, "index_node_refs_best_effort", index_refs
+    )
+
+    await brain_service.correct_fact(7, "old-fact", object_text="New company")
+    await brain_service.update_preference(7, "old-pref", value="detailed")
+
+    assert [(ref.kind, ref.user_id, ref.memory_id) for ref in indexed] == [
+        ("fact", 7, "new-fact"),
+        ("preference", 7, "new-pref"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_brain_writes_respect_memory_feature_flag(monkeypatch):
     monkeypatch.setattr(settings, "memory_enabled", False)
 

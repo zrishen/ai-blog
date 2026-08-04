@@ -18,6 +18,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import math
 from typing import Any
 
 from falkordb import FalkorDB
@@ -43,7 +44,7 @@ def _new_id() -> str:
 
 @dataclass
 class MemoryHit:
-    """recall 单条结果。"""
+    """recall 单条结果。score 是 FalkorDB 向量距离，越小越相关。"""
     content: str
     kind: str                      # entity / fact / episode / chunk / preference
     score: float | None = None
@@ -65,8 +66,84 @@ def _graph():
 
 
 def _safe_prop(slug: str) -> str:
-    """slug → 合法的向量属性名（embedding_<slug>）。"""
-    return "embedding_" + "".join(c if c.isalnum() else "_" for c in slug)
+    """slug → 合法且稳定的向量属性名（embedding_<slug>）。"""
+    normalized = slug.strip("_")
+    return "embedding_" + "".join(c if c.isalnum() else "_" for c in normalized)
+
+
+def _safe_text_prop(slug: str) -> str:
+    normalized = slug.strip("_")
+    return "embedding_source_" + "".join(c if c.isalnum() else "_" for c in normalized)
+
+
+def _vector_spec(kind: str) -> tuple[str, str]:
+    normalized = kind.strip().lower()
+    try:
+        return S.VECTOR_NODE_SPECS[normalized]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported memory vector kind: {kind}") from exc
+
+
+def _normalize_kinds(kinds: list[str] | None) -> list[str]:
+    if kinds is None:
+        return list(S.VECTOR_KIND_ORDER)
+    normalized: list[str] = []
+    for kind in kinds:
+        value = kind.strip().lower()
+        _vector_spec(value)
+        if value not in normalized:
+            normalized.append(value)
+    return normalized
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _recency_score(value: Any, *, now: datetime) -> float:
+    parsed = _parse_iso(value)
+    if parsed is None:
+        return 0.0
+    age_days = max(0.0, (now - parsed).total_seconds() / 86400)
+    return math.exp(-age_days / 90.0)
+
+
+def _rerank_score(hit: MemoryHit, *, now: datetime) -> float:
+    metadata = hit.metadata or {}
+    distance = hit.score if isinstance(hit.score, (int, float)) and math.isfinite(hit.score) else 2.0
+    semantic = max(0.0, min(1.0, 1.0 - distance / 2.0))
+    confidence = metadata.get("confidence")
+    confidence_score = (
+        max(0.0, min(1.0, float(confidence)))
+        if isinstance(confidence, (int, float)) and math.isfinite(confidence)
+        else 1.0
+    )
+    timestamp = metadata.get("occurred_at") or metadata.get("valid_from")
+    recency = _recency_score(timestamp, now=now) if timestamp else 1.0
+    graph_distance = int(metadata.get("graph_distance") or 0)
+    graph_score = 1.0 / (1.0 + max(0, graph_distance))
+    validity = 0.55 if metadata.get("valid_to") else 1.0
+    source_quality = 1.0 if metadata.get("source") not in {None, "memory"} else 0.85
+    return round(
+        0.55 * semantic
+        + 0.15 * confidence_score
+        + 0.12 * recency
+        + 0.10 * graph_score
+        + 0.05 * validity
+        + 0.03 * source_quality,
+        6,
+    )
 
 
 # ---------------- 客户端 / 索引 ----------------
@@ -86,53 +163,147 @@ async def ensure_graph() -> None:
     await _write("MERGE (:CortexMeta {key:'cortex'})", {})
 
 
-async def ensure_vector_index(embedding_model_slug: str, dim: int) -> None:
-    """按 embedding 模型 slug 幂等建 Chunk 向量索引（维度隔离：每模型一个 embedding_<slug> 属性）。"""
+def _index_rows(graph) -> list[tuple]:
+    result = _run(
+        graph,
+        "CALL db.indexes() "
+        "YIELD label, properties, types, options, entitytype, status "
+        "RETURN label, properties, types, options, entitytype, status",
+    )
+    return _rows(result)
 
-    def _exists(g, prop: str) -> bool:
-        result = _run(
-            g,
-            "CALL db.indexes() "
-            "YIELD label, properties, types, entitytype "
-            "RETURN label, properties, types, entitytype",
-        )
-        for label, properties, types, entitytype in _rows(result):
-            index_properties = [properties] if isinstance(properties, str) else (properties or [])
-            if isinstance(types, Mapping):
-                index_types = [
-                    index_type
-                    for property_types in types.values()
-                    for index_type in (
-                        property_types
-                        if isinstance(property_types, (list, tuple, set))
-                        else [property_types]
-                    )
-                ]
-            else:
-                index_types = [types] if isinstance(types, str) else (types or [])
-            if (
-                label == S.CHUNK
-                and prop in index_properties
-                and "VECTOR" in {str(index_type).upper() for index_type in index_types}
-                and str(entitytype).upper() == "NODE"
-            ):
-                return True
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return list(value)
+    return [value]
+
+
+def _vector_index_details(
+    row: tuple,
+    *,
+    label: str,
+    prop: str,
+) -> tuple[Mapping[str, Any], str] | None:
+    if len(row) < 6:
+        return None
+    index_label, properties, types, options, entitytype, status = row[:6]
+    index_properties = _as_list(properties)
+    if index_label != label or prop not in index_properties or str(entitytype).upper() != "NODE":
+        return None
+
+    property_types = types.get(prop) if isinstance(types, Mapping) else types
+    if "VECTOR" not in {str(index_type).upper() for index_type in _as_list(property_types)}:
+        return None
+
+    property_options: Any = options.get(prop) if isinstance(options, Mapping) else None
+    if not isinstance(property_options, Mapping) and isinstance(options, Mapping):
+        if "dimension" in options or "similarityFunction" in options:
+            property_options = options
+    if not isinstance(property_options, Mapping):
+        property_options = {}
+    return property_options, str(status or "")
+
+
+def _validate_vector_index(
+    row: tuple,
+    *,
+    label: str,
+    prop: str,
+    dim: int | None = None,
+    require_operational: bool = True,
+) -> bool:
+    details = _vector_index_details(row, label=label, prop=prop)
+    if details is None:
         return False
+    options, status = details
+    similarity = str(options.get("similarityFunction", "")).lower()
+    if not options and dim is None:
+        return not require_operational or not status or status.upper() == "OPERATIONAL"
+    if similarity != "cosine":
+        raise RuntimeError(
+            f"Vector index {label}.{prop} uses incompatible similarity function: {similarity or 'unknown'}"
+        )
+    if dim is not None:
+        try:
+            indexed_dim = int(options.get("dimension"))
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"Vector index {label}.{prop} has no valid dimension") from exc
+        if indexed_dim != dim:
+            raise RuntimeError(
+                f"Vector index {label}.{prop} dimension mismatch: expected {dim}, actual {indexed_dim}"
+            )
+    return not require_operational or status.upper() == "OPERATIONAL"
+
+
+async def ensure_vector_index(
+    embedding_model_slug: str,
+    dim: int,
+    *,
+    kind: str = "chunk",
+) -> None:
+    """按节点类型与 embedding slug 幂等建立向量索引。"""
+    label, _ = _vector_spec(kind)
 
     def _do() -> None:
-        g = _graph()
+        graph = _graph()
         prop = _safe_prop(embedding_model_slug)
-        if _exists(g, prop):
+        rows = _index_rows(graph)
+        existing = next(
+            (row for row in rows if _vector_index_details(row, label=label, prop=prop) is not None),
+            None,
+        )
+        if existing is not None:
+            _validate_vector_index(
+                existing,
+                label=label,
+                prop=prop,
+                dim=dim,
+                require_operational=False,
+            )
             return
         try:
-            g.create_node_vector_index(S.CHUNK, prop, dim=dim, similarity_function="cosine")
+            graph.create_node_vector_index(label, prop, dim=dim, similarity_function="cosine")
         except ResponseError:
             # Another backend worker may create the same index after our check.
-            if _exists(g, prop):
+            rows = _index_rows(graph)
+            existing = next(
+                (row for row in rows if _vector_index_details(row, label=label, prop=prop) is not None),
+                None,
+            )
+            if existing is not None:
+                _validate_vector_index(
+                    existing,
+                    label=label,
+                    prop=prop,
+                    dim=dim,
+                    require_operational=False,
+                )
                 return
             raise
 
     await asyncio.to_thread(_do)
+
+
+async def list_vector_indexed_kinds(embedding_model_slug: str) -> set[str]:
+    """返回当前 embedding 空间已经建立向量索引的节点类型。"""
+
+    def _do() -> set[str]:
+        prop = _safe_prop(embedding_model_slug)
+        rows = _index_rows(_graph())
+        return {
+            kind
+            for kind, (label, _) in S.VECTOR_NODE_SPECS.items()
+            if any(
+                _validate_vector_index(row, label=label, prop=prop)
+                for row in rows
+                if _vector_index_details(row, label=label, prop=prop) is not None
+            )
+        }
+
+    return await asyncio.to_thread(_do)
 
 
 # ---------------- 知识层写入 ----------------
@@ -214,6 +385,156 @@ async def add_preference(*, user_id: int, key: str, value: str, confidence: floa
          "vf": _now_iso(), "vt": None},
     )
     return pid
+
+
+async def fetch_nodes_for_embedding(
+    *,
+    kind: str,
+    embedding_model: str,
+    user_id: int | None = None,
+    ids: list[str] | None = None,
+    cursor: tuple[int, str] | None = None,
+    limit: int = 32,
+    missing_only: bool = True,
+) -> list[dict]:
+    """读取知识节点的稳定语义字段，供在线索引和 backfill。"""
+    normalized = kind.strip().lower()
+    label, id_key = _vector_spec(normalized)
+    prop = _safe_prop(embedding_model)
+    text_prop = _safe_text_prop(embedding_model)
+    filters = []
+    params: dict[str, Any] = {"limit": max(1, limit)}
+    if user_id is not None:
+        filters.append("node.user_id=$uid")
+        params["uid"] = user_id
+    if ids is not None:
+        if not ids:
+            return []
+        filters.append(f"node.{id_key} IN $ids")
+        params["ids"] = ids
+    if cursor is not None:
+        filters.append(
+            f"(node.user_id > $cursor_uid OR "
+            f"(node.user_id = $cursor_uid AND node.{id_key} > $cursor_id))"
+        )
+        params.update({"cursor_uid": cursor[0], "cursor_id": cursor[1]})
+    if missing_only:
+        if normalized == "chunk":
+            filters.append(f"node.{prop} IS NULL")
+        else:
+            filters.append(f"(node.{prop} IS NULL OR node.{text_prop} IS NULL)")
+    where = "WHERE " + " AND ".join(filters) if filters else ""
+
+    if normalized == "chunk":
+        cypher = (
+            f"MATCH (node:{label}) {where} "
+            f"RETURN node.user_id, node.{id_key}, node.content "
+            f"ORDER BY node.user_id, node.{id_key} LIMIT $limit"
+        )
+    elif normalized == "entity":
+        entity_filters = ["canonical IS NULL", *filters]
+        cypher = (
+            f"MATCH (node:{label}) "
+            f"OPTIONAL MATCH (node)-[:{S.SAME_AS}]->(canonical:{S.ENTITY}) "
+            "WITH node, canonical "
+            f"WHERE {' AND '.join(entity_filters)} "
+            f"RETURN node.user_id, node.{id_key}, node.name, node.entity_type, "
+            "node.aliases, node.description "
+            f"ORDER BY node.user_id, node.{id_key} LIMIT $limit"
+        )
+    elif normalized == "fact":
+        cypher = (
+            f"MATCH (node:{label}) "
+            f"OPTIONAL MATCH (node)-[:{S.SUBJECT}]->(subject:{S.ENTITY}) "
+            "WITH node, CASE WHEN subject.user_id=node.user_id THEN subject.name ELSE NULL END AS subject_name "
+            f"{where} RETURN node.user_id, node.{id_key}, node.subject_id, subject_name, "
+            "node.predicate, node.object_text "
+            f"ORDER BY node.user_id, node.{id_key} LIMIT $limit"
+        )
+    elif normalized == "episode":
+        cypher = (
+            f"MATCH (node:{label}) {where} "
+            f"RETURN node.user_id, node.{id_key}, node.kind, node.summary "
+            f"ORDER BY node.user_id, node.{id_key} LIMIT $limit"
+        )
+    else:
+        cypher = (
+            f"MATCH (node:{label}) {where} "
+            f"RETURN node.user_id, node.{id_key}, node.key, node.value "
+            f"ORDER BY node.user_id, node.{id_key} LIMIT $limit"
+        )
+
+    rows = _rows(await _read(cypher, params))
+    if normalized == "chunk":
+        return [
+            {"user_id": row[0], "memory_id": row[1], "content": row[2]}
+            for row in rows
+        ]
+    if normalized == "entity":
+        return [
+            {
+                "user_id": row[0], "memory_id": row[1], "name": row[2],
+                "entity_type": row[3], "aliases": row[4] or [], "description": row[5],
+            }
+            for row in rows
+        ]
+    if normalized == "fact":
+        return [
+            {
+                "user_id": row[0], "memory_id": row[1], "subject_id": row[2],
+                "subject_name": row[3], "predicate": row[4], "object_text": row[5],
+            }
+            for row in rows
+        ]
+    if normalized == "episode":
+        return [
+            {"user_id": row[0], "memory_id": row[1], "kind": row[2], "summary": row[3]}
+            for row in rows
+        ]
+    return [
+        {"user_id": row[0], "memory_id": row[1], "key": row[2], "value": row[3]}
+        for row in rows
+    ]
+
+
+async def upsert_node_embeddings(
+    *,
+    kind: str,
+    embedding_model: str,
+    vector_dim: int,
+    rows: list[dict],
+) -> int:
+    """为节点写入当前 embedding 空间的向量和稳定文本。"""
+    normalized = kind.strip().lower()
+    label, id_key = _vector_spec(normalized)
+    if not rows:
+        return 0
+    for row in rows:
+        embedding = row.get("embedding") or []
+        if len(embedding) != vector_dim or not row.get("text", "").strip():
+            raise ValueError("Knowledge node embeddings must be non-empty and have one dimension")
+    await ensure_vector_index(embedding_model, vector_dim, kind=normalized)
+    prop = _safe_prop(embedding_model)
+    text_prop = _safe_text_prop(embedding_model)
+    updated = 0
+    for row in rows:
+        set_clause = f"SET node.{prop}=vecf32($embedding)"
+        params = {
+            "uid": row["user_id"],
+            "mid": row["memory_id"],
+            "embedding": row["embedding"],
+        }
+        if normalized != "chunk":
+            set_clause += f", node.{text_prop}=$text"
+            params["text"] = row["text"]
+        result = await _write(
+            f"MATCH (node:{label} {{user_id:$uid, {id_key}:$mid}}) "
+            f"{set_clause} RETURN count(node)",
+            params,
+        )
+        result_rows = _rows(result)
+        updated += result_rows[0][0] if result_rows else 0
+    return updated
 
 
 async def get_fact(*, user_id: int, fact_id: str) -> dict | None:
@@ -426,7 +747,7 @@ async def add_document_chunks(
         }
         await _write(
             f"MERGE (c:{S.CHUNK} {{chunk_id:$cid, user_id:$uid}}) SET c.collection_name=$col, "
-            f"c.stored_name=$stored, c.content=$content, c.{prop}=$emb, c.resource_type=$rt, "
+            f"c.stored_name=$stored, c.content=$content, c.{prop}=vecf32($emb), c.resource_type=$rt, "
             f"c.resource_id=$rid, c.source=$src, c.chunk_index=$idx, c.total_chunks=$total",
             params,
         )
@@ -446,12 +767,28 @@ async def search_documents(
 
     def _do() -> list[MemoryHit]:
         g = _graph()
+        candidate_k = max(32, top_k * 4)
+        where = "node.user_id=$uid AND node.stored_name IN $wl"
+        if collection_name is not None:
+            where += " AND node.collection_name=$collection"
         cypher = (
-            f"CALL db.idx.vector.queryNodes('{S.CHUNK}', '{prop}', $k, $vec) "
-            f"YIELD node, score WHERE node.user_id=$uid AND node.stored_name IN $wl "
-            f"RETURN node.content, node.stored_name, node.source, score ORDER BY score LIMIT $k"
+            f"CALL db.idx.vector.queryNodes('{S.CHUNK}', '{prop}', $candidate_k, vecf32($vec)) "
+            f"YIELD node, score WHERE {where} "
+            f"RETURN node.content, node.stored_name, node.source, score "
+            f"ORDER BY score ASC LIMIT $limit"
         )
-        rs = _run(g, cypher, {"k": top_k, "vec": query_embedding, "uid": user_id, "wl": wl})
+        rs = _run(
+            g,
+            cypher,
+            {
+                "candidate_k": candidate_k,
+                "limit": top_k,
+                "vec": query_embedding,
+                "uid": user_id,
+                "wl": wl,
+                "collection": collection_name,
+            },
+        )
         hits: list[MemoryHit] = []
         for row in _rows(rs):
             hits.append(MemoryHit(content=row[0], kind="chunk", score=row[3],
@@ -491,46 +828,330 @@ async def recall(
     whitelist_stored_names: set[str] | None = None, kinds: list[str] | None = None,
     only_valid: bool = True,
 ) -> list[MemoryHit]:
-    """大脑 recall：① 向量召回 Top-K Chunk ② 沿 MENTIONS 扩展 1 跳到 Entity ③ 返回原文 + 关联实体。"""
+    """多类型语义候选 + user-scoped 受限图扩展 + 多信号排序。"""
     top_k = top_k or settings.memory_recall_top_k
+    max_hops = max(0, min(hops if hops is not None else settings.memory_recall_hops, 2))
+    requested = _normalize_kinds(kinds)
+    if not requested:
+        return []
+    available = await list_vector_indexed_kinds(embedding_model)
+    selected = [kind for kind in requested if kind in available]
+    if not selected:
+        return []
     prop = _safe_prop(embedding_model)
+    text_prop = _safe_text_prop(embedding_model)
     wl = list(whitelist_stored_names) if whitelist_stored_names else None
+    candidate_k = max(32, top_k * 4)
 
     def _do() -> list[MemoryHit]:
-        g = _graph()
-        where = "WHERE node.user_id=$uid"
-        if wl is not None:
-            where += " AND node.stored_name IN $wl"
-        cypher = (
-            f"CALL db.idx.vector.queryNodes('{S.CHUNK}', '{prop}', $k, $vec) YIELD node, score "
-            f"{where} "
-            f"OPTIONAL MATCH (node)-[:{S.MENTIONS}]->(e:{S.ENTITY}) "
-            f"RETURN node.content, node.source, score, collect(e.name) AS entities "
-            f"ORDER BY score LIMIT $k"
-        )
-        rs = _run(g, cypher, {"k": top_k, "vec": query_embedding, "uid": user_id, "wl": wl})
+        graph = _graph()
         hits: list[MemoryHit] = []
-        for row in _rows(rs):
-            content = row[0]
-            entities = row[3] or []
-            if entities:
-                content = content + "\n关联实体: " + ", ".join(entities)
-            hits.append(MemoryHit(content=content, kind="chunk", score=row[2],
-                                  metadata={"source": row[1], "entities": entities}))
-        return hits
+        for kind in selected:
+            label, id_key = _vector_spec(kind)
+            where_parts = ["node.user_id=$uid"]
+            if kind == "chunk" and wl is not None:
+                where_parts.append("node.stored_name IN $wl")
+            if kind in {"fact", "preference"} and only_valid:
+                where_parts.append("node.valid_to IS NULL")
+            params = {
+                "k": candidate_k,
+                "limit": candidate_k,
+                "vec": query_embedding,
+                "uid": user_id,
+                "wl": wl,
+            }
+            prefix = (
+                f"CALL db.idx.vector.queryNodes('{label}', '{prop}', $k, vecf32($vec)) "
+                "YIELD node, score "
+            )
+            if kind == "chunk":
+                cypher = (
+                    prefix
+                    + f"WHERE {' AND '.join(where_parts)} "
+                    + f"OPTIONAL MATCH (node)-[:{S.MENTIONS}]->(e:{S.ENTITY} {{user_id:$uid}}) "
+                    + "RETURN node.content, node.source, score, collect(e.name), node.chunk_id "
+                    + "ORDER BY score ASC LIMIT $limit"
+                )
+                for row in _rows(_run(graph, cypher, params)):
+                    content = row[0]
+                    entities = row[3] or []
+                    if entities:
+                        content += "\n关联实体: " + ", ".join(entities)
+                    hits.append(MemoryHit(
+                        content=content,
+                        kind=kind,
+                        score=row[2],
+                        metadata={
+                            "id": row[4], "source": row[1], "entities": entities,
+                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
+                        },
+                    ))
+            elif kind == "entity":
+                cypher = (
+                    prefix
+                    + f"WHERE {' AND '.join(where_parts)} "
+                    + f"OPTIONAL MATCH (node)-[:{S.SAME_AS}]->(canonical:{S.ENTITY}) "
+                    + "WITH node, score, canonical WHERE canonical IS NULL "
+                    + f"RETURN node.{text_prop}, score, node.{id_key}, node.name, "
+                    + "node.entity_type, node.confidence "
+                    + "ORDER BY score ASC LIMIT $limit"
+                )
+                for row in _rows(_run(graph, cypher, params)):
+                    hits.append(MemoryHit(
+                        content=row[0],
+                        kind=kind,
+                        score=row[1],
+                        metadata={
+                            "id": row[2], "source": row[3], "name": row[3],
+                            "entity_type": row[4], "confidence": row[5],
+                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
+                        },
+                    ))
+            elif kind == "fact":
+                cypher = (
+                    prefix
+                    + f"WHERE {' AND '.join(where_parts)} "
+                    + f"RETURN node.{text_prop}, score, node.{id_key}, node.subject_id, "
+                    + "node.predicate, node.valid_from, node.valid_to, node.confidence, node.source_doc_id "
+                    + "ORDER BY score ASC LIMIT $limit"
+                )
+                for row in _rows(_run(graph, cypher, params)):
+                    hits.append(MemoryHit(
+                        content=row[0],
+                        kind=kind,
+                        score=row[1],
+                        metadata={
+                            "id": row[2], "source": row[8] or "memory",
+                            "subject_id": row[3], "predicate": row[4],
+                            "valid_from": row[5], "valid_to": row[6],
+                            "confidence": row[7], "source_doc_id": row[8],
+                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
+                        },
+                    ))
+            elif kind == "episode":
+                cypher = (
+                    prefix
+                    + f"WHERE {' AND '.join(where_parts)} "
+                    + f"RETURN node.{text_prop}, score, node.{id_key}, node.kind, "
+                    + "node.occurred_at, node.conversation_id, node.message_id, node.confidence "
+                    + "ORDER BY score ASC LIMIT $limit"
+                )
+                for row in _rows(_run(graph, cypher, params)):
+                    hits.append(MemoryHit(
+                        content=row[0],
+                        kind=kind,
+                        score=row[1],
+                        metadata={
+                            "id": row[2], "source": f"conversation:{row[5]}" if row[5] else "memory",
+                            "episode_kind": row[3], "occurred_at": row[4],
+                            "conversation_id": row[5], "message_id": row[6],
+                            "confidence": row[7] if len(row) > 7 else None,
+                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
+                        },
+                    ))
+            else:
+                cypher = (
+                    prefix
+                    + f"WHERE {' AND '.join(where_parts)} "
+                    + f"RETURN node.{text_prop}, score, node.{id_key}, node.key, "
+                    + "node.valid_from, node.valid_to, node.confidence "
+                    + "ORDER BY score ASC LIMIT $limit"
+                )
+                for row in _rows(_run(graph, cypher, params)):
+                    hits.append(MemoryHit(
+                        content=row[0],
+                        kind=kind,
+                        score=row[1],
+                        metadata={
+                            "id": row[2], "source": "preference", "key": row[3],
+                            "valid_from": row[4], "valid_to": row[5], "confidence": row[6],
+                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
+                        },
+                    ))
+        seed_hits = list(hits)
+        if max_hops:
+            seed_refs = [
+                (hit.kind, str((hit.metadata or {}).get("id")))
+                for hit in seed_hits
+                if (hit.metadata or {}).get("id")
+            ]
+            expanded = _expand_memory_seeds_sync(
+                graph,
+                user_id=user_id,
+                seeds=seed_refs,
+                hops=max_hops,
+                only_valid=only_valid,
+                limit=max(top_k * 4, 24),
+            )
+            hits.extend(expanded)
+
+        now = _utcnow()
+        kind_order = {kind: index for index, kind in enumerate(S.VECTOR_KIND_ORDER)}
+        deduped: dict[tuple[str, str], MemoryHit] = {}
+        for hit in hits:
+            metadata = hit.metadata or {}
+            key = (hit.kind, str(metadata.get("id") or hit.content[:200]))
+            metadata["rank_score"] = _rerank_score(hit, now=now)
+            hit.metadata = metadata
+            current = deduped.get(key)
+            if current is None or metadata["rank_score"] > (current.metadata or {}).get("rank_score", 0.0):
+                deduped[key] = hit
+        ranked = sorted(
+            deduped.values(),
+            key=lambda hit: (
+                -(hit.metadata or {}).get("rank_score", 0.0),
+                hit.score if hit.score is not None else float("inf"),
+                kind_order.get(hit.kind, len(kind_order)),
+                str((hit.metadata or {}).get("id", "")),
+            ),
+        )
+        return ranked[:top_k]
 
     return await asyncio.to_thread(_do)
 
 
-async def traverse(*, start_ids: list[str], hops: int, edge_types: list[str] | None = None) -> list[dict]:
-    """通用多跳图遍历（供 recall/可视化/高级查询）。返回 {node, depth} 列表。"""
-    edges = "|".join(edge_types) if edge_types else f"{S.RELATES_TO}|{S.MENTIONS}|{S.INVOLVES}|{S.SUPERSEDES}"
+def _node_kind(labels: Any) -> str | None:
+    label_values = _as_list(labels)
+    for kind, (label, _) in S.GRAPH_NODE_SPECS.items():
+        if label in label_values:
+            return kind
+    return None
+
+
+def _node_memory_id(kind: str, properties: Mapping[str, Any]) -> str | None:
+    _, id_key = S.GRAPH_NODE_SPECS[kind]
+    value = properties.get(id_key)
+    return str(value) if value is not None else None
+
+
+def _render_expanded_node(kind: str, properties: Mapping[str, Any]) -> str:
+    if kind == "chunk":
+        return str(properties.get("content") or "")
+    if kind == "entity":
+        return str(properties.get("name") or "")
+    if kind == "fact":
+        return " ".join(
+            str(value).strip()
+            for value in (
+                properties.get("subject_id"),
+                properties.get("predicate"),
+                properties.get("object_text"),
+            )
+            if value
+        )
+    if kind == "episode":
+        return str(properties.get("summary") or "")
+    if kind == "preference":
+        return f"{properties.get('key')}: {properties.get('value')}"
+    return str(properties.get("title") or "")
+
+
+def _expand_memory_seeds_sync(
+    graph,
+    *,
+    user_id: int,
+    seeds: list[tuple[str, str]],
+    hops: int,
+    only_valid: bool,
+    limit: int,
+) -> list[MemoryHit]:
+    if not seeds or hops <= 0:
+        return []
+    allowed_edges = "|".join(S.GRAPH_RECALL_EDGES)
+    hits: list[MemoryHit] = []
+    seen: set[tuple[str, str]] = set(seeds)
+    frontier = list(seeds)
+    for depth in range(1, hops + 1):
+        if not frontier or len(hits) >= limit:
+            break
+        next_frontier: list[tuple[str, str]] = []
+        for seed_kind, seed_id in frontier:
+            seed_spec = S.GRAPH_NODE_SPECS.get(seed_kind)
+            if seed_spec is None:
+                continue
+            seed_label, seed_id_key = seed_spec
+            cypher = (
+                f"MATCH (seed:{seed_label} {{user_id:$uid, {seed_id_key}:$seed_id}}) "
+                f"MATCH (seed)-[rel:{allowed_edges}]-(node) "
+                "WHERE node.user_id=$uid "
+                "RETURN labels(node), properties(node), type(rel), startNode(rel)=seed "
+                "ORDER BY type(rel) LIMIT $limit"
+            )
+            rows = _rows(_run(
+                graph,
+                cypher,
+                {"uid": user_id, "seed_id": seed_id, "limit": max(1, limit - len(hits))},
+            ))
+            for row in rows:
+                if len(row) < 4 or not isinstance(row[1], Mapping):
+                    continue
+                kind = _node_kind(row[0])
+                if kind not in S.VECTOR_NODE_SPECS:
+                    continue
+                properties = row[1]
+                memory_id = _node_memory_id(kind, properties)
+                if not memory_id or (kind, memory_id) in seen:
+                    continue
+                if only_valid and kind in {"fact", "preference"} and properties.get("valid_to"):
+                    continue
+                content = _render_expanded_node(kind, properties).strip()
+                if not content:
+                    continue
+                source = properties.get("source") or properties.get("source_doc_id") or "memory"
+                confidence = properties.get("confidence")
+                metadata = {
+                    "id": memory_id,
+                    "source": source,
+                    "confidence": confidence,
+                    "occurred_at": properties.get("occurred_at"),
+                    "valid_from": properties.get("valid_from"),
+                    "valid_to": properties.get("valid_to"),
+                    "graph_distance": depth,
+                    "evidence": {"seed_kind": seed_kind, "seed_id": seed_id},
+                    "path": [{
+                        "from_kind": seed_kind,
+                        "from_id": seed_id,
+                        "relation": row[2],
+                        "direction": "out" if row[3] else "in",
+                        "to_kind": kind,
+                        "to_id": memory_id,
+                    }],
+                    "expanded": True,
+                }
+                hits.append(MemoryHit(content=content, kind=kind, score=None, metadata=metadata))
+                seen.add((kind, memory_id))
+                next_frontier.append((kind, memory_id))
+                if len(hits) >= limit:
+                    break
+        frontier = next_frontier
+    return hits
+
+
+async def traverse(
+    *,
+    user_id: int,
+    start_ids: list[str],
+    hops: int,
+    edge_types: list[str] | None = None,
+) -> list[dict]:
+    """严格 user-scoped 的有界图遍历。"""
+    allowed = set(S.GRAPH_RECALL_EDGES)
+    selected = edge_types or list(S.GRAPH_RECALL_EDGES)
+    if any(edge not in allowed for edge in selected):
+        raise ValueError("Unsupported graph edge type")
+    depth = max(0, min(hops, 2))
+    if not start_ids or depth == 0:
+        return []
+    edges = "|".join(selected)
     cypher = (
-        f"MATCH (n) WHERE n.entity_id IN $ids OR n.fact_id IN $ids OR n.episode_id IN $ids "
-        f"MATCH (n)-[:{edges}*1..{hops}]-(m) RETURN DISTINCT m"
+        "MATCH (n) WHERE n.user_id=$uid AND ("
+        "n.entity_id IN $ids OR n.fact_id IN $ids OR n.episode_id IN $ids OR "
+        "n.pref_id IN $ids OR n.chunk_id IN $ids) "
+        f"MATCH p=(n)-[:{edges}*1..{depth}]-(m) "
+        "WHERE m.user_id=$uid RETURN DISTINCT properties(m), length(p) AS depth"
     )
-    rs = await _read(cypher, {"ids": start_ids})
-    return [{"node": r[0]} for r in _rows(rs)]
+    rs = await _read(cypher, {"uid": user_id, "ids": start_ids})
+    return [{"node": row[0], "depth": row[1]} for row in _rows(rs)]
 
 
 # ---------------- 运维 ----------------
@@ -586,6 +1207,18 @@ async def has_resource_memory(*, user_id: int, resource_type: str, resource_id: 
 async def delete_resource_memory(*, user_id: int, resource_type: str, resource_id: int) -> None:
     """Delete the graph representation for a removed or unindexed resource."""
     params = {"uid": user_id, "rt": resource_type, "rid": resource_id}
+    doc_result = await _read(
+        f"MATCH (d:{S.DOCUMENT} {{user_id:$uid, resource_type:$rt, resource_id:$rid}}) "
+        "RETURN d.doc_id",
+        params,
+    )
+    doc_ids = [row[0] for row in _rows(doc_result) if row and row[0]]
+    if doc_ids:
+        await _write(
+            f"MATCH (f:{S.FACT} {{user_id:$uid}}) "
+            "WHERE f.source_doc_id IN $doc_ids DETACH DELETE f",
+            {"uid": user_id, "doc_ids": doc_ids},
+        )
     await _write(
         f"MATCH (d:{S.DOCUMENT} {{user_id:$uid, resource_type:$rt, resource_id:$rid}}) DETACH DELETE d",
         params,
@@ -593,6 +1226,12 @@ async def delete_resource_memory(*, user_id: int, resource_type: str, resource_i
     await _write(
         f"MATCH (c:{S.CHUNK} {{user_id:$uid, resource_type:$rt, resource_id:$rid}}) DETACH DELETE c",
         params,
+    )
+    await _write(
+        f"MATCH (e:{S.ENTITY} {{user_id:$uid}}) "
+        f"WHERE NOT (e)<-[:{S.MENTIONS}|{S.SOURCES}|{S.SUBJECT}|{S.OBJECT}|{S.INVOLVES}]-() "
+        f"AND NOT (e)-[:{S.RELATES_TO}|{S.SAME_AS}]-() DETACH DELETE e",
+        {"uid": user_id},
     )
 
 

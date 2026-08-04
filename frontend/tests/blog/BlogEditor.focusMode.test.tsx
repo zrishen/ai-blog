@@ -3,6 +3,7 @@ import { render, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import "@testing-library/jest-dom/vitest";
 import { AuthProvider } from "../../src/stores/authStore";
+import { BlogEditor } from "../../src/features/blog/components/BlogEditor";
 
 class MockResizeObserver {
   observe = () => {};
@@ -66,7 +67,6 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("默认折叠态：紧凑行可见，大卡片内容隐藏", async () => {
-    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <AuthProvider>
@@ -84,7 +84,6 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("工具栏 toggle 按钮在折叠态显示 Maximize 图标且提示展开", async () => {
-    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <AuthProvider>
@@ -100,7 +99,6 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("点击 toggle 后展开顶部完整卡片，再次点击收缩回去", async () => {
-    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <AuthProvider>
@@ -125,7 +123,6 @@ describe("BlogEditor 工具区折叠/展开", () => {
   });
 
   it("toggle 支持折叠↔展开多次往返切换", async () => {
-    const { BlogEditor } = await import("../../src/features/blog/components/BlogEditor");
     const result = render(
       <MemoryRouter>
         <AuthProvider>

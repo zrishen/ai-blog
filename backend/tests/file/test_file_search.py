@@ -7,10 +7,10 @@ from src.tools.file import _filter_and_dedupe_rag_results, _format_rag_context, 
 def test_rag_filter_dedupe_and_format():
     duplicate = "安装步骤：先运行 uv sync，再启动 uvicorn。"
     results = [
-        ("doc_a", MemoryHit(content=duplicate, kind="chunk", metadata={"source": "a.pdf"}, score=0.8)),
-        ("doc_b", MemoryHit(content=duplicate, kind="chunk", metadata={"source": "b.pdf"}, score=0.7)),
-        ("doc_c", MemoryHit(content="无关内容", kind="chunk", metadata={"source": "c.pdf"}, score=0.05)),
-        ("doc_d", MemoryHit(content="配置 MCP 工具需要填写 command 和 args。", kind="chunk", metadata={"source": "d.pdf"}, score=0.9)),
+        ("doc_a", MemoryHit(content=duplicate, kind="chunk", metadata={"source": "a.pdf"}, score=0.2)),
+        ("doc_b", MemoryHit(content=duplicate, kind="chunk", metadata={"source": "b.pdf"}, score=0.3)),
+        ("doc_c", MemoryHit(content="无关内容", kind="chunk", metadata={"source": "c.pdf"}, score=0.95)),
+        ("doc_d", MemoryHit(content="配置 MCP 工具需要填写 command 和 args。", kind="chunk", metadata={"source": "d.pdf"}, score=0.1)),
     ]
 
     filtered = _filter_and_dedupe_rag_results(results)
@@ -23,6 +23,7 @@ def test_rag_filter_dedupe_and_format():
     assert "文件库：doc_d" in context
     assert "来源：d.pdf" in context
     assert context.count(duplicate) == 1
+    assert filtered[1][1].metadata["source"] == "a.pdf"
     assert "无关内容" not in context
 
 
@@ -35,11 +36,14 @@ def test_rag_empty_context_prevents_fabrication():
 
 @pytest.mark.asyncio
 async def test_search_collections_only_returns_active_stored_names(monkeypatch):
+    captured = {}
+
     async def fake_search(**kwargs):
+        captured.update(kwargs)
         return [
-            MemoryHit(content="active", kind="chunk", metadata={"stored_name": "active.pdf"}, score=0.9),
-            MemoryHit(content="deleted", kind="chunk", metadata={"stored_name": "deleted.pdf"}, score=0.9),
-            MemoryHit(content="legacy", kind="chunk", metadata={"source": "legacy.pdf"}, score=0.9),
+            MemoryHit(content="active", kind="chunk", metadata={"stored_name": "active.pdf"}, score=0.1),
+            MemoryHit(content="deleted", kind="chunk", metadata={"stored_name": "deleted.pdf"}, score=0.1),
+            MemoryHit(content="legacy", kind="chunk", metadata={"source": "legacy.pdf"}, score=0.1),
         ]
 
     monkeypatch.setattr("src.services.memory.graph_store.search_documents", fake_search)
@@ -52,6 +56,7 @@ async def test_search_collections_only_returns_active_stored_names(monkeypatch):
     )
 
     assert [result.content for _, result in results] == ["active"]
+    assert captured["embedding_model"].startswith("_")
 
 
 @pytest.mark.asyncio

@@ -16,7 +16,7 @@ from src.schemas.brain import (
     BrainPreference,
     BrainStats,
 )
-from src.services.memory import graph_store
+from src.services.memory import graph_store, memory_embeddings
 
 
 def _require_memory_enabled() -> None:
@@ -111,6 +111,9 @@ async def correct_fact(
     )
     if fact is None:
         raise NotFoundError("Active fact not found")
+    await memory_embeddings.index_node_refs_best_effort([
+        memory_embeddings.MemoryNodeRef(kind="fact", user_id=user_id, memory_id=fact["fact_id"])
+    ])
     return BrainFact(**fact)
 
 
@@ -133,4 +136,9 @@ async def update_preference(
     )
     if preference is None:
         raise NotFoundError("Active preference not found")
+    await memory_embeddings.index_node_refs_best_effort([
+        memory_embeddings.MemoryNodeRef(
+            kind="preference", user_id=user_id, memory_id=preference["pref_id"]
+        )
+    ])
     return BrainPreference(**preference)

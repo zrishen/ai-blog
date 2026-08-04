@@ -322,7 +322,7 @@ async def test_normal_chat_context_excludes_research_tool_rules(monkeypatch):
     normal_context = "\n".join(system_messages)
 
     assert "DONE" in "".join(chunks)
-    assert captured["tool_names"] == ["blog_search_posts", "base_search_file"]
+    assert captured["tool_names"] == ["blog_search_posts", "base_search_file", "base_recall_memory"]
     assert "研究工具使用规则" not in normal_context
     assert not any(name.startswith("research_") for name in captured["tool_names"])
 

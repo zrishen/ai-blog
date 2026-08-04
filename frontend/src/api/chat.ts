@@ -156,10 +156,15 @@ function _hasUnresolvedProtocolMarker(text: string): boolean {
 export type ThinkingMode = "fast" | "balanced" | "smart";
 
 export interface StreamReference {
-  type: "rag" | "mcp";
+  type: "rag" | "memory" | "mcp";
   source?: string;
   collection?: string;
   distance?: number;
+  kind?: string;
+  status?: string;
+  time?: string;
+  evidence?: string;
+  path?: string;
   server?: string;
   tool?: string;
 }

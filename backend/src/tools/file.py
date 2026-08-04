@@ -1,6 +1,7 @@
 """文件库检索 LangChain 工具 + RAG 辅助函数。"""
 
 import asyncio
+import math
 
 from langchain_core.tools import tool
 
@@ -70,7 +71,7 @@ async def _search_collections(
                 user_id=user_id,
                 collection_name=name,
                 query_embedding=query_embedding,
-                embedding_model=get_embedding_collection_suffix().lstrip("_"),
+                embedding_model=get_embedding_collection_suffix(),
                 top_k=settings.rag_top_k,
                 whitelist_stored_names=stored_names,
             )
@@ -97,14 +98,23 @@ def _filter_and_dedupe_rag_results(results: list[tuple[str, object]]) -> list[tu
     filtered: list[tuple[str, object]] = []
     seen: set[str] = set()
 
-    for collection_name, result in results:
+    ranked = sorted(
+        results,
+        key=lambda item: (
+            getattr(item[1], "score", float("inf"))
+            if isinstance(getattr(item[1], "score", None), (int, float))
+            else float("inf")
+        ),
+    )
+    for collection_name, result in ranked:
         content = getattr(result, "content", "").strip()
         if not content:
             continue
 
-        score = getattr(result, "score", None)
-        distance = 1 - score if score is not None else None
-        if distance is not None and distance > settings.rag_distance_threshold:
+        distance = getattr(result, "score", None)
+        if not isinstance(distance, (int, float)) or not math.isfinite(distance):
+            continue
+        if distance > settings.rag_distance_threshold:
             continue
 
         key = content[:300]
@@ -112,14 +122,6 @@ def _filter_and_dedupe_rag_results(results: list[tuple[str, object]]) -> list[tu
             continue
         seen.add(key)
         filtered.append((collection_name, result))
-
-    filtered.sort(
-        key=lambda item: (
-            -getattr(item[1], "score", float("-inf"))
-            if getattr(item[1], "score", None) is not None
-            else float("inf")
-        )
-    )
     return filtered
 
 
@@ -135,8 +137,7 @@ def _format_rag_context(results: list[tuple[str, object]]) -> str:
     ):
         metadata = getattr(result, "metadata", None) or {}
         source = metadata.get("source") or metadata.get("file_name") or "unknown"
-        score = getattr(result, "score", None)
-        distance = 1 - score if score is not None else None
+        distance = getattr(result, "score", None)
         content = getattr(result, "content", "").strip()
 
         block = (

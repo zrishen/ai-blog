@@ -13,11 +13,16 @@ def _extract_references(tool_name: str, result_text: str, tool_input: dict | Non
     """从工具返回结果中提取引用信息（RAG 来源 / MCP 服务）。"""
     refs: list[dict[str, Any]] = []
     if tool_name == "base_search_file":
-        for m in re.finditer(r"来源[：:]\s*(\S+)", result_text):
-            source = m.group(1).rstrip("，。")
-            collection_m = re.search(r"文件库[：:]\s*(\S+)", result_text[m.start():m.start() + 200])
-            distance_m = re.search(r"相关距离[：:]\s*([\d.]+|unknown)", result_text[m.start():m.start() + 200])
-            ref: dict[str, Any] = {"type": "rag", "source": source}
+        for block in re.split(r"(?=^\[来源\s+\d+\]\s*$)", result_text, flags=re.MULTILINE):
+            source_m = re.search(r"^来源[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
+            if not source_m:
+                continue
+            ref: dict[str, Any] = {
+                "type": "rag",
+                "source": source_m.group(1).rstrip("，。"),
+            }
+            collection_m = re.search(r"^文件库[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
+            distance_m = re.search(r"^相关距离[：:]\s*(\S+)\s*$", block, flags=re.MULTILINE)
             if collection_m:
                 ref["collection"] = collection_m.group(1).rstrip("，。")
             if distance_m and distance_m.group(1) != "unknown":
@@ -27,13 +32,28 @@ def _extract_references(tool_name: str, result_text: str, tool_input: dict | Non
                     pass
             refs.append(ref)
     elif tool_name == "base_recall_memory":
-        for m in re.finditer(r"来源[：:]\s*(\S+)", result_text):
-            source = m.group(1).rstrip("，。")
-            kind_m = re.search(r"记忆类型[：:]\s*(\S+)", result_text[m.start():m.start() + 200])
-            distance_m = re.search(r"相关距离[：:]\s*([\d.]+|unknown)", result_text[m.start():m.start() + 200])
+        for block in re.split(r"(?=^\[来源\s+\d+\]\s*$)", result_text, flags=re.MULTILINE):
+            source_m = re.search(r"^来源[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
+            if not source_m:
+                continue
+            source = source_m.group(1).rstrip("，。")
+            kind_m = re.search(r"^记忆类型[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
+            distance_m = re.search(r"^相关距离[：:]\s*(\S+)\s*$", block, flags=re.MULTILINE)
+            status_m = re.search(r"^有效状态[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
+            time_m = re.search(r"^时间[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
+            evidence_m = re.search(r"^证据[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
+            path_m = re.search(r"^图路径[：:]\s*(.+?)\s*$", block, flags=re.MULTILINE)
             ref: dict[str, Any] = {"type": "memory", "source": source}
             if kind_m:
                 ref["kind"] = kind_m.group(1).rstrip("，。")
+            if status_m:
+                ref["status"] = status_m.group(1).rstrip("，。")
+            if time_m and time_m.group(1) != "unknown":
+                ref["time"] = time_m.group(1).rstrip("，。")
+            if evidence_m:
+                ref["evidence"] = evidence_m.group(1).rstrip("，。")
+            if path_m:
+                ref["path"] = path_m.group(1).rstrip("，。")
             if distance_m and distance_m.group(1) != "unknown":
                 try:
                     ref["distance"] = float(distance_m.group(1))

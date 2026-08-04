@@ -138,6 +138,7 @@ async def test_vectorize_and_store_writes_chunks_to_graph():
     assert captured["memory"]["collection_name"] == "user_17_kb"
     assert captured["memory"]["stored_name"] == "stored.pdf"
     assert captured["memory"]["chunks"] == ["memory content"]
+    assert captured["memory"]["embedding_model"].startswith("_")
     assert captured["memory"]["vector_dim"] == 384
     assert captured["memory"]["metadata_list"][0]["resource_type"] == "file"
     assert captured["memory"]["metadata_list"][0]["resource_id"] == 21

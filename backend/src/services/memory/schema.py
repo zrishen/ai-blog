@@ -13,6 +13,20 @@ PREFERENCE = "Preference"  # 程序记忆：用户偏好/习惯
 CHUNK = "Chunk"            # 原文层：向量检索，不建图谱边
 DOCUMENT = "Document"      # 来源锚点：指向 PG 业务数据
 
+# 可向量检索的节点类型。动态 Cypher label / id 属性只能来自此白名单。
+VECTOR_NODE_SPECS = {
+    "chunk": (CHUNK, "chunk_id"),
+    "entity": (ENTITY, "entity_id"),
+    "fact": (FACT, "fact_id"),
+    "episode": (EPISODE, "episode_id"),
+    "preference": (PREFERENCE, "pref_id"),
+}
+VECTOR_KIND_ORDER = tuple(VECTOR_NODE_SPECS)
+GRAPH_NODE_SPECS = {
+    **VECTOR_NODE_SPECS,
+    "document": (DOCUMENT, "doc_id"),
+}
+
 # ---- 边 type ----
 RELATES_TO = "RELATES_TO"  # Entity-[relation]->Entity（带时效 valid_from/to + weight）
 SUBJECT = "SUBJECT"        # Fact -> Entity（主语）
@@ -22,6 +36,16 @@ MENTIONS = "MENTIONS"      # Chunk -> Entity（召回原文跳实体的锚定边
 SOURCES = "SOURCES"        # Document -> Fact/Entity（知识出处）
 SUPERSEDES = "SUPERSEDES"  # 新 Fact -> 旧 Fact（事实演化，旧 Fact valid_to 置位）
 SAME_AS = "SAME_AS"        # Entity -> Entity（消歧/合并）
+GRAPH_RECALL_EDGES = (
+    MENTIONS,
+    SUBJECT,
+    OBJECT,
+    INVOLVES,
+    RELATES_TO,
+    SAME_AS,
+    SOURCES,
+    SUPERSEDES,
+)
 
 # ---- Episode kind ----
 EPISODE_CHAT = "chat"

@@ -47,7 +47,7 @@ async def _store_document_chunks(
         chunks=chunks,
         embeddings=embeddings,
         metadata_list=metadata_list,
-        embedding_model=get_embedding_collection_suffix().lstrip("_"),
+        embedding_model=get_embedding_collection_suffix(),
         vector_dim=len(embeddings[0]),
         progress_callback=progress_callback,
     )

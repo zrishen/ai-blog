@@ -53,14 +53,25 @@ def _format_memory_context(hits) -> str:
     parts = ["[回忆到的大脑记忆]"]
     total = 0
     for index, hit in enumerate(hits, start=1):
-        source = (hit.metadata or {}).get("source") or "memory"
+        metadata = hit.metadata or {}
+        source = metadata.get("source") or "memory"
         score = hit.score if hit.score is not None else "unknown"
+        content = str(hit.content).replace("[来源 ", "[来源​ ")
+        time_value = metadata.get("occurred_at") or metadata.get("valid_from")
+        status = "历史" if metadata.get("valid_to") else "当前"
+        evidence = metadata.get("evidence")
+        path = metadata.get("path")
         block = (
             f"\n[来源 {index}]\n"
             f"记忆类型：{hit.kind}\n"
             f"来源：{source}\n"
             f"相关距离：{score}\n"
-            f"内容：\n{hit.content}\n"
+            f"排序分：{metadata.get('rank_score', 'unknown')}\n"
+            f"有效状态：{status}\n"
+            f"时间：{time_value or 'unknown'}\n"
+            f"证据：{evidence or 'direct-vector-match'}\n"
+            f"图路径：{path or '[]'}\n"
+            f"内容：\n{content}\n"
         )
         if total + len(block) > MEMORY_MAX_CONTEXT_CHARS:
             break

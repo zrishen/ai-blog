@@ -6,7 +6,7 @@
 
 import logging
 
-from src.services.memory import graph_store
+from src.services.memory import graph_store, memory_embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -84,5 +84,19 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
         participants = [name_to_id[n] for n in ep.get("participants", []) if n in name_to_id]
         if participants:
             await graph_store.link_episode_entities(eid, participants)
+
+    refs = [
+        memory_embeddings.MemoryNodeRef(kind="entity", user_id=user_id, memory_id=eid)
+        for eid in dict.fromkeys(entity_id for entity_id, _ in result["entities"])
+    ]
+    refs.extend(
+        memory_embeddings.MemoryNodeRef(kind="fact", user_id=user_id, memory_id=fid)
+        for fid in result["facts"]
+    )
+    refs.extend(
+        memory_embeddings.MemoryNodeRef(kind="episode", user_id=user_id, memory_id=eid)
+        for eid in result["episodes"]
+    )
+    await memory_embeddings.index_node_refs_best_effort(refs)
 
     return result

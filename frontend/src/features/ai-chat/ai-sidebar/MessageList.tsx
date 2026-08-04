@@ -669,6 +669,17 @@ function ToolDetail({ tool }: { tool: ToolPair }) {
                     {ref.distance != null ? ` · 距离: ${ref.distance.toFixed(2)}` : ""}
                   </span>
                 </>
+              ) : ref.type === "memory" ? (
+                <>
+                  <BookOpen className="h-2.5 w-2.5" />
+                  <span>
+                    {ref.source}
+                    {ref.kind ? ` · ${ref.kind}` : ""}
+                    {ref.status ? ` · ${ref.status}` : ""}
+                    {ref.time ? ` · ${ref.time}` : ""}
+                    {ref.distance != null ? ` · 距离: ${ref.distance.toFixed(2)}` : ""}
+                  </span>
+                </>
               ) : (
                 <>
                   <Link2 className="h-2.5 w-2.5" />

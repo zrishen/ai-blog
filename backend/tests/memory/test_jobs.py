@@ -62,6 +62,46 @@ async def test_reconcile_removes_orphans_and_marks_missing_active_index_stale(
 
 
 @pytest.mark.asyncio
+async def test_reindex_all_delegates_to_memory_embedding_service(monkeypatch):
+    expected = jobs.memory_embeddings.EmbeddingIndexReport(embedded=3)
+    captured = {}
+
+    async def reindex_all(**kwargs):
+        captured.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(jobs.memory_embeddings, "reindex_all", reindex_all)
+
+    result = await jobs.reindex_all(
+        user_id=7,
+        kinds=["fact", "episode"],
+        batch_size=4,
+        force=True,
+    )
+
+    assert result is expected
+    assert captured == {
+        "user_id": 7,
+        "kinds": ["fact", "episode"],
+        "batch_size": 4,
+        "force": True,
+    }
+
+
+def test_reindex_cli_requires_explicit_scope():
+    parser = jobs._build_cli_parser()
+
+    with pytest.raises(SystemExit):
+        parser.parse_args(["reindex-all"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["reindex-all", "--user-id", "0"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["reindex-all", "--all-users", "--batch-size", "-1"])
+    assert parser.parse_args(["reindex-all", "--user-id", "7"]).user_id == 7
+    assert parser.parse_args(["reindex-all", "--all-users", "--kind", "fact"]).kinds == ["fact"]
+
+
+@pytest.mark.asyncio
 async def test_decay_memories_returns_graph_count(monkeypatch):
     class Result:
         result_set = [[3]]
