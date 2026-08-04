@@ -51,17 +51,3 @@ GRAPH_RECALL_EDGES = (
 EPISODE_CHAT = "chat"
 EPISODE_RESEARCH = "research_event"
 EPISODE_INGEST = "document_ingest"
-
-# ---- Fact kind（抽取的事实类型，可选语义细分）----
-FACT_ATTRIBUTE = "attribute"   # 实体属性事实
-FACT_RELATION = "relation"     # 关系事实
-FACT_EVENT = "event"           # 事件事实
-
-# 向量 index 命名前缀（按 embedding model slug 隔离维度）
-VECTOR_INDEX_PREFIX = "vec_idx"
-
-
-def vector_index_name(embedding_model_slug: str) -> str:
-    """按 embedding 模型 slug 生成 vector index 名（维度隔离）。"""
-    slug = embedding_model_slug.replace("-", "_").replace(".", "_")
-    return f"{VECTOR_INDEX_PREFIX}_{slug}"
