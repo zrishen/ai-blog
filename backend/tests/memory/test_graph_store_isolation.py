@@ -358,36 +358,6 @@ async def test_recall_expands_user_scoped_graph_and_reranks(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_traverse_requires_user_scope_and_edge_whitelist(monkeypatch):
-    captured = {}
-
-    async def fake_read(cypher, params):
-        captured["cypher"] = cypher
-        captured["params"] = params
-        return _Result([[{"entity_id": "entity-2"}, 1]])
-
-    monkeypatch.setattr(graph_store, "_read", fake_read)
-
-    rows = await graph_store.traverse(
-        user_id=7,
-        start_ids=["entity-1"],
-        hops=1,
-        edge_types=["RELATES_TO"],
-    )
-
-    assert rows == [{"node": {"entity_id": "entity-2"}, "depth": 1}]
-    assert "n.user_id=$uid" in captured["cypher"]
-    assert "m.user_id=$uid" in captured["cypher"]
-    with pytest.raises(ValueError, match="Unsupported graph edge"):
-        await graph_store.traverse(
-            user_id=7,
-            start_ids=["entity-1"],
-            hops=1,
-            edge_types=["UNSAFE"],
-        )
-
-
-@pytest.mark.asyncio
 async def test_recall_empty_kinds_returns_without_graph_access(monkeypatch):
     async def fail(_embedding_model):
         raise AssertionError("index discovery should not run")

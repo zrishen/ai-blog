@@ -1158,50 +1158,7 @@ def _expand_memory_seeds_sync(
     return hits
 
 
-async def traverse(
-    *,
-    user_id: int,
-    start_ids: list[str],
-    hops: int,
-    edge_types: list[str] | None = None,
-) -> list[dict]:
-    """严格 user-scoped 的有界图遍历。"""
-    allowed = set(S.GRAPH_RECALL_EDGES)
-    selected = edge_types or list(S.GRAPH_RECALL_EDGES)
-    if any(edge not in allowed for edge in selected):
-        raise ValueError("Unsupported graph edge type")
-    depth = max(0, min(hops, 2))
-    if not start_ids or depth == 0:
-        return []
-    edges = "|".join(selected)
-    cypher = (
-        "MATCH (n) WHERE n.user_id=$uid AND ("
-        "n.entity_id IN $ids OR n.fact_id IN $ids OR n.episode_id IN $ids OR "
-        "n.pref_id IN $ids OR n.chunk_id IN $ids) "
-        f"MATCH p=(n)-[:{edges}*1..{depth}]-(m) "
-        "WHERE m.user_id=$uid RETURN DISTINCT properties(m), length(p) AS depth"
-    )
-    rs = await _read(cypher, {"uid": user_id, "ids": start_ids})
-    return [{"node": row[0], "depth": row[1]} for row in _rows(rs)]
-
-
 # ---------------- 运维 ----------------
-
-async def list_user_collections(user_id: int) -> list[str]:
-    rs = await _read(
-        f"MATCH (c:{S.CHUNK} {{user_id:$uid}}) RETURN DISTINCT c.collection_name",
-        {"uid": user_id},
-    )
-    return [r[0] for r in _rows(rs)]
-
-
-async def delete_subgraph(*, user_id: int, resource_type: str, resource_id: int) -> int:
-    await _write(
-        f"MATCH (c:{S.CHUNK} {{user_id:$uid, resource_type:$rt, resource_id:$rid}}) DETACH DELETE c",
-        {"uid": user_id, "rt": resource_type, "rid": resource_id},
-    )
-    return 0
-
 
 async def list_resource_memory() -> list[dict]:
     """Return resource keys represented by document anchors or indexed chunks."""
