@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -68,11 +69,15 @@ function makeJob(overrides: Partial<FileProcessingJob> = {}): FileProcessingJob 
 
 function Probe() {
   const context = useFileProcessing();
+  const [returnedUploadJob, setReturnedUploadJob] = useState("none");
   return (
     <div>
       <span data-testid="upload-job">{context.uploadTask?.job?.id || "none"}</span>
+      <span data-testid="returned-upload-job">{returnedUploadJob}</span>
       <span data-testid="restore-job">{context.restoreJobs[17]?.id || "none"}</span>
-      <button onClick={() => void context.startUpload(new File(["data"], "a.pdf"))}>upload</button>
+      <button onClick={() => {
+        void context.startUpload(new File(["data"], "a.pdf")).then((job) => setReturnedUploadJob(job?.id || "none"));
+      }}>upload</button>
       <button onClick={() => {
         const job = context.restoreJobs[17];
         if (job) context.consumeRestoreSuccess(17, job.id);
@@ -96,6 +101,19 @@ beforeEach(() => {
 });
 
 describe("FileProcessingProvider", () => {
+  it("returns the accepted upload job to the workspace caller", async () => {
+    const user = userEvent.setup();
+    const uploadJob = makeJob();
+    mocks.upload.mockReturnValueOnce({ promise: Promise.resolve(uploadJob), cancel: vi.fn() });
+    mocks.getJob.mockImplementation(() => new Promise(() => {}));
+    renderProvider();
+
+    await waitFor(() => expect(mocks.listActive).toHaveBeenCalled());
+    await user.click(screen.getByRole("button", { name: "upload" }));
+
+    await waitFor(() => expect(screen.getByTestId("returned-upload-job")).toHaveTextContent(uploadJob.id));
+  });
+
   it("无 sessionStorage 时恢复 active upload 与 restore 并按 UUID 轮询", async () => {
     const uploadJob = makeJob();
     const restoreJob = makeJob({

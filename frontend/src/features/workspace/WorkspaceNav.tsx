@@ -35,7 +35,8 @@ import {
   type FileDocument,
   type WorkspaceNode,
 } from "../../api/client";
-import { getFileProcessingJob, uploadToFileLibrary } from "../../api/files";
+import { getFileProcessingJob } from "../../api/files";
+import { useFileProcessing } from "../file-processing/FileProcessingProvider";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -747,9 +748,10 @@ const COLLAPSED_FOLDERS_KEY = "workspace:collapsed-folder-ids";
 
 export function WorkspaceNav() {
   const { state, dispatch } = useChat();
+  const { startUpload } = useFileProcessing();
   const [editing, setEditing] = useState<EditingState | null>(null);
   // undefined=未触发上传；null=根级上传(不挂靠)；number=挂靠到该文件夹
-  const [uploadTarget, setUploadTarget] = useState<number | null | undefined>(undefined);
+  const uploadTargetRef = useRef<number | null | undefined>(undefined);
   // 拖拽放置位置：before/after=同级排序插入线；inside=移入文件夹
   const [dropIndicator, setDropIndicator] = useState<DropIndicator | null>(null);
   // 折叠的文件夹 id：初始从 localStorage 恢复，保留用户上次的展开/折叠状态
@@ -911,7 +913,16 @@ export function WorkspaceNav() {
         dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: id });
         dispatch({ type: "SET_FILE_SELECTED_FILE", payload: null });
       } else if (type === "file") {
-        const doc = fileDocuments.find((d) => d.id === id);
+        let doc = fileDocuments.find((d) => d.id === id);
+        if (!doc) {
+          try {
+            const response = await listFileDocuments();
+            setFileDocuments(response.documents);
+            doc = response.documents.find((d) => d.id === id);
+          } catch {
+            return;
+          }
+        }
         if (doc) {
           dispatch({ type: "SET_FILE_SELECTED_FILE", payload: doc.file_path });
           dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null });
@@ -971,23 +982,20 @@ export function WorkspaceNav() {
   );
 
   const requestUpload = useCallback((folderId: number | null) => {
-    setUploadTarget(folderId);
+    uploadTargetRef.current = folderId;
     fileInputRef.current?.click();
   }, []);
 
   const onFileChange = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) e.target.value = "";
-      if (!file || uploadTarget === undefined) return;
-      const target = uploadTarget;
-      setUploadTarget(undefined);
-      const clientRequestId =
-        typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `ws-${Date.now()}`;
+      e.target.value = "";
+      const target = uploadTargetRef.current;
+      uploadTargetRef.current = undefined;
+      if (!file || target === undefined) return;
+      const job = await startUpload(file);
+      if (!job) return;
       try {
-        const job = await uploadToFileLibrary(file, clientRequestId).promise;
         // 上传响应可能尚未处理完(result_document_id 为空),轮询直到拿到文档 id
         let docId = job.result_document_id;
         for (let i = 0; i < 20 && docId == null; i++) {
@@ -1001,11 +1009,9 @@ export function WorkspaceNav() {
         }
         await reload();
         dispatch({ type: "INCREMENT_FILE_LIBRARY_REVISION" });
-      } catch {
-        /* ignore */
-      }
+      } catch { /* 上传管理器会展示失败状态 */ }
     },
-    [uploadTarget, reload, dispatch],
+    [reload, dispatch, startUpload],
   );
 
   const selectView = useCallback(
@@ -1147,7 +1153,7 @@ export function WorkspaceNav() {
           </ContextMenuContent>
         </ContextMenu>
       </div>
-      <input ref={fileInputRef} type="file" hidden onChange={onFileChange} />
+      <input ref={fileInputRef} type="file" accept=".pdf,.docx,.xlsx" hidden onChange={onFileChange} />
       <ResourceDialogs actions={resourceActions} flatFolders={flatFolders} />
     </WorkspacePanel>
   );

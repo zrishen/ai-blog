@@ -42,7 +42,7 @@ export interface UploadTask extends FileProcessingProgressValue {
 interface FileProcessingContextValue {
   uploadTask: UploadTask | null;
   isUploadActive: boolean;
-  startUpload: (file: File, categoryId?: number) => Promise<void>;
+  startUpload: (file: File, categoryId?: number) => Promise<FileProcessingJob | null>;
   restoreJobs: Record<number, FileProcessingJob>;
   restoreFile: (item: TrashItem) => Promise<void>;
   consumeRestoreSuccess: (sourceId: number, jobId: string) => void;
@@ -345,7 +345,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   }, []);
 
   const startUpload = useCallback(async (file: File, categoryId?: number) => {
-    if (uploadTask?.status === "active") return;
+    if (uploadTask?.status === "active") return null;
     const requestId = makeRequestId();
     const initial: UploadTask = {
       requestId,
@@ -375,9 +375,10 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
       const job = await request.promise;
       uploadCancelRef.current = null;
       attachUploadJob(job, readStoredUpload());
+      return job;
     } catch (error) {
       uploadCancelRef.current = null;
-      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (error instanceof DOMException && error.name === "AbortError") return null;
       if (error instanceof FileUploadNetworkError) {
         const latest = readStoredUpload();
         const stored: StoredUpload = latest?.requestId === requestId ? latest : {
@@ -394,7 +395,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
             ? { ...current, status: "failed", error: "上传已中断，请重新选择文件" }
             : current);
         });
-        return;
+        return null;
       }
       sessionStorage.removeItem(STORAGE_KEY);
       const message = error instanceof Error ? error.message : "文件库上传失败";
@@ -402,6 +403,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
         ? { ...current, status: "failed", stage: "上传失败", error: message }
         : current);
     }
+    return null;
   }, [attachUploadJob, reconnectRequest, uploadTask]);
 
   const restoreFile = useCallback(async (item: TrashItem) => {

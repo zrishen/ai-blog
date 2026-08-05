@@ -64,12 +64,20 @@ export function AiKnowledgeView({
   };
 
   // 点击打开：文章→内联编辑，文件→内联预览（反查 file_path），研究类不可打开
-  const openResource = (it: RagSource) => {
-    if (!data) return;
+  const openResource = async (it: RagSource) => {
     if (it.resource_type === "blog_post" && it.resource_id != null) {
       onOpenBlog(it.resource_id);
     } else if (it.resource_type === "file" && it.resource_id != null) {
-      const doc = data.docs.find((d) => d.id === it.resource_id);
+      let doc = data?.docs.find((d) => d.id === it.resource_id);
+      if (!doc) {
+        try {
+          const response = await listFileDocuments();
+          setData((current) => (current ? { ...current, docs: response.documents } : current));
+          doc = response.documents.find((d) => d.id === it.resource_id);
+        } catch {
+          return;
+        }
+      }
       if (doc) onOpenFile(doc.file_path);
     }
   };
@@ -149,7 +157,9 @@ export function AiKnowledgeView({
                     <button
                       type="button"
                       disabled={!openable}
-                      onClick={() => openResource(it)}
+                      onClick={() => {
+                        void openResource(it);
+                      }}
                       className={cn(
                         "min-w-0 flex-1 truncate text-left text-body font-medium",
                         openable
@@ -160,7 +170,7 @@ export function AiKnowledgeView({
                       {nameOf(it)}
                     </button>
                     {indexJob ? (
-                      <div className="w-40 shrink-0">
+                      <div className="w-56 shrink-0">
                         <FileProcessingProgress
                           value={{ percent: indexJob.progress_percent, stage: jobStage(indexJob), job: indexJob }}
                         />

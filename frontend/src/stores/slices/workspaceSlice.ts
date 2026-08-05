@@ -2,6 +2,8 @@ import type { ChatState, ChatAction } from "../chatStore";
 
 export function workspaceReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
+    case "SET_FILE_SELECTED_FILE":
+      return { ...state, fileSelectedFile: action.payload };
     case "SET_WORKSPACE_TREE":
       return { ...state, workspaceTree: action.payload };
     case "SET_WORKSPACE_BLOG_STATUS":

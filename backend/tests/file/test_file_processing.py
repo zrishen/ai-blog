@@ -75,6 +75,11 @@ async def test_index_document_knowledge_links_chunks_to_consolidated_knowledge(
     async def link_sources(*, doc_id, entity_ids, fact_ids):
         sources.append((doc_id, entity_ids, fact_ids))
 
+    progress: list[tuple[str, int, int, str]] = []
+
+    async def report(stage, completed, total, unit):
+        progress.append((stage, completed, total, unit))
+
     monkeypatch.setattr(file_processing_service, "_get_document_memory_llm", get_llm)
     monkeypatch.setattr(file_processing_service.graph_store, "link_document", link_document)
     monkeypatch.setattr(file_processing_service.extractor, "extract", extract)
@@ -90,7 +95,7 @@ async def test_index_document_knowledge_links_chunks_to_consolidated_knowledge(
         original_name="source.pdf",
         stored_name="source.pdf",
     )
-    await _index_document_knowledge(db_session, job, ["first chunk", "second chunk"])
+    await _index_document_knowledge(db_session, job, ["first chunk", "second chunk"], report)
 
     assert mentions == [
         ("source.pdf", 0, ["entity-1"]),
@@ -104,6 +109,11 @@ async def test_index_document_knowledge_links_chunks_to_consolidated_knowledge(
     assert [payload["facts"][0]["source_doc_id"] for payload in extracted_payloads] == [
         "document-1",
         "document-1",
+    ]
+    assert progress == [
+        ("brain_extract", 0, 2, "chunk"),
+        ("brain_extract", 1, 2, "chunk"),
+        ("brain_extract", 2, 2, "chunk"),
     ]
 
 
@@ -121,6 +131,17 @@ def test_progress_models_match_contract_and_finalize_caps_before_success():
     }
     assert sum(PROGRESS_MODELS["upload_v1"].values()) == 100
     assert sum(PROGRESS_MODELS["restore_v1"].values()) == 100
+    assert PROGRESS_MODELS["index_v1"] == {
+        "cleanup_index": 2,
+        "parse": 10,
+        "chunk": 5,
+        "embedding": 35,
+        "metadata": 5,
+        "vector_store": 23,
+        "brain_extract": 15,
+        "finalize": 5,
+    }
+    assert sum(PROGRESS_MODELS["index_v1"].values()) == 100
 
     progress = empty_progress("upload_v1")
     assert progress["model_version"] == "upload_v1"
@@ -152,7 +173,7 @@ async def test_upload_returns_202_before_document_is_visible(
     assert body["status"] == "queued"
     assert body["progress_percent"] == 30
     assert body["progress_json"]["model_version"] == "upload_v1"
-    assert body["progress_json"]["current_stage"] == "cleanup_index"
+    assert body["progress_json"]["current_stage"] == "finalize"
     assert body["progress_json"]["stages"]["browser_upload"]["completed"] == 1
     assert body["progress_json"]["stages"]["persist_file"]["completed"] == 1
     job = await db_session.get(FileProcessingJob, body["id"])

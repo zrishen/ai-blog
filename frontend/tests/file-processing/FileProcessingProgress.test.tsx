@@ -31,6 +31,40 @@ function makeJob(overrides: Partial<FileProcessingJob> = {}): FileProcessingJob 
 }
 
 describe("FileProcessingProgress", () => {
+  it("加入 AI 知识时不暴露清理旧索引的内部步骤", () => {
+    const job = makeJob({
+      job_type: "index",
+      current_stage: "cleanup_index",
+      progress_percent: 2,
+      progress_json: {
+        model_version: "index_v1",
+        current_stage: "cleanup_index",
+        stages: { cleanup_index: { completed: 1, total: 1, unit: "operation" } },
+      },
+    });
+
+    render(<FileProcessingProgress value={{ percent: 2, stage: "fallback", job }} />);
+    expect(screen.getByText("准备建立索引")).toBeInTheDocument();
+    expect(screen.queryByText("清理旧索引")).not.toBeInTheDocument();
+  });
+
+  it("向量写入后显示 AI 大脑知识提取进度", () => {
+    const job = makeJob({
+      job_type: "index",
+      current_stage: "brain_extract",
+      progress_percent: 87,
+      progress_json: {
+        model_version: "index_v1",
+        current_stage: "brain_extract",
+        stages: { brain_extract: { completed: 5, total: 12, unit: "chunk" } },
+      },
+    });
+
+    render(<FileProcessingProgress value={{ percent: 87, stage: "fallback", job }} />);
+    expect(screen.getByText("提取实体与事实")).toBeInTheDocument();
+    expect(screen.getByText("5/12 片段 · 87%")).toBeInTheDocument();
+  });
+
   it("embedding 阶段聚合显示 chunk 计数", () => {
     const job = makeJob({
       progress_percent: 30,

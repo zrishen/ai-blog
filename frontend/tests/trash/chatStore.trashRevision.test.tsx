@@ -12,6 +12,16 @@ beforeEach(() => {
 });
 
 describe("chatStore file/trash revisions", () => {
+  it("保存选中文件，供工作区切换到文件预览", () => {
+    const { result } = renderHook(() => useChat(), { wrapper });
+
+    act(() => result.current.dispatch({ type: "SET_FILE_SELECTED_FILE", payload: "report.pdf" }));
+    expect(result.current.state.fileSelectedFile).toBe("report.pdf");
+
+    act(() => result.current.dispatch({ type: "SET_FILE_SELECTED_FILE", payload: null }));
+    expect(result.current.state.fileSelectedFile).toBeNull();
+  });
+
   it("初始值为 0", () => {
     const { result } = renderHook(() => useChat(), { wrapper });
     expect(result.current.state.fileLibraryRevision).toBe(0);

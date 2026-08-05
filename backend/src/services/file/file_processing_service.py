@@ -63,7 +63,8 @@ PROGRESS_MODELS: dict[str, dict[str, int]] = {
         "chunk": 5,
         "embedding": 35,
         "metadata": 5,
-        "vector_store": 38,
+        "vector_store": 23,
+        "brain_extract": 15,
         "finalize": 5,
     },
 }
@@ -394,14 +395,15 @@ async def fail_staging_job(
 
 
 async def mark_upload_queued(db: AsyncSession, job: FileProcessingJob) -> None:
+    next_stage = "finalize" if not job.auto_index else "cleanup_index"
     progress = _normalize_progress(job.progress_json, "upload_v1", "browser_upload")
     progress["stages"]["browser_upload"] = {"completed": 1, "total": 1, "unit": "file"}
     progress["stages"]["persist_file"] = {"completed": 1, "total": 1, "unit": "file"}
-    progress["current_stage"] = "cleanup_index"
+    progress["current_stage"] = next_stage
     job.progress_json = progress
     job.progress_percent = calculate_progress_percent("upload_v1", progress, status="queued")
     job.status = "queued"
-    job.current_stage = "cleanup_index"
+    job.current_stage = next_stage
     job.staging_path = None
     job.updated_at = utcnow()
     await db.commit()
@@ -555,6 +557,7 @@ async def _index_document_knowledge(
     db: AsyncSession,
     job: FileProcessingJob,
     chunks: list[str],
+    progress_reporter=None,
 ) -> None:
     """Extract document knowledge after raw chunks are safely present in the brain."""
     if (
@@ -564,10 +567,14 @@ async def _index_document_knowledge(
         or not job.target_resource_type
         or job.target_resource_id is None
     ):
+        if progress_reporter:
+            await progress_reporter("brain_extract", 1, 1, "operation")
         return
 
     llm = await _get_document_memory_llm(db, job.user_id)
     if llm is None:
+        if progress_reporter:
+            await progress_reporter("brain_extract", 1, 1, "operation")
         return
 
     doc_id = await graph_store.link_document(
@@ -577,6 +584,8 @@ async def _index_document_knowledge(
         title=job.original_name or job.stored_name or str(job.target_resource_id),
     )
     stored_name = job.stored_name or ""
+    if progress_reporter:
+        await progress_reporter("brain_extract", 0, len(chunks), "chunk")
     for chunk_index, chunk in enumerate(chunks):
         extracted = await extractor.extract(chunk, llm)
         extracted["episodes"] = []
@@ -593,6 +602,8 @@ async def _index_document_knowledge(
             entity_ids=entity_ids,
             fact_ids=consolidated["facts"],
         )
+        if progress_reporter:
+            await progress_reporter("brain_extract", chunk_index + 1, len(chunks), "chunk")
 
 
 async def _run_job(job_id: str) -> None:
@@ -655,9 +666,9 @@ async def _run_job(job_id: str) -> None:
                         resource_type=job.target_resource_type if job.job_type == "index" else None,
                         resource_id=job.target_resource_id if job.job_type == "index" else None,
                         progress_reporter=reporter,
-                    )
+                )
                 if job.job_type == "index":
-                    await _index_document_knowledge(db, job, chunks)
+                    await _index_document_knowledge(db, job, chunks, reporter)
                     # 推进 RagSource 状态；file 顺带回写 chunk 数到 FileDocument。
                     from src.services.workspace import rag_service
 

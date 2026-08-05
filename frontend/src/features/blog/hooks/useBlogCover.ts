@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useChat } from "../../../stores/chatStore";
+import { useAuth } from "../../../stores/authStore";
 import { createBlogPost, generateBlogCover, suggestBlogTags, uploadFile } from "../../../api/client";
 import { generateExcerpt } from "../utils/blogExcerpt";
 import type { BlogPost } from "../types";
@@ -19,6 +20,8 @@ export interface UseBlogCoverParams {
 
 export function useBlogCover({ existingPost, title, getContent, onError, onCoverChange, onTagsChange }: UseBlogCoverParams) {
   const { state, dispatch } = useChat();
+  const { user } = useAuth();
+  const username = user?.username;
   const [generatingCover, setGeneratingCover] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [tagGenerating, setTagGenerating] = useState(false);
@@ -35,13 +38,16 @@ export function useBlogCover({ existingPost, title, getContent, onError, onCover
     onError(null);
     try {
       const uploaded = await uploadFile(file);
-      onCoverChange(uploaded.download_url);
+      const coverUrl = username
+        ? `/api/v1/public/uploads/${encodeURIComponent(username)}/${encodeURIComponent(uploaded.stored_name)}`
+        : uploaded.download_url;
+      onCoverChange(coverUrl);
     } catch {
       onError("上传封面失败，请确认图片格式后重试");
     } finally {
       setUploadingCover(false);
     }
-  }, [onError, onCoverChange]);
+  }, [onError, onCoverChange, username]);
 
   const handleGenerateCover = useCallback(async () => {
     if (!existingPost) {

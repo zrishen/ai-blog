@@ -9,12 +9,12 @@ export interface FileProcessingProgressValue {
 const STAGE_LABELS: Record<string, string> = {
   browser_upload: "正在上传",
   persist_file: "服务器保存",
-  cleanup_index: "清理旧索引",
   parse: "解析文件",
   chunk: "切分文本",
   embedding: "生成向量",
   metadata: "整理元数据",
   vector_store: "写入向量库",
+  brain_extract: "提取实体与事实",
   finalize: "完成文件记录",
   queued: "等待处理",
 };
@@ -31,7 +31,10 @@ const UNIT_LABELS: Record<string, string> = {
 
 const CHUNK_PIPELINE_STAGES = ["embedding", "metadata", "vector_store"] as const;
 
-function getFileProcessingStageLabel(stage: string) {
+function getFileProcessingStageLabel(stage: string, job?: FileProcessingJob | null) {
+  if (stage === "cleanup_index") {
+    return job?.job_type === "restore" ? "准备重新建立索引" : "准备建立索引";
+  }
   return STAGE_LABELS[stage] ?? stage;
 }
 
@@ -64,7 +67,7 @@ function getDisplayStage(job?: FileProcessingJob | null): FileProcessingStage | 
 export function FileProcessingProgress({ value }: { value: FileProcessingProgressValue }) {
   const stage = getDisplayStage(value.job);
   const stageKey = value.job?.progress_json?.current_stage || value.job?.current_stage;
-  const stageLabel = stageKey ? getFileProcessingStageLabel(stageKey) : value.stage;
+  const stageLabel = stageKey ? getFileProcessingStageLabel(stageKey, value.job) : value.stage;
   const percent = value.percent == null ? undefined : Math.max(0, Math.min(100, value.percent));
   const unitText = stage && stage.total > 0
     ? `${stage.completed}/${stage.total} ${UNIT_LABELS[stage.unit] ?? stage.unit}`

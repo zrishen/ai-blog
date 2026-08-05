@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
-import { Archive, Inbox, Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, ReactNode } from "react";
+import { Archive, Inbox, Plus, Trash2, Upload } from "lucide-react";
 import { BlogIcon, PublishedIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
 import {
@@ -12,8 +12,10 @@ import {
 import { useChat } from "../../../stores/chatStore";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ArchiveToFolderDialog, type ArchiveTarget } from "../components/ArchiveToFolderDialog";
 import { DeleteResourceDialog, type DeleteResourceTarget } from "../components/DeleteResourceDialog";
+import { useFileProcessing } from "@/features/file-processing/FileProcessingProvider";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
 import { formatDate } from "./utils";
 
@@ -108,6 +110,8 @@ export function UnarchivedView({
   onCreateBlog: () => void;
 }) {
   const { state } = useChat();
+  const { startUpload, isUploadActive } = useFileProcessing();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<FileDocument[] | null>(null);
   const [posts, setPosts] = useState<BlogPostData[] | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ArchiveTarget | null>(null);
@@ -175,6 +179,12 @@ export function UnarchivedView({
   const loading = files === null || unarchivedPosts === null;
   const total = (files?.length ?? 0) + (unarchivedPosts?.length ?? 0);
 
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) await startUpload(file);
+  };
+
   const rows = useMemo<InboxRow[]>(() => {
     if (loading) return [];
     type WithTs = InboxRow & { ts: number };
@@ -220,10 +230,21 @@ export function UnarchivedView({
         title={`未分类 · ${loading ? 0 : total}`}
         icon={Inbox}
         actions={
-          <Button size="sm" variant="ghost" onClick={onCreateBlog}>
-            <Plus className="h-3.5 w-3.5" />
-            新建文章
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={isUploadActive}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              上传文件
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onCreateBlog}>
+              <Plus className="h-3.5 w-3.5" />
+              新建文章
+            </Button>
+          </div>
         }
       >
         {loading ? (
@@ -243,6 +264,15 @@ export function UnarchivedView({
           </ul>
         )}
       </SectionCard>
+      <Input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.docx,.xlsx"
+        className="hidden"
+        onChange={(event) => {
+          void handleFileChange(event);
+        }}
+      />
       <ArchiveToFolderDialog
         open={archiveTarget !== null}
         target={archiveTarget}

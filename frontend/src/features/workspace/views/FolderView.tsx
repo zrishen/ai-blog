@@ -93,11 +93,20 @@ export function FolderView({
 
   const flatFolders = useMemo(() => flattenFolders(tree), [tree]);
 
-  const openResource = (r: WorkspaceNode) => {
+  const openResource = async (r: WorkspaceNode) => {
     if (r.resource_type === "blog_post" && r.resource_id != null) {
       onOpenBlog(r.resource_id);
     } else if (r.resource_type === "file" && r.resource_id != null) {
-      const doc = docs.find((d) => d.id === r.resource_id);
+      let doc = docs.find((d) => d.id === r.resource_id);
+      if (!doc) {
+        try {
+          const response = await listFileDocuments();
+          setDocs(response.documents);
+          doc = response.documents.find((d) => d.id === r.resource_id);
+        } catch {
+          return;
+        }
+      }
       if (doc) onOpenFile(doc.file_path);
     }
   };
@@ -163,7 +172,7 @@ function ResourceRow({
   actions,
 }: {
   node: WorkspaceNode;
-  openResource: (r: WorkspaceNode) => void;
+  openResource: (r: WorkspaceNode) => void | Promise<void>;
   actions: ReturnType<typeof useResourceActions>;
 }) {
   const isFile = node.resource_type === "file";
@@ -196,7 +205,17 @@ function ResourceRow({
   }
 
   const menuActions: { icon: LucideIcon; label: string; run: () => void }[] = [
-    ...(openable ? [{ icon: Eye, label: "预览", run: () => openResource(node) }] : []),
+    ...(openable
+      ? [
+          {
+            icon: Eye,
+            label: "预览",
+            run: () => {
+              void openResource(node);
+            },
+          },
+        ]
+      : []),
     {
       icon: Move,
       label: "移动",
@@ -232,9 +251,13 @@ function ResourceRow({
           <div
             role="button"
             tabIndex={0}
-            onClick={() => openResource(node)}
+            onClick={() => {
+              void openResource(node);
+            }}
             onKeyDown={(e) => {
-              if (openable && (e.key === "Enter" || e.key === " ")) openResource(node);
+              if (openable && (e.key === "Enter" || e.key === " ")) {
+                void openResource(node);
+              }
             }}
             className={cn(
               "group flex w-full items-center gap-3 rounded-control px-3 py-2 text-left transition-colors data-[state=open]:bg-primary/10",
