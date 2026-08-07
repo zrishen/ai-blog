@@ -36,7 +36,6 @@ function renderLanding() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/u/:username" element={<div>个人博客首页</div>} />
-        <Route path="/research" element={<div>研究图谱首页</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -71,17 +70,6 @@ describe("LandingPage", () => {
 
     await user.click(screen.getByRole("button", { name: "模拟登录" }));
     expect(screen.getByText("个人博客首页")).toBeInTheDocument();
-  });
-
-  it("未登录点击研究入口时显示登录框，登录后进入研究图谱", async () => {
-    const user = userEvent.setup();
-    renderLanding();
-
-    await user.click(screen.getByRole("link", { name: "探索研究空间" }));
-    expect(screen.getByRole("dialog", { name: "登录到 AI Blog" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "模拟登录" }));
-    expect(screen.getByText("研究图谱首页")).toBeInTheDocument();
   });
 
   it("已登录时所有创作入口都指向当前用户的个人博客", async () => {

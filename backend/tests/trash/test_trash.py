@@ -320,7 +320,7 @@ async def test_trash_isolated_per_user(client: AsyncClient, db_session: AsyncSes
 
 @pytest.mark.asyncio
 async def test_trash_unsupported_type(client: AsyncClient):
-    resp = await client.delete("/api/v1/trash/research_topic/1")
+    resp = await client.delete("/api/v1/trash/unknown_type/1")
     assert resp.status_code in (400, 404)
 
 

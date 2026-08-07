@@ -49,8 +49,6 @@ vi.mock("../../src/api/client", async (importOriginal) => {
     generateBlogCover: vi.fn(() => Promise.resolve("")),
     uploadFile: vi.fn(() => Promise.resolve("")),
     suggestBlogTags: vi.fn(() => Promise.resolve([])),
-    getBlogResearchSummary: vi.fn(() => Promise.resolve(null)),
-    getResearchTopic: vi.fn(() => Promise.resolve(null)),
   };
 });
 

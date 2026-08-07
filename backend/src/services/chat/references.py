@@ -1,10 +1,8 @@
-"""工具结果解析：从工具返回文本提取引用信息、博客元数据，并自动关联研究上下文（orchestrator on_tool_end 调用）。"""
+"""工具结果解析：从工具返回文本提取引用信息与博客元数据（orchestrator on_tool_end 调用）。"""
 
 import logging
 import re
 from typing import Any
-
-from src.database.session import async_session
 
 logger = logging.getLogger(__name__)
 
@@ -94,40 +92,3 @@ def _extract_blog_meta(tool_name: str, result_text: str) -> dict[str, object] | 
             else:
                 meta[field] = val
     return meta if len(meta) > 1 else None
-
-
-async def _auto_link_research_context_to_blog_post(
-    blog_meta: dict[str, object] | None,
-    research_topic_id: object,
-    user_id: int,
-    enabled: bool,
-) -> dict[str, object] | None:
-    if not enabled or not blog_meta:
-        return None
-    post_id = blog_meta.get("post_id")
-    if not isinstance(post_id, int) or post_id <= 0:
-        return None
-    try:
-        topic_id = int(research_topic_id or 0)
-    except (TypeError, ValueError):
-        return None
-    if topic_id <= 0:
-        return None
-
-    from src.services.research import attach_adopted_claims_for_topic_to_post, attach_topic_to_post
-
-    try:
-        async with async_session() as session:
-            topic_link = await attach_topic_to_post(session, post_id, topic_id, user_id)
-            claim_count = await attach_adopted_claims_for_topic_to_post(
-                session,
-                post_id,
-                topic_id,
-                user_id,
-                "AI 可信写作自动关联",
-            )
-    except Exception as exc:
-        logger.warning("自动关联研究上下文到文章失败 post_id=%s topic_id=%s: %s", post_id, topic_id, exc)
-        return {"topic_linked": False, "claim_linked_count": 0, "error": "auto_link_failed"}
-
-    return {"topic_linked": bool(topic_link), "claim_linked_count": claim_count}

@@ -30,8 +30,7 @@ async def test_init_db_builds_full_schema_and_is_idempotent(monkeypatch):
                 tables = set(insp.get_table_names())
                 assert {
                     "users", "conversations", "messages", "blog_posts", "blog_post_revisions",
-                    "file_documents", "file_processing_jobs", "research_topics",
-                    "research_entities", "research_claims", "redemption_codes",
+                    "file_documents", "file_processing_jobs", "redemption_codes",
                     "subscription_weekly_usage", "workspace_nodes", "rag_sources",
                     "platform_plugins", "llm_settings", "public_chat_daily_usage",
                 }.issubset(tables)

@@ -64,19 +64,6 @@ SIDEBAR_TOOL_RULES = (
 )
 SYSTEM_TOOL_RULES += SIDEBAR_TOOL_RULES
 
-# Research Graph 工具提示词
-
-RESEARCH_TOOL_RULES = (
-    "\n\n研究工具使用规则：\n"
-    "1. 研究工具只用于可信写作、研究图谱页面或当前存在 research_topic_id 的上下文；普通博客操作不要调用 research_* 工具。\n"
-    "2. 开始研究或写作前，先用 research_get_topic 读取当前主题；如果没有主题且用户要开展可信研究，使用 research_create_topic 创建或复用主题。\n"
-    "3. 添加资料时按顺序使用 research_add_source 记录来源，再用 research_add_evidence 保存可追溯原文证据片段，最后用 research_add_claim 抽取事实声明。\n"
-    "4. search_summary 只能作为线索来源，不能作为最终 Evidence；AI 自己总结的内容不能作为支撑 Claim 的 Evidence。\n"
-    "5. 发现关键主体、组织、产品、时间线等实体时，可用 research_add_entity；需要表达支撑、冲突、引用或实体关系时，再用 research_add_relation。\n"
-    "6. 对不确定、需要用户审核或影响写作方向的结论，使用 research_add_proposal 记录建议，不要直接写成已确认事实。\n"
-    "7. 写作时只把 adopted 或 supported 且有有效 Evidence 的 Claim 当作确定事实；冲突 Claim 必须说明分歧，不能写成单一确定结论。"
-)
-
 # 文件库(base_search_file)提示词
 
 RAG_AUTO = "\n\n当用户提到文件库、上传文件、文档、资料、根据文档等私有资料线索时，应调用 base_search_file；普通闲聊不必调用。"
@@ -100,8 +87,6 @@ CTX_POST = "用户当前正在查看文章「{title}」(ID={post_id})。"
 CTX_FILES = "用户当前在文件库页面。"
 CTX_HOME = "用户当前在博客主页。"
 CTX_ABOUT = "用户当前在关于页面。"
-CTX_RESEARCH = "用户当前在研究图谱页面。"
-CTX_RESEARCH_TOPIC = "用户当前在研究图谱页面。 当前研究主题：「{title}」(ID={topic_id})。"
 
 # 选中文字(AI 修改)
 CTX_SELECTED_TEXT = (
@@ -115,27 +100,6 @@ CTX_SELECTED_TEXT = (
 CTX_SELECTED_TEXT_LABEL = "选中的内容：\n「{selected}」"
 CTX_SELECTED_SECTION = "选中内容位于文章第 {section_index} 节。调用 blog_edit_post 时把此序号传入 section_index。"
 
-# 研究主题注入
-CTX_RESEARCH_TOPIC_ID = (
-    "当前研究主题 ID={topic_id}。"
-    "请使用 research_get_topic 查看当前主题的已有来源、证据和事实。"
-    "如需添加新来源、证据或事实，请使用对应的 research_add_* 工具。"
-)
-
-# 可信写作 / 研究协议
-
-CTX_TRUST_WRITING = (
-    "当前处于可信写作模式。写作前必须先收集来源、抽取证据、建立事实声明（Claim），"
-    "再基于已确认或高可信事实生成文章。遵循以下硬性规则：\n"
-    "1. 搜索摘要只能作为线索（source_type=search_summary），不能保存为最终 Evidence。\n"
-    "2. AI 自己总结的内容不能作为 Evidence 支撑事实。\n"
-    "3. 没有有效 Evidence（kind=web|knowledge_base|mcp_tool|manual 且有 quote）的 Claim 不能进入 supported。\n"
-    "4. 低可信来源（trust_level=low）不能自动 adopted。\n"
-    "5. 冲突 Claim 不能写成确定事实，必须在文章中说明分歧。\n"
-    "6. Agent 写入的 Claim 默认 pending，需用户审核后才可 adopted。\n\n"
-    "{protocol}"
-)
-
 # 上下文压缩（compact）摘要提示词
 
 COMPACT_SUMMARY_PROMPT = (
@@ -147,22 +111,4 @@ COMPACT_SUMMARY_PROMPT = (
     "3. 用紧凑的连贯短文表达，避免过度分点堆砌；可用少量换行或短句组织。\n"
     "4. 只输出摘要本身，不要加「摘要：」之类前缀，不要解释你在做什么。\n"
 )
-
-TRUST_CHOICE_PROTOCOL = """
-研究写作选择协议：
-当需要给用户下一步建议时，可以在回复末尾输出一个结构化 JSON payload，格式为 TrustChoicePayload：
-{
-  "message": "给用户看的简短建议正文",
-  "choices": [
-    {"label": "去图谱审核", "kind": "action", "action": "open_research_graph"},
-    {"label": "研究反方观点", "kind": "reply", "prompt": "请继续研究这个主题的反方观点，并优先寻找权威来源和原文证据。"}
-  ]
-}
-choices 最多 1-4 个；同一个 choices 数组里允许 action 和 reply 混合。
-action 只能使用以下白名单：start_research、continue_research、open_research_graph、open_conflicts、explain_conflicts、write_from_confirmed_facts。
-reply 只表示用户确认后的下一句话，不代表你可以自动执行前端动作、删除、发布或跳转。
-label 只用于按钮展示，不能作为动作判断依据。
-不要求返回“不选择”，该选项由前端固定追加。
-不要求返回“请选择下一步：”，该标题由前端固定渲染。
-""".strip()
 

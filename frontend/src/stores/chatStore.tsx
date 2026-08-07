@@ -1,7 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
-import type { BrainStats, ResearchTopicDetail, ResearchTopicSummary, WorkspaceNode } from "../api/client";
-import type { TrustChoiceOption } from "../features/ai-chat/trustPrompts";
+import type { BrainStats, WorkspaceNode } from "../api/client";
 import type { ThinkingMode } from "../api/chat";
 import type {
   AISidebarConversationKey,
@@ -18,7 +17,6 @@ import { isDisplayableMessage } from "../features/ai-chat/types";
 import type { BlogPost, BlogView } from "../features/blog/types";
 import type { FileDocument } from "../api/client";
 import type { BrainTab, Page, Panel, Theme, WorkspaceView } from "./types";
-import { researchReducer } from "./slices/researchSlice";
 import { conversationReducer } from "./slices/conversationSlice";
 import { blogReducer } from "./slices/blogSlice";
 import { uiReducer } from "./slices/uiSlice";
@@ -90,15 +88,6 @@ interface ChatState {
   brainTab: BrainTab;
   brainStats: BrainStats | null;
 
-  researchTopics: ResearchTopicSummary[];
-  researchCurrentTopicId: number | null;
-  researchCurrentTopic: ResearchTopicDetail | null;
-  researchSelectedClaimId: number | null;
-  researchSelectedConflictId: number | null;
-  researchSelectedProposalId: number | null;
-  trustWritingEnabled: boolean;
-  pendingResearchPrompt: string | null;
-
   // 文件处理成功后递增，触发文件库列表刷新
   fileLibraryRevision: number;
 
@@ -135,8 +124,8 @@ type ChatAction =
   | { type: "SET_AI_SIDEBAR_MSGS_FOR_KEY"; payload: { key: AISidebarConversationKey; messages: Message[] } }
   | { type: "ADD_AI_SIDEBAR_MSG"; payload: Message }
   | { type: "ADD_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; message: Message } }
-  | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
-  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number } }
   | { type: "RECONCILE_AI_SIDEBAR_MESSAGE_IDS"; payload: { key: AISidebarConversationKey; optimisticUserId: number; userMessageId: number; optimisticAssistantId: number; assistantMessageId: number } }
   | { type: "APPLY_AI_STREAM_EVENT"; payload: { id: number; event: AIStreamEvent } }
   | { type: "APPLY_AI_STREAM_EVENT_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; event: AIStreamEvent } }
@@ -176,14 +165,6 @@ type ChatAction =
   | { type: "SET_WORKSPACE_BLOG_STATUS"; payload: { id: number; status: string } }
   | { type: "SET_WORKSPACE_SELECTED_FOLDER"; payload: number | null }
   | { type: "SET_WORKSPACE_SELECTED_VIEW"; payload: WorkspaceView }
-  | { type: "SET_RESEARCH_TOPICS"; payload: ResearchTopicSummary[] }
-  | { type: "SET_RESEARCH_CURRENT_TOPIC_ID"; payload: number | null }
-  | { type: "SET_RESEARCH_CURRENT_TOPIC"; payload: ResearchTopicDetail | null }
-  | { type: "SET_RESEARCH_SELECTED_CLAIM_ID"; payload: number | null }
-  | { type: "SET_RESEARCH_SELECTED_CONFLICT_ID"; payload: number | null }
-  | { type: "SET_RESEARCH_SELECTED_PROPOSAL_ID"; payload: number | null }
-  | { type: "SET_TRUST_WRITING_ENABLED"; payload: boolean }
-  | { type: "SET_PENDING_RESEARCH_PROMPT"; payload: string | null }
   | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
   | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
   | { type: "INCREMENT_TRASH_REVISION" }
@@ -195,7 +176,6 @@ type ChatAction =
   | { type: "LOGOUT" };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
-  state = researchReducer(state, action);
   state = conversationReducer(state, action);
   state = blogReducer(state, action);
   state = uiReducer(state, action);
@@ -238,14 +218,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         workspaceEditingBlogId: null,
         brainTab: "graph",
         brainStats: null,
-        researchTopics: [],
-        researchCurrentTopicId: null,
-        researchCurrentTopic: null,
-        researchSelectedClaimId: null,
-        researchSelectedConflictId: null,
-        researchSelectedProposalId: null,
-        trustWritingEnabled: false,
-        pendingResearchPrompt: null,
         fileLibraryRevision: state.fileLibraryRevision + 1,
         trashRevision: state.trashRevision + 1,
         aiKnowledgeRevision: state.aiKnowledgeRevision + 1,
@@ -259,7 +231,6 @@ const savedTheme = (localStorage.getItem("theme") as Theme) || "light";
 
 function getInitialPage(): Page {
   const path = window.location.pathname;
-  if (path.startsWith("/research")) return "research";
   if (path.startsWith("/workspace")) return "workspace";
   if (path.startsWith("/brain")) return "brain";
   return "blog";
@@ -326,15 +297,6 @@ const initialState: ChatState = {
   brainTab: "graph",
   brainStats: null,
 
-  researchTopics: [],
-  researchCurrentTopicId: null,
-  researchCurrentTopic: null,
-  researchSelectedClaimId: null,
-  researchSelectedConflictId: null,
-  researchSelectedProposalId: null,
-  trustWritingEnabled: false,
-  pendingResearchPrompt: null,
-
   fileLibraryRevision: 0,
   trashRevision: 0,
   aiKnowledgeRevision: 0,
@@ -392,5 +354,5 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   dispatch({ type: "SET_THEME", payload: next });
 }
 
-export type { Message, Conversation, DraftAttachment, FileDocument, BlogPost, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference, ResearchTopicDetail };
+export type { Message, Conversation, DraftAttachment, FileDocument, BlogPost, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference };
 export { isDisplayableMessage };

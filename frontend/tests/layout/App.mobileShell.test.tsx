@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
     currentPage: "workspace",
     blogCurrentPostId: null,
     blogPosts: [],
-    researchCurrentTopic: null,
   },
   dispatch: vi.fn(),
   setLayout: vi.fn(),
@@ -75,9 +74,6 @@ vi.mock("../../src/features/landing/LandingPage", () => ({
 }));
 vi.mock("../../src/features/workspace/WorkspacePage", () => ({
   WorkspacePage: () => <div>工作区主内容</div>,
-}));
-vi.mock("../../src/features/research/ResearchGraphPage", () => ({
-  ResearchGraphPage: () => <div>研究图谱主内容</div>,
 }));
 vi.mock("../../src/features/plugins/PluginCenterDialog", () => ({
   PluginCenterDialog: () => <div>Plugins</div>,
@@ -211,7 +207,7 @@ describe("App 手机端工作台外壳", () => {
     });
   });
 
-  it("未登录时移动导航仍提供创作与研究图谱入口，而不是空白抽屉", async () => {
+  it("未登录时移动导航仍提供创作入口，而不是空白抽屉", async () => {
     const user = userEvent.setup();
     mocks.auth = { isAuthenticated: false, isInitializing: false, user: null };
     renderApp();
@@ -220,7 +216,6 @@ describe("App 手机端工作台外壳", () => {
 
     expect(screen.getByRole("navigation", { name: "工作区主导航" })).toBeVisible();
     expect(screen.getByRole("button", { name: "创作" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "研究图谱" })).toBeVisible();
     expect(screen.queryByText("左侧业务面板")).not.toBeInTheDocument();
   });
 

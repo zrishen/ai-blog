@@ -8,7 +8,6 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInputBar
   const props: React.ComponentProps<typeof ChatInputBar> = {
     streaming: false,
     input: "",
-    topicCreateMode: false,
     textareaRef: { current: null },
     attachments: [],
     attachmentsEnabled: true,
@@ -22,7 +21,6 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInputBar
     onSend: vi.fn(),
     onStop: vi.fn(),
     onPickFiles: vi.fn(),
-    onPickResearch: vi.fn(),
     onOpenPlugins: vi.fn(),
     ...overrides,
   };

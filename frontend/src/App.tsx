@@ -11,7 +11,6 @@ import { SiteBlogRoute } from "./features/blog/components/SiteBlogRoute";
 import { SitePostRoute } from "./features/blog/components/SitePostRoute";
 import { LandingPage } from "./features/landing/LandingPage";
 import { WorkspacePage } from "./features/workspace/WorkspacePage";
-import { ResearchGraphPage } from "./features/research/ResearchGraphPage";
 import { BrainPage } from "./features/brain/BrainPage";
 import { OverviewPage } from "./features/admin/components/OverviewPage";
 import { UsersPage } from "./features/admin/components/UsersPage";
@@ -89,16 +88,6 @@ function WorkspaceRoute() {
   return <WorkspacePage />;
 }
 
-function ResearchRoute() {
-  const dispatch = useChatDispatch();
-
-  useEffect(() => {
-    dispatch({ type: "SET_PAGE", payload: "research" });
-  }, [dispatch]);
-
-  return <ResearchGraphPage />;
-}
-
 function BrainRoute() {
   const dispatch = useChatDispatch();
 
@@ -127,8 +116,6 @@ function MainContent() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/workspace" element={<WorkspaceRoute />} />
-      <Route path="/research" element={<ResearchRoute />} />
-      <Route path="/research/:topicId" element={<ResearchRoute />} />
       <Route path="/brain" element={<BrainRoute />} />
       <Route path="/u/:username" element={<SiteBlogRoute />} />
       <Route path="/u/:username/posts/:slug" element={<SitePostRoute />} />
@@ -183,18 +170,6 @@ function useAISidebarRouteContext() {
       };
     }
 
-    if (location.pathname.startsWith("/research")) {
-      const topicTitle = state.researchCurrentTopic?.title;
-      return {
-        mode,
-        contextText: topicTitle ? `当前上下文：研究图谱 · ${topicTitle}` : "当前上下文：研究图谱",
-        siteUsername: undefined,
-        postSlug: undefined,
-        pageType: "research" as const,
-        postTitle: undefined,
-      };
-    }
-
     if (postMatch && siteUsername) {
       const post = state.blogPosts.find((item) => item.slug === postSlug || item.id === state.blogCurrentPostId);
       return {
@@ -226,7 +201,7 @@ function useAISidebarRouteContext() {
       pageType: "other" as const,
       postTitle: undefined,
     };
-  }, [isAuthenticated, isInitializing, location.pathname, state.blogCurrentPostId, state.blogPosts, state.researchCurrentTopic?.title]);
+  }, [isAuthenticated, isInitializing, location.pathname, state.blogCurrentPostId, state.blogPosts]);
 }
 
 function App() {

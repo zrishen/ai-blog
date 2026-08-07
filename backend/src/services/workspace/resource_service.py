@@ -16,16 +16,16 @@ from src.services.workspace.node_service import (
     next_sort_order,
 )
 
-RESOURCE_TYPES = {"blog_post", "file", "research_topic"}
+RESOURCE_TYPES = {"blog_post", "file"}
 
-# 工作区可挂靠且底层带软删（回收站）的资源类型 → 模型。research_topic 无回收站，不在此列。
+# 工作区可挂靠的资源类型 → 底层模型（均带软删/回收站）。
 _SOFT_DELETABLE_MODELS = {"file": FileDocumentModel, "blog_post": BlogPostModel}
 
 
 async def soft_deleted_resource_ids(
     db: AsyncSession, resource_type: str, ids: list[int]
 ) -> set[int]:
-    """返回这批 resource_id 中底层资源已软删（进回收站）的集合；底层无 deleted_at 的类型（research_topic）返回空集。"""
+    """返回这批 resource_id 中底层资源已软删（进回收站）的集合；未知类型返回空集。"""
     if not ids:
         return set()
     model = _SOFT_DELETABLE_MODELS.get(resource_type)
@@ -38,8 +38,7 @@ async def soft_deleted_resource_ids(
 async def is_resource_alive(
     db: AsyncSession, resource_type: str | None, resource_id: int | None
 ) -> bool:
-    """底层资源行是否存在（active 或软删均算存活；已 purge=行不存在=False）。
-    research_topic 等无回收站的类型按存活处理，保留挂靠点。"""
+    """底层资源行是否存在（active 或软删均算存活；已 purge=行不存在=False）。未知类型按存活处理。"""
     if resource_type is None or resource_id is None:
         return False
     model = _SOFT_DELETABLE_MODELS.get(resource_type)

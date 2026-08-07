@@ -13,10 +13,6 @@ const api = vi.hoisted(() => ({
   getMessages: vi.fn(),
   getBlogPost: vi.fn(),
   listSitePosts: vi.fn(),
-  getResearchTopic: vi.fn(),
-  runResearchTopic: vi.fn(),
-  listResearchTopics: vi.fn(),
-  createResearchTopic: vi.fn(),
   sendSharedLandingChat: vi.fn(),
   sendSharedUserChat: vi.fn(),
   getAccessToken: vi.fn(() => null),
@@ -152,7 +148,6 @@ describe("AISidebar 博客 AI 修改编排", () => {
       post_title: "当前文章",
       selected_text: "旧文本",
       section_index: 2,
-      trust_writing_enabled: false,
     }));
     expect(latestChat!.state.aiSelectionContext).toBeNull();
 

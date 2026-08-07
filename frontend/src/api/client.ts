@@ -83,7 +83,6 @@ export * from "./auth";
 export * from "./conversations";
 export * from "./chat";
 export * from "./plugins";
-export * from "./research";
 export * from "./blog";
 export * from "./workspace";
 export * from "./files";

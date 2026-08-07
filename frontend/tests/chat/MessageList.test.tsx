@@ -40,7 +40,6 @@ function renderMessage(message: StreamingMessage, streaming: boolean) {
       historyLoadError={null}
       emptyHint=""
       onReloadHistory={vi.fn()}
-      onTrustChoiceSelect={vi.fn()}
     />,
   );
 }
@@ -72,7 +71,6 @@ describe("MessageList 思考过程生命周期", () => {
         historyLoadError={null}
         emptyHint=""
         onReloadHistory={vi.fn()}
-        onTrustChoiceSelect={vi.fn()}
       />,
     );
 
@@ -127,7 +125,6 @@ describe("MessageList 思考过程生命周期", () => {
         historyLoadError={null}
         emptyHint=""
         onReloadHistory={vi.fn()}
-        onTrustChoiceSelect={vi.fn()}
       />,
     );
 
@@ -155,7 +152,6 @@ describe("MessageList 思考过程生命周期", () => {
         historyLoadError={null}
         emptyHint=""
         onReloadHistory={vi.fn()}
-        onTrustChoiceSelect={vi.fn()}
       />,
     );
 
@@ -173,7 +169,6 @@ describe("MessageList 思考过程生命周期", () => {
         historyLoadError={null}
         emptyHint=""
         onReloadHistory={vi.fn()}
-        onTrustChoiceSelect={vi.fn()}
       />,
     );
 
@@ -196,7 +191,6 @@ describe("MessageList 思考过程生命周期", () => {
         historyLoadError={null}
         emptyHint=""
         onReloadHistory={vi.fn()}
-        onTrustChoiceSelect={vi.fn()}
       />,
     );
 

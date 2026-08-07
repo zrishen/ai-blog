@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { isSafeInternalPath } from "@/lib/routing";
-import { BrainCircuit, Home, LayoutDashboard, Network, type LucideIcon } from "lucide-react";
+import { BrainCircuit, Home, LayoutDashboard, type LucideIcon } from "lucide-react";
 import { useChatDispatch } from "@/stores/chatStore";
 import { useAuth, type AuthUser } from "@/stores/authStore";
 
-export type PrimaryNavigationKey = "home" | "research" | "workspace" | "brain";
+export type PrimaryNavigationKey = "home" | "workspace" | "brain";
 type LoginDestination = Exclude<PrimaryNavigationKey, "home">;
 
 export interface PrimaryNavigationItem {
@@ -43,15 +43,6 @@ export function useWorkspacePrimaryNavigation() {
     navigate("/");
   }, [navigate, resetBlogList, user]);
 
-  const handleResearch = useCallback(() => {
-    if (!isAuthenticated) {
-      openLoginDialog("research");
-      return;
-    }
-    dispatch({ type: "SET_PAGE", payload: "research" });
-    navigate("/research");
-  }, [dispatch, isAuthenticated, navigate, openLoginDialog]);
-
   const handleBrain = useCallback(() => {
     if (!isAuthenticated) {
       openLoginDialog("brain");
@@ -73,12 +64,6 @@ export function useWorkspacePrimaryNavigation() {
     const destination = pendingLoginDestination;
     setPendingLoginDestination(null);
 
-    if (destination === "research") {
-      dispatch({ type: "SET_PAGE", payload: "research" });
-      navigate("/research");
-      return;
-    }
-
     if (destination === "workspace") {
       navigate("/workspace");
       return;
@@ -91,26 +76,23 @@ export function useWorkspacePrimaryNavigation() {
 
     resetBlogList();
     navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
-  }, [dispatch, navigate, pendingLoginDestination, resetBlogList]);
+  }, [navigate, pendingLoginDestination, resetBlogList]);
 
   const returnTo = (location.state as { returnTo?: unknown } | null)?.returnTo;
   const activePath = isSafeInternalPath(returnTo) ? returnTo : location.pathname;
   const activePrimaryPage: PrimaryNavigationKey | null = activePath === "/workspace"
     ? "workspace"
-    : activePath.startsWith("/research")
-        ? "research"
-        : activePath.startsWith("/brain")
-          ? "brain"
-          : activePath === "/" || activePath.startsWith("/u/")
-            ? "home"
-            : null;
+    : activePath.startsWith("/brain")
+      ? "brain"
+      : activePath === "/" || activePath.startsWith("/u/")
+        ? "home"
+        : null;
 
   const primaryNavigation = useMemo<PrimaryNavigationItem[]>(() => [
     { key: "home", label: "首页", icon: Home, onClick: handleHome },
     { key: "workspace", label: "创作", icon: LayoutDashboard, onClick: handleWorkspace },
-    { key: "research", label: "研究图谱", icon: Network, onClick: handleResearch },
     { key: "brain", label: "AI 大脑", icon: BrainCircuit, onClick: handleBrain },
-  ], [handleBrain, handleHome, handleResearch, handleWorkspace]);
+  ], [handleBrain, handleHome, handleWorkspace]);
 
   return {
     activePrimaryPage,

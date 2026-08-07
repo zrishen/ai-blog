@@ -60,7 +60,6 @@ export function LandingPage() {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
-  const [loginDestination, setLoginDestination] = useState<"blog" | "research">("blog");
   const personalBlogPath = user?.username
     ? `/u/${encodeURIComponent(user.username)}`
     : "/";
@@ -68,22 +67,10 @@ export function LandingPage() {
   const handlePersonalBlogClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (isAuthenticated && user?.username) return;
     event.preventDefault();
-    setLoginDestination("blog");
-    setLoginDialogOpen(true);
-  };
-
-  const handleResearchClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (isAuthenticated) return;
-    event.preventDefault();
-    setLoginDestination("research");
     setLoginDialogOpen(true);
   };
 
   const handleLoginSuccess = (loggedInUser: AuthUser) => {
-    if (loginDestination === "research") {
-      navigate("/research");
-      return;
-    }
     navigate(`/u/${encodeURIComponent(loggedInUser.username)}`);
   };
 
@@ -179,7 +166,7 @@ export function LandingPage() {
                 </div>
               </div>
             </div>
-            <div className="site-floating-tag site-floating-tag-one">研究图谱</div>
+            <div className="site-floating-tag site-floating-tag-one">资料库</div>
             <div className="site-floating-tag site-floating-tag-two">AI 对话</div>
           </div>
         </section>
@@ -239,13 +226,9 @@ export function LandingPage() {
             <span>围绕内容，而不是工具</span>
             <h2>越写，知识之间的连接越清楚。</h2>
             <p>
-              每一次写作都可以回到你的资料、研究与历史内容。AI Blog
+              每一次写作都可以回到你的资料与历史内容。AI Blog
               不只帮你完成一篇文章，也帮你建立下一篇文章的起点。
             </p>
-            <Link to="/research" onClick={handleResearchClick}>
-              探索研究空间
-              <ArrowRight aria-hidden="true" />
-            </Link>
           </div>
 
           <div className="site-feature-board">
@@ -266,8 +249,8 @@ export function LandingPage() {
             <div className="site-feature-card">
               <Search aria-hidden="true" />
               <div>
-                <strong>可追溯研究</strong>
-                <p>把来源、主张和证据放进同一张图谱。</p>
+                <strong>资料检索</strong>
+                <p>把网页摘录、笔记和文件汇入同一处，随时回到上下文。</p>
               </div>
             </div>
           </div>

@@ -139,8 +139,6 @@ const api = vi.hoisted(() => ({
   deleteBlogRevision: vi.fn(),
   deleteBlogPost: vi.fn(),
   getBlogPost: vi.fn(),
-  getBlogResearchSummary: vi.fn(),
-  getResearchTopic: vi.fn(),
   listBlogPosts: vi.fn(),
   suggestBlogTags: vi.fn(),
   generateBlogCover: vi.fn(),
@@ -212,7 +210,6 @@ describe("BlogEditor AI patch 链", () => {
     latestChat = null;
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
-    api.getBlogResearchSummary.mockResolvedValue(null);
     api.listBlogPosts.mockResolvedValue([]);
     api.listBlogRevisions.mockResolvedValue([]);
   });
@@ -352,7 +349,6 @@ describe("BlogEditor dirty 追踪", () => {
     latestChat = null;
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
-    api.getBlogResearchSummary.mockResolvedValue(null);
     api.listBlogPosts.mockResolvedValue([]);
   });
 
@@ -380,7 +376,6 @@ describe("BlogEditor Vditor 生命周期", () => {
     latestChat = null;
     vi.clearAllMocks();
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
-    api.getBlogResearchSummary.mockResolvedValue(null);
     api.listBlogPosts.mockResolvedValue([]);
   });
 

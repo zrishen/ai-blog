@@ -21,15 +21,9 @@ from src.prompts import (
     CTX_FILES,
     CTX_HOME,
     CTX_POST,
-    CTX_RESEARCH,
-    CTX_RESEARCH_TOPIC,
-    CTX_RESEARCH_TOPIC_ID,
     CTX_SELECTED_SECTION,
     CTX_SELECTED_TEXT,
     CTX_SELECTED_TEXT_LABEL,
-    CTX_TRUST_WRITING,
-    RESEARCH_TOOL_RULES,
-    TRUST_CHOICE_PROTOCOL,
 )
 from src.services.chat.chat_attachment_service import (
     PreparedChatAttachment,
@@ -52,7 +46,6 @@ from src.services.subscription import (
 from src.tools.blog import BLOG_TOOLS, current_user_id_cv
 from src.tools.file import base_search_file
 from src.tools.mcp import build_mcp_call_tool, format_mcp_capabilities, normalize_mcp_capabilities
-from src.tools.research import RESEARCH_TOOLS
 
 from src.services.llm.llm_factory import _chat_model_kwargs, _create_llm, _system_prompt
 from .messages import (
@@ -61,7 +54,7 @@ from .messages import (
     _has_image_blocks,
     _without_image_blocks,
 )
-from .references import _auto_link_research_context_to_blog_post, _extract_blog_meta, _extract_references
+from .references import _extract_blog_meta, _extract_references
 from .streaming import (
     _BLOGDELTA_MARKER,
     _BLOGSTART_MARKER,
@@ -414,12 +407,6 @@ async def stream_chat(
     if mcp_capabilities:
         agent_tools.append(build_mcp_call_tool(mcp_plugins, mcp_capabilities))
 
-    # Research context
-    trust_writing = context.get("trust_writing_enabled", False) if context else False
-    research_topic_id = context.get("research_topic_id") if context else None
-    if trust_writing or research_topic_id:
-        agent_tools.extend(RESEARCH_TOOLS)
-
     if use_platform_key:
         # 订阅有效：用平台 key（allow_official_fallback 走 .env）+ 开 stream_usage 拿真实 usage
         model_kwargs = _chat_model_kwargs(thinking_mode, None, allow_official_fallback=True)
@@ -484,22 +471,6 @@ async def stream_chat(
                 elif page_type == "about":
                     parts.append(CTX_ABOUT)
                     page_context_parts.append(CTX_ABOUT)
-                elif page_type == "research":
-                    topic_title = context.get("research_topic_title", "")
-                    if topic_title:
-                        research_info = CTX_RESEARCH_TOPIC.format(title=topic_title, topic_id=research_topic_id)
-                    else:
-                        research_info = CTX_RESEARCH
-                    parts.append(research_info)
-                    page_context_parts.append(research_info)
-
-                # 可信写作模式上下文
-                if trust_writing or research_topic_id:
-                    parts.append(RESEARCH_TOOL_RULES)
-                if trust_writing:
-                    parts.append(CTX_TRUST_WRITING.format(protocol=TRUST_CHOICE_PROTOCOL))
-                if research_topic_id:
-                    parts.append(CTX_RESEARCH_TOPIC_ID.format(topic_id=research_topic_id))
 
                 selected = context.get("selected_text")
                 if selected:
@@ -642,15 +613,6 @@ async def stream_chat(
                         blog_meta = _extract_blog_meta(tool_name, result_text)
                         if blog_meta:
                             payload["blog_meta"] = blog_meta
-                            if tool_name in {"blog_create_post", "blog_write_post"}:
-                                research_link = await _auto_link_research_context_to_blog_post(
-                                    blog_meta,
-                                    research_topic_id,
-                                    user_id,
-                                    enabled=bool(trust_writing or research_topic_id),
-                                )
-                                if research_link:
-                                    payload["research_link"] = research_link
                     elif tool_name == "update_blog_sidebar":
                         # 把工具输入的 html 回传前端，左栏 iframe 即时渲染（无需改 SSE 协议）
                         sidebar_input = _tool_call_input_by_id.get(call_id, _last_tool_input)

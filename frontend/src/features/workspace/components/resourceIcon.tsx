@@ -8,7 +8,7 @@ import type { WorkspaceNode } from "@/api/client";
  * 工作区资源图标（左侧目录树 + 中栏平铺共用）：
  * - blog_post（文章）→ blog.svg
  * - file（文件）→ 按扩展名复用 getFileIcon（PDF/Word/Excel/图片… 彩色图标）
- * - 其余（research_topic 等）→ Network
+ * - 其余未知类型 → Network
  */
 export function getResourceIcon(node: WorkspaceNode) {
   switch (node.resource_type) {

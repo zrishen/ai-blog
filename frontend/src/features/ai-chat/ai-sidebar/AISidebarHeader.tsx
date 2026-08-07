@@ -2,7 +2,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Plus,
-  Search,
   Zap,
   Scale,
   Sparkles,
@@ -14,10 +13,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { listResearchTopics } from "../../../api/client";
 import { useChat } from "../../../stores/chatStore";
 import { thinkingModeLabels } from "./constants";
 import type { ThinkingMode } from "../../../api/chat";
@@ -45,7 +42,7 @@ export function AISidebarHeader({
   onNewChat,
   onThinkingModeChange,
 }: AISidebarHeaderProps) {
-  const { state, dispatch } = useChat();
+  const { state } = useChat();
   const supportsThinking = state.llmSupportsThinking;
 
   return (
@@ -109,25 +106,6 @@ export function AISidebarHeader({
                   menuItem
                 );
               })}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={async () => {
-                  const next = !state.trustWritingEnabled;
-                  dispatch({ type: "SET_TRUST_WRITING_ENABLED", payload: next });
-                  if (next) {
-                    try {
-                      const topics = await listResearchTopics();
-                      dispatch({ type: "SET_RESEARCH_TOPICS", payload: topics });
-                    } catch {
-                      /* topics will be fetched on demand later */
-                    }
-                  }
-                }}
-              >
-                <Search className="mr-2 h-4 w-4" />
-                研究写作
-                {state.trustWritingEnabled && <span className="ml-auto text-primary">✓</span>}
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )}

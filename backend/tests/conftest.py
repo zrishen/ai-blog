@@ -131,7 +131,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def _fake_get_user_llm_settings(db, user_id):
-    """模拟登录用户已配置自有 API 密钥，避免 chat/research service 触发无 key 拒绝。"""
+    """模拟登录用户已配置自有 API 密钥，避免 chat service 触发无 key 拒绝。"""
     return SimpleNamespace(
         protocol="openai",
         base_url="https://example.com/v1",

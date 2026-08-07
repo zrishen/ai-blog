@@ -155,7 +155,6 @@ ai-blog/
 │   │   │   ├── auth.py             # 注册/登录
 │   │   │   ├── settings.py         # 用户级 LLM 配置
 │   │   │   ├── blog.py             # 博客 CRUD + 封面生成
-│   │   │   ├── research.py         # 研究图谱 + 运行 + 草稿预览
 │   │   │   ├── conversations.py    # 会话管理
 │   │   │   ├── chat.py             # 私有 SSE 流式对话
 │   │   │   ├── public_chat.py      # 公开对话（未登录）
@@ -171,7 +170,6 @@ ai-blog/
 │   │   │   ├── chat_service.py             # 私有对话编排
 │   │   │   ├── public_chat_service.py      # 公开对话（限额）
 │   │   │   ├── conversation_service.py
-│   │   │   ├── research_service.py         # 研究图谱 + Agent 流程
 │   │   │   ├── file_service.py             # 上传/读取/向量化
 │   │   │   ├── embedding_service.py        # ONNX 或 API embedding
 │   │   │   ├── memory/                     # FalkorDB 向量检索与认知记忆
@@ -181,10 +179,9 @@ ai-blog/
 │   │   │   └── mcp/                        # MCP 客户端管理
 │   │   ├── tools/                  # LangGraph Agent 可用工具
 │   │   │   ├── agent_tools.py
-│   │   │   ├── research_tools.py
 │   │   │   └── mcp_tools.py
 │   │   ├── database/               # ORM 模型、连接、迁移
-│   │   │   ├── models.py           # 所有 SQLAlchemy 模型（含研究图谱完整结构）
+│   │   │   ├── models.py           # 所有 SQLAlchemy 模型
 │   │   │   ├── engine.py / session.py
 │   │   │   └── migrations.py       # 自动迁移（含 user_id→username 目录迁移）
 │   │   ├── schemas/                # Pydantic Schema
@@ -194,14 +191,13 @@ ai-blog/
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx                 # 根组件：三栏布局 + 路由 + ErrorBoundary
-│   │   ├── api/                    # API 客户端（auth/blog/chat/conversations/files/knowledge/mcp/research）
+│   │   ├── api/                    # API 客户端（auth/blog/chat/conversations/files/knowledge/mcp）
 │   │   ├── stores/                 # chatStore、authStore
 │   │   ├── components/             # NavBar / LeftSidebar / AISidebar 触发器 / MCPModal / shadcn ui
 │   │   ├── features/
 │   │   │   ├── landing/            # LandingPage（项目主页 + 公开对话）
 │   │   │   ├── blog/               # 博客列表 / 详情 / 编辑器（Vditor）
 │   │   │   ├── knowledge-base/     # 知识库管理 + 上传
-│   │   │   ├── research/           # 研究图谱（React Flow + 节点 + 详情面板 + 流程面板）
 │   │   │   ├── ai-chat/            # 右侧 AI 侧栏（多上下文）
 │   │   │   └── auth/               # 登录弹窗
 │   │   └── hooks/
@@ -221,7 +217,6 @@ ai-blog/
 | `/u/:username` | 用户公开博客主页 | 否（仅展示已发布文章） |
 | `/u/:username/posts/:slug` | 文章详情页 | 否 |
 | `/knowledge` | 知识库管理 | 是 |
-| `/research` `/research/:topicId` | 研究图谱 | 是 |
 
 ## 核心 API
 
@@ -234,11 +229,6 @@ ai-blog/
 | 博客 | PUT | `/api/v1/blog/posts/{id}/publish` | 发布/取消发布 |
 | 博客 | POST | `/api/v1/blog/posts/{id}/generate-cover` | AI 生成封面 |
 | 博客 | CRUD | `/api/v1/blog/categories` | 分类管理 |
-| 研究 | CRUD | `/api/v1/research/topics` | 研究主题 |
-| 研究 | CRUD | `/api/v1/research/topics/{id}/sources` `/evidence` `/claims` `/entities` `/relations` `/proposals` | 图谱各维度 |
-| 研究 | GET | `/api/v1/research/topics/{id}/runs` | 运行记录 |
-| 研究 | POST | `/api/v1/research/topics/{id}/draft-preview` | 生成博客草稿预览 |
-| 研究 | GET | `/api/v1/research/graph` | 完整图谱数据 |
 | 对话 | POST | `/api/v1/chat/stream` | 私有 SSE 流式对话 |
 | 对话 | POST | `/api/v1/public/chat/stream` | 公开 SSE 流式对话（匿名、限额） |
 | 对话 | CRUD | `/api/v1/conversations` | 会话管理 |

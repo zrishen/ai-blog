@@ -1,6 +1,5 @@
 import { useChat } from "../stores/chatStore";
 import { BlogTocPanel } from "../features/blog/components/BlogTocPanel";
-import { ResearchPanel } from "../features/research/ResearchPanel";
 import { BrainNav } from "../features/brain/BrainNav";
 import { BlogOverviewPanel } from "../features/blog/components/BlogOverviewPanel";
 import { WorkspaceNav } from "../features/workspace/WorkspaceNav";
@@ -23,10 +22,6 @@ export function LeftSidebar() {
 
   if (state.currentPage === "blog" && state.blogCurrentView === "edit") {
     return <BlogTocPanel mode="edit" />;
-  }
-
-  if (state.currentPage === "research") {
-    return <ResearchPanel />;
   }
 
   if (state.currentPage === "brain") {

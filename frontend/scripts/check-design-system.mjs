@@ -5,24 +5,16 @@ const componentContracts = [
   ["src/components/NavBar.tsx", "navItemVariants"],
   ["src/features/admin/components/AdminNav.tsx", "navItemVariants"],
   ["src/features/ai-chat/ai-sidebar/ConversationListView.tsx", "surfaceVariants"],
-  ["src/features/research/ResearchPanel.tsx", "surfaceVariants"],
-  ["src/features/research/ResearchPanel.tsx", "WorkspacePanel"],
-  ["src/features/research/ResearchGraphPage.tsx", "EmptyState"],
   ["src/features/subscription/components/SubscriptionPanel.tsx", "surfaceVariants"],
   ["src/features/blog/components/BlogOverviewPanel.tsx", "WorkspacePanel"],
   ["src/features/blog/components/BlogPostCard.tsx", "surfaceVariants"],
-  ["src/features/research/tabs/OverviewTab.tsx", "SelectableSurface"],
   ["src/features/auth/LoginForm.tsx", "TabsTrigger"],
   ["src/features/auth/LoginForm.tsx", "Alert"],
   ["src/components/NavBar.tsx", "Select"],
   ["src/features/plugins/PluginCenterDialog.tsx", "DialogContent"],
   ["src/features/admin/components/PluginsPage.tsx", "Textarea"],
   ["src/features/subscription/components/SubscriptionPanel.tsx", "Alert"],
-  ["src/features/research/process/RunDetail.tsx", "Alert"],
   ["src/features/blog/components/BlogPostView.tsx", "variant=\"destructive\""],
-  ["src/features/research/tabs/ProposalsTab.tsx", "statusBadgeVariant"],
-  ["src/features/research/tabs/OverviewTab.tsx", "statusBadgeVariant"],
-  ["src/features/research/tabs/ClaimsTab.tsx", "statusBadgeVariant"],
 ];
 
 const foundationContracts = [
@@ -46,8 +38,6 @@ const retiredPatterns = [
 
 const emptyStateSurfaceContracts = [
   ["src/features/blog/components/BlogPage.tsx", "border-dashed"],
-  ["src/features/research/ResearchGraphPage.tsx", "border-dashed"],
-  ["src/features/research/ResearchPanel.tsx", "border-dashed"],
 ];
 
 const rawNativeControlAllowlist = new Set([
@@ -71,10 +61,6 @@ const rawRadiusAllowlist = new Set([
 const colorPaletteAllowlist = new Set([
   // 文件类型图标:颜色编码文件格式
   "src/components/fileIcons.tsx",
-  // 研究图谱节点:颜色编码实体/证据/来源类型
-  "src/features/research/nodes/EntityNode.tsx",
-  "src/features/research/nodes/EvidenceNode.tsx",
-  "src/features/research/nodes/SourceNode.tsx",
   // 管理后台 metric tile:分类着色(无对应语义 token)
   "src/features/admin/components/OverviewPage.tsx",
 ]);

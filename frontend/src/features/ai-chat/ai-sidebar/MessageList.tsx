@@ -15,8 +15,6 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { Message } from "../../../stores/chatStore";
-import { TrustChoiceGroup } from "../TrustChoiceGroup";
-import type { TrustChoiceOption } from "../trustPrompts";
 import { collectMessageReferences } from "./messageHelpers";
 import { maskStreamingMarkdown } from "./streamingMarkdown";
 import { MessageAttachments } from "./MessageAttachments";
@@ -39,7 +37,6 @@ interface MessageListProps {
   emptyHint: string;
   onReloadHistory: () => void;
   onJumpToLatest?: () => void;
-  onTrustChoiceSelect: (messageId: number, option: TrustChoiceOption) => void;
 }
 
 function formatThinkingDuration(ms: number) {
@@ -63,7 +60,6 @@ function MessageListComponent({
   emptyHint,
   onReloadHistory,
   onJumpToLatest,
-  onTrustChoiceSelect,
 }: MessageListProps) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -156,8 +152,7 @@ function MessageListComponent({
                     groupMsgIndex === group.messages.length - 1;
                   const isStreaming = isLast && streaming && msg.role === "assistant";
                   const isAssistant = msg.role === "assistant";
-                  const messageContent = msg.trustChoicePrompt ?? msg.content;
-                  const showTrustChoices = isAssistant && !isStreaming && !!msg.trustChoiceOptions?.length;
+                  const messageContent = msg.content;
 
                   const streamMessage = msg as Message & {
                     streamingRound?: string;
@@ -228,13 +223,6 @@ function MessageListComponent({
                             </div>
                           ) : null}
                         </>
-                      )}
-                      {showTrustChoices && (
-                        <TrustChoiceGroup
-                          options={msg.trustChoiceOptions ?? []}
-                          disabled={streaming}
-                          onSelect={(option) => onTrustChoiceSelect(msg.id, option)}
-                        />
                       )}
                       {uniqueRefs.length > 0 && !isStreaming && (
                         <div className="mt-2.5 border-t border-border/40 pt-2">
@@ -636,7 +624,6 @@ function toolPrepLabel(toolName: string): string {
   if (toolName === "blog_edit_post") return "正在生成修改";
   if (toolName.startsWith("blog_")) return "正在生成文章";
   if (toolName.startsWith("file_") || toolName.includes("search")) return "正在检索文件";
-  if (toolName.startsWith("research_")) return "正在研究";
   return `正在准备 ${toolName}`;
 }
 

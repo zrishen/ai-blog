@@ -1,5 +1,4 @@
 import type { ThinkingMode } from "../../api/chat";
-import type { TrustChoiceOption } from "./trustPrompts";
 
 export interface Reference {
   type: "rag" | "memory" | "mcp";
@@ -73,8 +72,6 @@ export interface Message {
   loopSteps?: string[];
   thinkingMode?: ThinkingMode;
   thinkingDurationMs?: number;
-  trustChoicePrompt?: string | null;
-  trustChoiceOptions?: TrustChoiceOption[];
   token_count: number;
   created_at: string;
 }

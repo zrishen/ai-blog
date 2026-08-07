@@ -37,7 +37,7 @@ class WorkspaceNode(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     parent_id = Column(Integer, ForeignKey("workspace_nodes.id"), nullable=True)
     node_type = Column(String(20), nullable=False)  # folder / resource
-    resource_type = Column(String(30), nullable=True)  # blog_post / file / research_topic（仅 resource）
+    resource_type = Column(String(30), nullable=True)  # blog_post / file（仅 resource）
     resource_id = Column(Integer, nullable=True)
     name = Column(String(300), nullable=False)
     slug = Column(String(300), nullable=False)
@@ -58,7 +58,7 @@ class RagSource(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    resource_type = Column(String(30), nullable=False)  # blog_post / file / research_topic / research_claim
+    resource_type = Column(String(30), nullable=False)  # blog_post / file
     resource_id = Column(Integer, nullable=False)
     index_status = Column(String(20), nullable=False, default="pending")  # pending / active / stale / failed
     indexed_version = Column(String(60), nullable=True)  # 内容版本指纹，判断是否 stale

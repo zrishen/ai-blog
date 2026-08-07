@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import {
   Plus,
-  GitBranch,
   Blocks,
   ArrowUp,
   Square,
@@ -21,7 +20,6 @@ import {
 interface ChatInputBarProps {
   streaming: boolean;
   input: string;
-  topicCreateMode: boolean;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onInputChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
@@ -34,14 +32,12 @@ interface ChatInputBarProps {
   onSelectAttachments: (files: FileList) => void;
   onRetryAttachment: (localId: string) => void;
   onRemoveAttachment: (localId: string) => void;
-  onPickResearch: () => void;
   onOpenPlugins: () => void;
 }
 
 export function ChatInputBar({
   streaming,
   input,
-  topicCreateMode,
   textareaRef,
   onInputChange,
   onKeyDown,
@@ -54,7 +50,6 @@ export function ChatInputBar({
   onSelectAttachments,
   onRetryAttachment,
   onRemoveAttachment,
-  onPickResearch,
   onOpenPlugins,
 }: ChatInputBarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -114,10 +109,6 @@ export function ChatInputBar({
               <Paperclip className="mr-2 h-4 w-4" />
               上传文件
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onPickResearch}>
-              <GitBranch className="mr-2 h-4 w-4" />
-              研究图谱
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={onOpenPlugins}>
               <Blocks className="mr-2 h-4 w-4" />
               插件
@@ -127,9 +118,7 @@ export function ChatInputBar({
         <Textarea
           ref={textareaRef}
           className="min-h-[40px] max-h-[88px] flex-1 resize-none border-none bg-transparent px-2 py-2 text-body leading-relaxed text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-          placeholder={
-            topicCreateMode ? "输入新研究主题名称，Enter 创建..." : "想写什么，尽管说"
-          }
+          placeholder="想写什么，尽管说"
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={onKeyDown}

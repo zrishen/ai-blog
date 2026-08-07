@@ -1,13 +1,12 @@
 import type { ChatState, ChatAction } from "../chatStore";
 import type { ChatAttachment, Message, ToolEvent } from "../../features/ai-chat/types";
 import { isDisplayableMessage } from "../../features/ai-chat/types";
-import type { TrustChoiceOption } from "../../features/ai-chat/trustPrompts";
 import type { ThinkingMode } from "../../api/chat";
 import { applyStreamEvent } from "./streamEvent";
 
 function updateMessageWithPayload(
   message: Message,
-  payload: { content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number; trustChoicePrompt?: string | null; trustChoiceOptions?: TrustChoiceOption[] },
+  payload: { content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number },
 ): Message {
   return {
     ...message,
@@ -23,8 +22,6 @@ function updateMessageWithPayload(
     ...(payload.loopSteps !== undefined ? { loopSteps: payload.loopSteps } : {}),
     ...(payload.thinkingMode !== undefined ? { thinkingMode: payload.thinkingMode } : {}),
     ...(payload.thinkingDurationMs !== undefined ? { thinkingDurationMs: payload.thinkingDurationMs } : {}),
-    ...(payload.trustChoicePrompt !== undefined ? { trustChoicePrompt: payload.trustChoicePrompt } : {}),
-    ...(payload.trustChoiceOptions !== undefined ? { trustChoiceOptions: payload.trustChoiceOptions } : {}),
   };
 }
 

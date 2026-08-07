@@ -40,7 +40,6 @@ import { SubPageHeader, WorkspaceView } from "./shared";
 const RESOURCE_LABEL: Record<string, string> = {
   blog_post: "文章",
   file: "文件",
-  research_topic: "研究",
 };
 
 export function FolderView({

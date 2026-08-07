@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../stores/authStore";
 import { isDisplayableMessage, useChat } from "../../../stores/chatStore";
 import type { AISidebarConversationKey, Message, Reference } from "../../../stores/chatStore";
@@ -10,24 +9,8 @@ import {
   getMessages,
   listSitePosts,
   getBlogPost,
-  getResearchTopic,
-  runResearchTopic,
-  listResearchTopics,
-  createResearchTopic,
 } from "../../../api/client";
 import type { BlogToolMeta, StreamReference } from "../../../api/client";
-import { TrustContextIndicator } from "../TrustContextIndicator";
-import {
-  buildDraftChoices,
-  buildExplainConflictsPrompt,
-  buildOpenResearchChoices,
-  buildResearchRunPrompt,
-  buildTrustedDraftPrompt,
-  buildTopicSelectChoices,
-  parseTrustChoicePayload,
-  stripTrustChoicePayload,
-} from "../trustPrompts";
-import type { TrustChoiceOption, TrustChoicePayload } from "../trustPrompts";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, AlertCircle } from "lucide-react";
 import { LoginDialog } from "../../auth/LoginDialog";
@@ -36,11 +19,9 @@ import { MessageList } from "./MessageList";
 import { createPatchDeltaPlayer, type PatchDeltaPlayer } from "./patchDeltaPlayer";
 import {
   blogToolOperations,
-  RESEARCH_TOOL_NAMES,
   saveAISidebarSession,
   type AISidebarProps,
 } from "./constants";
-import { useAISidebarNavigation } from "../hooks/useAISidebarNavigation";
 import { useChatAttachments } from "../hooks/useChatAttachments";
 import { useAISidebarRuntime } from "./AISidebarRuntimeContext";
 import type { RunState } from "../AISidebar";
@@ -79,8 +60,7 @@ export interface AISidebarChatProps {
 }
 
 // chat 子组件：消费运行时 Context + 自取 store；持有 chat 全部 state/ref/handler/effect。
-// useAISidebarNavigation + LoginDialog 随 chat 下沉（仅 chat 视图挂载时才需要登录入口）。
-// 从 AISidebar 抽出，行为不变；runChatStream/handleSend/handleTrustChoiceSelect deps 数组逐字复制。
+// 从 AISidebar 抽出，行为不变；runChatStream/handleSend deps 数组逐字复制。
 export function AISidebarChat({
   isPrivate,
   contextText,
@@ -95,10 +75,8 @@ export function AISidebarChat({
 }: AISidebarChatProps) {
   const { state, dispatch } = useChat();
   const { user, isAuthenticated } = useAuth();
-  const navigate = useNavigate();
   const {
     selectedKey,
-    setSidebarView,
     getActiveKey,
     setInputForKey,
     loadConvs,
@@ -109,13 +87,11 @@ export function AISidebarChat({
     setHistoryReloadKey,
   } = useAISidebarRuntime();
 
-  const [topicCreateMode, setTopicCreateMode] = useState(false);
-  const [topicCreateMessageId, setTopicCreateMessageId] = useState<number | null>(null);
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyRequestSeqRef = useRef(new Map<AISidebarConversationKey, number>());
   const streamingByKeyRef = useRef(state.aiSidebarStreamingByKey);
   const skipNextHistoryLoadRef = useRef(new Set<number>());
-  const hadResearchToolsRef = useRef(false);
 
   const selectedMessages = useMemo(
     () => (selectedKey ? state.aiSidebarMessagesByKey[selectedKey] ?? [] : []),
@@ -126,7 +102,7 @@ export function AISidebarChat({
   const selectedError = selectedKey ? state.aiSidebarErrorsByKey[selectedKey] ?? null : null;
   const selectedHistory = selectedKey ? state.aiSidebarHistoryByKey[selectedKey] ?? { loading: false, error: null } : { loading: false, error: null };
   const aiSidebarMessageGroups = useMemo(() => buildMessageGroups(selectedMessages), [selectedMessages]);
-  const attachments = useChatAttachments(selectedKey, isPrivate && isAuthenticated && !topicCreateMode && !selectedStreaming);
+  const attachments = useChatAttachments(selectedKey, isPrivate && isAuthenticated && !selectedStreaming);
 
   useEffect(() => {
     streamingByKeyRef.current = state.aiSidebarStreamingByKey;
@@ -138,42 +114,6 @@ export function AISidebarChat({
       textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 88) + "px";
     }
   }, [selectedInput]);
-
-  const showTrustChoicePayload = useCallback((payload: TrustChoicePayload) => {
-    const key = getActiveKey();
-    const assistantId = Date.now();
-    dispatch({ type: "SET_TRUST_WRITING_ENABLED", payload: true });
-    dispatch({
-      type: "ADD_AI_SIDEBAR_MSG_FOR_KEY",
-      payload: {
-        key,
-        message: {
-          id: assistantId,
-          role: "assistant",
-          content: payload.message,
-          conversation_id: getConversationIdFromKey(key) ?? 0,
-          trustChoicePrompt: payload.message,
-          trustChoiceOptions: payload.choices,
-          token_count: 0,
-          created_at: new Date().toISOString(),
-        },
-      },
-    });
-    setSidebarView("chat");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dispatch, getActiveKey]);
-
-  useEffect(() => {
-    const prompt = state.pendingResearchPrompt;
-    if (!prompt) return;
-    const payload = prompt === "draft_research_choices"
-      ? buildDraftChoices(state.researchCurrentTopic?.title)
-      : buildOpenResearchChoices(state.researchCurrentTopic?.title);
-    queueMicrotask(() => {
-      showTrustChoicePayload(payload);
-      dispatch({ type: "SET_PENDING_RESEARCH_PROMPT", payload: null });
-    });
-  }, [dispatch, showTrustChoicePayload, state.pendingResearchPrompt, state.researchCurrentTopic?.title]);
 
   useEffect(() => {
     if (!isPrivate || !selectedKey) return;
@@ -207,39 +147,6 @@ export function AISidebarChat({
       });
   }, [dispatch, historyReloadKey, isPrivate, scrollToLatestAfterRender, selectedKey]);
 
-  useEffect(() => {
-    if (!state.trustWritingEnabled || !isPrivate) return;
-    if (state.researchCurrentTopicId) return;
-    if (selectedHistory.loading) return;
-    const hasTrustChoice = selectedMessages.some(
-      (m) => Boolean(m.trustChoiceOptions && m.trustChoiceOptions.length > 0)
-    );
-    if (hasTrustChoice) return;
-    (async () => {
-      const topics = state.researchTopics.length > 0
-        ? state.researchTopics
-        : await listResearchTopics().catch(() => []);
-      if (topics.length > 0) {
-        showTrustChoicePayload(buildTopicSelectChoices(topics));
-      } else {
-        showTrustChoicePayload(buildOpenResearchChoices(state.researchCurrentTopic?.title));
-      }
-    })();
-  }, [state.trustWritingEnabled, isPrivate, state.researchCurrentTopicId, selectedHistory.loading, selectedMessages, state.researchTopics, showTrustChoicePayload, state.researchCurrentTopic?.title]);
-
-  const handleGoResearchReview = useCallback(() => {
-    dispatch({ type: "SET_PAGE", payload: "research" });
-    const topicId = state.researchCurrentTopicId;
-    navigate(topicId ? `/research/${topicId}` : "/research");
-  }, [dispatch, navigate, state.researchCurrentTopicId]);
-
-  const {
-    loginDialogOpen,
-    setLoginDialogOpen,
-    handleResearch,
-    handleLoginSuccess,
-  } = useAISidebarNavigation(isAuthenticated);
-
   const refreshOwnPosts = useCallback(async (blogMeta?: BlogToolMeta): Promise<boolean> => {
     if (!user?.username || !blogMeta?.operation || !blogToolOperations.has(blogMeta.operation)) return false;
     if (siteUsername && siteUsername !== user.username) return false;
@@ -262,17 +169,6 @@ export function AISidebarChat({
       return false;
     }
   }, [dispatch, siteUsername, user]);
-
-  const refreshResearchTopicIfNeeded = useCallback(async () => {
-    if (!hadResearchToolsRef.current) return;
-    hadResearchToolsRef.current = false;
-    const topicId = state.researchCurrentTopicId;
-    if (!topicId) return;
-    try {
-      const detail = await getResearchTopic(topicId);
-      dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
-    } catch (e) { console.warn("Failed to refresh research topic after stream:", e); }
-  }, [dispatch, state.researchCurrentTopicId]);
 
   // 流式运行：controller → sendChat callbacks → catch/finally。调用级变量（convKey/text/assistantId/...）参数传入，
   // 组件级 state/ref/handler 闭包。从 handleSend 抽出以让前置逻辑可读；deps 列全则无 stale closure（与原 handleSend 同等）。
@@ -354,11 +250,6 @@ export function AISidebarChat({
           pageContext.post_id = state.blogCurrentPostId;
           if (postTitle) pageContext.post_title = postTitle;
         }
-        if (state.researchCurrentTopicId) {
-          pageContext.research_topic_id = state.researchCurrentTopicId;
-          if (state.researchCurrentTopic?.title) pageContext.research_topic_title = state.researchCurrentTopic.title;
-        }
-        pageContext.trust_writing_enabled = state.trustWritingEnabled;
         if (state.aiSelectionContext) {
           pageContext.post_id = state.aiSelectionContext.postId;
           pageContext.selected_text = state.aiSelectionContext.selectedText;
@@ -546,7 +437,6 @@ export function AISidebarChat({
               } else {
                 enqueueUi(async () => { await refreshOwnPosts(blogMeta); });
               }
-              if (toolName && RESEARCH_TOOL_NAMES.has(toolName)) hadResearchToolsRef.current = true;
             },
             onPatchStart: ({ post_id: postId, stream_id: streamId, target_text: targetText }) => {
               const runId = `${activeKey}:${streamId}`;
@@ -615,23 +505,10 @@ export function AISidebarChat({
         if (runState.streamError) throw new Error(runState.streamError);
         if (!persistenceConfirmed) throw new Error("消息保存状态未确认，请重试。");
         await loadConvs();
-        await refreshResearchTopicIfNeeded();
       } else if (siteUsername) {
         await sendSharedUserChat(siteUsername, text, postSlug, appendChunk, controller.signal);
       } else {
         await sendSharedLandingChat(text, appendChunk, controller.signal);
-      }
-
-      if (isPrivate && state.trustWritingEnabled && runState.streamFinalized) {
-        const trustChoicePayload = parseTrustChoicePayload(runState.finalContent);
-        if (trustChoicePayload) {
-          const visibleContent = stripTrustChoicePayload(runState.finalContent, trustChoicePayload.message);
-          updateAssistant({
-            content: visibleContent,
-            trustChoicePrompt: visibleContent,
-            trustChoiceOptions: trustChoicePayload.choices,
-          });
-        }
       }
     } catch (err) {
       cancelPlayer(patchPlayer);
@@ -660,58 +537,15 @@ export function AISidebarChat({
       dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: activeKey, streaming: false } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachments, dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, refreshResearchTopicIfNeeded, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.researchCurrentTopic, state.researchCurrentTopicId, state.aiSelectionContext, state.aiLeftbarEditContext, state.trustWritingEnabled]);
+  }, [attachments, dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.aiSelectionContext, state.aiLeftbarEditContext]);
 
   const handleSend = useCallback(async (textOverride?: string) => {
     const convKey = getActiveKey();
     const text = (textOverride ?? state.aiSidebarInputsByKey[convKey] ?? "").trim();
-    const includeDraftAttachments = textOverride === undefined && isPrivate && !topicCreateMode;
+    const includeDraftAttachments = textOverride === undefined && isPrivate;
     const readyDrafts = includeDraftAttachments ? attachments.uploaded : [];
     if ((!text && readyDrafts.length === 0) || state.aiSidebarStreamingByKey[convKey]) return;
     if (includeDraftAttachments && (attachments.hasUploading || attachments.hasFailed)) return;
-
-    const currentMessages = state.aiSidebarMessagesByKey[convKey] ?? [];
-    if (state.trustWritingEnabled && !state.researchCurrentTopicId && isPrivate) {
-      const hasTrustChoice = currentMessages.some(
-        (m) => Boolean(m.trustChoiceOptions && m.trustChoiceOptions.length > 0)
-      );
-      if (!hasTrustChoice) {
-        const topics = state.researchTopics.length > 0
-          ? state.researchTopics
-          : await listResearchTopics().catch(() => []);
-        showTrustChoicePayload(topics.length > 0
-          ? buildTopicSelectChoices(topics)
-          : buildOpenResearchChoices(state.researchCurrentTopic?.title)
-        );
-        return;
-      }
-    }
-
-    if (topicCreateMode) {
-      setTopicCreateMode(false);
-      setInputForKey(convKey, "");
-      dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: convKey, error: null } });
-      try {
-        const created = await createResearchTopic({ title: text });
-        const detail = await getResearchTopic(created.id);
-        dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC_ID", payload: created.id });
-        dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
-        dispatch({ type: "SET_RESEARCH_TOPICS", payload: [created, ...state.researchTopics] });
-        const payload = buildOpenResearchChoices(detail.title);
-        if (topicCreateMessageId) {
-          dispatch({
-            type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
-            payload: { key: convKey, id: topicCreateMessageId, content: payload.message, trustChoicePrompt: payload.message, trustChoiceOptions: payload.choices },
-          });
-          setTopicCreateMessageId(null);
-        } else {
-          showTrustChoicePayload(payload);
-        }
-      } catch {
-        dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: convKey, error: "创建主题失败，请稍后重试" } });
-      }
-      return;
-    }
 
     const attachmentLocalIds = readyDrafts.map((draft) => draft.localId);
     const sentAttachments = readyDrafts.flatMap((draft) => draft.attachment ? [{ id: draft.attachment.id }] : []);
@@ -756,7 +590,7 @@ export function AISidebarChat({
       attachmentLocalIds,
       optimisticUserMessageId: userMsg.id,
     });
-  }, [attachments, dispatch, getActiveKey, isPrivate, runChatStream, scrollToLatestAfterRender, setInputForKey, showTrustChoicePayload, state.aiSidebarInputsByKey, state.aiSidebarMessagesByKey, state.aiSidebarStreamingByKey, state.aiSidebarThinkingMode, state.trustWritingEnabled, state.researchCurrentTopicId, state.researchCurrentTopic, state.researchTopics, topicCreateMessageId, topicCreateMode]);
+  }, [attachments, dispatch, getActiveKey, isPrivate, runChatStream, scrollToLatestAfterRender, setInputForKey, state.aiSidebarInputsByKey, state.aiSidebarStreamingByKey, state.aiSidebarThinkingMode]);
 
   const handleStop = useCallback(() => {
     if (!selectedKey) return;
@@ -765,88 +599,6 @@ export function AISidebarChat({
     dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: selectedKey, streaming: false } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, selectedKey]);
-
-  const handleTrustChoiceSelect = useCallback(async (messageId: number, option: TrustChoiceOption) => {
-    const key = getActiveKey();
-    const isInlineUpdate = option.kind === "action" && option.action === "select_topic";
-    if (!isInlineUpdate) {
-      dispatch({
-        type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
-        payload: { key, id: messageId, trustChoicePrompt: null, trustChoiceOptions: [] },
-      });
-    }
-
-    if (option.kind === "action" && option.action === "dismiss") return;
-
-    if (option.kind === "reply") {
-      await handleSend(option.prompt);
-      return;
-    }
-
-    const topicId = state.researchCurrentTopicId;
-    const topicTitle = state.researchCurrentTopic?.title;
-
-    switch (option.action) {
-      case "open_research_graph":
-        handleGoResearchReview();
-        return;
-      case "open_conflicts": {
-        const conflict = state.researchCurrentTopic?.relations.find((item) => item.relation_type === "conflicts_with");
-        if (conflict) dispatch({ type: "SET_RESEARCH_SELECTED_CONFLICT_ID", payload: conflict.id });
-        handleGoResearchReview();
-        return;
-      }
-      case "start_research":
-      case "continue_research":
-        if (topicId) {
-          dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: null } });
-          try {
-            await runResearchTopic(topicId, `sidebar-${topicId}-${Date.now()}`);
-            const detail = await getResearchTopic(topicId);
-            dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
-          } catch {
-            dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: "启动研究任务失败，请稍后重试" } });
-            return;
-          }
-        }
-        await handleSend(buildResearchRunPrompt(topicTitle));
-        return;
-      case "explain_conflicts":
-        await handleSend(buildExplainConflictsPrompt(topicTitle));
-        return;
-      case "write_from_confirmed_facts":
-        await handleSend(buildTrustedDraftPrompt(topicTitle));
-        return;
-      case "select_topic": {
-        const tid = Number(option.id.replace("topic-select-", ""));
-        if (!tid || isNaN(tid)) return;
-        dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: null } });
-        try {
-          const detail = await getResearchTopic(tid);
-          dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC_ID", payload: tid });
-          dispatch({ type: "SET_RESEARCH_CURRENT_TOPIC", payload: detail });
-          const payload = buildOpenResearchChoices(detail.title);
-          dispatch({
-            type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
-            payload: { key, id: messageId, content: payload.message, trustChoicePrompt: payload.message, trustChoiceOptions: payload.choices },
-          });
-        } catch {
-          dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key, error: "加载主题失败，请稍后重试" } });
-        }
-        return;
-      }
-      case "create_topic":
-        setTopicCreateMessageId(messageId);
-        setTopicCreateMode(true);
-        setInputForKey(key, "");
-        dispatch({
-          type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY",
-          payload: { key, id: messageId, content: "请在下方输入框中输入新研究主题名称，按 Enter 创建，Esc 取消。", trustChoicePrompt: "请在下方输入框中输入新研究主题名称，按 Enter 创建，Esc 取消。" },
-        });
-        setTimeout(() => textareaRef.current?.focus(), 50);
-        return;
-    }
-  }, [dispatch, getActiveKey, handleGoResearchReview, handleSend, setInputForKey, state.researchCurrentTopicId, state.researchCurrentTopic]);
 
   const handleInputChange = useCallback((value: string) => {
     const key = getActiveKey();
@@ -862,13 +614,7 @@ export function AISidebarChat({
       e.preventDefault();
       void handleSend();
     }
-    if (e.key === "Escape" && topicCreateMode) {
-      const key = getActiveKey();
-      setTopicCreateMode(false);
-      setTopicCreateMessageId(null);
-      setInputForKey(key, "");
-    }
-  }, [getActiveKey, handleSend, setInputForKey, topicCreateMode]);
+  }, [handleSend]);
 
   const handleReloadHistory = useCallback(() => {
     setHistoryReloadKey((key) => key + 1);
@@ -880,7 +626,12 @@ export function AISidebarChat({
       return;
     }
     dispatch({ type: "TOGGLE_PLUGIN_CENTER", payload: true });
-  }, [dispatch, isAuthenticated, setLoginDialogOpen]);
+  }, [dispatch, isAuthenticated]);
+
+  const handleLoginSuccess = useCallback(() => {
+    setLoginDialogOpen(false);
+    dispatch({ type: "TOGGLE_PLUGIN_CENTER", payload: true });
+  }, [dispatch]);
 
   const handleJumpToLatest = useCallback(() => {
     scrollToLatest("smooth");
@@ -889,7 +640,7 @@ export function AISidebarChat({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <AnimatePresence>
-        {(contextText || state.aiSelectionContext || state.aiLeftbarEditContext || state.trustWritingEnabled) && (
+        {(contextText || state.aiSelectionContext || state.aiLeftbarEditContext) && (
           <motion.div
             initial={{ maxHeight: 0, opacity: 0, paddingTop: 0, paddingBottom: 0 }}
             animate={{ maxHeight: 120, opacity: 1, paddingTop: 8, paddingBottom: 8 }}
@@ -902,7 +653,6 @@ export function AISidebarChat({
                 <span className="truncate">{contextText}</span>
               </div>
             )}
-            <TrustContextIndicator enabled={state.trustWritingEnabled} topic={state.researchCurrentTopic} />
             {state.aiSelectionContext && (
               <div className="flex items-center gap-2">
                 <Sparkles className="h-3 w-3 flex-shrink-0 text-primary" />
@@ -959,15 +709,13 @@ export function AISidebarChat({
         historyLoadError={selectedHistory.error}
         emptyHint={isPrivate ? "可以帮你写文章、总结文件库、润色段落或拆解思路。" : "可以围绕当前公开页面进行普通聊天和内容讨论。"}
         onReloadHistory={handleReloadHistory}
-        onTrustChoiceSelect={handleTrustChoiceSelect}
       />
 
       <ChatInputBar
         streaming={selectedStreaming}
         input={selectedInput}
-        topicCreateMode={topicCreateMode}
         attachments={attachments.drafts}
-        attachmentsEnabled={isPrivate && isAuthenticated && !topicCreateMode && !selectedStreaming}
+        attachmentsEnabled={isPrivate && isAuthenticated && !selectedStreaming}
         sendDisabled={attachments.hasUploading || attachments.hasFailed || (!selectedInput.trim() && attachments.uploaded.length === 0)}
         getAttachmentPreviewUrl={attachments.getPreviewUrl}
         onSelectAttachments={attachments.addFiles}
@@ -978,7 +726,6 @@ export function AISidebarChat({
         onKeyDown={handleKeyDown}
         onSend={handleSendClick}
         onStop={handleStop}
-        onPickResearch={handleResearch}
         onOpenPlugins={handleOpenPlugins}
       />
 

@@ -1,4 +1,4 @@
-import { BarChart3, FileText, MessageSquare, Network, Sparkles, Users, Zap } from "lucide-react";
+import { BarChart3, FileText, MessageSquare, Sparkles, Users, Zap } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -132,7 +132,6 @@ function WorkspacePreview() {
           <nav className="space-y-1" aria-label="工作区导航">
             <button type="button" className={navItemVariants({ layout: "side", state: "active" })}><Sparkles className="h-4 w-4" />首页</button>
             <button type="button" className={navItemVariants({ layout: "side", state: "idle" })}><FileText className="h-4 w-4" />文件库</button>
-            <button type="button" className={navItemVariants({ layout: "side", state: "idle" })}><Network className="h-4 w-4" />研究图谱</button>
           </nav>
           <div className="mt-auto rounded-panel border border-border/60 bg-background/55 p-3 text-fine text-muted-foreground">3 篇草稿 · 本周 0.0M token</div>
         </WorkspacePanel>

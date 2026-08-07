@@ -7,7 +7,7 @@ export interface AISidebarProps {
   contextText?: string;
   siteUsername?: string;
   postSlug?: string;
-  pageType?: "post" | "home" | "research" | "about" | "other";
+  pageType?: "post" | "home" | "about" | "other";
   postTitle?: string;
   onRequestClose?: () => void;
   forceExpanded?: boolean;
@@ -112,11 +112,3 @@ export function saveAISidebarSession(userId: number, session: AISidebarSession):
     // 本地存储不可用时仍保留当前页面内状态。
   }
 }
-
-export const RESEARCH_TOOL_NAMES = new Set([
-  "research_add_source",
-  "research_add_evidence",
-  "research_add_claim",
-  "research_add_relation",
-  "research_add_proposal",
-]);

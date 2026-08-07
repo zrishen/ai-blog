@@ -292,7 +292,7 @@ async def _with_blog_status(
 async def _without_soft_deleted_resources(
     db: AsyncSession, nodes: list[WorkspaceNodeModel]
 ) -> list[WorkspaceNodeModel]:
-    """剔除底层资源已软删的 resource 节点；folder 与无回收站的类型（research_topic）原样保留。"""
+    """剔除底层资源已软删的 resource 节点；folder 与未知类型原样保留。"""
     from src.services.workspace.resource_service import soft_deleted_resource_ids
 
     by_type: dict[str, list[int]] = {}

@@ -128,8 +128,6 @@ const api = vi.hoisted(() => ({
   deleteBlogRevision: vi.fn(),
   deleteBlogPost: vi.fn(),
   getBlogPost: vi.fn(),
-  getBlogResearchSummary: vi.fn(),
-  getResearchTopic: vi.fn(),
   listBlogPosts: vi.fn(),
   suggestBlogTags: vi.fn(),
   generateBlogCover: vi.fn(),
@@ -203,7 +201,6 @@ describe("BlogEditor 核心回归", () => {
     vi.clearAllMocks();
     // AuthProvider 挂载会调 /auth/refresh；回归测试不依赖登录用户身份，模拟未登录快速完成
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
-    api.getBlogResearchSummary.mockResolvedValue(null);
     api.listBlogPosts.mockResolvedValue([]);
     api.listBlogRevisions.mockResolvedValue([]);
     api.publishBlogPost.mockResolvedValue({
