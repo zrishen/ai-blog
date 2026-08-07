@@ -39,6 +39,21 @@ export interface UploadTask extends FileProcessingProgressValue {
   error: string | null;
 }
 
+// 多文件上传队列：每项持调用方的 resolve，在该文件 job 终态时 settle。
+interface QueueItem {
+  file: File;
+  categoryId?: number;
+  resolve: (job: FileProcessingJob | null) => void;
+}
+
+// 当前唯一活跃上传（串行保证）：pollJob 终态/错误分支靠它 settle 调用方 Promise。
+interface ActiveUpload {
+  item: QueueItem;
+  requestId: string;
+  jobId?: string;
+  resolveTerminal: (job: FileProcessingJob | null) => void;
+}
+
 interface FileProcessingContextValue {
   uploadTask: UploadTask | null;
   isUploadActive: boolean;
@@ -125,6 +140,10 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   const [optimisticKeys, setOptimisticKeys] = useState<string[]>([]);
   const [indexErrors, setIndexErrors] = useState<Record<string, string>>({});
   const uploadCancelRef = useRef<(() => void) | null>(null);
+  const queueRef = useRef<QueueItem[]>([]);
+  const activeRef = useRef<ActiveUpload | null>(null);
+  const processQueueRef = useRef<() => void>(() => {});
+  const [queueLength, setQueueLength] = useState(0);
   const timersRef = useRef(new Map<string, number>());
   const pollingRef = useRef(new Set<string>());
   const completedRef = useRef(new Set<string>());
@@ -200,6 +219,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
             if (kind === "upload") {
               sessionStorage.removeItem(STORAGE_KEY);
               setUploadTask(null);
+              const active = activeRef.current;
+              if (active && active.jobId === jobId) active.resolveTerminal(latest);
             } else if (kind === "index" && indexKey) {
               consumeIndexSuccess(indexKey, jobId);
             }
@@ -210,6 +231,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
             if (kind === "upload") {
               sessionStorage.removeItem(STORAGE_KEY);
               setUploadTask((current) => current ? { ...current, status: "failed", error: latest.error_message || "文件处理失败" } : current);
+              const active = activeRef.current;
+              if (active && active.jobId === jobId) active.resolveTerminal(null);
             } else if (kind === "index" && indexKey) {
               consumeIndexSuccess(indexKey, jobId);
               dispatch({ type: "INCREMENT_AI_KNOWLEDGE_REVISION" });
@@ -224,6 +247,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
             if (kind === "upload") {
               sessionStorage.removeItem(STORAGE_KEY);
               setUploadTask(null);
+              const active = activeRef.current;
+              if (active && active.jobId === jobId) active.resolveTerminal(null);
             } else if (kind === "index" && indexKey) {
               consumeIndexSuccess(indexKey, jobId);
             } else if (kind === "restore" && sourceId != null) {
@@ -270,7 +295,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     }
   }, [onSucceeded, pollJob]);
 
-  const reconnectRequest = useCallback(async (stored: StoredUpload, interruptedNetwork: boolean) => {
+  const reconnectRequest = useCallback(async (stored: StoredUpload, interruptedNetwork: boolean): Promise<FileProcessingJob | null> => {
     let jobs = await listFileProcessingJobsByRequestId(stored.requestId);
     if (jobs.length === 0) {
       const active = await listActiveFileProcessingJobs();
@@ -290,9 +315,11 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
         status: "failed",
         error: "上传已中断，请重新选择文件",
       });
-      return;
+      activeRef.current?.resolveTerminal(null);
+      return null;
     }
     attachUploadJob(job, stored);
+    return job;
   }, [attachUploadJob]);
 
   useEffect(() => {
@@ -344,6 +371,9 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
 
   useEffect(() => {
     if (isAuthenticated) return;
+    queueRef.current = [];
+    activeRef.current = null;
+    setQueueLength(0);
     uploadCancelRef.current?.();
     uploadCancelRef.current = null;
     for (const timer of timersRef.current.values()) window.clearTimeout(timer);
@@ -360,15 +390,34 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   }, [isAuthenticated]);
 
   useEffect(() => () => {
+    queueRef.current = [];
+    activeRef.current = null;
     uploadCancelRef.current?.();
     for (const timer of timersRef.current.values()) window.clearTimeout(timer);
     timersRef.current.clear();
     pollingRef.current.clear();
   }, []);
 
-  const startUpload = useCallback(async (file: File, categoryId?: number) => {
-    if (uploadTask?.status === "active") return null;
+  const startUpload = useCallback((file: File, categoryId?: number) => new Promise<FileProcessingJob | null>((resolve) => {
+    queueRef.current.push({ file, categoryId, resolve });
+    setQueueLength(queueRef.current.length);
+    void processQueueRef.current();
+  }), []);
+
+  // 串行驱动队列：取队首一项跑完整生命周期（终态才 settle），再递归下一项。
+  // 后端 active_key 只在 job 终态释放，故必须等终态才能发下一个上传，否则 409。
+  const processQueue = useCallback(async () => {
+    if (activeRef.current) return;
+    const item = queueRef.current.shift();
+    setQueueLength(queueRef.current.length);
+    if (!item) return;
+
+    const { file, categoryId, resolve } = item;
     const requestId = makeRequestId();
+    let resolveTerminal!: (job: FileProcessingJob | null) => void;
+    const terminalPromise = new Promise<FileProcessingJob | null>((r) => { resolveTerminal = r; });
+    activeRef.current = { item, requestId, resolveTerminal };
+
     const initial: UploadTask = {
       requestId,
       fileName: file.name,
@@ -396,12 +445,16 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     try {
       const job = await request.promise;
       uploadCancelRef.current = null;
+      if (activeRef.current) activeRef.current.jobId = job.id;
       attachUploadJob(job, readStoredUpload());
-      return job;
+      // XHR 返回时若 job 已终态（auto_index=False 偶发立即成功），pollJob 不会跑，这里直接 settle
+      if (job.status === "succeeded") resolveTerminal(job);
+      else if (job.status === "failed" || job.status === "cancelled") resolveTerminal(null);
     } catch (error) {
       uploadCancelRef.current = null;
-      if (error instanceof DOMException && error.name === "AbortError") return null;
-      if (error instanceof FileUploadNetworkError) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        resolveTerminal(null);
+      } else if (error instanceof FileUploadNetworkError) {
         const latest = readStoredUpload();
         const stored: StoredUpload = latest?.requestId === requestId ? latest : {
           requestId,
@@ -411,22 +464,36 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
           percent: 0,
           stage: "上传连接中断",
         };
-        await reconnectRequest(stored, true).catch(() => {
+        const recovered = await reconnectRequest(stored, true).catch(() => {
           sessionStorage.removeItem(STORAGE_KEY);
           setUploadTask((current) => current?.requestId === requestId
             ? { ...current, status: "failed", error: "上传已中断，请重新选择文件" }
             : current);
+          resolveTerminal(null);
+          return null;
         });
-        return null;
+        if (recovered && activeRef.current) activeRef.current.jobId = recovered.id;
+        if (recovered?.status === "succeeded") resolveTerminal(recovered);
+        else if (recovered?.status === "failed" || recovered?.status === "cancelled") resolveTerminal(null);
+      } else {
+        sessionStorage.removeItem(STORAGE_KEY);
+        const message = error instanceof Error ? error.message : "文件库上传失败";
+        setUploadTask((current) => current?.requestId === requestId
+          ? { ...current, status: "failed", stage: "上传失败", error: message }
+          : current);
+        resolveTerminal(null);
       }
-      sessionStorage.removeItem(STORAGE_KEY);
-      const message = error instanceof Error ? error.message : "文件库上传失败";
-      setUploadTask((current) => current?.requestId === requestId
-        ? { ...current, status: "failed", stage: "上传失败", error: message }
-        : current);
     }
-    return null;
-  }, [attachUploadJob, reconnectRequest, uploadTask]);
+
+    // 每条路径都已 resolveTerminal（成功靠 pollJob/直接，错误自己调），await 后 settle 调用方
+    const terminalJob = await terminalPromise;
+    activeRef.current = null;
+    resolve(terminalJob);
+    void processQueueRef.current();
+  }, [attachUploadJob, reconnectRequest]);
+
+  // 保持 processQueueRef 指向最新实现，供 startUpload 入队触发与终态递归调用
+  useEffect(() => { processQueueRef.current = processQueue; }, [processQueue]);
 
   const restoreFile = useCallback(async (item: TrashItem) => {
     const result = await restoreTrashItem("file_document", item.id);
@@ -527,7 +594,12 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
           {uploadTask.status === "failed" ? (
             <div className="text-fine leading-relaxed text-destructive">{uploadTask.error}</div>
           ) : (
-            <FileProcessingProgress value={uploadTask} />
+            <>
+              <FileProcessingProgress value={uploadTask} />
+              {queueLength > 0 && (
+                <div className="mt-1 text-meta text-muted-foreground">还有 {queueLength} 个文件等待上传</div>
+              )}
+            </>
           )}
         </div>
       )}

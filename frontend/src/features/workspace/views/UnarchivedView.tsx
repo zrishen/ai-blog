@@ -110,7 +110,7 @@ export function UnarchivedView({
   onCreateBlog: () => void;
 }) {
   const { state } = useChat();
-  const { startUpload, isUploadActive } = useFileProcessing();
+  const { startUpload } = useFileProcessing();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<FileDocument[] | null>(null);
   const [posts, setPosts] = useState<BlogPostData[] | null>(null);
@@ -180,9 +180,9 @@ export function UnarchivedView({
   const total = (files?.length ?? 0) + (unarchivedPosts?.length ?? 0);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (file) await startUpload(file);
+    for (const file of files) await startUpload(file);
   };
 
   const rows = useMemo<InboxRow[]>(() => {
@@ -234,7 +234,6 @@ export function UnarchivedView({
             <Button
               size="sm"
               variant="ghost"
-              disabled={isUploadActive}
               onClick={() => fileInputRef.current?.click()}
             >
               <Upload className="h-3.5 w-3.5" />
@@ -268,6 +267,7 @@ export function UnarchivedView({
         ref={fileInputRef}
         type="file"
         accept=".pdf,.docx,.xlsx"
+        multiple
         className="hidden"
         onChange={(event) => {
           void handleFileChange(event);

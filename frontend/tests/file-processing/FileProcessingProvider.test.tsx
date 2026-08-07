@@ -104,14 +104,50 @@ describe("FileProcessingProvider", () => {
   it("returns the accepted upload job to the workspace caller", async () => {
     const user = userEvent.setup();
     const uploadJob = makeJob();
+    const done = makeJob({ status: "succeeded", progress_percent: 100, result_document_id: 42, finished_at: "2026-07-14T00:00:02Z" });
     mocks.upload.mockReturnValueOnce({ promise: Promise.resolve(uploadJob), cancel: vi.fn() });
-    mocks.getJob.mockImplementation(() => new Promise(() => {}));
+    mocks.getJob.mockResolvedValue(done);
     renderProvider();
 
     await waitFor(() => expect(mocks.listActive).toHaveBeenCalled());
     await user.click(screen.getByRole("button", { name: "upload" }));
 
+    // 新契约：startUpload 等 job 终态才 settle（终态 job 才带 result_document_id）
     await waitFor(() => expect(screen.getByTestId("returned-upload-job")).toHaveTextContent(uploadJob.id));
+  });
+
+  it("多文件串行排队：第二个上传在上一个 job 终态后才发出请求", async () => {
+    const user = userEvent.setup();
+    const firstXhrJob = makeJob();
+    const firstDone = makeJob({ status: "succeeded", progress_percent: 100, result_document_id: 11, finished_at: "2026-07-14T00:00:02Z" });
+    const secondXhrJob = makeJob({ id: "11111111-2222-4333-8444-555555555555" });
+    const secondDone = makeJob({ id: "11111111-2222-4333-8444-555555555555", status: "succeeded", progress_percent: 100, result_document_id: 22, finished_at: "2026-07-14T00:00:03Z" });
+
+    let resolveFirst!: (job: FileProcessingJob) => void;
+    mocks.upload.mockImplementationOnce(() => ({
+      promise: new Promise<FileProcessingJob>((r) => { resolveFirst = r; }),
+      cancel: vi.fn(),
+    }));
+    mocks.upload.mockImplementationOnce(() => ({ promise: Promise.resolve(secondXhrJob), cancel: vi.fn() }));
+
+    let getJobCall = 0;
+    mocks.getJob.mockImplementation(() => {
+      getJobCall += 1;
+      return Promise.resolve(getJobCall === 1 ? firstDone : secondDone);
+    });
+
+    renderProvider();
+    await waitFor(() => expect(mocks.listActive).toHaveBeenCalled());
+    const uploadBtn = screen.getByRole("button", { name: "upload" });
+    await user.click(uploadBtn);
+    await user.click(uploadBtn);
+    // 两个文件都已入队，但第二个的 XHR 尚未发出（第一个还在 in-flight）
+    expect(mocks.upload).toHaveBeenCalledTimes(1);
+
+    resolveFirst(firstXhrJob);
+    // 第一个 job 终态后，第二个上传才发出
+    await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId("returned-upload-job")).toHaveTextContent(secondDone.id));
   });
 
   it("无 sessionStorage 时恢复 active upload 与 restore 并按 UUID 轮询", async () => {

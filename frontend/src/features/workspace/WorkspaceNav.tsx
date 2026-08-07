@@ -35,7 +35,6 @@ import {
   type FileDocument,
   type WorkspaceNode,
 } from "../../api/client";
-import { getFileProcessingJob } from "../../api/files";
 import { useFileProcessing } from "../file-processing/FileProcessingProvider";
 import {
   ContextMenu,
@@ -1021,30 +1020,26 @@ export function WorkspaceNav() {
 
   const onFileChange = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
+      const files = Array.from(e.target.files ?? []);
       e.target.value = "";
       const target = uploadTargetRef.current;
       uploadTargetRef.current = undefined;
-      if (!file || target === undefined) return;
-      const job = await startUpload(file);
-      if (!job) return;
-      try {
-        // 上传响应可能尚未处理完(result_document_id 为空),轮询直到拿到文档 id
-        let docId = job.result_document_id;
-        for (let i = 0; i < 20 && docId == null; i++) {
-          await new Promise((r) => setTimeout(r, 500));
-          const j = await getFileProcessingJob(job.id);
-          docId = j.result_document_id;
-          if (j.status === "failed") break;
-        }
-        if (docId != null && target != null) {
-          await attachResource("file", docId, target, file.name);
+      if (files.length === 0 || target === undefined) return;
+      // startUpload 现在排队串行，且等到 job 终态才返回（result_document_id 已就绪）；
+      // 同一会话多文件共享 target 文件夹；失败/取消的文件跳过，队列自动继续下一个。
+      for (const file of files) {
+        const job = await startUpload(file);
+        const docId = job?.result_document_id;
+        if (docId == null) continue;
+        if (target != null) {
+          try {
+            await attachResource("file", docId, target, file.name);
+          } catch { /* 挂靠失败不影响后续文件 */ }
         }
         await reload();
-        dispatch({ type: "INCREMENT_FILE_LIBRARY_REVISION" });
-      } catch { /* 上传管理器会展示失败状态 */ }
+      }
     },
-    [reload, dispatch, startUpload],
+    [reload, startUpload],
   );
 
   const selectView = useCallback(
@@ -1186,7 +1181,7 @@ export function WorkspaceNav() {
           </ContextMenuContent>
         </ContextMenu>
       </div>
-      <input ref={fileInputRef} type="file" accept=".pdf,.docx,.xlsx" hidden onChange={onFileChange} />
+      <input ref={fileInputRef} type="file" accept=".pdf,.docx,.xlsx" multiple hidden onChange={onFileChange} />
       <ResourceDialogs actions={resourceActions} flatFolders={flatFolders} />
       <Dialog
         open={deleteFolderTarget !== null}
