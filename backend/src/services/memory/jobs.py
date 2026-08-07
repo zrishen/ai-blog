@@ -48,24 +48,27 @@ async def decay_memories() -> int:
     return count
 
 
-async def _resource_exists(
+async def _resource_state(
     db: AsyncSession,
     *,
     user_id: int,
     resource_type: str,
     resource_id: int,
-) -> bool:
+) -> str:
+    """业务记录状态：absent=已硬删（彻底没了）；soft_deleted=在回收站（deleted_at 有值）；
+    active=正常存在。软删文件保留其 RagSource，让回收站恢复时能据此重建向量——
+    否则维护任务会把回收站文件误当孤儿清掉归属，导致恢复后回不到 AI 知识库。"""
     if resource_type == "file":
         document = await db.get(FileDocument, resource_id)
-        return bool(
-            document
-            and document.deleted_at is None
-            and str(document.user_id) == str(user_id)
-        )
+        if document is None or str(document.user_id) != str(user_id):
+            return "absent"
+        return "soft_deleted" if document.deleted_at is not None else "active"
     if resource_type == "blog_post":
         post = await db.get(BlogPost, resource_id)
-        return bool(post and post.deleted_at is None and post.user_id == user_id)
-    return False
+        if post is None or post.user_id != user_id:
+            return "absent"
+        return "soft_deleted" if post.deleted_at is not None else "active"
+    return "absent"
 
 
 async def _schedule_reindex(
@@ -97,13 +100,16 @@ async def _reconcile_orphans_in_session(db: AsyncSession) -> int:
 
     for resource in graph_resources:
         key = (resource["user_id"], resource["resource_type"], resource["resource_id"])
-        if await _resource_exists(
+        state = await _resource_state(
             db,
             user_id=key[0],
             resource_type=key[1],
             resource_id=key[2],
-        ) and key in source_keys:
+        )
+        # active 且有归属：正常保留；soft_deleted：回收站文件保留 graph 记忆（restore 时重建）
+        if (state == "active" and key in source_keys) or state == "soft_deleted":
             continue
+        # absent：业务记录已硬删，graph 记忆是孤儿
         await graph_store.delete_resource_memory(
             user_id=key[0],
             resource_type=key[1],
@@ -118,13 +124,13 @@ async def _reconcile_orphans_in_session(db: AsyncSession) -> int:
     for key, source in source_keys.items():
         if key in processed:
             continue
-        exists = await _resource_exists(
+        state = await _resource_state(
             db,
             user_id=key[0],
             resource_type=key[1],
             resource_id=key[2],
         )
-        if not exists:
+        if state == "absent":
             await graph_store.delete_resource_memory(
                 user_id=key[0],
                 resource_type=key[1],
@@ -132,6 +138,9 @@ async def _reconcile_orphans_in_session(db: AsyncSession) -> int:
             )
             await db.delete(source)
             changes += 1
+        elif state == "soft_deleted":
+            # 回收站文件：保留归属，不重建向量（等用户恢复时由 restore job 重建）
+            continue
         elif source.index_status == "active" and not await graph_store.has_resource_memory(
             user_id=key[0],
             resource_type=key[1],

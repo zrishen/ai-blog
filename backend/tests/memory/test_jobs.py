@@ -62,6 +62,59 @@ async def test_reconcile_removes_orphans_and_marks_missing_active_index_stale(
 
 
 @pytest.mark.asyncio
+async def test_reconcile_preserves_soft_deleted_rag_source(db_session: AsyncSession, monkeypatch):
+    """软删（回收站）文件的 RagSource 必须保留：恢复时 restore job 据此判断「曾加入知识库」
+    并重建向量；若被维护任务当孤儿清掉，文件恢复后回不到 AI 知识库。"""
+    document = FileDocument(
+        collection_name="user_1_file",
+        user_id="1",
+        original_name="soft-deleted.pdf",
+        file_path="soft.pdf",
+        chunk_content="1 chunks",
+        meta="",
+        deleted_at=datetime(2026, 8, 1),
+    )
+    db_session.add(document)
+    await db_session.commit()
+    await db_session.refresh(document)
+    source = RagSource(
+        user_id=1,
+        resource_type="file",
+        resource_id=document.id,
+        index_status="active",
+        collection_name="user_1_file",
+    )
+    db_session.add(source)
+    await db_session.commit()
+
+    removed = []
+    reindexed = []
+
+    async def list_resource_memory():
+        return [{"user_id": 1, "resource_type": "file", "resource_id": document.id}]
+
+    async def delete_resource_memory(**kwargs):
+        removed.append(kwargs)
+
+    async def has_resource_memory(**kwargs):
+        return True
+
+    async def schedule_reindex(*args, **kwargs):
+        reindexed.append(kwargs)
+
+    monkeypatch.setattr(jobs.graph_store, "list_resource_memory", list_resource_memory)
+    monkeypatch.setattr(jobs.graph_store, "delete_resource_memory", delete_resource_memory)
+    monkeypatch.setattr(jobs.graph_store, "has_resource_memory", has_resource_memory)
+    monkeypatch.setattr(jobs, "_schedule_reindex", schedule_reindex)
+
+    assert await jobs.reconcile_orphans(db_session) == 0
+    assert removed == []
+    assert reindexed == []
+    await db_session.refresh(source)
+    assert source.index_status == "active"
+
+
+@pytest.mark.asyncio
 async def test_reindex_all_delegates_to_memory_embedding_service(monkeypatch):
     expected = jobs.memory_embeddings.EmbeddingIndexReport(embedded=3)
     captured = {}
