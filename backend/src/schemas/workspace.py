@@ -1,24 +1,28 @@
 """工作区组织层 schema：目录树节点 + 资源挂靠 + AI 知识源。"""
 
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.schemas.file_processing import FileProcessingJobResponse
 
 
 # ---- 目录树 ----
 
+# 文件夹名上限对齐 database/models/workspace.py 的 workspace_nodes.name(String(300))，
+# 超长在入口直接 422，避免透传到 db.commit() 触发 StringDataRightTruncation → 500。
+NodeName = Annotated[str, Field(max_length=300)]
+
 
 class FolderCreate(BaseModel):
-    name: str
+    name: NodeName
     parent_id: Optional[int] = None
 
 
 class NodePatch(BaseModel):
     """就地改文件夹属性（改名）。移动走 /move 端点（含防环）。"""
-    name: Optional[str] = None
+    name: Optional[NodeName] = None
 
 
 class NodeMove(BaseModel):
@@ -59,7 +63,7 @@ class AttachRequest(BaseModel):
     resource_type: str
     resource_id: int
     parent_id: int
-    name: Optional[str] = None
+    name: Optional[NodeName] = None
 
 
 class MoveResourceRequest(BaseModel):

@@ -1,30 +1,38 @@
 """博客文章的 Pydantic 模型。"""
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 BlogStatus = Literal["draft", "published"]
 
+# 长度上限与 database/models/blog.py 的列长对齐：超长在入口直接 422，
+# 避免透传到 db.commit() 触发 StringDataRightTruncation → 500。
+Title = Annotated[str, Field(max_length=300)]
+Excerpt = Annotated[str, Field(max_length=500)]
+CoverImage = Annotated[str, Field(max_length=500)]
+Tags = Annotated[str, Field(max_length=500)]
+Author = Annotated[str, Field(max_length=100)]
+
 
 class BlogPostCreate(BaseModel):
-    title: str
+    title: Title
     content: str
-    excerpt: Optional[str] = None
-    cover_image: Optional[str] = None
+    excerpt: Optional[Excerpt] = None
+    cover_image: Optional[CoverImage] = None
     status: Optional[BlogStatus] = "draft"
-    tags: Optional[str] = None
-    author: Optional[str] = None
+    tags: Optional[Tags] = None
+    author: Optional[Author] = None
 
 
 class BlogPostUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[Title] = None
     content: Optional[str] = None
-    excerpt: Optional[str] = None
-    cover_image: Optional[str] = None
+    excerpt: Optional[Excerpt] = None
+    cover_image: Optional[CoverImage] = None
     status: Optional[BlogStatus] = None
-    tags: Optional[str] = None
+    tags: Optional[Tags] = None
 
 
 class BlogPostResponse(BaseModel):
