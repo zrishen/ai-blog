@@ -254,7 +254,7 @@ export function AISidebarChat({
       }
     }
     try {
-      const data = await listSitePosts(user.username, { include_drafts: true, per_page: 50 });
+      const data = await listSitePosts(user.username, { include_drafts: true });
       dispatch({ type: "SET_BLOG_POSTS", payload: data.posts });
       return true;
     } catch (e) {

@@ -79,6 +79,8 @@ class ChatAttachment(Base):
     stored_path = Column(String(500), nullable=False)
     media_type = Column(String(150), nullable=False)
     size_bytes = Column(Integer, nullable=False)
+    # 图片 base64 缓存：避免每次构建历史消息时重复读盘 + 重编码（派生数据，可随时重建）
+    image_base64_cache = Column(Text, nullable=True)
     position = Column(Integer, nullable=True)
     extracted_text = Column(Text, nullable=True)
     extraction_truncated = Column(Boolean, nullable=False, default=False)

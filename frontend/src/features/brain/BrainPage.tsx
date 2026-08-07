@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertCircle, Boxes, BrainCircuit, Clock, Heart, Pencil, Trash2, type LucideIcon } from "lucide-react";
+import { AlertCircle, Boxes, BrainCircuit, Clock, Heart, Pencil, RefreshCw, Trash2, type LucideIcon } from "lucide-react";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,8 @@ import { BrainGraphView } from "./BrainGraphView";
 import { EntityDetailPanel } from "./EntityDetailPanel";
 import { entityTypeColor, kindLabel } from "./utils/brainStyle";
 
+type BrainSection = "stats" | "graph" | "entities" | "episodes" | "preferences";
+
 export function BrainPage() {
   const { isAuthenticated } = useAuth();
   const { state, dispatch } = useChat();
@@ -45,6 +47,9 @@ export function BrainPage() {
   const [preferences, setPreferences] = useState<BrainPreference[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 各 section 独立结算：失败的记入此表，避免任一接口失败拖垮整页或误显示「尚未启用/还没有」
+  const [sectionErrors, setSectionErrors] = useState<Partial<Record<BrainSection, string>>>({});
+  const [reloadKey, setReloadKey] = useState(0);
   const [selectedEntity, setSelectedEntity] = useState<BrainGraphNode | null>(null);
   const [entityFacts, setEntityFacts] = useState<BrainFact[]>([]);
   const [factsLoading, setFactsLoading] = useState(false);
@@ -56,31 +61,36 @@ export function BrainPage() {
     if (!isAuthenticated) return;
     let cancelled = false;
     (async () => {
-      try {
-        const [s, g, ents, eps, prefs] = await Promise.all([
-          getBrainStats(),
-          getBrainGraph(),
-          listBrainEntities(),
-          listBrainEpisodes(),
-          listBrainPreferences(),
-        ]);
-        if (cancelled) return;
-        dispatch({ type: "SET_BRAIN_STATS", payload: s });
-        setGraph(g);
-        setEntities(ents);
-        setEpisodes(eps);
-        setPreferences(prefs);
-        setError(null);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "大脑加载失败");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      // 五个接口独立结算：成功各自 set，失败记入 sectionErrors——避免任一失败拖垮整页
+      const [statsR, graphR, entsR, epsR, prefsR] = await Promise.allSettled([
+        getBrainStats(),
+        getBrainGraph(),
+        listBrainEntities(),
+        listBrainEpisodes(),
+        listBrainPreferences(),
+      ]);
+      if (cancelled) return;
+      const errs: Partial<Record<BrainSection, string>> = {};
+      if (statsR.status === "fulfilled") dispatch({ type: "SET_BRAIN_STATS", payload: statsR.value });
+      else errs.stats = "统计加载失败";
+      if (graphR.status === "fulfilled") setGraph(graphR.value); else errs.graph = "图谱加载失败";
+      if (entsR.status === "fulfilled") setEntities(entsR.value); else errs.entities = "实体加载失败";
+      if (epsR.status === "fulfilled") setEpisodes(epsR.value); else errs.episodes = "记忆加载失败";
+      if (prefsR.status === "fulfilled") setPreferences(prefsR.value); else errs.preferences = "偏好加载失败";
+      setSectionErrors(errs);
+      setError(Object.keys(errs).length ? "部分内容加载失败，已显示可用部分" : null);
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, dispatch]);
+  }, [isAuthenticated, dispatch, reloadKey]);
+
+  const retry = () => {
+    setSectionErrors({});
+    setError(null);
+    setReloadKey((k) => k + 1);
+  };
 
   const handleSelectEntity = useCallback(async (node: BrainGraphNode | null) => {
     setSelectedEntity(node);
@@ -180,6 +190,7 @@ export function BrainPage() {
   }
 
   const enabled = stats?.enabled ?? false;
+  const statsFailed = !!sectionErrors.stats;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background p-2">
@@ -193,10 +204,13 @@ export function BrainPage() {
           <p className="mt-2 max-w-2xl text-body-lg leading-relaxed text-muted-foreground">
             实体、事实、对话记忆与偏好织成一张会生长的星图——AI 越用越懂你。
           </p>
-          {error && (
+          {error && !statsFailed && (
             <Alert variant="destructive" role="alert" className="mt-4 flex items-center gap-2">
               <AlertCircle className="h-4 w-4" />
-              {error}
+              <span className="flex-1">{error}</span>
+              <Button size="sm" variant="ghost" onClick={retry} className="shrink-0 text-meta">
+                <RefreshCw className="h-3.5 w-3.5" /> 重试
+              </Button>
             </Alert>
           )}
         </div>
@@ -208,6 +222,18 @@ export function BrainPage() {
                 <Skeleton key={i} className="h-28 rounded-panel" />
               ))}
             </div>
+          ) : statsFailed ? (
+            <EmptyState
+              icon={AlertCircle}
+              title="大脑数据加载失败"
+              description="未能读取大脑状态，请检查网络后重试。"
+              action={
+                <Button onClick={retry}>
+                  <RefreshCw className="h-4 w-4" /> 重试
+                </Button>
+              }
+              className="h-full min-h-[360px] rounded-surface"
+            />
           ) : !enabled ? (
             <EmptyState
               icon={BrainCircuit}

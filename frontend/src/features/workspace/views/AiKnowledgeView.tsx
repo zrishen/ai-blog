@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Network, Plus, Sparkles, X } from "lucide-react";
+import { AlertCircle, Network, Plus, RefreshCw, Sparkles, X } from "lucide-react";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
 import { leaveAiKnowledge, listAiKnowledge, type RagSource } from "../../../api/workspace";
@@ -16,12 +16,6 @@ import { cn } from "@/lib/utils";
 
 // 状态徽标已精简：索引中显示进度条，失败显示红字「失败」，其余状态不标记。
 
-interface AiKnowledgeData {
-  rag: RagSource[];
-  docs: FileDocument[];
-  posts: BlogPostData[];
-}
-
 export function AiKnowledgeView({
   onOpenBlog,
   onOpenFile,
@@ -30,19 +24,31 @@ export function AiKnowledgeView({
   onOpenFile: (filePath: string) => void;
 }) {
   const { state } = useChat();
-  const { indexJobs, optimisticKeys, consumeOptimistic } = useFileProcessing();
-  const [data, setData] = useState<AiKnowledgeData | null>(null);
+  const { indexJobs, optimisticKeys, consumeOptimistic, joinToAiKnowledge, indexErrors } = useFileProcessing();
+  // rag 是核心数据（null=加载中/失败未决，[]=真空）；docs/posts 仅用于反查名称，失败可降级回退 #id。
+  const [rag, setRag] = useState<RagSource[] | null>(null);
+  const [docs, setDocs] = useState<FileDocument[]>([]);
+  const [posts, setPosts] = useState<BlogPostData[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [joinOpen, setJoinOpen] = useState(false);
   const [removingKey, setRemovingKey] = useState<string | null>(null);
 
   const reload = useCallback(() => {
-    return Promise.all([listAiKnowledge(), listFileDocuments(), listBlogPosts()])
-      .then(([rag, files, blogs]) => {
-        setData({ rag, docs: files.documents, posts: blogs.posts });
-        const realKeys = new Set(rag.map((r) => `${r.resource_type}:${r.resource_id}`));
-        consumeOptimistic(realKeys);
-      })
-      .catch(() => setData({ rag: [], docs: [], posts: [] }));
+    // 三个接口独立结算：rag 失败才整块报错；files/blogs 失败仅降级名称反查，不拖垮核心列表。
+    return Promise.allSettled([listAiKnowledge(), listFileDocuments(), listBlogPosts()])
+      .then(([ragRes, docsRes, postsRes]) => {
+        if (ragRes.status === "fulfilled") {
+          setRag(ragRes.value);
+          setLoadError(null);
+          const realKeys = new Set(ragRes.value.map((r) => `${r.resource_type}:${r.resource_id}`));
+          consumeOptimistic(realKeys);
+        } else {
+          setRag(null);
+          setLoadError("加载 AI 知识失败，请检查网络后重试");
+        }
+        if (docsRes.status === "fulfilled") setDocs(docsRes.value.documents);
+        if (postsRes.status === "fulfilled") setPosts(postsRes.value.posts);
+      });
   }, [consumeOptimistic]);
 
   useEffect(() => {
@@ -51,13 +57,12 @@ export function AiKnowledgeView({
 
   // RagSource 不含 name,按 resource_type 在文件/文章列表里反查真实名称
   const nameOf = (it: RagSource): string => {
-    if (!data) return "";
     if (it.resource_type === "file") {
-      const d = data.docs.find((x) => x.id === it.resource_id);
+      const d = docs.find((x) => x.id === it.resource_id);
       return d ? d.original_name : `文件 #${it.resource_id}`;
     }
     if (it.resource_type === "blog_post") {
-      const p = data.posts.find((x) => x.id === it.resource_id);
+      const p = posts.find((x) => x.id === it.resource_id);
       return p ? (p.title || "无标题") : `文章 #${it.resource_id}`;
     }
     return `${it.resource_type} #${it.resource_id}`;
@@ -68,11 +73,11 @@ export function AiKnowledgeView({
     if (it.resource_type === "blog_post" && it.resource_id != null) {
       onOpenBlog(it.resource_id);
     } else if (it.resource_type === "file" && it.resource_id != null) {
-      let doc = data?.docs.find((d) => d.id === it.resource_id);
+      let doc = docs.find((d) => d.id === it.resource_id);
       if (!doc) {
         try {
           const response = await listFileDocuments();
-          setData((current) => (current ? { ...current, docs: response.documents } : current));
+          setDocs(response.documents);
           doc = response.documents.find((d) => d.id === it.resource_id);
         } catch {
           return;
@@ -98,7 +103,7 @@ export function AiKnowledgeView({
     [reload],
   );
 
-  const realRag = data?.rag ?? null;
+  const realRag = rag;
   const realKeys = new Set((realRag ?? []).map((r) => `${r.resource_type}:${r.resource_id}`));
   const optimisticItems: RagSource[] = optimisticKeys
     .filter((k) => !realKeys.has(k))
@@ -106,12 +111,32 @@ export function AiKnowledgeView({
       const [t, idStr] = k.split(":");
       return { resource_type: t, resource_id: Number(idStr), index_status: "pending" } as RagSource;
     });
-  const items: RagSource[] | null = realRag === null ? null : [...optimisticItems, ...realRag];
+  // 加入失败项（资源未入库）：同样以行展示，附「重试」入口；真实行存在时状态由真实行接管
+  const failedItems: RagSource[] = Object.keys(indexErrors)
+    .filter((k) => !realKeys.has(k))
+    .map((k) => {
+      const [t, idStr] = k.split(":");
+      return { resource_type: t, resource_id: Number(idStr), index_status: "failed" } as RagSource;
+    });
+  const items: RagSource[] | null = realRag === null ? null : [...failedItems, ...optimisticItems, ...realRag];
   const ragList = realRag ?? [];
 
   return (
     <WorkspaceView>
-      {items === null ? (
+      {loadError && realRag === null ? (
+        <EmptyState
+          icon={AlertCircle}
+          title="加载失败"
+          description="AI 知识列表未能加载，可能是网络问题。"
+          action={
+            <Button onClick={() => { setLoadError(null); void reload(); }}>
+              <RefreshCw className="h-4 w-4" />
+              重试
+            </Button>
+          }
+          className="flex-1 p-10"
+        />
+      ) : items === null ? (
           <LoadingState />
         ) : items.length === 0 ? (
           <EmptyState
@@ -142,6 +167,7 @@ export function AiKnowledgeView({
                 const key = `${it.resource_type}:${it.resource_id}`;
                 const openable = it.resource_type === "blog_post" || it.resource_type === "file";
                 const indexJob = indexJobs[key];
+                const indexError = indexErrors[key];
                 return (
                   <li
                     key={key}
@@ -169,11 +195,41 @@ export function AiKnowledgeView({
                     >
                       {nameOf(it)}
                     </button>
-                    {indexJob ? (
+                    {indexError ? (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge variant="destructive" title={indexError}>
+                          加入失败
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            void joinToAiKnowledge(it.resource_type, it.resource_id).catch(() => undefined);
+                          }}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          重试
+                        </Button>
+                      </div>
+                    ) : indexJob ? (
                       <div className="w-56 shrink-0">
                         <FileProcessingProgress
                           value={{ percent: indexJob.progress_percent, stage: jobStage(indexJob), job: indexJob }}
                         />
+                      </div>
+                    ) : it.index_status === "stale" ? (
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge variant="secondary">索引待更新</Badge>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            void joinToAiKnowledge(it.resource_type, it.resource_id).catch(() => undefined);
+                          }}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          刷新
+                        </Button>
                       </div>
                     ) : it.index_status === "failed" ? (
                       <Badge variant="destructive">失败</Badge>

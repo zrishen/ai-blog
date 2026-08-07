@@ -62,7 +62,6 @@ def _build_current_user_content(
     attachments: list[PreparedChatAttachment],
     *,
     provider: str,
-    legacy_image_url: str | None,
 ) -> str | list[dict]:
     text = user_message
     content: list[dict] = []
@@ -92,8 +91,6 @@ def _build_current_user_content(
             )
             content.append({"type": "image_url", "image_url": {"url": data_url}})
 
-    if legacy_image_url:
-        content.append({"type": "image_url", "image_url": {"url": legacy_image_url}})
     if not content:
         return user_message
     if len(content) == 1 and content[0].get("type") == "text" and not attachments:
@@ -105,7 +102,6 @@ async def _build_messages(
     user_message: str,
     conversation_id: int | None,
     user_id: int,
-    user_image_url: str | None,
     attachments: list[PreparedChatAttachment] | None = None,
     provider: str = "openai",
     *,
@@ -221,7 +217,6 @@ async def _build_messages(
                     m.content,
                     history_attachments[m.id],
                     provider=provider,
-                    legacy_image_url=None,
                 )
                 messages.append({"role": m.role, "content": history_content})
             else:
@@ -234,7 +229,6 @@ async def _build_messages(
         full_user_message,
         attachments or [],
         provider=provider,
-        legacy_image_url=user_image_url,
     )
     messages.append({"role": "user", "content": current_content})
     user_token_count = estimate_tokens(current_content)

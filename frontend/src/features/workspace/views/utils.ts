@@ -1,4 +1,5 @@
 import type { WorkspaceNode } from "../../../api/client";
+import { formatDate as formatBjDate } from "@/lib/datetime";
 
 /** 文件夹树节点：children=子文件夹，resources=挂靠的文件/文章资源 */
 export interface TreeFolder extends WorkspaceNode {
@@ -37,18 +38,9 @@ export function flattenFolders(
   return out;
 }
 
-/** ISO → 本地日期（zh-CN），失败返回空串。 */
+/** ISO → 北京时间日期（YYYY/MM/DD），空/非法返回空串。 */
 export function formatDate(iso: string | undefined | null): string {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleDateString("zh-CN", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  } catch {
-    return "";
-  }
+  return formatBjDate(iso);
 }
 
 /** 拖拽源类型：

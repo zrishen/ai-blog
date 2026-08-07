@@ -19,10 +19,12 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def get_user_upload_dir(user_id: int | str) -> Path:
-    """Return the per-user upload directory, creating it if needed."""
-    user_dir = UPLOAD_DIR / _resolve_username(user_id)
-    user_dir.mkdir(parents=True, exist_ok=True)
-    return user_dir
+    """Return the per-user upload directory path (does NOT create it).
+
+    纯取路径：读接口（预览/下载/公共图片）不应有建目录副作用，否则未校验的 username
+    会被滥用来制造大量空目录。写入场景（save_file 等）自行 mkdir。
+    """
+    return UPLOAD_DIR / _resolve_username(user_id)
 
 
 async def _store_document_chunks(
@@ -66,7 +68,6 @@ IMAGE_TYPES = {
     ".jpg": {"image/jpeg"},
     ".jpeg": {"image/jpeg"},
     ".webp": {"image/webp"},
-    ".svg": {"image/svg+xml"},
 }
 
 SUPPORTED_TYPES = DOCUMENT_TYPES | IMAGE_TYPES
@@ -92,25 +93,69 @@ def _validate_file(filename: str, size: int | None, content_type: str | None, *,
     return None
 
 
+# 文件头魔数：校验真实内容与扩展名一致，防扩展名欺骗（如 evil.php 改名 evil.png 上传）。
+MAGIC_BYTES: dict[str, bytes] = {
+    ".png": b"\x89PNG\r\n\x1a\n",
+    ".jpg": b"\xff\xd8\xff",
+    ".jpeg": b"\xff\xd8\xff",
+    ".webp": b"RIFF",
+    ".pdf": b"%PDF-",
+    ".docx": b"PK\x03\x04",
+    ".xlsx": b"PK\x03\x04",
+}
+
+
+def matches_magic(filename: str, content: bytes) -> bool:
+    """文件头魔数是否与扩展名一致。未登记魔数的扩展名保守放行。"""
+    ext = _get_extension(filename)
+    if ext == ".webp":
+        return content[:4] == b"RIFF" and content[8:12] == b"WEBP"
+    expected = MAGIC_BYTES.get(ext)
+    if expected is None:
+        return True
+    return content.startswith(expected)
+
+
 async def save_file(file: UploadFile, *, allow_images: bool = True, user_id: int | str = 1) -> tuple[str, str]:
-    """Save uploaded file and return (stored_filename, original_name)."""
-    error = _validate_file(file.filename or "file", file.size, file.content_type, allow_images=allow_images)
+    """Save uploaded file (streamed to disk) and return (stored_filename, original_name)."""
+    filename = file.filename or "file"
+    error = _validate_file(filename, file.size, file.content_type, allow_images=allow_images)
     if error:
         raise ValueError(error)
 
-    # Read content first before opening the output file to avoid empty writes
-    content = await file.read()
-    if not content:
-        raise ValueError("Uploaded file is empty")
-
-    ext = _get_extension(file.filename or "file")
+    ext = _get_extension(filename)
     stored_name = f"{uuid.uuid4().hex}{ext}"
     user_dir = get_user_upload_dir(user_id)
+    user_dir.mkdir(parents=True, exist_ok=True)
     path = user_dir / stored_name
 
-    path.write_bytes(content)
-
-    return stored_name, file.filename or "file"
+    # 流式写盘：1MB chunk 边读边写，避免一次性 read 全文件撑爆内存；
+    # 第一个 chunk 做魔数校验，累计 size 防超限，任何失败清理半成品。
+    total = 0
+    checked_magic = False
+    output = await asyncio.to_thread(path.open, "wb")
+    success = False
+    try:
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            if not checked_magic:
+                if not matches_magic(filename, chunk):
+                    raise ValueError("文件内容与扩展名不符")
+                checked_magic = True
+            total += len(chunk)
+            if total > MAX_FILE_SIZE:
+                raise ValueError("File exceeds 100MB limit")
+            await asyncio.to_thread(output.write, chunk)
+        if total == 0:
+            raise ValueError("Uploaded file is empty")
+        success = True
+    finally:
+        await asyncio.to_thread(output.close)
+        if not success:
+            await asyncio.to_thread(path.unlink, missing_ok=True)
+    return stored_name, filename
 
 
 def delete_uploaded_file(stored_name: str, user_id: int | str) -> bool:

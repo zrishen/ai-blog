@@ -156,18 +156,26 @@ def mock_external_services():
          patch("src.services.memory.graph_store.add_document_chunks", return_value=None), \
          patch("src.services.memory.graph_store.search_documents", return_value=[]), \
          patch("src.services.memory.graph_store.delete_document_chunks", return_value=True), \
+         patch("src.services.memory.graph_store.delete_resource_memory", return_value=None), \
+         patch("src.api.files.delete_resource_memory", return_value=None), \
+         patch("src.services.trash.trash_service.delete_resource_memory", return_value=None), \
          patch("src.services.memory.graph_store.ping", return_value=True), \
          patch("src.services.embeddings.embedding_service.get_embeddings", return_value=[[0.1] * 384]), \
          patch("src.services.trash.trash_service.delete_document_chunks", return_value=True):
         yield
 
 
+@pytest.fixture(autouse=True)
+def _reset_inproc_rate_limit():
+    """每测试清空进程内频率限制桶，避免跨测试累积误触发 429。"""
+    from src.utils.rate_limit import reset_rate_limit
+    reset_rate_limit()
+
+
 async def mock_stream_chat(
     user_message=None,
     conversation_id=None,
     user_id=None,
-    user_image_url=None,
-    user_file_url=None,
     attachment_ids=None,
     thinking_mode="normal",
     context=None,

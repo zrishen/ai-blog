@@ -49,7 +49,7 @@ async def create_folder(
     user: User = Depends(get_current_user),
 ):
     return await node_service.create_folder(
-        db, user.id, name=data.name, parent_id=data.parent_id, auto_index=data.auto_index
+        db, user.id, name=data.name, parent_id=data.parent_id
     )
 
 
@@ -63,10 +63,6 @@ async def update_node(
     node = await node_service.get_owned_node(db, node_id, user.id)
     if data.name is not None:
         node = await node_service.rename_node(db, user.id, node_id, data.name)
-    if data.auto_index is not None:
-        node.auto_index = data.auto_index
-        await db.commit()
-        await db.refresh(node)
     return node
 
 

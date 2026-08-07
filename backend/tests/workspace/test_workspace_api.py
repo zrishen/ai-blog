@@ -26,11 +26,10 @@ async def test_folder_lifecycle(client: AsyncClient):
     assert len(resp.json()["nodes"]) == 2
 
     resp = await client.patch(
-        f"/api/v1/workspace/nodes/{fid}", json={"name": "Agent Memory", "auto_index": True}
+        f"/api/v1/workspace/nodes/{fid}", json={"name": "Agent Memory"}
     )
     assert resp.status_code == 200
     assert resp.json()["name"] == "Agent Memory"
-    assert resp.json()["auto_index"] is True
 
     resp = await client.delete(f"/api/v1/workspace/nodes/{fid}")
     assert resp.status_code == 204

@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
+import { isSafeInternalPath } from "@/lib/routing";
 import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
 import { DEFAULT_COVERS, recordNumber, recordString } from "../utils/blogEditorTypes";
 import { expandBlankLines } from "../utils/markdownBlankLines";
@@ -120,7 +121,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
     }
     dispatch({ type: "SET_BLOG_VIEW", payload: existingPost ? "view" : "list" });
     const returnTo = (location.state as { returnTo?: unknown } | null)?.returnTo;
-    if (typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//")) {
+    if (isSafeInternalPath(returnTo)) {
       navigate(returnTo, { replace: true });
       return;
     }
@@ -182,6 +183,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
   const [pendingRestoreRevision, setPendingRestoreRevision] = useState<BlogRevision | null>(null);
   const [restorePruneCandidate, setRestorePruneCandidate] = useState<BlogRevisionSummary | null>(null);
   const [restoreCannotSnapshot, setRestoreCannotSnapshot] = useState(false);
+  const [pendingLeave, setPendingLeave] = useState(false);
   const historyButtonRef = useRef<HTMLDivElement>(null);
   const [historyPanelPosition, setHistoryPanelPosition] = useState({ top: 8, left: 8 });
   const openHistoryPanel = useCallback(() => {
@@ -355,7 +357,10 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
   }, [autosave, completeRestore, currentWorkingCopy, restorePruneCandidate, restoreWorkingCopy, revisionHistory]);
 
   const handleCancel = useCallback(() => {
-    void autosave.flushNow().finally(exitEditor);
+    // 强制保存失败时不直接退出，弹确认让用户知情（本地恢复副本仍保留）
+    void autosave.flushNow()
+      .then(exitEditor)
+      .catch(() => setPendingLeave(true));
   }, [autosave, exitEditor]);
 
   const handlePreview = useCallback(() => {
@@ -662,9 +667,6 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
 
       const savedSpan = document.createElement("span");
       savedSpan.className = "blog-editor-toolbar-meta-saved";
-      savedSpan.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
-      const savedText = document.createTextNode("");
-      savedSpan.appendChild(savedText);
 
       meta.append(countSpan, savedSpan);
       toolbar.append(meta);
@@ -675,13 +677,16 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
 
     const savedSpan = meta.querySelector<HTMLElement>(".blog-editor-toolbar-meta-saved");
     if (savedSpan) {
-      const textNode = Array.from(savedSpan.childNodes).find((n) => n.nodeType === Node.TEXT_NODE);
-      if (textNode) {
-        textNode.nodeValue = autosave.lastSaved ? `已同步 ${autosave.lastSaved}` : "";
-      }
-      savedSpan.style.display = autosave.lastSaved ? "" : "none";
+      const clockSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+      const alertSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+      savedSpan.innerHTML = autosave.saveError ? alertSvg : clockSvg;
+      savedSpan.appendChild(document.createTextNode(
+        autosave.saveError ? "保存失败" : autosave.lastSaved ? `已同步 ${autosave.lastSaved}` : "",
+      ));
+      savedSpan.style.display = (autosave.saveError || autosave.lastSaved) ? "" : "none";
+      savedSpan.classList.toggle("text-destructive", autosave.saveError);
     }
-  }, [containerId, vditorToolbarReady, wordCount, lineCount, autosave.lastSaved]);
+  }, [containerId, vditorToolbarReady, wordCount, lineCount, autosave.lastSaved, autosave.saveError]);
 
   return (
     <>
@@ -1194,6 +1199,21 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingLeave} onOpenChange={setPendingLeave}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>保存失败</DialogTitle>
+            <DialogDescription>
+              文章未能保存到服务器（可能网络异常或登录已过期）。仍要离开吗？本地恢复副本仍保留，下次进入编辑器会自动恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingLeave(false)}>留在此页</Button>
+            <Button variant="destructive" onClick={() => { setPendingLeave(false); exitEditor(); }}>仍要离开</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

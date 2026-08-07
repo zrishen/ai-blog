@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getPreviewUrl } from "@/api/client";
+import { apiFetch, getPreviewBaseUrl, getPreviewPdfUrl } from "@/api/client";
 
 interface Props {
   filename: string;
@@ -7,14 +7,13 @@ interface Props {
 
 export function FilePreview({ filename }: Props) {
   const ext = filename.split(".").pop()?.toLowerCase();
-  const previewUrl = getPreviewUrl(filename);
 
   if (ext === "pdf") {
-    return <PdfPreview key={previewUrl} filename={filename} previewUrl={previewUrl} />;
+    return <PdfPreview key={filename} filename={filename} />;
   }
 
   if (ext === "docx" || ext === "xlsx") {
-    return <FilePreviewHTML key={previewUrl} url={previewUrl} />;
+    return <FilePreviewHTML key={filename} filename={filename} />;
   }
 
   return (
@@ -24,20 +23,42 @@ export function FilePreview({ filename }: Props) {
   );
 }
 
-function PdfPreview({ filename, previewUrl }: { filename: string; previewUrl: string }) {
+function PdfPreview({ filename }: { filename: string }) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // iframe 无法注入 header，先换 scoped 预览令牌（仅可预览该文件）再设 src。
+  // filename 变化由父组件 key={filename} 触发重挂载重置 state，effect 内只做异步取数。
+  useEffect(() => {
+    let alive = true;
+    getPreviewPdfUrl(filename)
+      .then((url) => {
+        if (alive) setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (alive) {
+          setError("加载失败");
+          setLoading(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [filename]);
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden h-full">
       <div className="flex-1 relative overflow-hidden">
-        <iframe
-          src={previewUrl}
-          className="w-full h-full border-none"
-          onLoad={() => setLoading(false)}
-          onError={() => { setError("加载失败"); setLoading(false); }}
-          title={filename}
-        />
+        {previewUrl && (
+          <iframe
+            src={previewUrl}
+            className="w-full h-full border-none"
+            onLoad={() => setLoading(false)}
+            onError={() => { setError("加载失败"); setLoading(false); }}
+            title={filename}
+          />
+        )}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-body bg-background">
             加载中...
@@ -51,14 +72,16 @@ function PdfPreview({ filename, previewUrl }: { filename: string; previewUrl: st
   );
 }
 
-function FilePreviewHTML({ url }: { url: string }) {
+function FilePreviewHTML({ filename }: { filename: string }) {
+  const url = getPreviewBaseUrl(filename);
   const [html, setHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(url, { signal: controller.signal })
+    // apiFetch 自动带 Authorization header（access token），401 自动刷新；凭证不再入 URL。
+    apiFetch(url, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error("加载失败");
         return res.text();

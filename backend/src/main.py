@@ -2,6 +2,8 @@
 
 from contextlib import asynccontextmanager
 import logging
+import subprocess
+from pathlib import Path
 from time import perf_counter
 
 from fastapi import FastAPI, Request
@@ -16,13 +18,33 @@ from src.core.exceptions import DomainError
 http_logger = logging.getLogger("http.access")
 
 
+def _resolve_version() -> str:
+    """运行时版本：优先 git 标签（与部署 tag 一致），无 .git（容器）回退包元数据。"""
+    try:
+        out = subprocess.check_output(
+            ["git", "describe", "--tags", "--always"],
+            cwd=str(Path(__file__).resolve().parent),
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).decode().strip()
+        if out:
+            return out
+    except Exception:
+        pass
+    try:
+        from importlib.metadata import version
+        return version("ai-blog")
+    except Exception:
+        return "0.0.0"
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await startup()
     yield
 
 
-app = FastAPI(title="ai-blog", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="ai-blog", version=_resolve_version(), lifespan=lifespan)
 
 # 同源部署（前端走 /api 相对路径）留空即可；跨域部署需通过 CORS_ALLOW_ORIGINS 显式指定 origin，
 # 因为浏览器规范拒绝 credentials 模式下使用通配 "*" origin。
@@ -75,4 +97,4 @@ async def _domain_error_handler(_: Request, exc: DomainError) -> JSONResponse:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": settings.model_name}
+    return {"status": "ok"}

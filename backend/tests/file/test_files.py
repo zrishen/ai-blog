@@ -65,3 +65,29 @@ async def test_soft_deleted_library_file_stays_downloadable_when_chat_references
     response = await client.get(f"/api/v1/uploads/{stored_name}")
 
     assert response.status_code == 200
+
+
+def test_get_user_upload_dir_does_not_create_directory(tmp_path, monkeypatch):
+    """get_user_upload_dir 纯取路径，无建目录副作用（根治空目录滥用）。"""
+    from src.services.file import file_service
+
+    monkeypatch.setattr(file_service, "UPLOAD_DIR", tmp_path)
+    target = tmp_path / "never_created_user"
+    assert file_service.get_user_upload_dir("never_created_user") == target
+    assert not target.exists()
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_svg(client: AsyncClient):
+    """SVG 不再允许上传（防内嵌脚本导致的存储型 XSS）。"""
+    files = {"file": ("evil.svg", io.BytesIO(b"<svg onload='alert(1)'></svg>"), "image/svg+xml")}
+    resp = await client.post("/api/v1/upload", files=files)
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_upload_rejects_magic_mismatch(client: AsyncClient):
+    """扩展名与真实文件头不符（魔数校验）应拒绝，防扩展名欺骗。"""
+    files = {"file": ("evil.png", io.BytesIO(b"<?php system($_GET['c']); ?>"), "image/png")}
+    resp = await client.post("/api/v1/upload", files=files)
+    assert resp.status_code == 400

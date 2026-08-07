@@ -76,21 +76,38 @@ HEARTBEAT_INTERVAL_SECONDS = 10.0
 
 _task_registry: dict[str, asyncio.Task] = {}
 _reconcile_registry: dict[str, asyncio.Task] = {}
-_worker_semaphores: dict[int, asyncio.Semaphore] = {}
+# 按 event loop 缓存并发信号量：{"global": 全局封顶 Semaphore, "users": {user_id: 单用户上限 Semaphore}}
+_worker_semaphores: dict[int, dict[str, Any]] = {}
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _worker_semaphore() -> asyncio.Semaphore:
+def _worker_concurrency_state() -> tuple[Any, asyncio.Semaphore]:
+    """返回 (user_sem_factory, global_sem)。
+
+    global_sem 为全系统共享的并发封顶；user_sem_factory(user_id) 按 user_id 缓存单用户上限。
+    acquire 顺序须 per-user 先、全局后（见 _run_job），避免拿着全局槽卡在 per-user 上空等。
+    """
     loop_id = id(asyncio.get_running_loop())
-    semaphore = _worker_semaphores.get(loop_id)
-    if semaphore is None:
-        semaphore = asyncio.Semaphore(1)
+    state = _worker_semaphores.get(loop_id)
+    if state is None:
+        state = {
+            "global": asyncio.Semaphore(settings.file_processing_concurrency),
+            "users": {},
+        }
         _worker_semaphores.clear()
-        _worker_semaphores[loop_id] = semaphore
-    return semaphore
+        _worker_semaphores[loop_id] = state
+
+    def user_sem(user_id: int) -> asyncio.Semaphore:
+        semaphore = state["users"].get(user_id)
+        if semaphore is None:
+            semaphore = asyncio.Semaphore(settings.file_processing_user_concurrency)
+            state["users"][user_id] = semaphore
+        return semaphore
+
+    return user_sem, state["global"]
 
 
 def _normalize_progress(
@@ -431,6 +448,37 @@ def schedule_job(job_id: str) -> None:
     task.add_done_callback(lambda finished, key=job_id: _task_registry.pop(key, None))
 
 
+async def cancel_jobs_for_resource(
+    db: AsyncSession, *, user_id: int, resource_type: str, resource_id: int
+) -> None:
+    """取消并终结某资源进行中的 index job：从 AI 知识移除资源时调用，避免 job 仍跑完
+    浪费 embedding/LLM、写入记忆孤儿，并在 mark_indexed 时因 RagSource 已删而误标 failed。"""
+    result = await db.execute(
+        select(FileProcessingJob).where(
+            FileProcessingJob.user_id == user_id,
+            FileProcessingJob.job_type == "index",
+            FileProcessingJob.target_resource_type == resource_type,
+            FileProcessingJob.target_resource_id == resource_id,
+            FileProcessingJob.status.in_(ACTIVE_STATUSES),
+        )
+    )
+    now = utcnow()
+    cancelled_any = False
+    for job in result.scalars():
+        task = _task_registry.pop(job.id, None)
+        if task is not None and not task.done():
+            task.cancel()
+        job.status = "cancelled"
+        job.finished_at = now
+        job.heartbeat_at = now
+        job.updated_at = now
+        job.execution_token = None
+        job.active_key = None
+        cancelled_any = True
+    if cancelled_any:
+        await db.commit()
+
+
 async def _update_progress(
     db: AsyncSession,
     job_id: str,
@@ -458,6 +506,15 @@ async def _update_progress(
     job.updated_at = job.heartbeat_at
     await db.commit()
     return percent
+
+
+async def _peek_job_user_id(job_id: str) -> int | None:
+    """主键查 job.user_id，用于 acquire 信号量前选 per-user 槽；job 不存在返回 None。"""
+    async with async_session() as db:
+        row = (await db.execute(
+            select(FileProcessingJob.user_id).where(FileProcessingJob.id == job_id)
+        )).first()
+        return row[0] if row else None
 
 
 async def _claim_job(db: AsyncSession, job_id: str) -> tuple[FileProcessingJob, str] | None:
@@ -607,7 +664,12 @@ async def _index_document_knowledge(
 
 
 async def _run_job(job_id: str) -> None:
-    async with _worker_semaphore():
+    user_id = await _peek_job_user_id(job_id)
+    user_sem, global_sem = _worker_concurrency_state()
+    async with contextlib.AsyncExitStack() as stack:
+        if user_id is not None:
+            await stack.enter_async_context(user_sem(user_id))
+        await stack.enter_async_context(global_sem)
         async with async_session() as db:
             claimed = await _claim_job(db, job_id)
             if not claimed:
@@ -621,11 +683,29 @@ async def _run_job(job_id: str) -> None:
             progress_state = _normalize_progress(job.progress_json, job.progress_model_version, job.current_stage)
             try:
                 # auto_index=False（默认）：上传仅存文件 + 建 FileDocument 元记录，不索引；
-                # 索引由「加入 AI 知识」(rag_service) 或目录 auto_index 触发。
+                # 索引由「加入 AI 知识」(rag_service) 触发。
                 if job.job_type == "upload" and not job.auto_index:
                     await _finalize_success(db, job.id, token, [], indexed=False)
                     return
+                # restore：从未加入 AI 知识（无 RagSource）的文件不重建向量——用户没把它加入
+                # 知识库，恢复也不该顺手索引，避免无谓 embedding/向量成本。文件库软删只清向量、
+                # 保留 RagSource，故其存在性即「曾否加入知识库」的可靠判据。
+                if job.job_type == "restore" and job.source_document_id is not None:
+                    from src.services.workspace import rag_service
+
+                    if await rag_service.get_rag_source(
+                        db, job.user_id, "file", job.source_document_id
+                    ) is None:
+                        await _finalize_success(db, job.id, token, [], indexed=False)
+                        return
                 await graph_store.delete_document_chunks(job.collection_name, job.stored_name or "")
+                # 重建索引前完整清理旧记忆（Document/事实/孤立实体），避免新旧事实并存
+                if job.job_type == "index" and job.target_resource_type and job.target_resource_id:
+                    await graph_store.delete_resource_memory(
+                        user_id=job.user_id,
+                        resource_type=job.target_resource_type,
+                        resource_id=job.target_resource_id,
+                    )
                 await _update_progress(db, job.id, token, "cleanup_index", 1, 1, "operation")
                 progress_state["stages"]["cleanup_index"] = {
                     "completed": 1,

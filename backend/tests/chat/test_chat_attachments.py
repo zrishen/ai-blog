@@ -46,15 +46,6 @@ def _pdf_file(content: bytes = b"%PDF-1.4\nchat attachment"):
     return {"file": ("notes.pdf", io.BytesIO(content), "application/pdf")}
 
 
-def test_message_request_rejects_mixed_new_and_legacy_attachment_fields():
-    with pytest.raises(ValueError, match="attachments"):
-        MessageRequest(
-            content="mixed",
-            image_url="/legacy.png",
-            attachments=[{"id": str(uuid.uuid4())}],
-        )
-
-
 @pytest.mark.asyncio
 async def test_upload_attachment_returns_complete_dto_and_stores_file(
     client: AsyncClient,

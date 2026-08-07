@@ -1,5 +1,6 @@
 import { AlertCircle, FileSearch, Search, ShieldCheck, XCircle, Zap, type LucideIcon } from "lucide-react";
 import { CheckCircle2 } from "lucide-react";
+import { formatMonthDayTime } from "@/lib/datetime";
 
 const STAGE_KEYS = [
   "search_sources",
@@ -51,8 +52,7 @@ export interface StageProgressItem {
 
 export function formatTime(dateStr?: string | null) {
   if (!dateStr) return null;
-  const d = new Date(dateStr);
-  return d.toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatMonthDayTime(dateStr);
 }
 
 export function getStageProgress(progress: Record<string, unknown>): StageProgressItem[] {

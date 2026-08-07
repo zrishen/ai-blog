@@ -51,6 +51,8 @@ interface FileProcessingContextValue {
   indexJobs: Record<string, FileProcessingJob>;
   joinToAiKnowledge: (resourceType: string, resourceId: number) => Promise<void>;
   consumeIndexSuccess: (key: string, jobId: string) => void;
+  // 加入失败记录（API 层失败，资源未入库）：key → 错误消息，由列表行展示「加入失败 + 重试」
+  indexErrors: Record<string, string>;
   // 乐观加入的资源 key（API 返回前先在中栏显示）；真实 RagSource 到达后被 consumeOptimistic 清理
   optimisticKeys: string[];
   consumeOptimistic: (realKeys: Set<string>) => void;
@@ -72,7 +74,9 @@ function makeRequestId() {
 export function jobStage(job: FileProcessingJob) {
   if (job.status === "failed") return job.error_message || "文件处理失败";
   if (job.status === "succeeded") return "文件处理完成";
-  return job.current_stage || (job.status === "queued" ? "等待服务器处理" : "正在处理文件");
+  if (job.status === "cancelled") return "已取消";
+  if (job.status === "queued") return "排队中";
+  return job.current_stage || "正在处理文件";
 }
 
 function mergeJob(previous: FileProcessingJob | null | undefined, next: FileProcessingJob): FileProcessingJob {
@@ -119,6 +123,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   const [restoreJobs, setRestoreJobs] = useState<Record<number, FileProcessingJob>>({});
   const [indexJobs, setIndexJobs] = useState<Record<string, FileProcessingJob>>({});
   const [optimisticKeys, setOptimisticKeys] = useState<string[]>([]);
+  const [indexErrors, setIndexErrors] = useState<Record<string, string>>({});
   const uploadCancelRef = useRef<(() => void) | null>(null);
   const timersRef = useRef(new Map<string, number>());
   const pollingRef = useRef(new Set<string>());
@@ -211,6 +216,23 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
             } else if (kind === "restore") {
               // 还原 job 失败：触发刷新让回收站视图回滚乐观移除
               dispatch({ type: "INCREMENT_FILE_RESTORE_REVISIONS" });
+            }
+            return;
+          }
+          if (latest.status === "cancelled") {
+            clearPoll(key);
+            if (kind === "upload") {
+              sessionStorage.removeItem(STORAGE_KEY);
+              setUploadTask(null);
+            } else if (kind === "index" && indexKey) {
+              consumeIndexSuccess(indexKey, jobId);
+            } else if (kind === "restore" && sourceId != null) {
+              setRestoreJobs((current) => {
+                if (current[sourceId]?.id !== jobId) return current;
+                const next = { ...current };
+                delete next[sourceId];
+                return next;
+              });
             }
             return;
           }
@@ -329,11 +351,11 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     pollingRef.current.clear();
     completedRef.current.clear();
     // 登出时同步清理当前用户的本地任务状态
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUploadTask(null);
     setRestoreJobs({});
     setIndexJobs({});
     setOptimisticKeys([]);
+    setIndexErrors({});
     sessionStorage.removeItem(STORAGE_KEY);
   }, [isAuthenticated]);
 
@@ -431,6 +453,13 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     setOptimisticKeys((prev) => (prev.includes(optimisticKey) ? prev : [...prev, optimisticKey]));
     try {
       const result = await joinAiKnowledge(resourceType, resourceId);
+      // API 成功即清除历史失败标记，行状态交给索引 job / 真实数据
+      setIndexErrors((current) => {
+        if (!current[optimisticKey]) return current;
+        const next = { ...current };
+        delete next[optimisticKey];
+        return next;
+      });
       const job = result.job;
       if (job) {
         const key =
@@ -445,6 +474,11 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
       dispatch({ type: "INCREMENT_AI_KNOWLEDGE_REVISION" });
     } catch (e) {
       setOptimisticKeys((prev) => prev.filter((k) => k !== optimisticKey));
+      // 失败记录到行内，由 AiKnowledgeView 展示「加入失败 + 重试」
+      setIndexErrors((current) => ({
+        ...current,
+        [optimisticKey]: e instanceof Error ? e.message : "加入 AI 知识失败",
+      }));
       throw e;
     }
   }, [dispatch, pollJob]);
@@ -467,6 +501,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
       consumeIndexSuccess,
       optimisticKeys,
       consumeOptimistic,
+      indexErrors,
     }}>
       {children}
       {uploadTask && (

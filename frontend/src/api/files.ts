@@ -1,9 +1,23 @@
 import { API_BASE, apiFetch, readErrorDetail, getAccessToken, setAccessToken } from "./client";
 
-export function getPreviewUrl(filename: string): string {
-  const token = getAccessToken();
-  const base = `${API_BASE}/preview/${encodeURIComponent(filename)}`;
-  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+// 预览 base URL（不带凭证）。docx/xlsx 经 apiFetch 自动携带 Authorization header，凭证不入 URL。
+export function getPreviewBaseUrl(filename: string): string {
+  return `${API_BASE}/preview/${encodeURIComponent(filename)}`;
+}
+
+// PDF 走 iframe 无法带 header：先换一把 scoped 预览令牌（type=preview，绑定 filename）再拼 ?token=。
+// 即便该 URL 进入日志/历史，泄露的也仅是"只能预览该文件"的弱令牌，而非全局 access JWT。
+export async function getPreviewToken(filename: string): Promise<string> {
+  const res = await apiFetch(`${API_BASE}/preview/token?filename=${encodeURIComponent(filename)}`);
+  if (!res.ok) throw new Error("获取预览令牌失败");
+  const data = (await res.json()) as { token?: string };
+  if (!data.token) throw new Error("获取预览令牌失败");
+  return data.token;
+}
+
+export async function getPreviewPdfUrl(filename: string): Promise<string> {
+  const token = await getPreviewToken(filename);
+  return `${getPreviewBaseUrl(filename)}?token=${encodeURIComponent(token)}`;
 }
 
 export interface FileDocument {
@@ -19,7 +33,7 @@ export interface FileDocumentsResponse {
   documents: FileDocument[];
 }
 
-export type FileProcessingStatus = "staging" | "queued" | "running" | "succeeded" | "failed";
+export type FileProcessingStatus = "staging" | "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
 export interface FileProcessingStage {
   completed: number;

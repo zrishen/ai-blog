@@ -48,6 +48,25 @@ describe("FileProcessingProgress", () => {
     expect(screen.queryByText("清理旧索引")).not.toBeInTheDocument();
   });
 
+  it("queued 状态显示排队中而非阶段文案", () => {
+    const job = makeJob({
+      job_type: "index",
+      status: "queued",
+      current_stage: "cleanup_index",
+      progress_percent: 0,
+      progress_json: {
+        model_version: "index_v1",
+        current_stage: "cleanup_index",
+        stages: {},
+      },
+    });
+
+    render(<FileProcessingProgress value={{ percent: 0, stage: "fallback", job }} />);
+    expect(screen.getByText("排队中")).toBeInTheDocument();
+    expect(screen.queryByText("准备建立索引")).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+  });
+
   it("向量写入后显示 AI 大脑知识提取进度", () => {
     const job = makeJob({
       job_type: "index",

@@ -75,7 +75,6 @@ async def create_folder(
     *,
     name: str,
     parent_id: int | None = None,
-    auto_index: bool = False,
 ) -> WorkspaceNodeModel:
     name = (name or "").strip()
     if not name:
@@ -92,7 +91,6 @@ async def create_folder(
         name=name,
         slug=slug,
         sort_order=await next_sort_order(db, user_id, parent_id),
-        auto_index=auto_index,
     )
     db.add(node)
     await db.commit()
@@ -153,7 +151,7 @@ async def is_descendant(db: AsyncSession, candidate_id: int, ancestor_id: int) -
 
 
 async def delete_node(db: AsyncSession, user_id: int, node_id: int) -> WorkspaceNodeModel:
-    """删除节点：folder 软删（可恢复）并递归处理子树；resource 挂靠点硬删（资源回未归档）。"""
+    """删除节点：整棵子树（folder + resource 挂靠点）统一软删进回收站，可经回收站整体恢复。"""
     node = await get_owned_node(db, node_id, user_id)
     await _remove_subtree(db, node_id)
     await db.commit()
@@ -161,15 +159,50 @@ async def delete_node(db: AsyncSession, user_id: int, node_id: int) -> Workspace
 
 
 async def _remove_subtree(db: AsyncSession, node_id: int) -> None:
+    """递归软删子树（folder + resource 节点都置 deleted_at），保留挂靠关系供回收站整体恢复。"""
     for child in await _raw_children(db, node_id):
         await _remove_subtree(db, child.id)
     node = await db.get(WorkspaceNodeModel, node_id)
     if node is None:
         return
-    if node.node_type == "resource":
-        await db.delete(node)
+    node.deleted_at = _utcnow()
+
+
+async def restore_subtree(db: AsyncSession, user_id: int, root_node: WorkspaceNodeModel) -> None:
+    """从回收站恢复一棵软删子树：递归清 deleted_at；folder 重算 slug（冲突追加后缀，name 不变）；
+    resource 挂靠点按底层资源是否存活决定恢复或清悬空。恢复≠新归档，不触发 AI 知识索引。"""
+    root_node.deleted_at = None
+    root_node.slug = await ensure_unique_slug(
+        db, user_id, root_node.parent_id, root_node.slug, exclude_id=root_node.id
+    )
+    for child in await _raw_children_all(db, root_node.id):
+        if child.deleted_at is None:
+            continue
+        if child.node_type == "folder":
+            await restore_subtree(db, user_id, child)
+        else:
+            await _restore_resource_node(db, child)
+    await db.commit()
+
+
+async def _restore_resource_node(db: AsyncSession, node: WorkspaceNodeModel) -> None:
+    """恢复 resource 挂靠点：底层资源存活（active/软删）则清 deleted_at（底层软删时由 list_all 隐藏，
+    日后恢复底层资源即归位）；底层已 purge（行不存在）则硬删悬空挂靠点。"""
+    from src.services.workspace.resource_service import is_resource_alive
+
+    if await is_resource_alive(db, node.resource_type, node.resource_id):
+        node.deleted_at = None
     else:
-        node.deleted_at = _utcnow()
+        await db.delete(node)
+
+
+async def purge_subtree(db: AsyncSession, node_id: int) -> None:
+    """永久删除一棵子树：递归硬删所有 WorkspaceNode（底层资源不动，回未分类）。"""
+    for child in await _raw_children_all(db, node_id):
+        await purge_subtree(db, child.id)
+    node = await db.get(WorkspaceNodeModel, node_id)
+    if node is not None:
+        await db.delete(node)
 
 
 async def _raw_children(db: AsyncSession, parent_id: int) -> list[WorkspaceNodeModel]:
@@ -180,17 +213,30 @@ async def _raw_children(db: AsyncSession, parent_id: int) -> list[WorkspaceNodeM
     return list((await db.execute(stmt)).scalars().all())
 
 
+async def _raw_children_all(db: AsyncSession, parent_id: int) -> list[WorkspaceNodeModel]:
+    """查某父节点的全部子节点（含软删），供 restore/purge 遍历软删子树。"""
+    stmt = select(WorkspaceNodeModel).where(WorkspaceNodeModel.parent_id == parent_id)
+    return list((await db.execute(stmt)).scalars().all())
+
+
 async def reorder_children(
     db: AsyncSession, user_id: int, parent_id: int | None, ordered_ids: list[int]
 ) -> list[WorkspaceNodeModel]:
-    """按 ordered_ids 重排某父目录下子节点；返回重排后的子节点列表。"""
+    """按 ordered_ids 重排某父目录下子节点；返回按新顺序排列的子节点列表。
+
+    ordered_ids 必须是该目录全部子节点的无重复排列；部分/重复请求会污染 sort_order
+    导致同级顺序不稳定，一律拒绝。
+    """
+    if len(set(ordered_ids)) != len(ordered_ids):
+        raise ValidationFailedError("排序节点列表存在重复")
+    children = await list_children(db, user_id, parent_id)
+    if set(ordered_ids) != {c.id for c in children}:
+        raise ValidationFailedError("排序节点列表必须为该目录全部子节点")
+    by_id = {c.id: c for c in children}
     for idx, nid in enumerate(ordered_ids):
-        node = await get_owned_node(db, nid, user_id)
-        if node.parent_id != parent_id:
-            raise ValidationFailedError("节点不在指定父目录下")
-        node.sort_order = idx
+        by_id[nid].sort_order = idx
     await db.commit()
-    return await list_children(db, user_id, parent_id)
+    return [by_id[nid] for nid in ordered_ids]
 
 
 async def list_children(

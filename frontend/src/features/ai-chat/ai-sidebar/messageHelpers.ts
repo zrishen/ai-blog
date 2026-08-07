@@ -1,14 +1,16 @@
 import type { Reference } from "../../../stores/chatStore";
+import { formatMonthDay, parseDate } from "@/lib/datetime";
 
 export function formatDate(dateStr: string): string {
-  const d = new Date(dateStr);
+  const d = parseDate(dateStr);
+  if (!d) return "";
   const now = new Date();
   const diff = now.getTime() - d.getTime();
   if (diff < 60000) return "刚刚";
   if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
   if (diff < 172800000) return "昨天";
-  return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+  return formatMonthDay(dateStr);
 }
 
 function dedupeReferences(refs: Reference[]): Reference[] {

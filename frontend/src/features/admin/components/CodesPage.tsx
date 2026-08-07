@@ -6,6 +6,7 @@ import {
   revokeAdminCode,
   type AdminCodeItem,
 } from "@/api/client";
+import { formatDateTime as formatBjDateTime } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,11 +42,7 @@ function clampNumber(n: number, min: number, max: number): number {
 
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString();
-  } catch {
-    return iso;
-  }
+  return formatBjDateTime(iso);
 }
 
 function errorMessage(e: unknown, fallback: string): string {

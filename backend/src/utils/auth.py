@@ -43,6 +43,23 @@ def create_access_token(user_id: int, username: str) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
+def create_preview_token(user_id: int, filename: str) -> str:
+    """签发预览专用弱权限 token（type=preview，绑定 filename）。
+
+    用于 PDF iframe 等必须把凭证放 URL 的场景：泄露后仅能预览该用户该文件，
+    无法调用其它需认证接口，filename 绑定也防越权预览其它文件。
+    """
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "type": "preview",
+        "filename": filename,
+        "exp": now + timedelta(seconds=settings.preview_token_expire_seconds),
+        "iat": now,
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
 def _hash_refresh_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -69,6 +86,19 @@ def decode_access_token(token: str) -> Optional[dict]:
     except jwt.PyJWTError:
         return None
     if payload.get("type") != "access":
+        return None
+    return payload
+
+
+def decode_preview_token(token: str, expected_filename: str) -> Optional[dict]:
+    """校验预览 token：签名有效 + type=preview + filename 绑定一致。"""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    if payload.get("type") != "preview":
+        return None
+    if payload.get("filename") != expected_filename:
         return None
     return payload
 
@@ -100,6 +130,30 @@ async def revoke_refresh_token(raw: str | None, db: AsyncSession) -> None:
     if record is not None and record.revoked_at is None:
         record.revoked_at = _naive_utc(datetime.now(timezone.utc))
         await db.commit()
+
+
+async def find_refresh_token(raw: str | None, db: AsyncSession) -> Optional[RefreshToken]:
+    """按明文查 refresh 记录（含已吊销），供 /refresh 做轮换 / 重用检测。"""
+    if not raw:
+        return None
+    result = await db.execute(
+        select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh_token(raw))
+    )
+    return result.scalar_one_or_none()
+
+
+async def revoke_all_user_refresh_tokens(user_id: int, db: AsyncSession) -> None:
+    """吊销该用户所有未吊销的 refresh token（重用检测 / 退出所有设备用）。"""
+    result = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    now = _naive_utc(datetime.now(timezone.utc))
+    for record in result.scalars().all():
+        record.revoked_at = now
+    await db.commit()
 
 
 async def get_current_user(

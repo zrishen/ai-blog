@@ -45,7 +45,7 @@ class BlogPost(Base):
     content = Column(Text, nullable=False)
     excerpt = Column(String(500), nullable=True)
     cover_image = Column(String(500), nullable=True)
-    status = Column(String(20), nullable=False, default="draft")  # draft / published / archived
+    status = Column(String(20), nullable=False, default="draft")  # draft / published
     category_id = Column(Integer, ForeignKey("blog_categories.id"), nullable=True)
     tags = Column(String(500), nullable=True)
     author = Column(String(100), nullable=True)

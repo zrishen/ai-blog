@@ -8,13 +8,14 @@ import logging
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.database.engine import FileDocument, get_db
-from src.database.models import BlogPost, User
+from src.database.models import BlogPost, BlogPostRevision, User
 from src.schemas.file_base import (
     FileCollectionResponse,
     FileDocumentListResponse,
@@ -25,6 +26,7 @@ from src.schemas.files import FileUploadResponse
 from src.schemas.file_processing import FileProcessingJobResponse
 from src.services.file.file_processing_service import (
     FileProcessingActiveError,
+    cancel_jobs_for_resource,
     create_or_reuse_upload_job,
     fail_staging_job,
     get_job,
@@ -38,10 +40,11 @@ from src.services.file.file_service import (
     _validate_file,
     get_user_upload_dir,
     is_hidden_soft_deleted_file,
+    matches_magic,
     save_file,
 )
-from src.services.memory.graph_store import delete_document_chunks
-from src.utils.auth import get_current_user
+from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
+from src.utils.auth import decode_access_token, get_current_user, verify_refresh_token
 
 
 logger = logging.getLogger(__name__)
@@ -53,7 +56,6 @@ MEDIA_TYPES = {
     ".webp": "image/webp",
     ".gif": "image/gif",
     ".avif": "image/avif",
-    ".svg": "image/svg+xml",
     ".pdf": "application/pdf",
 }
 
@@ -77,17 +79,94 @@ async def upload_file(file: UploadFile = File(...), user: User = Depends(get_cur
     )
 
 
+async def _find_published_post_referencing_image(
+    db: AsyncSession,
+    filename: str,
+    username: str | None = None,
+) -> BlogPost | None:
+    """返回引用了该 filename 的已发布文章（status=published、未删、published revision 的
+    content/cover_image 含 filename）；无则 None。
+
+    公开图片只在"已被已发布文章引用"时才可访问，避免草稿/未关联/已删文章图片泄露。
+    filename 是 stored_name（uuid.ext，全局唯一），用 contains 子串匹配即可。
+    """
+    stmt = select(BlogPost).join(
+        BlogPostRevision, BlogPost.published_revision_id == BlogPostRevision.id
+    )
+    if username is not None:
+        stmt = stmt.join(User, User.id == BlogPost.user_id).where(User.username == username)
+    stmt = stmt.where(
+        BlogPost.status == "published",
+        BlogPost.deleted_at.is_(None),
+        or_(
+            BlogPostRevision.content.contains(filename),
+            BlogPostRevision.cover_image.contains(filename),
+        ),
+    ).limit(1)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def _find_owner_post_referencing_image(
+    db: AsyncSession, filename: str, user_id: int
+) -> BlogPost | None:
+    """该用户任意未删除文章（工作副本 content/cover_image 含 filename）。
+
+    用于作者本人查看：草稿图片只在工作副本，发布后的编辑视图也在工作副本。
+    """
+    stmt = select(BlogPost).where(
+        BlogPost.user_id == user_id,
+        BlogPost.deleted_at.is_(None),
+        or_(
+            BlogPost.content.contains(filename),
+            BlogPost.cover_image.contains(filename),
+        ),
+    ).limit(1)
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def get_optional_viewer(
+    authorization: str | None = Header(default=None),
+    refresh_token: str | None = Cookie(default=None, alias=settings.refresh_cookie_name),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """公开图片接口的可选认证：access header 或 refresh cookie 任一识别出登录用户。
+
+    供"作者本人查看自己草稿图片"使用——<img> 无法带 access header，但同源会带 refresh cookie。
+    """
+    if authorization and authorization.lower().startswith("bearer "):
+        payload = decode_access_token(authorization[7:])
+        if payload and payload.get("sub"):
+            user = await db.get(User, int(payload["sub"]))
+            if user is not None:
+                return user
+    if refresh_token:
+        user = await verify_refresh_token(refresh_token, db)
+        if user is not None:
+            return user
+    return None
+
+
 @router.get("/public/uploads/{username}/{filename}")
-async def get_public_uploaded_image(username: str, filename: str):
-    """Serve a user-uploaded blog image without auth."""
+async def get_public_uploaded_image(
+    username: str,
+    filename: str,
+    viewer: User | None = Depends(get_optional_viewer),
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve a user-uploaded blog image. Author sees own images; others need a published reference."""
     suffix = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"}:
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
         raise HTTPException(status_code=403, detail="Only images can be public")
+
+    # 作者本人（带凭证）放行自己目录的图片；否则仅"被已发布文章引用"才公开
+    if not (viewer is not None and viewer.username == username):
+        if await _find_published_post_referencing_image(db, filename, username=username) is None:
+            raise HTTPException(status_code=404, detail="File not found")
 
     user_dir = get_user_upload_dir(username)
     file_path = user_dir / filename
     resolved = file_path.resolve()
-    if not str(resolved).startswith(str(user_dir.resolve())):
+    if not resolved.is_relative_to(user_dir.resolve()):
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -99,26 +178,26 @@ async def get_public_uploaded_image(username: str, filename: str):
 
 
 @router.get("/blog/cover/{filename}")
-async def get_blog_cover(filename: str, db: AsyncSession = Depends(get_db)):
-    """Serve a cover image that is still referenced by an active blog post."""
+async def get_blog_cover(
+    filename: str,
+    viewer: User | None = Depends(get_optional_viewer),
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve a cover image. Published covers are public; draft covers only visible to the author."""
     if Path(filename).name != filename:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    cover_urls = (f"/api/v1/blog/cover/{filename}", f"/api/blog/cover/{filename}")
-    result = await db.execute(
-        select(BlogPost).where(
-            BlogPost.cover_image.in_(cover_urls),
-            BlogPost.deleted_at.is_(None),
-        )
-    )
-    post = result.scalar_one_or_none()
+    # 已发布文章引用 → 任何人可见；否则仅当请求者是引用该图的草稿文章作者时可见
+    post = await _find_published_post_referencing_image(db, filename)
+    if post is None and viewer is not None:
+        post = await _find_owner_post_referencing_image(db, filename, viewer.id)
     if post is None:
         raise HTTPException(status_code=404, detail="Cover image not found")
 
     user_dir = get_user_upload_dir(post.user_id)
     file_path = user_dir / filename
     resolved = file_path.resolve()
-    if not str(resolved).startswith(str(user_dir.resolve())):
+    if not resolved.is_relative_to(user_dir.resolve()):
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Cover image not found")
@@ -147,7 +226,7 @@ async def get_uploaded_file(filename: str, user: User = Depends(get_current_user
     user_dir = get_user_upload_dir(user.id)
     file_path = user_dir / filename
     resolved = file_path.resolve()
-    if not str(resolved).startswith(str(user_dir.resolve())):
+    if not resolved.is_relative_to(user_dir.resolve()):
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -228,10 +307,15 @@ async def upload_to_file_library(
     moved_to_final = False
     try:
         output = await asyncio.to_thread(staging_path.open, "xb")
+        checked_magic = False
         while True:
             chunk = await file.read(1024 * 1024)
             if not chunk:
                 break
+            if not checked_magic:
+                if not matches_magic(original_name, chunk):
+                    raise ValueError("文件内容与扩展名不符")
+                checked_magic = True
             total += len(chunk)
             if total > MAX_FILE_SIZE:
                 raise ValueError("File exceeds 100MB limit")
@@ -397,19 +481,24 @@ async def delete_file_document(
     # Step 1: DB 软删，使其立刻对用户不可见
     doc.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
+    # 进回收站即取消该资源进行中的索引任务，避免后台 job 继续跑完
+    await cancel_jobs_for_resource(
+        db, user_id=user.id, resource_type="file", resource_id=doc_id
+    )
 
     collection_name = doc.collection_name
     stored_name = doc.file_path
     try:
         await delete_document_chunks(collection_name, stored_name)
+        await delete_resource_memory(user_id=user.id, resource_type="file", resource_id=doc_id)
     except Exception:
         logger.exception(
             "File library soft-delete vector cleanup failed: doc_id=%s stored_name=%s",
             doc_id,
             stored_name,
         )
-        # commit 已发生，session 内 doc 状态不可靠；重查后清 deleted_at 再 commit
-        await db.rollback()
+        # commit 已发生，重查后清 deleted_at 再 commit。不 rollback：commit 后无 pending 可回滚，
+        # 且 rollback 后立即 get 在 NullPool+asyncpg 下触发 MissingGreenlet
         fresh = await db.get(FileDocument, doc_id)
         if fresh is not None and fresh.deleted_at is not None:
             fresh.deleted_at = None
@@ -464,15 +553,19 @@ async def delete_file_collection(
     for doc in documents:
         doc.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
+        await cancel_jobs_for_resource(
+            db, user_id=user.id, resource_type="file", resource_id=doc.id
+        )
         try:
             await delete_document_chunks(name, doc.file_path)
+            await delete_resource_memory(user_id=user.id, resource_type="file", resource_id=doc.id)
         except Exception:
             logger.exception(
                 "File collection soft-delete vector cleanup failed: collection=%s doc_id=%s",
                 name,
                 doc.id,
             )
-            await db.rollback()
+            # commit 已发生，重查后清 deleted_at 再 commit（理由同 delete_file_document）
             fresh = await db.get(FileDocument, doc.id)
             if fresh is not None and fresh.deleted_at is not None:
                 fresh.deleted_at = None

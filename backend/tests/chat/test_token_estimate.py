@@ -69,3 +69,15 @@ def test_estimate_tokens_accepts_list_via_text_extraction() -> None:
 def test_estimate_tokens_accepts_none_as_empty() -> None:
     # assistant tool_calls 消息的 content 可能为 None（合法），不应崩溃（曾致 stream_chat 500）
     assert estimate_tokens(None) == 1
+
+
+def test_estimate_tokens_includes_image_blocks() -> None:
+    # 多模态消息：文本 + 图片块，token = 文本 token + 图片基础值 + base64 折算
+    content = [
+        {"type": "text", "text": "hello"},
+        {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "a" * 400}},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64," + "b" * 400}},
+    ]
+    total = estimate_tokens(content)
+    # 文本 1 + 图片1(500 + 400//400=1) + 图片2(500 + 400//400=1) = 1003
+    assert total >= 1002  # 500+1 + 500+1 + 1

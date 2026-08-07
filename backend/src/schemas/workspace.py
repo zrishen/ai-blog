@@ -14,13 +14,11 @@ from src.schemas.file_processing import FileProcessingJobResponse
 class FolderCreate(BaseModel):
     name: str
     parent_id: Optional[int] = None
-    auto_index: bool = False
 
 
 class NodePatch(BaseModel):
-    """就地改文件夹属性（改名 / 自动索引开关）。移动走 /move 端点（含防环）。"""
+    """就地改文件夹属性（改名）。移动走 /move 端点（含防环）。"""
     name: Optional[str] = None
-    auto_index: Optional[bool] = None
 
 
 class NodeMove(BaseModel):
@@ -44,7 +42,6 @@ class WorkspaceNodeResponse(BaseModel):
     name: str
     slug: str
     sort_order: int
-    auto_index: bool
     created_at: datetime
     updated_at: datetime
 

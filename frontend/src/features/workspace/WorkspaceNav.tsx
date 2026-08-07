@@ -51,6 +51,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { cn } from "@/lib/utils";
@@ -390,9 +400,6 @@ function FolderTree({
                       className="h-4 w-4 flex-shrink-0"
                     />
                     <span className="flex-1 truncate text-body">{f.name}</span>
-                    {f.auto_index && (
-                      <span className="text-caption text-muted-foreground">自动索引</span>
-                    )}
                     {/* ⋯ 菜单：移动端常驻、桌面 hover 显示，与右键菜单内容一致 */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -886,6 +893,12 @@ export function WorkspaceNav() {
     if (state.workspaceTree.length === 0) reload();
   }, [reload, state.workspaceTree.length]);
 
+  // 回收站还原/清空后刷新目录树（恢复文件夹等结构性变化）
+  useEffect(() => {
+    if (state.trashRevision === 0) return;
+    void reload();
+  }, [state.trashRevision, reload]);
+
   // 缓存文件元数据，供左栏 file 资源点击反查 file_path
   useEffect(() => {
     let alive = true;
@@ -966,6 +979,12 @@ export function WorkspaceNav() {
     [],
   );
 
+  // 文件夹删除走二次确认：递归软删整棵子树进回收站，须显式确认（可恢复）
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+
   const handleDelete = useCallback(
     async (id: number) => {
       try {
@@ -980,6 +999,20 @@ export function WorkspaceNav() {
     },
     [dispatch, reload, selectedFolderId],
   );
+
+  const requestDeleteFolder = useCallback(
+    (id: number) => {
+      const name = state.workspaceTree.find((n) => n.id === id)?.name ?? "该文件夹";
+      setDeleteFolderTarget({ id, name });
+    },
+    [state.workspaceTree],
+  );
+
+  const confirmDeleteFolder = useCallback(async () => {
+    const id = deleteFolderTarget?.id;
+    setDeleteFolderTarget(null);
+    if (id != null) await handleDelete(id);
+  }, [deleteFolderTarget, handleDelete]);
 
   const requestUpload = useCallback((folderId: number | null) => {
     uploadTargetRef.current = folderId;
@@ -1124,7 +1157,7 @@ export function WorkspaceNav() {
                     dispatch({ type: "SET_FILE_SELECTED_FILE", payload: null });
                     dispatch({ type: "SET_WORKSPACE_SELECTED_FOLDER", payload: id });
                   }}
-                  onDelete={handleDelete}
+                  onDelete={requestDeleteFolder}
                   onRename={startRename}
                   onNewSub={startNewSub}
                   onUpload={(fid) => requestUpload(fid)}
@@ -1155,6 +1188,29 @@ export function WorkspaceNav() {
       </div>
       <input ref={fileInputRef} type="file" accept=".pdf,.docx,.xlsx" hidden onChange={onFileChange} />
       <ResourceDialogs actions={resourceActions} flatFolders={flatFolders} />
+      <Dialog
+        open={deleteFolderTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteFolderTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除文件夹</DialogTitle>
+            <DialogDescription>
+              将删除「{deleteFolderTarget?.name}」及其全部子文件夹，移入回收站。其中的文件和文章不会被删除，可随时从回收站恢复整个文件夹。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">取消</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={confirmDeleteFolder}>
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </WorkspacePanel>
   );
 }

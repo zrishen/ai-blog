@@ -1,7 +1,11 @@
 import { API_BASE, apiFetch } from "./client";
 import type { FileProcessingJob } from "./files";
 
-export type TrashItemType = "conversation" | "file_document" | "blog_post";
+export type TrashItemType =
+  | "conversation"
+  | "file_document"
+  | "blog_post"
+  | "workspace_folder";
 
 export interface TrashItem {
   type: TrashItemType;

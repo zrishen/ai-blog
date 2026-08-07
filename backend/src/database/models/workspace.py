@@ -6,7 +6,6 @@ WorkspaceNode 既是文件夹（folder），也是「某资源挂在某文件夹
 """
 
 from sqlalchemy import (
-    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -43,7 +42,6 @@ class WorkspaceNode(Base):
     name = Column(String(300), nullable=False)
     slug = Column(String(300), nullable=False)
     sort_order = Column(Integer, nullable=False, default=0)
-    auto_index = Column(Boolean, nullable=False, default=False)  # 目录级「自动加入 AI 知识」
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)

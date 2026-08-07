@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { isSafeInternalPath } from "@/lib/routing";
 import { BrainCircuit, Home, LayoutDashboard, Network, type LucideIcon } from "lucide-react";
 import { useChatDispatch } from "@/stores/chatStore";
 import { useAuth, type AuthUser } from "@/stores/authStore";
@@ -93,9 +94,7 @@ export function useWorkspacePrimaryNavigation() {
   }, [dispatch, navigate, pendingLoginDestination, resetBlogList]);
 
   const returnTo = (location.state as { returnTo?: unknown } | null)?.returnTo;
-  const activePath = typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//")
-    ? returnTo
-    : location.pathname;
+  const activePath = isSafeInternalPath(returnTo) ? returnTo : location.pathname;
   const activePrimaryPage: PrimaryNavigationKey | null = activePath === "/workspace"
     ? "workspace"
     : activePath.startsWith("/research")

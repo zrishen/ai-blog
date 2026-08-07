@@ -78,12 +78,12 @@ async def test_register_succeeds_when_intro_article_fails(client: AsyncClient, m
 async def test_login(client: AsyncClient):
     await client.post("/api/v1/auth/register", json={
         "username": "loginuser",
-        "password": "mypassword",
+        "password": "mypassword1",
         "invite_code": settings.registration_invite_code,
     })
     resp = await client.post("/api/v1/auth/login", json={
         "username": "loginuser",
-        "password": "mypassword",
+        "password": "mypassword1",
     })
     assert resp.status_code == 200
     data = resp.json()
@@ -97,7 +97,7 @@ async def test_login(client: AsyncClient):
 async def test_login_wrong_password(client: AsyncClient):
     await client.post("/api/v1/auth/register", json={
         "username": "wrongpw",
-        "password": "correct",
+        "password": "correct123",
         "invite_code": settings.registration_invite_code,
     })
     resp = await client.post("/api/v1/auth/login", json={
@@ -148,6 +148,78 @@ async def test_refresh_without_cookie_returns_401(client: AsyncClient):
     client.cookies.clear()  # 模拟无 refresh cookie
     resp = await client.post("/api/v1/auth/refresh")
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_rotates_refresh_token(client: AsyncClient):
+    """refresh 轮换：旧 refresh 即时吊销、下发新 refresh，新旧不共存。"""
+    await client.post("/api/v1/auth/register", json={
+        "username": "rotuser",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
+    old_refresh = client.cookies.get(settings.refresh_cookie_name)
+    assert old_refresh is not None
+
+    resp = await client.post("/api/v1/auth/refresh")
+    assert resp.status_code == 200
+    new_refresh = client.cookies.get(settings.refresh_cookie_name)
+    # 轮换：下发了与旧值不同的新 token
+    assert new_refresh is not None and new_refresh != old_refresh
+
+    # 新 token 立即可继续刷新
+    assert (await client.post("/api/v1/auth/refresh")).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_refresh_grace_allows_concurrent_reuse(client: AsyncClient):
+    """宽限期内重用旧 token（多标签页近同时刷新的竞态）→ 宽容换新，不连带吊销其他会话。"""
+    await client.post("/api/v1/auth/register", json={
+        "username": "graceuser",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
+    old_refresh = client.cookies.get(settings.refresh_cookie_name)
+
+    # 标签页 A 轮换：old_refresh 随即被吊销
+    await client.post("/api/v1/auth/refresh")
+    new_refresh = client.cookies.get(settings.refresh_cookie_name)
+
+    # 标签页 B 仍持旧 token，在宽限期内并发刷新 → 宽容换新（200），不判窃取
+    client.cookies.clear()
+    headers = {"Cookie": f"{settings.refresh_cookie_name}={old_refresh}"}
+    assert (await client.post("/api/v1/auth/refresh", headers=headers)).status_code == 200
+
+    # 未参与重用的 new_refresh 仍有效（未吊销全部会话）→ 绝不错杀正常用户
+    client.cookies.clear()
+    headers = {"Cookie": f"{settings.refresh_cookie_name}={new_refresh}"}
+    assert (await client.post("/api/v1/auth/refresh", headers=headers)).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_refresh_reuse_after_grace_revokes_all_sessions(client: AsyncClient, monkeypatch):
+    """超宽限期重用旧 token → 判定 token 被窃取，吊销该用户全部 refresh。"""
+    monkeypatch.setattr(settings, "refresh_rotation_grace_seconds", 0)
+    await client.post("/api/v1/auth/register", json={
+        "username": "reuseuser",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
+    old_refresh = client.cookies.get(settings.refresh_cookie_name)
+
+    # 轮换得到新 token（old_refresh 随即被吊销）
+    await client.post("/api/v1/auth/refresh")
+    new_refresh = client.cookies.get(settings.refresh_cookie_name)
+
+    # 宽限期外（grace=0 即立即超期）重用旧 token → 判窃取
+    client.cookies.clear()
+    headers = {"Cookie": f"{settings.refresh_cookie_name}={old_refresh}"}
+    assert (await client.post("/api/v1/auth/refresh", headers=headers)).status_code == 401
+
+    # 吊销该用户所有 refresh：未参与重用的新 token 也一并失效
+    client.cookies.clear()
+    headers = {"Cookie": f"{settings.refresh_cookie_name}={new_refresh}"}
+    assert (await client.post("/api/v1/auth/refresh", headers=headers)).status_code == 401
 
 
 @pytest.mark.asyncio
@@ -204,6 +276,61 @@ async def test_register_is_closed_when_invite_code_is_not_configured(client: Asy
         "invite_code": "any-code",
     })
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_register_rejects_weak_password(client: AsyncClient):
+    """注册密码不足 8 位或缺字母/数字 → 422（schema 校验，不建用户）。"""
+    for weak in ("short1", "onlyletters", "12345678"):
+        resp = await client.post("/api/v1/auth/register", json={
+            "username": f"weak_{weak}",
+            "password": weak,
+            "invite_code": settings.registration_invite_code,
+        })
+        assert resp.status_code == 422, (weak, resp.text)
+
+
+def test_check_rate_limit_window_and_isolation():
+    """滑动窗口内放行至 limit、超限拒绝；不同 bucket 互不影响。"""
+    from src.utils.rate_limit import check_rate_limit, reset_rate_limit
+
+    reset_rate_limit()
+    assert check_rate_limit("k", limit=2, window_seconds=60) is True
+    assert check_rate_limit("k", limit=2, window_seconds=60) is True
+    assert check_rate_limit("k", limit=2, window_seconds=60) is False  # 第 3 次超限
+    assert check_rate_limit("other", limit=2, window_seconds=60) is True  # 独立桶
+
+
+@pytest.mark.asyncio
+async def test_login_rate_limited_after_threshold(client: AsyncClient, monkeypatch):
+    """同 IP 连续登录超阈值后返 429（前几次仍按 401 凭证错误返回）。"""
+    monkeypatch.setattr(settings, "auth_login_rate_limit", 3)
+    monkeypatch.setattr(settings, "auth_rate_limit_window_seconds", 60)
+    for _ in range(3):
+        resp = await client.post("/api/v1/auth/login", json={"username": "xx", "password": "abcd1"})
+        assert resp.status_code == 401  # 凭证错误，但未到限流阈值
+    resp = await client.post("/api/v1/auth/login", json={"username": "xx", "password": "abcd1"})
+    assert resp.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_register_rate_limited_after_threshold(client: AsyncClient, monkeypatch):
+    """同 IP 连续注册超阈值后返 429（覆盖邀请码暴力撞库）。"""
+    monkeypatch.setattr(settings, "auth_register_rate_limit", 2)
+    monkeypatch.setattr(settings, "auth_rate_limit_window_seconds", 60)
+    for _ in range(2):
+        resp = await client.post("/api/v1/auth/register", json={
+            "username": "uu",
+            "password": "pass1234",
+            "invite_code": settings.registration_invite_code,
+        })
+        assert resp.status_code in (201, 409)  # 首次成功 / 重复用户名，均未限流
+    resp = await client.post("/api/v1/auth/register", json={
+        "username": "uu",
+        "password": "pass1234",
+        "invite_code": settings.registration_invite_code,
+    })
+    assert resp.status_code == 429
 
 
 @pytest.mark.asyncio

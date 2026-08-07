@@ -717,16 +717,20 @@ async def prepare_history_attachments(
             continue
         position = attachment.position or 0
         if attachment.media_type.startswith("image/"):
-            try:
-                content = await asyncio.to_thread(path.read_bytes)
-            except OSError:
-                logger.warning("历史图片附件读取失败: attachment_id=%s", attachment.attachment_id)
-                continue
+            image_base64 = attachment.image_base64_cache
+            if not image_base64:
+                try:
+                    content = await asyncio.to_thread(path.read_bytes)
+                except OSError:
+                    logger.warning("历史图片附件读取失败: attachment_id=%s", attachment.attachment_id)
+                    continue
+                image_base64 = base64.b64encode(content).decode("ascii")
+                attachment.image_base64_cache = image_base64
             item = PreparedChatAttachment(
                 attachment=attachment,
                 position=position,
                 kind="image",
-                image_base64=base64.b64encode(content).decode("ascii"),
+                image_base64=image_base64,
             )
         else:
             text = attachment.extracted_text

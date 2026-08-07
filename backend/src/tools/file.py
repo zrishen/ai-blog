@@ -33,7 +33,7 @@ async def _get_active_file_whitelist(user_id: int | None = None) -> dict[str, se
             .where(
                 RagSource.user_id == user_id,
                 RagSource.resource_type == "file",
-                RagSource.index_status == "active",
+                RagSource.index_status.in_(("active", "stale")),
                 FileDocument.deleted_at.is_(None),
             )
         )
@@ -46,7 +46,7 @@ async def _get_active_file_whitelist(user_id: int | None = None) -> dict[str, se
             .where(
                 RagSource.user_id == user_id,
                 RagSource.resource_type == "blog_post",
-                RagSource.index_status == "active",
+                RagSource.index_status.in_(("active", "stale")),
                 BlogPost.deleted_at.is_(None),
             )
         )

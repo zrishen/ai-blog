@@ -8,22 +8,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.engine import get_db
 from src.database.models import User
 from src.services.file.file_service import convert_to_html, get_user_upload_dir, is_hidden_soft_deleted_file
-from src.utils.auth import decode_access_token
+from src.config import settings
+from src.utils.auth import (
+    create_preview_token,
+    decode_access_token,
+    decode_preview_token,
+    get_current_user,
+)
 
 router = APIRouter()
 _preview_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
 async def get_preview_user(
+    filename: str,
     header_token: str | None = Depends(_preview_oauth2_scheme),
     query_token: str | None = Query(default=None, alias="token"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    token = header_token or query_token
-    if not token:
+    """header 走普通 access token（docx/xlsx 经 apiFetch 携带）；
+    query 必须是绑定 filename 的 preview token（PDF iframe 场景，无法带 header）。"""
+    if header_token:
+        payload = decode_access_token(header_token)
+    elif query_token:
+        payload = decode_preview_token(query_token, expected_filename=filename)
+    else:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    payload = decode_access_token(token)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的认证令牌")
 
@@ -35,6 +46,19 @@ async def get_preview_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
     return user
+
+
+@router.get("/preview/token")
+async def issue_preview_token(
+    filename: str = Query(...),
+    user: User = Depends(get_current_user),
+):
+    """签发预览专用弱权限 token（type=preview，绑定 filename）。
+
+    前端用它拼 ?token= 供 PDF iframe 加载；泄露后仅能预览该用户该文件。
+    """
+    token = create_preview_token(user.id, filename)
+    return {"token": token, "expires_in": settings.preview_token_expire_seconds}
 
 
 @router.get("/preview/{filename:path}")
@@ -55,7 +79,7 @@ async def preview_file(
     user_dir = get_user_upload_dir(user.id)
     path = user_dir / filename
     resolved = path.resolve()
-    if not str(resolved).startswith(str(user_dir.resolve())):
+    if not resolved.is_relative_to(user_dir.resolve()):
         raise HTTPException(status_code=403, detail="Access denied")
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")

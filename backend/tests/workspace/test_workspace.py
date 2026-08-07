@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
-from src.database.models import BlogPost, FileDocument, FileProcessingJob
+from src.database.models import BlogPost, FileDocument, FileProcessingJob, WorkspaceNode
 from src.services.file import file_processing_service
 from src.services.workspace import node_service, rag_service, resource_service
 
@@ -46,6 +46,44 @@ async def test_create_folder_duplicate_slug(db_session: AsyncSession):
 async def test_create_folder_empty_name(db_session: AsyncSession):
     with pytest.raises(ValidationFailedError):
         await node_service.create_folder(db_session, TEST_USER_ID, name="   ")
+
+
+@pytest.mark.asyncio
+async def test_reorder_children_reorders_all(db_session: AsyncSession):
+    """完整无重复列表：按新顺序写 sort_order，返回值与 list_children 均按新顺序。"""
+    parent = await node_service.create_folder(db_session, TEST_USER_ID, name="P")
+    a = await node_service.create_folder(db_session, TEST_USER_ID, name="A", parent_id=parent.id)
+    b = await node_service.create_folder(db_session, TEST_USER_ID, name="B", parent_id=parent.id)
+    c = await node_service.create_folder(db_session, TEST_USER_ID, name="C", parent_id=parent.id)
+    a_id, b_id, c_id = a.id, b.id, c.id
+    reordered = await node_service.reorder_children(
+        db_session, TEST_USER_ID, parent.id, [c_id, a_id, b_id]
+    )
+    assert [n.id for n in reordered] == [c_id, a_id, b_id]
+    fetched = await node_service.list_children(db_session, TEST_USER_ID, parent.id)
+    assert [n.id for n in fetched] == [c_id, a_id, b_id]
+
+
+@pytest.mark.asyncio
+async def test_reorder_children_rejects_partial_list(db_session: AsyncSession):
+    """缺节点：必须拒绝，避免污染 sort_order。"""
+    parent = await node_service.create_folder(db_session, TEST_USER_ID, name="P2")
+    a = await node_service.create_folder(db_session, TEST_USER_ID, name="A", parent_id=parent.id)
+    await node_service.create_folder(db_session, TEST_USER_ID, name="B", parent_id=parent.id)
+    with pytest.raises(ValidationFailedError):
+        await node_service.reorder_children(db_session, TEST_USER_ID, parent.id, [a.id])
+
+
+@pytest.mark.asyncio
+async def test_reorder_children_rejects_duplicates(db_session: AsyncSession):
+    """重复 id：必须拒绝。"""
+    parent = await node_service.create_folder(db_session, TEST_USER_ID, name="P3")
+    a = await node_service.create_folder(db_session, TEST_USER_ID, name="A", parent_id=parent.id)
+    b = await node_service.create_folder(db_session, TEST_USER_ID, name="B", parent_id=parent.id)
+    with pytest.raises(ValidationFailedError):
+        await node_service.reorder_children(
+            db_session, TEST_USER_ID, parent.id, [a.id, b.id, a.id]
+        )
 
 
 @pytest.mark.asyncio
@@ -165,18 +203,20 @@ async def test_move_resource(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_delete_folder_hard_deletes_resource_nodes(db_session: AsyncSession):
-    """删 folder 时 resource 挂靠点硬删，资源可重新挂靠（唯一约束无残留）。"""
+async def test_delete_folder_soft_deletes_resource_nodes(db_session: AsyncSession):
+    """删 folder 时 resource 挂靠点随 folder 软删（保留挂靠关系供回收站恢复）。"""
     folder = await node_service.create_folder(db_session, TEST_USER_ID, name="F")
-    await resource_service.attach_resource(
-        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=99, parent_id=folder.id
+    folder_id = folder.id
+    attached = await resource_service.attach_resource(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=99, parent_id=folder_id
     )
-    await node_service.delete_node(db_session, TEST_USER_ID, folder.id)
-    other = await node_service.create_folder(db_session, TEST_USER_ID, name="G")
-    node = await resource_service.attach_resource(
-        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=99, parent_id=other.id
-    )
-    assert node.parent_id == other.id
+    attached_id = attached.id
+    await node_service.delete_node(db_session, TEST_USER_ID, folder_id)
+    db_session.expire_all()
+    folder_node = await db_session.get(WorkspaceNode, folder_id)
+    res_node = await db_session.get(WorkspaceNode, attached_id)
+    assert folder_node is not None and folder_node.deleted_at is not None
+    assert res_node is not None and res_node.deleted_at is not None
 
 
 @pytest.mark.asyncio
@@ -186,6 +226,118 @@ async def test_attach_invalid_resource_type(db_session: AsyncSession):
         await resource_service.attach_resource(
             db_session, TEST_USER_ID, resource_type="unknown", resource_id=1, parent_id=folder.id
         )
+
+
+@pytest.mark.asyncio
+async def test_restore_subtree_restores_folders_and_resources(db_session: AsyncSession):
+    """恢复软删子树：多层目录 + 挂靠资源全部清 deleted_at、回到原层级。"""
+    post = BlogPost(title="t", slug="restore-sub", content="c", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+    post_id = post.id
+    root = await node_service.create_folder(db_session, TEST_USER_ID, name="root")
+    root_id = root.id
+    child = await node_service.create_folder(db_session, TEST_USER_ID, name="child", parent_id=root_id)
+    child_id = child.id
+    res = await resource_service.attach_resource(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post_id, parent_id=child_id
+    )
+    res_id = res.id
+    await node_service.delete_node(db_session, TEST_USER_ID, root_id)
+    db_session.expire_all()
+    root_node = await db_session.get(WorkspaceNode, root_id)
+    await node_service.restore_subtree(db_session, TEST_USER_ID, root_node)
+    db_session.expire_all()
+    for nid in (root_id, child_id, res_id):
+        node = await db_session.get(WorkspaceNode, nid)
+        assert node is not None and node.deleted_at is None
+    assert (await db_session.get(WorkspaceNode, child_id)).parent_id == root_id
+    assert (await db_session.get(WorkspaceNode, res_id)).parent_id == child_id
+
+
+@pytest.mark.asyncio
+async def test_restore_subtree_slug_conflict_appends_suffix(db_session: AsyncSession):
+    """恢复时同级已有同名目录：slug 追加后缀，name 不变。"""
+    root = await node_service.create_folder(db_session, TEST_USER_ID, name="dup")
+    root_id = root.id
+    await node_service.delete_node(db_session, TEST_USER_ID, root_id)
+    await node_service.create_folder(db_session, TEST_USER_ID, name="dup")  # 占用 slug=dup
+    db_session.expire_all()
+    root_node = await db_session.get(WorkspaceNode, root_id)
+    await node_service.restore_subtree(db_session, TEST_USER_ID, root_node)
+    db_session.expire_all()
+    restored = await db_session.get(WorkspaceNode, root_id)
+    assert restored is not None and restored.deleted_at is None
+    assert restored.slug == "dup-2"
+    assert restored.name == "dup"
+
+
+@pytest.mark.asyncio
+async def test_restore_subtree_drops_node_for_purged_resource(db_session: AsyncSession):
+    """恢复时底层资源已不存在（视为 purge）：悬空挂靠点硬删，不残留幽灵节点。"""
+    root = await node_service.create_folder(db_session, TEST_USER_ID, name="r")
+    root_id = root.id
+    res = await resource_service.attach_resource(  # resource_id=777 底层无对应 BlogPost
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=777, parent_id=root_id
+    )
+    res_id = res.id
+    await node_service.delete_node(db_session, TEST_USER_ID, root_id)
+    db_session.expire_all()
+    root_node = await db_session.get(WorkspaceNode, root_id)
+    await node_service.restore_subtree(db_session, TEST_USER_ID, root_node)
+    db_session.expire_all()
+    assert await db_session.get(WorkspaceNode, root_id) is not None
+    assert await db_session.get(WorkspaceNode, res_id) is None
+
+
+@pytest.mark.asyncio
+async def test_purge_subtree_removes_all_nodes(db_session: AsyncSession):
+    """永久删除子树：所有 WorkspaceNode 硬删。"""
+    root = await node_service.create_folder(db_session, TEST_USER_ID, name="pr")
+    root_id = root.id
+    child = await node_service.create_folder(db_session, TEST_USER_ID, name="prc", parent_id=root_id)
+    child_id = child.id
+    res = await resource_service.attach_resource(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=888, parent_id=child_id
+    )
+    res_id = res.id
+    await node_service.delete_node(db_session, TEST_USER_ID, root_id)
+    await node_service.purge_subtree(db_session, root_id)
+    db_session.expire_all()
+    for nid in (root_id, child_id, res_id):
+        assert await db_session.get(WorkspaceNode, nid) is None
+
+
+@pytest.mark.asyncio
+async def test_attach_revives_soft_deleted_node(db_session: AsyncSession):
+    """删 folder 后同资源重新 attach：复活同一挂靠点（id 不变、parent 更新）。"""
+    a = await node_service.create_folder(db_session, TEST_USER_ID, name="A")
+    b = await node_service.create_folder(db_session, TEST_USER_ID, name="B")
+    attached = await resource_service.attach_resource(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=123, parent_id=a.id
+    )
+    attached_id = attached.id
+    await node_service.delete_node(db_session, TEST_USER_ID, a.id)
+    revived = await resource_service.attach_resource(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=123, parent_id=b.id
+    )
+    assert revived.id == attached_id
+    assert revived.parent_id == b.id
+    assert revived.deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_list_trash_workspace_folder_deletion_roots(db_session: AsyncSession):
+    """list_trash 只列删除根 folder，连带软删的子 folder 不重复出现。"""
+    from src.services.trash.trash_service import list_trash
+
+    root = await node_service.create_folder(db_session, TEST_USER_ID, name="root")
+    await node_service.create_folder(db_session, TEST_USER_ID, name="child", parent_id=root.id)
+    await node_service.delete_node(db_session, TEST_USER_ID, root.id)
+    items = await list_trash(db_session, user_id=TEST_USER_ID)
+    folder_items = [i for i in items if i.type == "workspace_folder"]
+    assert len(folder_items) == 1
+    assert folder_items[0].id == root.id
 
 
 # ---- rag_service: AI 知识 ----
@@ -214,6 +366,159 @@ async def test_mark_indexed_and_stale(db_session: AsyncSession):
     assert active.indexed_version == "v1"
     stale = await rag_service.mark_stale(db_session, TEST_USER_ID, "blog_post", 3)
     assert stale.index_status == "stale"
+
+
+@pytest.mark.asyncio
+async def test_update_post_content_marks_ai_knowledge_stale(db_session: AsyncSession):
+    """博客正文变更 → 已加入 AI 知识的资源标 stale（旧索引保留可用，用户手动刷新后重建）。"""
+    from src.services.blog.blog_service import update_post
+
+    post = BlogPost(title="原标", slug="stale-on-edit", content="原正文", user_id=TEST_USER_ID, status="draft")
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    await rag_service.add_to_ai_knowledge(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id
+    )
+    await rag_service.mark_indexed(db_session, TEST_USER_ID, "blog_post", post.id)
+
+    await update_post(db_session, post.id, {"content": "改后的正文"}, TEST_USER_ID)
+
+    source = await rag_service.get_rag_source(db_session, TEST_USER_ID, "blog_post", post.id)
+    assert source is not None
+    assert source.index_status == "stale"
+
+
+@pytest.mark.asyncio
+async def test_update_post_without_content_change_keeps_active(db_session: AsyncSession):
+    """正文未实质变更 → 不标 stale，索引保持 active。"""
+    from src.services.blog.blog_service import update_post
+
+    post = BlogPost(title="原标", slug="active-on-edit", content="原正文", user_id=TEST_USER_ID, status="draft")
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    await rag_service.add_to_ai_knowledge(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id
+    )
+    await rag_service.mark_indexed(db_session, TEST_USER_ID, "blog_post", post.id)
+
+    await update_post(db_session, post.id, {"content": "原正文"}, TEST_USER_ID)
+
+    source = await rag_service.get_rag_source(db_session, TEST_USER_ID, "blog_post", post.id)
+    assert source is not None
+    assert source.index_status == "active"
+
+
+@pytest.mark.asyncio
+async def test_unindex_cancels_active_index_job(db_session: AsyncSession):
+    """移除 AI 知识资源时，该资源进行中的 index job 被取消（标 cancelled），不再跑完浪费。"""
+    import uuid
+
+    post = BlogPost(title="t", slug="cancel-on-unindex", content="c", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    collection = rag_service.blog_collection_name(TEST_USER_ID)
+    await rag_service.add_to_ai_knowledge(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id, collection_name=collection
+    )
+    job = FileProcessingJob(
+        id=str(uuid.uuid4()),
+        user_id=TEST_USER_ID,
+        job_type="index",
+        target_resource_type="blog_post",
+        target_resource_id=post.id,
+        status="running",
+        current_stage="embedding",
+        progress_model_version="index_v1",
+        progress_percent=40,
+        progress_json={},
+        client_request_id=str(uuid.uuid4()),
+        original_name="t",
+        stored_name=f"blog_post:{post.id}",
+        collection_name=collection,
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    await rag_service.unindex_blog_post(db_session, TEST_USER_ID, post.id)
+
+    refreshed = await db_session.get(FileProcessingJob, job.id)
+    assert refreshed is not None
+    assert refreshed.status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_delete_post_cancels_active_index_job(db_session: AsyncSession):
+    """博客进回收站（软删）即取消进行中的索引任务，不等到永久删除。"""
+    import uuid
+
+    from src.services.blog.blog_service import delete_post
+
+    post = BlogPost(title="t", slug="cancel-on-soft-delete", content="c", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    collection = rag_service.blog_collection_name(TEST_USER_ID)
+    await rag_service.add_to_ai_knowledge(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id, collection_name=collection
+    )
+    job = FileProcessingJob(
+        id=str(uuid.uuid4()),
+        user_id=TEST_USER_ID,
+        job_type="index",
+        target_resource_type="blog_post",
+        target_resource_id=post.id,
+        status="running",
+        current_stage="embedding",
+        progress_model_version="index_v1",
+        progress_percent=40,
+        progress_json={},
+        client_request_id=str(uuid.uuid4()),
+        original_name="t",
+        stored_name=f"blog_post:{post.id}",
+        collection_name=collection,
+    )
+    db_session.add(job)
+    await db_session.commit()
+
+    await delete_post(db_session, post.id, TEST_USER_ID)
+
+    refreshed = await db_session.get(FileProcessingJob, job.id)
+    assert refreshed is not None
+    assert refreshed.status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_unindex_deletes_ai_brain_memory_immediately(db_session: AsyncSession, monkeypatch):
+    """移出 AI 知识即时清 AI 大脑记忆（delete_resource_memory），不等维护周期。"""
+    from src.services.memory import graph_store
+
+    calls = []
+
+    async def spy(**kwargs):
+        calls.append(kwargs)
+
+    monkeypatch.setattr(graph_store, "delete_resource_memory", spy)
+
+    post = BlogPost(title="t", slug="del-mem", content="c", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+
+    collection = rag_service.blog_collection_name(TEST_USER_ID)
+    await rag_service.add_to_ai_knowledge(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id, collection_name=collection
+    )
+
+    await rag_service.unindex_blog_post(db_session, TEST_USER_ID, post.id)
+
+    assert calls == [{"user_id": TEST_USER_ID, "resource_type": "blog_post", "resource_id": post.id}]
 
 
 @pytest.mark.asyncio
@@ -452,50 +757,6 @@ async def test_backfill_rag_sources_from_files(db_session: AsyncSession):
     assert await rag_service.get_rag_source(db_session, TEST_USER_ID, "file", not_indexed.id) is None
     # 幂等：再次迁移不再产生新记录
     assert await rag_service.backfill_rag_sources_from_files(db_session) == 0
-
-
-# ---- resource_service: 目录 auto_index 触发 ----
-
-
-@pytest.mark.asyncio
-async def test_attach_to_auto_index_folder_triggers_indexing(db_session: AsyncSession, monkeypatch):
-    folder = await node_service.create_folder(db_session, TEST_USER_ID, name="AI", auto_index=True)
-    doc = _make_file_document(chunk_content="not indexed")
-    db_session.add(doc)
-    await db_session.commit()
-
-    called: list[int] = []
-
-    async def fake_index(db, user_id, *, document_id):
-        called.append(document_id)
-        return None
-
-    monkeypatch.setattr(rag_service, "index_file_document", fake_index)
-
-    await resource_service.attach_resource(
-        db_session, TEST_USER_ID, resource_type="file", resource_id=doc.id, parent_id=folder.id
-    )
-    assert called == [doc.id]
-
-
-@pytest.mark.asyncio
-async def test_attach_to_plain_folder_does_not_index(db_session: AsyncSession, monkeypatch):
-    folder = await node_service.create_folder(db_session, TEST_USER_ID, name="普通")
-    doc = _make_file_document(chunk_content="not indexed")
-    db_session.add(doc)
-    await db_session.commit()
-
-    called: list[int] = []
-
-    async def fake_index(db, user_id, *, document_id):
-        called.append(document_id)
-
-    monkeypatch.setattr(rag_service, "index_file_document", fake_index)
-
-    await resource_service.attach_resource(
-        db_session, TEST_USER_ID, resource_type="file", resource_id=doc.id, parent_id=folder.id
-    )
-    assert called == []
 
 
 # ---- 软删（回收站）联动：工作区/ AI 知识不得显示底层已软删的资源 ----

@@ -6,6 +6,7 @@ import {
   setAdminUser,
   type AdminUserItem,
 } from "@/api/client";
+import { formatDateTime } from "@/lib/datetime";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,9 +131,9 @@ export function UsersPage() {
     try {
       const res = await grantAdminSubscription(extendUserId, days);
       setSuccess(
-        `已为 ${target?.username ?? extendUserId} 延期至 ${new Date(
+        `已为 ${target?.username ?? extendUserId} 延期至 ${formatDateTime(
           res.subscription_expires_at,
-        ).toLocaleString()}`,
+        )}`,
       );
       handleCloseExtend();
       setReloadNonce((n) => n + 1);
@@ -266,12 +267,12 @@ export function UsersPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {u.subscription_expires_at
-                          ? new Date(u.subscription_expires_at).toLocaleString()
+                          ? formatDateTime(u.subscription_expires_at)
                           : "—"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {u.created_at
-                          ? new Date(u.created_at).toLocaleString()
+                          ? formatDateTime(u.created_at)
                           : "—"}
                       </TableCell>
                       <TableCell className="pr-5 text-right">

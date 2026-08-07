@@ -4,10 +4,12 @@ access token 短期 JWT 走响应体；refresh token 走 HttpOnly cookie（仅 /
 """
 
 import logging
+import re
 import secrets
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,12 +20,14 @@ from src.database.models import User
 from src.utils.auth import (
     create_access_token,
     create_refresh_token,
+    find_refresh_token,
     get_current_user,
     hash_password,
+    revoke_all_user_refresh_tokens,
     revoke_refresh_token,
     verify_password,
-    verify_refresh_token,
 )
+from src.utils.rate_limit import check_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,13 @@ class AuthRequest(BaseModel):
 
 class RegisterRequest(AuthRequest):
     invite_code: str = Field(min_length=1, max_length=256)
+    password: str = Field(min_length=8, max_length=100)
+
+    @model_validator(mode="after")
+    def _validate_password_strength(self) -> "RegisterRequest":
+        if not re.search(r"[A-Za-z]", self.password) or not re.search(r"\d", self.password):
+            raise ValueError("密码至少 8 位，且需同时包含字母和数字")
+        return self
 
 
 class AuthResponse(BaseModel):
@@ -56,12 +67,26 @@ def _user_payload(user: User) -> dict:
     }
 
 
-def _set_refresh_cookie(response: Response, raw_token: str) -> None:
+def _resolve_cookie_secure(request: Request) -> bool:
+    """refresh cookie 的 secure：配置显式覆盖优先；未设则按请求协议推导。
+
+    防 HTTP 生产漏配——运维无需配置，HTTPS 部署自动 secure，本地 HTTP 自动可写。
+    反向代理终止 TLS 时上游 scheme 可能仍是 http，读 X-Forwarded-Proto 兜底。
+    """
+    if settings.cookie_secure is not None:
+        return settings.cookie_secure
+    if request.url.scheme == "https":
+        return True
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    return forwarded.split(",")[0].strip() == "https"
+
+
+def _set_refresh_cookie(response: Response, request: Request, raw_token: str) -> None:
     response.set_cookie(
         _REFRESH_COOKIE,
         raw_token,
         httponly=True,
-        secure=settings.cookie_secure,
+        secure=_resolve_cookie_secure(request),
         samesite=settings.cookie_samesite,
         max_age=settings.refresh_token_expire_seconds,
         path=_REFRESH_PATH,
@@ -72,8 +97,34 @@ def _clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(_REFRESH_COOKIE, path=_REFRESH_PATH)
 
 
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _enforce_auth_rate_limit(request: Request, action: str) -> None:
+    """per-IP 滑动窗口频率限制：防登录撞库与注册/邀请码暴力尝试，超限返 429。"""
+    ip = request.client.host if request.client else "unknown"
+    limit = (
+        settings.auth_login_rate_limit if action == "login" else settings.auth_register_rate_limit
+    )
+    bucket = f"{action}:{ip}"
+    if not check_rate_limit(
+        bucket, limit=limit, window_seconds=settings.auth_rate_limit_window_seconds
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="操作过于频繁，请稍后再试",
+        )
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def register(
+    body: RegisterRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    _enforce_auth_rate_limit(request, "register")
     expected_invite_code = settings.registration_invite_code.strip()
     supplied_invite_code = body.invite_code.strip()
     if not expected_invite_code or not secrets.compare_digest(supplied_invite_code, expected_invite_code):
@@ -109,7 +160,7 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
 
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
-    _set_refresh_cookie(response, refresh)
+    _set_refresh_cookie(response, request, refresh)
     return AuthResponse(access_token=access, user=_user_payload(user))
 
 
@@ -123,7 +174,13 @@ async def _seed_intro_article(db: AsyncSession, user_id: int):
 
 
 @router.post("/login")
-async def login(body: AuthRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def login(
+    body: AuthRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+):
+    _enforce_auth_rate_limit(request, "login")
     result = await db.execute(select(User).where(User.username == body.username))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
@@ -131,21 +188,50 @@ async def login(body: AuthRequest, response: Response, db: AsyncSession = Depend
 
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
-    _set_refresh_cookie(response, refresh)
+    _set_refresh_cookie(response, request, refresh)
     return AuthResponse(access_token=access, user=_user_payload(user))
 
 
 @router.post("/refresh")
 async def refresh(
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db),
     refresh_token: str | None = Cookie(default=None, alias=_REFRESH_COOKIE),
 ):
-    """用 HttpOnly cookie 里的 refresh token 换取新的 access token。"""
-    user = await verify_refresh_token(refresh_token, db)
+    """用 cookie refresh 换新 access，并轮换 refresh（旧 token 即时吊销、下发新 token）。
+
+    重用检测带宽限期：被吊销的 refresh 在宽限期内被重用，视为多标签页近同时刷新的合法
+    并发竞态，宽容换新；超宽限期才判定 token 被窃取，吊销该用户全部 refresh。
+    """
+    record = await find_refresh_token(refresh_token, db)
+    now = _now_utc()
+    if record is None:
+        _clear_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话已过期，请重新登录")
+    if record.revoked_at is not None:
+        reused_age = now - record.revoked_at
+        if reused_age > timedelta(seconds=settings.refresh_rotation_grace_seconds):
+            # 旧 token 在宽限期外被重用 → 判定 token 被窃取，强制全设备登出
+            await revoke_all_user_refresh_tokens(record.user_id, db)
+            _clear_refresh_cookie(response)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话已失效，请重新登录")
+        # 宽限期内重用 → 多标签页并发刷新竞态，宽容换新（落到下方轮换）
+    elif record.expires_at < now:
+        _clear_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话已过期，请重新登录")
+
+    user = await db.get(User, record.user_id)
     if user is None:
         _clear_refresh_cookie(response)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话已过期，请重新登录")
+
+    # 轮换：吊销当前 token（宽容换新时已吊销则跳过）+ 签发新 refresh
+    if record.revoked_at is None:
+        record.revoked_at = now
+        await db.commit()
+    new_refresh = await create_refresh_token(user.id, db)
+    _set_refresh_cookie(response, request, new_refresh)
     access = create_access_token(user.id, user.username)
     return AuthResponse(access_token=access, user=_user_payload(user))
 

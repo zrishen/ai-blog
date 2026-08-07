@@ -11,7 +11,6 @@ export interface WorkspaceNode {
   name: string;
   slug: string;
   sort_order: number;
-  auto_index: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -43,12 +42,11 @@ export async function getWorkspaceTree(): Promise<WorkspaceNode[]> {
 export async function createFolder(
   name: string,
   parentId: number | null = null,
-  autoIndex = false
 ): Promise<WorkspaceNode> {
   const res = await apiFetch(`${API_BASE}/workspace/folders`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, parent_id: parentId, auto_index: autoIndex }),
+    body: JSON.stringify({ name, parent_id: parentId }),
   });
   return (await unwrap(res, "创建文件夹失败")) as WorkspaceNode;
 }
@@ -60,7 +58,7 @@ export async function deleteNode(id: number): Promise<void> {
 
 export async function patchNode(
   id: number,
-  patch: { name?: string; auto_index?: boolean },
+  patch: { name?: string },
 ): Promise<WorkspaceNode> {
   const res = await apiFetch(`${API_BASE}/workspace/nodes/${id}`, {
     method: "PATCH",

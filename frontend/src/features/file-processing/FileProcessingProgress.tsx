@@ -67,8 +67,13 @@ function getDisplayStage(job?: FileProcessingJob | null): FileProcessingStage | 
 export function FileProcessingProgress({ value }: { value: FileProcessingProgressValue }) {
   const stage = getDisplayStage(value.job);
   const stageKey = value.job?.progress_json?.current_stage || value.job?.current_stage;
-  const stageLabel = stageKey ? getFileProcessingStageLabel(stageKey, value.job) : value.stage;
-  const percent = value.percent == null ? undefined : Math.max(0, Math.min(100, value.percent));
+  const isQueued = value.job?.status === "queued";
+  const stageLabel = isQueued
+    ? "排队中"
+    : (stageKey ? getFileProcessingStageLabel(stageKey, value.job) : value.stage);
+  const percent = isQueued || value.percent == null
+    ? undefined
+    : Math.max(0, Math.min(100, value.percent));
   const unitText = stage && stage.total > 0
     ? `${stage.completed}/${stage.total} ${UNIT_LABELS[stage.unit] ?? stage.unit}`
     : null;

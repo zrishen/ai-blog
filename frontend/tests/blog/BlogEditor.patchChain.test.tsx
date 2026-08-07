@@ -369,7 +369,8 @@ describe("BlogEditor dirty 追踪", () => {
     fireEvent.change(title, { target: { value: "改过的标题" } });
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
     await waitFor(() => expect(api.updateBlogPost).toHaveBeenCalledOnce());
-    expect(latestChat!.state.blogCurrentView).toBe("view");
+    // 退出发生在 flushNow().then(exitEditor) 的微任务尾：用 waitFor 等它落地，而非立即断言
+    await waitFor(() => expect(latestChat!.state.blogCurrentView).toBe("view"));
   });
 });
 

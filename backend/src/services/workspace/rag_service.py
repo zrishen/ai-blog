@@ -248,15 +248,18 @@ async def unindex_file_document(
     db: AsyncSession, user_id: int, document_id: int
 ) -> None:
     """从 AI 知识移除文件：删向量 + 删 RagSource，文件本身保留并标记 not indexed。"""
-    from src.services.memory.graph_store import delete_document_chunks
+    from src.services.file.file_processing_service import cancel_jobs_for_resource
+    from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 
     doc = await _get_owned_file_document(db, user_id, document_id)
     source = await get_rag_source(db, user_id, "file", document_id)
     if source is None:
         raise NotFoundError("该资源未加入 AI 知识")
     collection_name = source.collection_name
+    await cancel_jobs_for_resource(db, user_id=user_id, resource_type="file", resource_id=document_id)
     await remove_from_ai_knowledge(db, user_id, "file", document_id)
     await delete_document_chunks(collection_name, doc.file_path)
+    await delete_resource_memory(user_id=user_id, resource_type="file", resource_id=document_id)
     doc.chunk_content = "not indexed"
     await db.commit()
 
@@ -265,14 +268,17 @@ async def unindex_blog_post(
     db: AsyncSession, user_id: int, post_id: int
 ) -> None:
     """从 AI 知识移除文章：删向量 + 删 RagSource，文章本身保留。"""
-    from src.services.memory.graph_store import delete_document_chunks
+    from src.services.file.file_processing_service import cancel_jobs_for_resource
+    from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 
     source = await get_rag_source(db, user_id, "blog_post", post_id)
     if source is None:
         raise NotFoundError("该资源未加入 AI 知识")
     collection_name = source.collection_name
+    await cancel_jobs_for_resource(db, user_id=user_id, resource_type="blog_post", resource_id=post_id)
     await remove_from_ai_knowledge(db, user_id, "blog_post", post_id)
     await delete_document_chunks(collection_name, f"blog_post:{post_id}")
+    await delete_resource_memory(user_id=user_id, resource_type="blog_post", resource_id=post_id)
 
 
 async def backfill_rag_sources_from_files(db: AsyncSession) -> int:

@@ -213,7 +213,7 @@ async def test_upload_enforces_actual_chunked_size_limit(client: AsyncClient, mo
     monkeypatch.setattr("src.api.files.MAX_FILE_SIZE", 3)
     response = await client.post(
         "/api/v1/files/documents",
-        files={"file": ("large.pdf", io.BytesIO(b"1234"), "application/pdf")},
+        files={"file": ("large.pdf", io.BytesIO(b"%PDF-1.4 oversized content"), "application/pdf")},
         headers=_request_headers(),
     )
     assert response.status_code == 400
@@ -562,3 +562,172 @@ async def test_purge_file_document_removes_ai_knowledge(client: AsyncClient, db_
 
     db_session.expire_all()
     assert await rag_service.get_rag_source(db_session, 1, "file", doc_id) is None
+
+
+@pytest.mark.asyncio
+async def test_reindex_cleans_old_memory_before_rebuild(
+    db_session: AsyncSession, monkeypatch
+):
+    """重建索引（index job）在向量化前完整清理旧记忆，避免新旧事实并存。"""
+    from src.services.workspace import rag_service
+
+    source = file_service.get_user_upload_dir(1) / f"reindex-{uuid.uuid4().hex}.pdf"
+    source.write_bytes(b"%PDF-1.4 reindex")
+    doc = FileDocument(
+        collection_name="user_1_file_test",
+        user_id="1",
+        original_name="reindex.pdf",
+        file_path=source.name,
+        chunk_content="1 chunks",
+        meta="",
+    )
+    db_session.add(doc)
+    await db_session.commit()
+    await db_session.refresh(doc)
+    doc_id = doc.id
+
+    await rag_service.add_to_ai_knowledge(db_session, 1, resource_type="file", resource_id=doc_id)
+    await rag_service.mark_indexed(db_session, 1, "file", doc_id)
+
+    memory_calls: list[dict] = []
+
+    async def spy_memory(**kwargs):
+        memory_calls.append(kwargs)
+
+    async def fake_vectorize(*args, **kwargs):
+        return []
+
+    async def noop_index_knowledge(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(file_processing_service.graph_store, "delete_resource_memory", spy_memory)
+    monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake_vectorize)
+    monkeypatch.setattr(file_processing_service, "_index_document_knowledge", noop_index_knowledge)
+
+    job = FileProcessingJob(
+        id=str(uuid.uuid4()),
+        user_id=1,
+        job_type="index",
+        status="queued",
+        current_stage="cleanup_index",
+        progress_model_version="index_v1",
+        progress_percent=0,
+        progress_json=empty_progress("index_v1", "cleanup_index"),
+        client_request_id=str(uuid.uuid4()),
+        original_name="reindex.pdf",
+        stored_name=source.name,
+        collection_name="user_1_file",
+        target_resource_type="file",
+        target_resource_id=doc_id,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    job_id = job.id
+
+    await _run_job(job_id)
+
+    db_session.expire_all()
+    assert {"user_id": 1, "resource_type": "file", "resource_id": doc_id} in memory_calls
+    assert (await db_session.get(FileProcessingJob, job_id)).status == "succeeded"
+
+
+async def _seed_queued_upload_job(db: AsyncSession, user_id: int) -> FileProcessingJob:
+    """插入 queued 的 upload+auto_index job：走 vectorize 路径但不触发 LLM 知识抽取，便于并发测试。"""
+    job = FileProcessingJob(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        job_type="upload",
+        auto_index=True,
+        status="queued",
+        current_stage="cleanup_index",
+        progress_model_version="upload_v1",
+        progress_percent=0,
+        progress_json=empty_progress("upload_v1", "cleanup_index"),
+        client_request_id=str(uuid.uuid4()),
+        original_name="doc.pdf",
+        stored_name="doc.pdf",
+        collection_name=f"user_{user_id}_file",
+    )
+    db.add(job)
+    return job
+
+
+def _inflight_tracking_vectorize() -> tuple:
+    """vectorize 替身：记录同时进入执行体的 job 数峰值（asyncio 单线程内自增自减无需加锁）。"""
+    state = {"in_flight": 0, "peak": 0}
+
+    async def fake(*args, **kwargs):
+        state["in_flight"] += 1
+        if state["in_flight"] > state["peak"]:
+            state["peak"] = state["in_flight"]
+        await asyncio.sleep(0.05)
+        state["in_flight"] -= 1
+        return []
+
+    return fake, state
+
+
+@pytest.mark.asyncio
+async def test_global_concurrency_caps_in_flight_jobs(db_session: AsyncSession, monkeypatch):
+    """全局封顶：3 个不同用户各 1 job，并发=2 时同时执行的峰值恰为 2。"""
+    monkeypatch.setattr(file_processing_service.settings, "file_processing_concurrency", 2)
+    monkeypatch.setattr(file_processing_service.settings, "file_processing_user_concurrency", 2)
+    file_processing_service._worker_semaphores.clear()
+
+    jobs = [await _seed_queued_upload_job(db_session, uid) for uid in (1, 2, 3)]
+    await db_session.commit()
+    job_ids = [job.id for job in jobs]
+
+    fake, state = _inflight_tracking_vectorize()
+    monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake)
+
+    await asyncio.gather(*[_run_job(job_id) for job_id in job_ids])
+
+    assert state["peak"] == 2
+    db_session.expire_all()
+    for job_id in job_ids:
+        assert (await db_session.get(FileProcessingJob, job_id)).status == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_per_user_concurrency_caps_single_user_jobs(db_session: AsyncSession, monkeypatch):
+    """每用户上限：单用户 4 个 job，全局=4/用户=2 时峰值仍为 2（用户配额先于全局耗尽）。"""
+    monkeypatch.setattr(file_processing_service.settings, "file_processing_concurrency", 4)
+    monkeypatch.setattr(file_processing_service.settings, "file_processing_user_concurrency", 2)
+    file_processing_service._worker_semaphores.clear()
+
+    jobs = [await _seed_queued_upload_job(db_session, 1) for _ in range(4)]
+    await db_session.commit()
+    job_ids = [job.id for job in jobs]
+
+    fake, state = _inflight_tracking_vectorize()
+    monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake)
+
+    await asyncio.gather(*[_run_job(job_id) for job_id in job_ids])
+
+    assert state["peak"] == 2
+    db_session.expire_all()
+    for job_id in job_ids:
+        assert (await db_session.get(FileProcessingJob, job_id)).status == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_per_user_concurrency_does_not_block_other_users(db_session: AsyncSession, monkeypatch):
+    """per-user 按用户隔离：两用户各 1 job，用户=1 时仍可 2 并行（不跨用户累加）。"""
+    monkeypatch.setattr(file_processing_service.settings, "file_processing_concurrency", 2)
+    monkeypatch.setattr(file_processing_service.settings, "file_processing_user_concurrency", 1)
+    file_processing_service._worker_semaphores.clear()
+
+    jobs = [await _seed_queued_upload_job(db_session, uid) for uid in (1, 2)]
+    await db_session.commit()
+    job_ids = [job.id for job in jobs]
+
+    fake, state = _inflight_tracking_vectorize()
+    monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake)
+
+    await asyncio.gather(*[_run_job(job_id) for job_id in job_ids])
+
+    assert state["peak"] == 2
+    db_session.expire_all()
+    for job_id in job_ids:
+        assert (await db_session.get(FileProcessingJob, job_id)).status == "succeeded"

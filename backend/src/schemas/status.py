@@ -10,6 +10,5 @@ class StatusComponents(BaseModel):
 
 class StatusResponse(BaseModel):
     status: str
-    model: str
     timestamp: str
     components: StatusComponents

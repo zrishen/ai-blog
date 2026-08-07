@@ -1,8 +1,9 @@
 import type { ResearchTopicDetail } from "../../../api/client";
+import { formatMonthDay } from "@/lib/datetime";
 
 export function formatDate(dateStr?: string | null) {
   if (!dateStr) return "未检查";
-  return new Date(dateStr).toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+  return formatMonthDay(dateStr);
 }
 
 export function statusLabel(status: string) {

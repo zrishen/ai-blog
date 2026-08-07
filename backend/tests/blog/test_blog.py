@@ -143,3 +143,18 @@ async def test_public_projection_requires_a_published_revision(db_session: Async
     db_session.add(draft)
     await db_session.commit()
     assert await get_published_post_by_id(db_session, draft.id) is None
+
+
+@pytest.mark.asyncio
+async def test_invalid_status_rejected(client: AsyncClient):
+    """非法 status（如 archived）应在创建/更新时被 422 拒绝，而非静默变草稿/不生效。"""
+    resp = await client.post(
+        "/api/v1/blog/posts",
+        json={"title": "Bad", "content": "Body", "status": "archived"},
+    )
+    assert resp.status_code == 422
+
+    created = await create_post_request(client, title="Valid", content="Body", status="published")
+    post_id = created["id"]
+    resp = await client.put(f"/api/v1/blog/posts/{post_id}", json={"status": "archived"})
+    assert resp.status_code == 422

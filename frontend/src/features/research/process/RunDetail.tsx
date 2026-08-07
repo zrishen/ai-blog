@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { ResearchRun } from "@/api/research";
+import { formatClock } from "@/lib/datetime";
 import {
   formatTime,
   getStageLogs,
@@ -207,7 +208,7 @@ function StageRow({ stage, logs, isRunningStage }: StageRowProps) {
               {logs.map((log, li) => {
                 const StatusIcon = LOG_STATUS_ICON[log.status] ?? Search;
                 const isError = log.status === "error";
-                const timeStr = new Date(log.ts).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                const timeStr = formatClock(log.ts, true);
                 return (
                   <div
                     key={li}

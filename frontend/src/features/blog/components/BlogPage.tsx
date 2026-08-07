@@ -51,7 +51,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
 
   const loadPosts = useCallback(async () => {
     try {
-      const data = await listSitePosts(username, { per_page: 50 });
+      const data = await listSitePosts(username);
       dispatch({ type: "SET_BLOG_POSTS", payload: data.posts });
       return data.posts;
     } catch (e) {

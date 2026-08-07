@@ -71,7 +71,7 @@ def test_without_image_blocks_filters_keeps_text_or_empty() -> None:
 
 
 def test_build_current_user_content_plain_text_returns_str() -> None:
-    assert _build_current_user_content("hi", [], provider="openai", legacy_image_url=None) == "hi"
+    assert _build_current_user_content("hi", [], provider="openai") == "hi"
 
 
 def test_build_current_user_content_file_attachment() -> None:
@@ -79,7 +79,6 @@ def test_build_current_user_content_file_attachment() -> None:
         "msg",
         [_attach(kind="file", attachment=SimpleNamespace(original_name="d.pdf"), document_text="C")],
         provider="openai",
-        legacy_image_url=None,
     )
     assert isinstance(result, list)
     assert result[0] == {"type": "text", "text": "msg"}
@@ -91,7 +90,6 @@ def test_build_current_user_content_image_openai_data_url() -> None:
         "msg",
         [_attach(kind="image", image_base64="abc", attachment=SimpleNamespace(original_name="x.png", media_type="image/png"))],
         provider="openai",
-        legacy_image_url=None,
     )
     img = next(b for b in result if b.get("type") == "image_url")
     assert img["image_url"]["url"] == "data:image/png;base64,abc"
@@ -102,7 +100,6 @@ def test_build_current_user_content_image_anthropic_source() -> None:
         "msg",
         [_attach(kind="image", image_base64="abc", attachment=SimpleNamespace(original_name="x.png", media_type="image/png"))],
         provider="anthropic",
-        legacy_image_url=None,
     )
     img = next(b for b in result if b.get("type") == "image")
     assert img["source"] == {"type": "base64", "media_type": "image/png", "data": "abc"}
@@ -114,13 +111,7 @@ def test_build_current_user_content_image_missing_base64_raises() -> None:
             "msg",
             [_attach(kind="image", image_base64=None, attachment=SimpleNamespace(original_name="x.png", media_type="image/png"))],
             provider="openai",
-            legacy_image_url=None,
         )
-
-
-def test_build_current_user_content_legacy_image_url() -> None:
-    result = _build_current_user_content("msg", [], provider="openai", legacy_image_url="http://x/y.png")
-    assert next(b for b in result if b.get("type") == "image_url")["image_url"]["url"] == "http://x/y.png"
 
 
 # ── _build_messages（mock 依赖）──
@@ -152,7 +143,7 @@ def _patch_deps(monkeypatch, *, conv=None, msgs=None, attachments=None) -> None:
 
 async def test_build_messages_new_conversation(monkeypatch) -> None:
     _patch_deps(monkeypatch)  # 无 conv / msgs
-    built, full, tokens, _compact = await _build_messages("hello", None, user_id=1, user_image_url=None)
+    built, full, tokens, _compact = await _build_messages("hello", None, user_id=1)
     assert built == [{"role": "user", "content": "hello"}]
     assert full == "hello"
     assert tokens > 0
@@ -163,7 +154,7 @@ async def test_build_messages_appends_history(monkeypatch) -> None:
         _msg(id=1, role="user", content="q"),
         _msg(id=2, role="assistant", content="a"),
     ])
-    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1, user_image_url=None)
+    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1)
     assert [m["role"] for m in built] == ["user", "assistant", "user"]
     assert built[0]["content"] == "q"
     assert built[2]["content"] == "now"
@@ -175,7 +166,7 @@ async def test_build_messages_tool_calls_complete_pair_emitted(monkeypatch) -> N
         _msg(id=2, role="assistant", content=None, tool_calls=[{"id": "tc1", "name": "search", "args": {"q": "x"}}]),
         _msg(id=3, role="tool", content="result", tool_call_id="tc1"),
     ])
-    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1, user_image_url=None)
+    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1)
     assert [m["role"] for m in built] == ["user", "assistant", "tool", "user"]
     assert built[1]["tool_calls"][0]["id"] == "tc1"
     assert built[1]["tool_calls"][0]["function"]["name"] == "search"
@@ -188,5 +179,5 @@ async def test_build_messages_tool_calls_incomplete_skipped(monkeypatch) -> None
         _msg(id=1, role="user", content="q"),
         _msg(id=2, role="assistant", content=None, tool_calls=[{"id": "tc1", "name": "search", "args": {}}]),
     ])
-    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1, user_image_url=None)
+    built, _full, _tokens, _compact = await _build_messages("now", 1, user_id=1)
     assert [m["role"] for m in built] == ["user", "user"]  # 不完整 assistant 被跳过

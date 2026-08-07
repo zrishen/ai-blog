@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/lib/datetime";
 import { surfaceVariants } from "@/lib/visualVariants";
 
 // 周额度展示用 M 单位（÷1e6 保留 1 位）。
@@ -52,7 +53,7 @@ export function SubscriptionPanel() {
       setCode("");
       setMsg({
         kind: "ok",
-        text: `兑换成功，订阅有效期至 ${new Date(s.expires_at ?? "").toLocaleString()}`,
+        text: `兑换成功，订阅有效期至 ${formatDateTime(s.expires_at)}`,
       });
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "兑换失败" });
@@ -94,7 +95,7 @@ export function SubscriptionPanel() {
 
       <div className="text-meta text-muted-foreground">
         {status.expires_at
-          ? `有效期至 ${new Date(status.expires_at).toLocaleString()}`
+          ? `有效期至 ${formatDateTime(status.expires_at)}`
           : "暂无有效订阅，可在下方输入兑换码激活"}
       </div>
 

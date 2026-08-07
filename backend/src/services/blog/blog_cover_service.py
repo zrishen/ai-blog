@@ -61,6 +61,7 @@ def _store_cover_image(post: BlogPost, image_bytes: bytes, content_type: str | N
         raise ValueError("Image generation returned an empty image")
     stored_name = _stored_cover_name(post, content_type)
     user_dir = get_user_upload_dir(post.user_id)
+    user_dir.mkdir(parents=True, exist_ok=True)
     (user_dir / stored_name).write_bytes(image_bytes)
     return f"/api/v1/blog/cover/{stored_name}"
 

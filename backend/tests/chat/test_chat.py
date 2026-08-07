@@ -53,7 +53,6 @@ async def test_build_messages_uses_empty_history_for_invalid_conversation(monkey
         "你好",
         conversation_id=999,
         user_id=1,
-        user_image_url=None,
     )
 
     assert messages == [{"role": "user", "content": "你好"}]
@@ -79,7 +78,6 @@ async def test_build_messages_has_no_rag_context_parameter(monkeypatch):
         "根据MDCN论文重写这个博客",
         conversation_id=999,
         user_id=1,
-        user_image_url=None,
     )
 
     assert messages == [{"role": "user", "content": "根据MDCN论文重写这个博客"}]
@@ -1068,7 +1066,6 @@ def test_build_current_user_content_formats_provider_images_and_documents():
         "问题",
         attachments,
         provider="openai",
-        legacy_image_url=None,
     )
     assert openai_content[1] == {
         "type": "image_url",
@@ -1081,7 +1078,6 @@ def test_build_current_user_content_formats_provider_images_and_documents():
         "问题",
         attachments,
         provider="anthropic",
-        legacy_image_url=None,
     )
     assert anthropic_content[1] == {
         "type": "image",

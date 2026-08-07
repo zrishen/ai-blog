@@ -7,6 +7,7 @@ from typing import Optional
 
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import defer
 
 from src.database.models import BlogPost as BlogPostModel
 from src.database.models import BlogPostRevision, User
@@ -41,12 +42,17 @@ class PublicPostView:
     published_at: Optional[datetime]
 
     @classmethod
-    def from_post_revision(cls, post: BlogPostModel, revision: BlogPostRevision) -> "PublicPostView":
+    def from_post_revision(
+        cls,
+        post: BlogPostModel,
+        revision: BlogPostRevision,
+        include_content: bool = True,
+    ) -> "PublicPostView":
         return cls(
             id=post.id,
             title=revision.title,
             slug=revision.slug,
-            content=revision.content,
+            content=revision.content if include_content else "",
             excerpt=revision.excerpt,
             cover_image=revision.cover_image,
             status="published",
@@ -157,49 +163,85 @@ async def list_posts(
     status: Optional[str] = None,
     search: Optional[str] = None,
     page: int = 1,
-    per_page: int = 10,
+    per_page: Optional[int] = None,  # None 或 <=0 表示返回全部
 ) -> dict:
     if owner_username:
         owner = await get_user_by_username(db, owner_username)
         if not owner:
-            return {"posts": [], "total": 0, "page": page, "per_page": per_page}
+            return {"posts": [], "total": 0, "page": page, "per_page": 0}
         owner_id = owner.id
     else:
         owner_id = viewer_user_id if viewer_user_id is not None else SYSTEM_USER_ID
 
+    page = max(1, page)
+    paginated = per_page is not None and per_page > 0
+
     is_owner = viewer_user_id is not None and viewer_user_id == owner_id
     if is_owner and include_drafts_for_owner:
-        stmt = select(BlogPostModel).where(
+        filters = [
             BlogPostModel.user_id == owner_id,
             BlogPostModel.deleted_at.is_(None),
-        )
+        ]
         if status:
-            stmt = stmt.where(BlogPostModel.status == status)
+            filters.append(BlogPostModel.status == status)
         if search:
             pattern = f"%{search}%"
-            stmt = stmt.where(or_(BlogPostModel.title.ilike(pattern), BlogPostModel.content.ilike(pattern)))
-        posts = (await db.execute(stmt.order_by(desc(BlogPostModel.updated_at)))).scalars().all()
+            filters.append(or_(BlogPostModel.title.ilike(pattern), BlogPostModel.content.ilike(pattern)))
+        total = None
+        if paginated:
+            total = await db.scalar(select(func.count(BlogPostModel.id)).where(*filters)) or 0
+        stmt = (
+            select(BlogPostModel)
+            .options(defer(BlogPostModel.content), defer(BlogPostModel.blocks_json))
+            .where(*filters)
+            .order_by(desc(BlogPostModel.updated_at), desc(BlogPostModel.id))
+        )
+        if paginated:
+            stmt = stmt.offset((page - 1) * per_page).limit(per_page)
+        posts = (await db.execute(stmt)).scalars().all()
     else:
         if status and status != "published":
-            return {"posts": [], "total": 0, "page": page, "per_page": per_page}
-        stmt = (
-            select(BlogPostModel, BlogPostRevision)
-            .join(BlogPostRevision, BlogPostModel.published_revision_id == BlogPostRevision.id)
-            .where(
-                BlogPostModel.user_id == owner_id,
-                BlogPostModel.deleted_at.is_(None),
-                BlogPostModel.status == "published",
-            )
-        )
+            return {"posts": [], "total": 0, "page": page, "per_page": 0}
+        filters = [
+            BlogPostModel.user_id == owner_id,
+            BlogPostModel.deleted_at.is_(None),
+            BlogPostModel.status == "published",
+        ]
         if search:
             pattern = f"%{search}%"
-            stmt = stmt.where(or_(BlogPostRevision.title.ilike(pattern), BlogPostRevision.content.ilike(pattern)))
-        pairs = (await db.execute(stmt.order_by(desc(BlogPostModel.published_at)))).all()
-        posts = [PublicPostView.from_post_revision(post, revision) for post, revision in pairs]
+            filters.append(or_(BlogPostRevision.title.ilike(pattern), BlogPostRevision.content.ilike(pattern)))
+        total = None
+        if paginated:
+            total = (
+                await db.scalar(
+                    select(func.count(BlogPostModel.id))
+                    .join(BlogPostRevision, BlogPostModel.published_revision_id == BlogPostRevision.id)
+                    .where(*filters)
+                )
+                or 0
+            )
+        stmt = (
+            select(BlogPostModel, BlogPostRevision)
+            .options(
+                defer(BlogPostModel.content),
+                defer(BlogPostModel.blocks_json),
+                defer(BlogPostRevision.content),
+            )
+            .join(BlogPostRevision, BlogPostModel.published_revision_id == BlogPostRevision.id)
+            .where(*filters)
+            .order_by(desc(BlogPostModel.published_at), desc(BlogPostModel.id))
+        )
+        if paginated:
+            stmt = stmt.offset((page - 1) * per_page).limit(per_page)
+        pairs = (await db.execute(stmt)).all()
+        posts = [
+            PublicPostView.from_post_revision(post, revision, include_content=False)
+            for post, revision in pairs
+        ]
 
-    total = len(posts)
-    start = max(0, (page - 1) * per_page)
-    return {"posts": posts[start:start + per_page], "total": total, "page": page, "per_page": per_page}
+    if total is None:
+        total = len(posts)
+    return {"posts": posts, "total": total, "page": page, "per_page": per_page if paginated else 0}
 
 
 async def _create_revision(
@@ -283,6 +325,7 @@ async def create_post(db: AsyncSession, data: dict, user_id: int) -> BlogPostMod
 async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) -> Optional[BlogPostModel]:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     requested_status = data.get("status") if "status" in data else None
+    content_changed = "content" in data and (data["content"] or "") != (post.content or "")
     meta = _meta_from_post(post)
     slug = post.slug
     if data.get("title") and data["title"] != post.title:
@@ -305,6 +348,11 @@ async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) 
     )
     if updated is None:
         return None
+    if content_changed:
+        # 正文实质变更：标记 AI 知识索引过期（旧向量仍可检索，用户手动刷新后重建）
+        from src.services.workspace import rag_service
+
+        await rag_service.mark_stale(db, user_id, "blog_post", post_id)
     if requested_status == "draft":
         updated.published_revision_id = None
         updated.published_at = None
@@ -411,6 +459,17 @@ async def delete_post(db: AsyncSession, post_id: int, user_id: int) -> bool:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     post.deleted_at = _now()
     await db.commit()
+    # 进回收站即取消进行中的索引任务，并 best-effort 清理 AI 大脑记忆（不等维护周期）
+    from src.services.file.file_processing_service import cancel_jobs_for_resource
+    from src.services.memory.graph_store import delete_resource_memory
+
+    await cancel_jobs_for_resource(
+        db, user_id=user_id, resource_type="blog_post", resource_id=post_id
+    )
+    try:
+        await delete_resource_memory(user_id=user_id, resource_type="blog_post", resource_id=post_id)
+    except Exception:
+        logger.warning("博客软删清理 AI 大脑记忆失败（留待维护周期）: post_id=%s", post_id, exc_info=True)
     return True
 
 

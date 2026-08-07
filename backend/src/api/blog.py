@@ -89,7 +89,7 @@ async def list_public_user_posts(
     status: str = None,
     search: str = None,
     page: int = 1,
-    per_page: int = 10,
+    per_page: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     viewer: Optional[User] = Depends(get_optional_user),
 ):
@@ -145,7 +145,7 @@ async def list_blog_posts(
     status: str = None,
     search: str = None,
     page: int = 1,
-    per_page: int = 10,
+    per_page: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_optional_user),
 ):

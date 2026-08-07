@@ -1,9 +1,11 @@
 """博客文章的 Pydantic 模型。"""
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
+
+BlogStatus = Literal["draft", "published"]
 
 
 class BlogPostCreate(BaseModel):
@@ -11,7 +13,7 @@ class BlogPostCreate(BaseModel):
     content: str
     excerpt: Optional[str] = None
     cover_image: Optional[str] = None
-    status: Optional[str] = "draft"
+    status: Optional[BlogStatus] = "draft"
     tags: Optional[str] = None
     author: Optional[str] = None
 
@@ -21,7 +23,7 @@ class BlogPostUpdate(BaseModel):
     content: Optional[str] = None
     excerpt: Optional[str] = None
     cover_image: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[BlogStatus] = None
     tags: Optional[str] = None
 
 

@@ -2,9 +2,10 @@ import base64
 import binascii
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 加载 .env（不覆盖已有值），让非 Settings 变量（如 HF_ENDPOINT）也能被第三方库读到
@@ -53,6 +54,15 @@ class Settings(BaseSettings):
     embedding_local_model: str = "Qwen/Qwen3-Embedding-0.6B"
     embedding_local_device: str = "cpu"
 
+    # ---- 文件处理 worker 并发 ----
+    # 全系统共享：所有用户加起来同时最多跑这么多 job。受 embedding provider 限流与内存预算约束。
+    file_processing_concurrency: int = Field(4, ge=1)
+    # 单用户并发上限：防一个用户批量加入 AI 知识索引独占全局槽位、饿死他人。
+    # 默认 1——同用户索引串行，规避并发写同一用户记忆图（consolidator 时序）的竞态；
+    # 1 本身已防独占（单用户最多占 1 槽），跨用户并行由 file_processing_concurrency 保证。
+    # 记忆层并发经验证后可调高；单租户可设成与 file_processing_concurrency 相等。
+    file_processing_user_concurrency: int = Field(1, ge=1)
+
     # ---- RAG 检索 ----
     rag_top_k: int = 3
     rag_distance_threshold: float = 0.7
@@ -68,10 +78,17 @@ class Settings(BaseSettings):
     access_token_expire_seconds: int = 15 * 60
     refresh_token_expire_seconds: int = 30 * 24 * 3600
     refresh_cookie_name: str = "refresh_token"
+    # refresh 轮换宽限期：旧 token 在此窗口内被重用视为多标签页并发刷新竞态（宽容换新），
+    # 超窗口才判定 token 被窃取、吊销该用户全部 refresh。覆盖浏览器 cookie 传播 + 刷新 RTT。
+    refresh_rotation_grace_seconds: int = 30
+    # preview token：弱权限令牌（type=preview，绑定 user+filename），仅用于 PDF iframe 这类
+    # 必须把凭证放 URL 的场景；TTL 宽以支持长时阅读，安全靠 scope 收口而非时效。
+    preview_token_expire_seconds: int = 24 * 3600
 
     # ---- Cookie / CORS ----
-    # 本地 http 开发 False；生产用环境变量覆盖为 True
-    cookie_secure: bool = False
+    # refresh cookie 的 secure：None=按请求协议自动推导（HTTPS / X-Forwarded-Proto → secure），
+    # 防 HTTP 生产漏配；True/False=强制覆盖（本地 http 调试可显式设 False）。
+    cookie_secure: bool | None = None
     cookie_samesite: str = "lax"
     # 同源部署留空（前端走 /api 相对路径）；跨域填逗号分隔 origin
     cors_allow_origins: str = ""
@@ -103,6 +120,13 @@ class Settings(BaseSettings):
     image_generation_base_url: str | None = None
     image_generation_api_key: str | None = None
 
+    # ---- 认证频率限制（内存滑动窗口，防撞库/暴力注册）----
+    auth_rate_limit_window_seconds: int = 60
+    auth_login_rate_limit: int = 10
+    auth_register_rate_limit: int = 5
+    # /status 健康检查限流（未认证，防高频请求放大 DB/磁盘/图库探测负载）
+    status_rate_limit: int = 30
+
     # ---- 公共聊天 ----
     public_chat_max_input_chars: int = 2000
     public_chat_max_context_chars: int = 6000
@@ -120,8 +144,6 @@ class Settings(BaseSettings):
     # 首次启动按账号密码自动创建；已存在则只提升权限，不覆盖密码
     super_admin_username: str | None = None
     super_admin_password: str | None = None
-    # 指定已存在的用户名，启动时幂等提升为普通 admin；留空不处理
-    initial_admin_username: str | None = None
 
     # ---- 上下文压缩（compact 摘要）----
     # 超 budget*ratio 触发：保留最近 recent_count 条原文，更早的 LLM 摘要
@@ -148,6 +170,22 @@ class Settings(BaseSettings):
     # 思考期可能长时间无 event：调大 langchain 超时防误判卡死；agent_stream_idle_timeout 做最终兜底
     langchain_stream_chunk_timeout: float | None = 600.0
     agent_stream_idle_timeout: float = 600.0
+
+    @field_validator("database_url")
+    @classmethod
+    def _database_url_must_be_secured(cls, value: str) -> str:
+        # 非本地拒绝空密码/公开弱值（postgres），与 jwt_secret 强约束看齐；本地放行保留开发便利。
+        # compose 部署另由 ${POSTGRES_PASSWORD:?} 在编排层兜底。
+        parts = urlsplit(value)
+        host = (parts.hostname or "").lower()
+        is_local = host in {"localhost", "127.0.0.1", "::1"}
+        password = parts.password or ""
+        if not is_local and (not password or password == "postgres"):
+            raise ValueError(
+                "database_url 指向非本地主机却使用空密码或公开弱值（postgres），"
+                "存在被直连拿库风险；请通过环境变量 DATABASE_URL 注入强密码。"
+            )
+        return value
 
     @field_validator("jwt_secret")
     @classmethod

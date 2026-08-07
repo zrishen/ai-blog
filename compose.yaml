@@ -12,7 +12,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cortex}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?必须在 .env 设置强密码（生产勿用 postgres）}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +26,7 @@ services:
       - app-network
 
   falkordb:
-    image: falkordb/falkordb:latest
+    image: falkordb/falkordb:${FALKORDB_VERSION:-v4.20.1}
     volumes:
       - falkordbdata:/data
     healthcheck:
@@ -54,7 +54,7 @@ services:
       # 本地 embedding 模型缓存落到挂载的 data volume，避免容器重建重新下载（容器路径，勿放 .env）
       - HF_HOME=/app/data/hf_cache
       # 指向 compose 内的 postgres 服务（覆盖 .env 的本地 DATABASE_URL）
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-cortex}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?必须在 .env 设置强密码}@postgres:5432/${POSTGRES_DB:-cortex}
       # 指向 compose 内的 falkordb 服务（AI 大脑）
       - FALKORDB_URL=redis://falkordb:6379
       # AI 大脑默认开启；仅在紧急回退时显式设为 false。

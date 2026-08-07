@@ -245,8 +245,6 @@ export interface SendChatCallbacks {
 }
 
 export interface SendChatOptions {
-  imageUrl?: string;
-  fileUrl?: string;
   attachments?: Array<{ id: string }>;
   thinkingMode?: ThinkingMode;
   context?: Record<string, unknown>;
@@ -260,8 +258,6 @@ export async function sendChat(
   options: SendChatOptions,
 ) {
   const {
-    imageUrl,
-    fileUrl,
     attachments,
     thinkingMode,
     context,
@@ -290,8 +286,6 @@ export async function sendChat(
     body: JSON.stringify({
       content,
       conversation_id: conversationId,
-      image_url: imageUrl || null,
-      file_url: fileUrl || null,
       attachments: attachments ?? [],
       thinking_mode: thinkingMode ?? "balanced",
       context: context ?? null,

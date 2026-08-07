@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
 import { BlogIcon } from "@/components/icons";
+import folderIcon from "@/components/icons/folder.svg";
 import { getFileIcon } from "@/components/fileIcons";
 import {
   emptyTrash,
@@ -105,7 +106,7 @@ export function TrashView() {
           <EmptyState
             icon={Trash2}
             title="回收站是空的"
-            description="删除的会话、文件、文章会暂存在这里，可恢复或永久清除。"
+            description="删除的会话、文件、文章、文件夹会暂存在这里，可恢复或永久清除。"
             className="flex-1 p-10"
           />
         ) : (
@@ -130,6 +131,8 @@ export function TrashView() {
                         <BlogIcon className="h-4 w-4 flex-shrink-0" />
                       ) : it.type === "file_document" ? (
                         getFileIcon(it.name)
+                      ) : it.type === "workspace_folder" ? (
+                        <img src={folderIcon} alt="" className="h-4 w-4 flex-shrink-0" />
                       ) : (
                         <MessageSquare className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                       )}

@@ -10,24 +10,6 @@ from src.logging_config import setup_logging
 logger = logging.getLogger(__name__)
 
 
-async def _ensure_initial_admin(session) -> None:
-    username = (settings.initial_admin_username or "").strip()
-    if not username:
-        return
-
-    from sqlalchemy import select
-
-    from src.database.models import User
-
-    user = (await session.execute(select(User).where(User.username == username))).scalar_one_or_none()
-    if user is None:
-        logger.warning("Configured initial admin does not exist: %s", username)
-        return
-    if not user.is_admin:
-        user.is_admin = True
-        await session.commit()
-
-
 async def _ensure_super_admin(session) -> None:
     username = (settings.super_admin_username or "").strip()
     password = settings.super_admin_password or ""
@@ -72,7 +54,6 @@ async def startup() -> None:
         user = await ensure_system_user(session)
         await ensure_intro_post(session, build_intro_post_payload(), user.id)
         await _ensure_super_admin(session)
-        await _ensure_initial_admin(session)
         from src.utils.user_dir import warm_username_cache
 
         await warm_username_cache(session)

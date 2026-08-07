@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE, createBlogPost, getAccessToken, updateBlogPost } from "../../../api/client";
 import type { BlogPostData } from "../../../api/blog";
+import { useAuth } from "../../../stores/authStore";
 import { generateExcerpt } from "../utils/blogExcerpt";
+import { draftRecoveryKey } from "../utils/draftStorage";
+import { formatClock } from "@/lib/datetime";
 
 export interface BlogWorkingCopy {
   title: string;
@@ -19,10 +22,6 @@ interface UseAutosaveOptions {
 }
 
 const AUTOSAVE_DELAY = 2000;
-
-function recoveryKey(postId?: number): string {
-  return postId == null ? "draft_blog_new" : `draft_blog_${postId}`;
-}
 
 function serialize(copy: BlogWorkingCopy): string {
   return JSON.stringify({ ...copy, _savedAt: new Date().toISOString() });
@@ -48,6 +47,8 @@ function readRecoveryCopy(key: string): BlogWorkingCopy | null {
  * `enqueue`, so a slow autosave never races a publish, commit, or restore.
  */
 export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }: UseAutosaveOptions) {
+  const { user } = useAuth();
+  const userId = user?.id;
   const { title, content, tags, coverImage } = values;
   const latestRef = useRef(values);
   const versionRef = useRef(0);
@@ -57,6 +58,7 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
   const pausedRef = useRef(false);
   const [createdPostId, setCreatedPostId] = useState<number | undefined>();
   const [lastSaved, setLastSaved] = useState("");
+  const [saveError, setSaveError] = useState(false);
 
   useEffect(() => {
     latestRef.current = { title, content, tags, coverImage };
@@ -70,10 +72,17 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
   }, [postId]);
 
   const writeRecoveryCopy = useCallback(() => {
+    if (userId == null) return;
     const copy = latestRef.current;
     if (!copy.title.trim() && !copy.content.trim() && !copy.coverImage) return;
-    localStorage.setItem(recoveryKey(postIdRef.current), serialize(copy));
-  }, []);
+    // localStorage 禁用/超限（隐私模式、配额满）时 setItem 会抛：本地副本写不了就跳过，
+    // 绝不能让它中断后续的远端保存。
+    try {
+      localStorage.setItem(draftRecoveryKey(userId, postIdRef.current), serialize(copy));
+    } catch {
+      /* 本地副本不可用，忽略 */
+    }
+  }, [userId]);
 
   const enqueue = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     const next = tailRef.current.catch(() => undefined).then(operation);
@@ -95,11 +104,16 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
     let saved: BlogPostData;
     if (postIdRef.current == null) {
       saved = await createBlogPost({ ...payload, status: "draft" });
-      const newKey = recoveryKey(saved.id);
-      const oldKey = recoveryKey();
-      const pendingCopy = localStorage.getItem(oldKey);
-      if (pendingCopy) localStorage.setItem(newKey, pendingCopy);
-      localStorage.removeItem(oldKey);
+      // 本地副本迁移：localStorage 不可用时跳过，不影响已创建的远端记录
+      try {
+        const newKey = draftRecoveryKey(userId, saved.id);
+        const oldKey = draftRecoveryKey(userId);
+        const pendingCopy = localStorage.getItem(oldKey);
+        if (pendingCopy) localStorage.setItem(newKey, pendingCopy);
+        localStorage.removeItem(oldKey);
+      } catch {
+        /* ignore */
+      }
       postIdRef.current = saved.id;
       setCreatedPostId(saved.id);
       onCreated(saved);
@@ -108,11 +122,16 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
     }
     onSaved({ id: saved.id, updated_at: saved.updated_at });
     if (version === versionRef.current) {
-      localStorage.removeItem(recoveryKey(saved.id));
+      try {
+        localStorage.removeItem(draftRecoveryKey(userId, saved.id));
+      } catch {
+        /* ignore */
+      }
     }
-    setLastSaved(new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }));
+    setLastSaved(formatClock(new Date()));
+    setSaveError(false);
     return saved;
-  }, [onCreated, onSaved]);
+  }, [onCreated, onSaved, userId]);
 
   const flushNow = useCallback(
     (workingCopy?: BlogWorkingCopy) => enqueue(() => persistLatest(workingCopy)),
@@ -120,12 +139,13 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
   );
 
   useEffect(() => {
-    const key = recoveryKey(postId);
+    if (userId == null) return;
+    const key = draftRecoveryKey(userId, postId);
     if (recoveredKeysRef.current.has(key)) return;
     recoveredKeysRef.current.add(key);
     const copy = readRecoveryCopy(key);
     if (copy) onRecovered(copy);
-  }, [onRecovered, postId]);
+  }, [onRecovered, postId, userId]);
 
   useEffect(() => {
     const copy = latestRef.current;
@@ -133,9 +153,9 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
     const timer = window.setTimeout(() => {
       writeRecoveryCopy();
       if (pausedRef.current) return;
-      void flushNow().catch(() => {
-        // Autosave failures are intentionally silent; the recovery copy stays local.
-      });
+      void flushNow()
+        .then(() => setSaveError(false))
+        .catch(() => setSaveError(true));
     }, AUTOSAVE_DELAY);
     return () => window.clearTimeout(timer);
   }, [title, content, tags, coverImage, flushNow, writeRecoveryCopy]);
@@ -153,7 +173,9 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
         tags: copy.tags.trim() || undefined,
         cover_image: copy.coverImage || null,
       });
-      if (body.length > 60_000) return;
+      // keepalive fetch 的 body 浏览器硬限 64KB（按 UTF-8 字节）。按字符串 length 会误判
+      // 中文（1 code unit 但 UTF-8 3 字节）：超限的中文 body 仍会发送并被浏览器静默丢弃。
+      if (new TextEncoder().encode(body).length > 60_000) return;
       const token = getAccessToken();
       void fetch(`${API_BASE}/blog/posts/${id}`, {
         method: "PUT",
@@ -173,5 +195,5 @@ export function useAutosave({ postId, values, onCreated, onSaved, onRecovered }:
   const pause = useCallback(() => { pausedRef.current = true; }, []);
   const resume = useCallback(() => { pausedRef.current = false; }, []);
 
-  return { postId: postId ?? createdPostId, enqueue, flushNow, writeRecoveryCopy, lastSaved, pause, resume };
+  return { postId: postId ?? createdPostId, enqueue, flushNow, writeRecoveryCopy, lastSaved, saveError, pause, resume };
 }

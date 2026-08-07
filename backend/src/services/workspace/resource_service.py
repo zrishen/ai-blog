@@ -3,8 +3,6 @@
 resource 节点是引用关系（不持有内容，一个资源至多一个挂靠点）；解绑=硬删挂靠点，资源本身不受影响。
 """
 
-import logging
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,8 +15,6 @@ from src.services.workspace.node_service import (
     get_owned_node,
     next_sort_order,
 )
-
-logger = logging.getLogger(__name__)
 
 RESOURCE_TYPES = {"blog_post", "file", "research_topic"}
 
@@ -39,22 +35,31 @@ async def soft_deleted_resource_ids(
     return {row[0] for row in (await db.execute(stmt)).all()}
 
 
-async def _maybe_auto_index(
-    db: AsyncSession,
-    user_id: int,
-    resource_type: str,
-    resource_id: int,
-    folder: WorkspaceNodeModel,
-) -> None:
-    """目录开启 auto_index 时，挂靠/移入的 file 资源自动加入 AI 知识（best-effort，失败不阻塞挂靠）。"""
-    if not folder.auto_index or resource_type != "file":
-        return
-    from src.services.workspace.rag_service import index_file_document
+async def is_resource_alive(
+    db: AsyncSession, resource_type: str | None, resource_id: int | None
+) -> bool:
+    """底层资源行是否存在（active 或软删均算存活；已 purge=行不存在=False）。
+    research_topic 等无回收站的类型按存活处理，保留挂靠点。"""
+    if resource_type is None or resource_id is None:
+        return False
+    model = _SOFT_DELETABLE_MODELS.get(resource_type)
+    if model is None:
+        return True
+    return (await db.get(model, resource_id)) is not None
 
-    try:
-        await index_file_document(db, user_id, document_id=resource_id)
-    except Exception:
-        logger.warning("auto_index 触发索引失败: %s/%s", resource_type, resource_id, exc_info=True)
+
+async def _soft_deleted_resource_node(
+    db: AsyncSession, user_id: int, resource_type: str, resource_id: int
+) -> WorkspaceNodeModel | None:
+    """查同 (user, resource_type, resource_id) 的软删挂靠点（_resource_node 只查 active，看不见它）。"""
+    stmt = select(WorkspaceNodeModel).where(
+        WorkspaceNodeModel.user_id == user_id,
+        WorkspaceNodeModel.node_type == "resource",
+        WorkspaceNodeModel.resource_type == resource_type,
+        WorkspaceNodeModel.resource_id == resource_id,
+        WorkspaceNodeModel.deleted_at.is_not(None),
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 def _resource_slug(resource_type: str, resource_id: int) -> str:
@@ -83,7 +88,8 @@ async def attach_resource(
     parent_id: int,
     name: str | None = None,
 ) -> WorkspaceNodeModel:
-    """把资源挂靠到指定文件夹。已挂靠则抛 ConflictError。"""
+    """把资源挂靠到指定文件夹。已挂靠（active）则抛 ConflictError；存在软删挂靠点则复活复用，
+    绕过 uq_workspace_nodes_resource 全局唯一约束（删 folder 后资源重新归档的必要路径）。"""
     if resource_type not in RESOURCE_TYPES:
         raise ValidationFailedError(f"不支持的资源类型：{resource_type}")
     if parent_id is None:
@@ -93,21 +99,31 @@ async def attach_resource(
     parent = await get_owned_node(db, parent_id, user_id)
     if parent.node_type != "folder":
         raise ValidationFailedError("父节点必须是文件夹")
-    slug = await ensure_unique_slug(db, user_id, parent_id, _resource_slug(resource_type, resource_id))
-    node = WorkspaceNodeModel(
-        user_id=user_id,
-        parent_id=parent_id,
-        node_type="resource",
-        resource_type=resource_type,
-        resource_id=resource_id,
-        name=name or _resource_slug(resource_type, resource_id),
-        slug=slug,
-        sort_order=await next_sort_order(db, user_id, parent_id),
-    )
-    db.add(node)
+    desired_slug = _resource_slug(resource_type, resource_id)
+    display_name = name or _resource_slug(resource_type, resource_id)
+    soft = await _soft_deleted_resource_node(db, user_id, resource_type, resource_id)
+    if soft is not None:
+        # 复活软删挂靠点：清软删、改父、重算 slug/sort_order（避免唯一约束冲突）
+        soft.deleted_at = None
+        soft.parent_id = parent_id
+        soft.name = display_name
+        soft.slug = await ensure_unique_slug(db, user_id, parent_id, desired_slug, exclude_id=soft.id)
+        soft.sort_order = await next_sort_order(db, user_id, parent_id)
+        node = soft
+    else:
+        node = WorkspaceNodeModel(
+            user_id=user_id,
+            parent_id=parent_id,
+            node_type="resource",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            name=display_name,
+            slug=await ensure_unique_slug(db, user_id, parent_id, desired_slug),
+            sort_order=await next_sort_order(db, user_id, parent_id),
+        )
+        db.add(node)
     await db.commit()
     await db.refresh(node)
-    await _maybe_auto_index(db, user_id, resource_type, resource_id, parent)
     return node
 
 
@@ -154,7 +170,6 @@ async def move_resource(
     node.sort_order = await next_sort_order(db, user_id, new_parent_id)
     await db.commit()
     await db.refresh(node)
-    await _maybe_auto_index(db, user_id, resource_type, resource_id, parent)
     return node
 
 

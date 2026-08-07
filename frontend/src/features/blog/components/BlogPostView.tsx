@@ -17,6 +17,7 @@ import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelect
 import { expandBlankLines } from "../utils/markdownBlankLines";
 import { MermaidBlock } from "@/components/MermaidBlock";
 import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
+import { formatDateLong } from "@/lib/datetime";
 
 // 代码语言 class → 展示名(与编辑器语言选项保持一致)
 const CODE_LANGUAGE_LABELS: Record<string, string> = {
@@ -139,11 +140,7 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
   const date = useMemo(() => {
     const dateStr = post?.published_at || post?.created_at;
     if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("zh-CN", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    return formatDateLong(dateStr);
   }, [post?.created_at, post?.published_at]);
 
   const mdComponents = useMemo(() => ({

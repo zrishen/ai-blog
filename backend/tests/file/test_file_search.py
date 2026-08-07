@@ -118,3 +118,32 @@ async def test_whitelist_includes_active_blog_posts(db_session, monkeypatch):
 
     whitelist = await _get_active_file_whitelist(user_id=1)
     assert whitelist == {collection: {f"blog_post:{post.id}"}}
+
+
+@pytest.mark.asyncio
+async def test_whitelist_includes_stale_rag_sources(db_session, monkeypatch):
+    """内容变更后标 stale 的资源仍参与检索（沿用旧索引），直到用户手动刷新重建。"""
+    import contextlib
+
+    from src.database.models import FileDocument
+    from src.services.workspace import rag_service
+    from src.tools.file import _get_active_file_whitelist
+
+    @contextlib.asynccontextmanager
+    async def _factory():
+        yield db_session
+
+    monkeypatch.setattr("src.database.session.async_session", _factory)
+
+    stale = FileDocument(
+        collection_name="user_1", user_id="1", original_name="stale.pdf",
+        file_path="stale.store", chunk_content="3 chunks", meta="",
+    )
+    db_session.add(stale)
+    await db_session.commit()
+    await rag_service.add_to_ai_knowledge(db_session, 1, resource_type="file", resource_id=stale.id)
+    await rag_service.mark_indexed(db_session, 1, "file", stale.id)
+    await rag_service.mark_stale(db_session, 1, "file", stale.id)
+
+    whitelist = await _get_active_file_whitelist(user_id=1)
+    assert whitelist == {"user_1": {"stale.store"}}

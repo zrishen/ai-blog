@@ -6,6 +6,7 @@ import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import { User, Eye, Calendar, Tags } from "lucide-react";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
+import { formatMonthDay } from "@/lib/datetime";
 
 interface Props {
   post: BlogPost;
@@ -14,8 +15,7 @@ interface Props {
 }
 
 function formatDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
+  return formatMonthDay(dateStr);
 }
 
 function getExcerpt(post: BlogPost) {
