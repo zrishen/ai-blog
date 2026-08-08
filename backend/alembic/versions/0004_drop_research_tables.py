@@ -23,17 +23,19 @@ def upgrade() -> None:
     op.execute("DELETE FROM rag_sources WHERE resource_type IN ('research_topic', 'research_claim')")
 
     # 按 FK 反序 drop 11 张 research 表
-    op.drop_table("blog_post_claim_links")
-    op.drop_table("blog_post_research_links")
-    op.drop_table("research_claim_entity_links")
-    op.drop_table("research_relations")
-    op.drop_table("research_proposals")
-    op.drop_table("research_runs")
-    op.drop_table("research_claims")
-    op.drop_table("research_evidence")
-    op.drop_table("research_entities")
-    op.drop_table("research_sources")
-    op.drop_table("research_topics")
+    # if_exists：0001 baseline 用 create_all 按 model 建表（model 已删 research 表 → 不建），
+    # 全新库这些表不存在，幂等防 UndefinedTableError；旧库（research 曾上线）正常 drop。
+    op.drop_table("blog_post_claim_links", if_exists=True)
+    op.drop_table("blog_post_research_links", if_exists=True)
+    op.drop_table("research_claim_entity_links", if_exists=True)
+    op.drop_table("research_relations", if_exists=True)
+    op.drop_table("research_proposals", if_exists=True)
+    op.drop_table("research_runs", if_exists=True)
+    op.drop_table("research_claims", if_exists=True)
+    op.drop_table("research_evidence", if_exists=True)
+    op.drop_table("research_entities", if_exists=True)
+    op.drop_table("research_sources", if_exists=True)
+    op.drop_table("research_topics", if_exists=True)
 
 
 def downgrade() -> None:

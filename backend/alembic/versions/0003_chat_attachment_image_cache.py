@@ -16,7 +16,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("chat_attachments", sa.Column("image_base64_cache", sa.Text(), nullable=True))
+    # if_not_exists：0001 baseline 用 Base.metadata.create_all 按 model 建全表（model 已含此列），
+    # 全新库会重复 ADD → DuplicateColumnError。幂等兼容 create_all baseline + 旧库增量两种路径。
+    op.add_column("chat_attachments", sa.Column("image_base64_cache", sa.Text(), nullable=True), if_not_exists=True)
 
 
 def downgrade() -> None:

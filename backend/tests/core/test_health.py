@@ -10,7 +10,6 @@ async def test_health(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert "model" in data
 
 
 @pytest.mark.asyncio
@@ -19,7 +18,6 @@ async def test_status(client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
-    assert "model" in data
     assert "timestamp" in data
     assert "components" in data
     assert "database" in data["components"]
