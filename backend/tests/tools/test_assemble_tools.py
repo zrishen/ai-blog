@@ -1,0 +1,118 @@
+"""assemble_tools 行为等价单测：装配集 == 现状硬编码
+（blog_7 + base_search_file + 条件 base_recall_memory + 条件 mcp_call_tool），顺序保现状。
+"""
+import pytest
+
+from src.services.skill.context import SkillContext
+from src.tools.provider import (
+    McpToolProvider,
+    ToolContext,
+    ToolFeatureFlags,
+    assemble_tools,
+)
+from src.tools.registry import TOOL_REGISTRY, tool_names_by_tag
+
+# 1.4：从 TOOL_REGISTRY 派生（统一工具名源，消灭字面量副本；BLOG_TOOLS 已退役）
+BLOG_7 = tool_names_by_tag("writing")
+_DEFAULT_REQUIRED = BLOG_7 | tool_names_by_tag("base")
+
+# 装配顺序 = TOOL_REGISTRY 中 required 的插入序（assemble_tools 遍历 registry 保序 == 旧 agent_tools）
+_EXPECTED_ORDER = [name for name in TOOL_REGISTRY if name in _DEFAULT_REQUIRED]
+
+
+def _ctx(*, memory_enabled=True, mcp_plugins=(), required=None) -> ToolContext:
+    return ToolContext(
+        user_id=1,
+        skill=SkillContext(
+            required_tool_names=required if required is not None else _DEFAULT_REQUIRED,
+            enabled_segment_names=frozenset(),
+        ),
+        mcp_plugins=tuple(mcp_plugins),
+        feature_flags=ToolFeatureFlags(memory_enabled=memory_enabled),
+    )
+
+
+def test_assemble_replicates_current_tools_default():
+    """默认（memory on、无 mcp）：9 工具，顺序保现状。"""
+    asm = assemble_tools(_ctx())
+    assert [t.name for t in asm.tools] == _EXPECTED_ORDER
+    assert asm.mounted_tool_names == set(_EXPECTED_ORDER)
+
+
+def test_memory_gate_off_skips_recall():
+    """memory_enabled=False → base_recall_memory 被 gate skip；无 gate 工具不受影响。"""
+    asm = assemble_tools(_ctx(memory_enabled=False))
+    names = {t.name for t in asm.tools}
+    assert "base_recall_memory" not in names
+    assert "base_search_file" in names
+    assert BLOG_7 <= names
+
+
+def test_mcp_off_when_no_plugins():
+    asm = assemble_tools(_ctx(mcp_plugins=()))
+    assert "mcp_call_tool" not in asm.mounted_tool_names
+
+
+def test_mcp_on_when_plugins_present():
+    plugins = [{"slug": "p", "name": "P", "is_published": True,
+                "tools": [{"name": "t", "input_schema": {"type": "object", "properties": {}}}]}]
+    asm = assemble_tools(_ctx(mcp_plugins=plugins))
+    assert "mcp_call_tool" in asm.mounted_tool_names
+    # mcp_call_tool 追加在末尾（保现状序）
+    assert asm.tools[-1].name == "mcp_call_tool"
+
+
+def test_unknown_required_tool_raises():
+    """required_tool_names 含 registry 未登记名 → ValueError fail loud。"""
+    with pytest.raises(ValueError):
+        assemble_tools(_ctx(required=_DEFAULT_REQUIRED | {"nonexistent_tool"}))
+
+
+def test_mcp_provider_empty_when_no_plugins():
+    assert McpToolProvider().provide(_ctx(mcp_plugins=())) == []
+
+
+def test_mcp_skipped_when_plugins_have_no_capabilities():
+    """插件存在但 normalize 后能力为空（is_published=False）→ 不挂 mcp_call_tool（复刻现状 if mcp_capabilities）。"""
+    plugins = [{"slug": "p", "name": "P", "is_published": False,
+                "tools": [{"name": "t", "input_schema": {"type": "object", "properties": {}}}]}]
+    asm = assemble_tools(_ctx(mcp_plugins=plugins))
+    assert "mcp_call_tool" not in asm.mounted_tool_names
+
+
+def test_mcp_skipped_when_plugin_lacks_slug():
+    """插件缺 slug → normalize 丢弃 → 能力为空 → 不挂。"""
+    plugins = [{"name": "P", "is_published": True, "tools": [{"name": "t"}]}]
+    asm = assemble_tools(_ctx(mcp_plugins=plugins))
+    assert "mcp_call_tool" not in asm.mounted_tool_names
+
+
+def test_selective_mount_only_required_subset():
+    """required_tool_names 子集 → 仅挂载该子集（锁定 1.4 skill 选择性挂载接入点基线）。"""
+    asm = assemble_tools(_ctx(required=frozenset({"base_search_file"})))
+    assert [t.name for t in asm.tools] == ["base_search_file"]
+    assert asm.mounted_tool_names == {"base_search_file"}
+    assert not (BLOG_7 & asm.mounted_tool_names)
+
+
+def test_dedup_provider_collision_keeps_registry_first(monkeypatch, caplog):
+    """provider 返回与 registry 同名工具 → 保留 registry 首现，provider 副本 skip + warning（§3 first-wins）。"""
+    from langchain_core.tools import StructuredTool
+    from src.tools import provider as provider_mod
+
+    def _noop():
+        return ""
+
+    colliding = StructuredTool.from_function(_noop, name="blog_create_post", description="collision")
+
+    class CollidingProvider:
+        name = "colliding"
+        def provide(self, ctx):
+            return [colliding]
+
+    monkeypatch.setattr(provider_mod, "_PROVIDERS", (CollidingProvider(),))
+    with caplog.at_level("WARNING", logger="src.tools.provider"):
+        asm = assemble_tools(_ctx())
+    names = [t.name for t in asm.tools]
+    assert names.count("blog_create_post") == 1
+    assert any("blog_create_post" in r.message for r in caplog.records)

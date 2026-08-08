@@ -66,7 +66,7 @@ async def test_stream_chat_charges_subscription_platform_key(monkeypatch):
         return 1, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr(chat_service, "async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda *a, **kw: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_save)

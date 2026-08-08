@@ -526,14 +526,3 @@ async def update_blog_sidebar(html: str) -> str:
             settings.html = html
         await db.commit()
         return "左栏已更新，博主与访客刷新后即可看到。"
-
-
-BLOG_TOOLS = [
-    blog_create_post,
-    blog_write_post,
-    blog_edit_post,
-    blog_delete_post,
-    blog_search_posts,
-    blog_read_post,
-    update_blog_sidebar,
-]

@@ -30,6 +30,7 @@ async def chat(data: MessageRequest, user: User = Depends(get_current_user)):
         attachment_ids=[str(item.id) for item in data.attachments],
         thinking_mode=data.thinking_mode,
         context=data.context,
+        enabled_skills=data.enabled_skills,
     ):
         if _STREAMERROR_MARKER in chunk:
             try:
@@ -72,6 +73,7 @@ async def chat_stream(data: MessageRequest, user: User = Depends(get_current_use
             attachment_ids=[str(item.id) for item in data.attachments],
             thinking_mode=data.thinking_mode,
             context=data.context,
+            enabled_skills=data.enabled_skills,
         ),
         media_type="text/event-stream",
     )

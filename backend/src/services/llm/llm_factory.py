@@ -5,7 +5,6 @@
 
 import json
 import logging
-from datetime import datetime
 from typing import Any
 
 from langchain_openai import ChatOpenAI
@@ -24,30 +23,31 @@ except ImportError:
     _HAS_DEEPSEEK = False
 
 from src.config import settings
-from src.prompts import (
-    MCP_CAPABILITIES,
-    RAG_AUTO,
-    SYSTEM_BASE,
-    SYSTEM_DATE,
-    SYSTEM_TOOL_RULES,
-)
+from src.prompts import PromptSegment
 from .llm_settings_service import build_llm_model_kwargs
 
 logger = logging.getLogger(__name__)
 
 
 def _system_prompt(
-    tool_names: list[str],
+    segments: list[PromptSegment],
+    *,
+    today: str,
     mcp_capabilities_text: str = "",
 ) -> str:
-    today = datetime.now().strftime("%Y年%m月%d日")
-    base = SYSTEM_BASE + SYSTEM_DATE.format(today=today)
-    if tool_names:
-        base += SYSTEM_TOOL_RULES
-    base += RAG_AUTO
-    if mcp_capabilities_text:
-        base += MCP_CAPABILITIES.format(cap_text=mcp_capabilities_text)
-    return base
+    """瘦渲染器：只拼接已由 resolve_active_segments 解析的段。
+
+    format_keys 非空才 .format（值取自 today/mcp_capabilities_text），零条件判断——
+    门控全在 PromptSegment.condition，本函数不重复判定。
+    """
+    fmt = {"today": today, "cap_text": mcp_capabilities_text}
+    parts: list[str] = []
+    for seg in segments:
+        if seg.format_keys:
+            parts.append(seg.template.format(**{k: fmt[k] for k in seg.format_keys}))
+        else:
+            parts.append(seg.template)
+    return "".join(parts)
 
 
 def _extra_body_for_mode(thinking_mode: str) -> dict[str, Any] | None:

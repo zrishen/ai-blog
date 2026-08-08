@@ -171,7 +171,7 @@ async def base_search_file(query: str) -> str:
     当需要从用户上传的文件或博客文章中查找信息、回答事实性问题时使用此工具。
     参数 query: 搜索查询字符串。"""
     from src.services.embeddings.embedding_service import get_embeddings
-    from src.tools.blog import current_user_id_cv
+    from src.core.context import current_user_id_cv
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -189,8 +189,3 @@ async def base_search_file(query: str) -> str:
     results = await _search_collections(active_files, query, embeddings[0], user_id=user_id)
     results = _filter_and_dedupe_rag_results(results)
     return _format_rag_context(results)
-
-
-RAG_TOOLS = [
-    base_search_file,
-]

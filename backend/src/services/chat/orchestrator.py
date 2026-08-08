@@ -8,6 +8,7 @@ import json
 import logging
 import time
 import uuid
+from datetime import datetime
 from typing import Any, AsyncGenerator
 
 from langchain_core.messages import AIMessage, ToolMessage
@@ -24,6 +25,8 @@ from src.prompts import (
     CTX_SELECTED_SECTION,
     CTX_SELECTED_TEXT,
     CTX_SELECTED_TEXT_LABEL,
+    PromptContext,
+    resolve_active_segments,
 )
 from src.services.chat.chat_attachment_service import (
     PreparedChatAttachment,
@@ -43,9 +46,10 @@ from src.services.subscription import (
     consume_tokens,
     should_use_platform_key,
 )
-from src.tools.blog import BLOG_TOOLS, current_user_id_cv
-from src.tools.file import base_search_file
-from src.tools.mcp import build_mcp_call_tool, format_mcp_capabilities, normalize_mcp_capabilities
+from src.core.context import current_user_id_cv
+from src.services.skill import resolve_skills
+from src.tools.mcp import format_mcp_capabilities, normalize_mcp_capabilities
+from src.tools.provider import ToolContext, ToolFeatureFlags, assemble_tools
 
 from src.services.llm.llm_factory import _chat_model_kwargs, _create_llm, _system_prompt
 from .messages import (
@@ -276,6 +280,7 @@ async def stream_chat(
     attachment_ids: list[str] | None = None,
     thinking_mode: str = "balanced",
     context: dict | None = None,
+    enabled_skills: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     # 1. 加载用户启用的平台 MCP 插件
     from src.database.models import User
@@ -396,16 +401,17 @@ async def stream_chat(
             })
             return
 
-    # 3. Build agent
-    agent_tools = list(BLOG_TOOLS)
-    agent_tools.append(base_search_file)
-    if settings.memory_enabled:
-        # 大脑 recall 工具（GraphRAG）：回忆过往对话/偏好/实体关系，与 base_search_file 并列
-        from src.tools.memory import base_recall_memory
-
-        agent_tools.append(base_recall_memory)
-    if mcp_capabilities:
-        agent_tools.append(build_mcp_call_tool(mcp_plugins, mcp_capabilities))
+    # 3. Build agent（assemble_tools 唯一装配入口，seam-conventions §3；行为等价原硬编码）
+    skill_ctx = resolve_skills(
+        enabled_ids=frozenset(enabled_skills) if enabled_skills is not None else None
+    )  # 1.4：None→默认；[] 显式禁用所有 skill（is not None 区分空列表与缺省）
+    asm = assemble_tools(ToolContext(
+        user_id=user_id,
+        skill=skill_ctx,
+        mcp_plugins=tuple(mcp_plugins),
+        feature_flags=ToolFeatureFlags.from_settings(),
+    ))
+    agent_tools = asm.tools
 
     if use_platform_key:
         # 订阅有效：用平台 key（allow_official_fallback 走 .env）+ 开 stream_usage 拿真实 usage
@@ -521,11 +527,21 @@ async def stream_chat(
 
             llm = _create_llm(model_kwargs, thinking_mode)
 
-            all_tool_names = [t.name for t in agent_tools]
+            # 1.3：prompt 注入走 PromptSegment 注册表（resolve_active_segments 按 priority 装配）。
+            # enabled_segments 取 skill_ctx（1.2 桩返回空集；1.4 skill 框架填写作段名）。
+            # 写作段 1.3 期 default_active=True 保默认快照；1.5 翻 False 后靠此 enabled_segments 激活。
+            prompt_ctx = PromptContext(
+                user_id=user_id,
+                mounted_tool_names=asm.mounted_tool_names,
+                mcp_capabilities_text=mcp_capabilities_text,
+                enabled_segments=skill_ctx.enabled_segment_names,
+            )
+            active_segments = resolve_active_segments(prompt_ctx)
+            today = datetime.now().strftime("%Y年%m月%d日")
             async for event in _astream_agent_with_vision_fallback(
                 llm,
                 agent_tools,
-                _system_prompt(all_tool_names, mcp_capabilities_text),
+                _system_prompt(active_segments, today=today, mcp_capabilities_text=mcp_capabilities_text),
                 api_messages,
                 idle_timeout=settings.agent_stream_idle_timeout,
             ):

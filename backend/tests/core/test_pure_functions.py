@@ -2,14 +2,25 @@
 
 import pytest
 
-from src.prompts import SYSTEM_TOOL_RULES
+from src.prompts import (
+    BLOG_MERMAID_GUIDE,
+    CORE_TOOL_RULES_TEXT,
+    PromptContext,
+    RAG_AUTO,
+    SIDEBAR_TOOL_RULES,
+    SYSTEM_BASE,
+    SYSTEM_DATE,
+    WRITING_CREATE_TEXT,
+    resolve_active_segments,
+)
+from src.services.llm.llm_factory import _system_prompt
 from src.services.llm.llm_settings_service import (
     SUPPORTED_LLM_PROTOCOLS,
     build_llm_model_kwargs,
     normalize_llm_protocol,
 )
 from src.services.blog.blog_storage_service import normalize_post_body
-from src.tools.blog import BLOG_TOOLS
+from src.tools.registry import tool_names_by_tag
 from src.utils.slug import slugify
 
 
@@ -158,13 +169,15 @@ def test_build_llm_model_kwargs_skips_reasoning_effort_for_non_thinking_model():
 
 
 def test_blog_prompt_requires_create_then_write_for_new_posts():
-    assert "先调用 blog_create_post" in SYSTEM_TOOL_RULES
-    assert "再调用 blog_write_post" in SYSTEM_TOOL_RULES
-    assert "不得创建草稿后直接结束" in SYSTEM_TOOL_RULES
+    # 1.3：create-before-write 规则迁至 WRITING_CREATE_TEXT（写作段，blog_* 门控）
+    assert "先调用 blog_create_post" in WRITING_CREATE_TEXT
+    assert "再调用 blog_write_post" in WRITING_CREATE_TEXT
+    assert "不得创建草稿后直接结束" in WRITING_CREATE_TEXT
 
 
 def test_blog_tools_expose_read_edit_write_tools():
-    names = [tool.name for tool in BLOG_TOOLS]
+    # 1.4：BLOG_TOOLS 退役，写作工具集从 TOOL_REGISTRY.tags 派生（统一工具名源）
+    names = tool_names_by_tag("writing")
 
     assert "blog_read_post" in names
     assert "blog_write_post" in names
@@ -178,3 +191,116 @@ def test_blog_tools_expose_read_edit_write_tools():
     assert "blog_patch_post" not in names
     assert "update_blog_sidebar" in names
     assert len(names) == 7
+
+
+# ---- PromptSegment 注册表（1.3 prompt 注入）----
+
+
+def _default_writing_ctx(**overrides):
+    """默认写作场景 ctx == orchestrator 真实接线形状（resolve_skills 默认 required+segments）。"""
+    from src.services.skill import resolve_skills
+
+    default = resolve_skills()  # DEFAULT_ENABLED_SKILLS：required=writing+base，segments=writing×3
+    base = dict(
+        user_id=1,
+        mounted_tool_names=default.required_tool_names,
+        enabled_segments=default.enabled_segment_names,  # 自动跟踪 orchestrator（1.4 writing×3）
+    )
+    base.update(overrides)
+    return PromptContext(**base)
+
+
+def test_resolve_default_snapshot_segment_names_and_order():
+    """默认场景激活段集与 priority 顺序锁定（mcp 因无 cap_text 不激活）。"""
+    segments = resolve_active_segments(_default_writing_ctx())
+    assert [s.name for s in segments] == [
+        "system_base",
+        "system_date",
+        "core_tool_rules",
+        "writing_create_flow",
+        "writing_mermaid",
+        "writing_sidebar",
+        "rag_auto",
+    ]
+
+
+def test_system_prompt_default_byte_equivalence():
+    """_system_prompt 默认输出 == 各段常量按 priority 拼接（逐字节锁定装配 + 渲染）。"""
+    today = "2026年08月08日"
+    rendered = _system_prompt(resolve_active_segments(_default_writing_ctx()), today=today)
+    expected = (
+        SYSTEM_BASE
+        + SYSTEM_DATE.format(today=today)
+        + CORE_TOOL_RULES_TEXT
+        + WRITING_CREATE_TEXT
+        + BLOG_MERMAID_GUIDE
+        + SIDEBAR_TOOL_RULES
+        + RAG_AUTO
+    )
+    assert rendered == expected
+
+
+def test_system_date_dropped_writing_locator():
+    """1.3：SYSTEM_DATE 去'撰写文章时'写作定位词，保留时间线相关性。"""
+    assert "撰写文章时" not in SYSTEM_DATE
+    assert "时间线" in SYSTEM_DATE
+
+
+def test_resolve_writing_segments_condition_filters_without_blog_tools():
+    """挂非写作工具 → _writing_on=False → 写作三段不激活（AND：default_active 不能绕过 condition）。"""
+    ctx = PromptContext(
+        user_id=1,
+        mounted_tool_names=frozenset({"mcp_call_tool"}),
+        enabled_segments=frozenset(),
+    )
+    names = {s.name for s in resolve_active_segments(ctx)}
+    assert "writing_create_flow" not in names
+    assert "writing_mermaid" not in names
+    assert "writing_sidebar" not in names
+    assert "core_tool_rules" in names  # core 仍激活（mounted 非空）
+    assert "rag_auto" not in names  # 无 base_search_file
+
+
+def test_resolve_core_rules_condition_requires_tools():
+    """core 段 condition=bool(mounted_tool_names)：无工具 → 不激活；base/date 无条件常驻。"""
+    ctx = PromptContext(
+        user_id=1,
+        mounted_tool_names=frozenset(),
+        enabled_segments=frozenset(),
+    )
+    names = {s.name for s in resolve_active_segments(ctx)}
+    assert "core_tool_rules" not in names
+    assert "system_base" in names
+    assert "system_date" in names
+    assert "rag_auto" not in names
+
+
+def test_resolve_mcp_segment_condition_requires_cap_text():
+    """mcp 段 condition=bool(mcp_capabilities_text)：空不激活，非空激活。"""
+    assert "mcp_capabilities" not in {
+        s.name for s in resolve_active_segments(_default_writing_ctx(mcp_capabilities_text=""))
+    }
+    assert "mcp_capabilities" in {
+        s.name for s in resolve_active_segments(_default_writing_ctx(mcp_capabilities_text="srv/t"))
+    }
+
+
+def test_resolve_enabled_segments_activates_default_inactive(monkeypatch):
+    """OR 语义：default_active=False 的段仅靠 enabled_segments 激活（1.5 skill 启用路径）。
+
+    注册表现状全 default_active=True（enabled 分支被短路、无法测）；临时注入一个
+    default_active=False 段，验证它仅在被 enable 时激活——锁定 OR 的 enabled 分支，
+    防 1.5 翻 default_active=False 后该激活路径无人覆盖（1.3 审查 N1）。
+    """
+    from src.prompts import PROMPT_SEGMENT_REGISTRY, PromptSegment
+
+    test_seg = PromptSegment("test_skill_only_segment", "X", default_active=False, condition=None)
+    monkeypatch.setitem(PROMPT_SEGMENT_REGISTRY, test_seg.name, test_seg)
+
+    base_ctx = dict(user_id=1, mounted_tool_names=frozenset({"blog_create_post"}))
+    # 未 enable → 不激活（default_active=False 且不在 enabled_segments）
+    ctx_off = PromptContext(enabled_segments=frozenset(), **base_ctx)
+    assert test_seg.name not in {s.name for s in resolve_active_segments(ctx_off)}
+    # enable → 激活（OR 第二项 True；condition None 放行）
+    ctx_on = PromptContext(enabled_segments=frozenset({test_seg.name}), **base_ctx)
+    assert test_seg.name in {s.name for s in resolve_active_segments(ctx_on)}

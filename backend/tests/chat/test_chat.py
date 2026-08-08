@@ -109,9 +109,6 @@ async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
         async def execute(self, stmt):
             return FakeResult()
 
-    class FakeBlogTool:
-        name = "blog_search_posts"
-
     class FakeChunk:
         content = "已回复"
         tool_call_chunks = []
@@ -131,7 +128,7 @@ async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", fake_create_react_agent)
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
@@ -151,6 +148,9 @@ async def test_auto_mode_attaches_base_search_file_tool(monkeypatch):
     prompt_text = captured["prompt"]
     assert "base_search_file" in prompt_text
     assert "文件库" in prompt_text
+    # 写作三段集成断言（默认挂 blog_* 即注入；防 orchestrator 接线静默丢写作段，1.3 审查 N2）
+    assert "处理博客时" in prompt_text  # writing_create_flow
+    assert "classDef" in prompt_text  # writing_mermaid
     assert not any("[检索到的参考内容]" in m["content"] for m in captured["agent_messages"])
 
 
@@ -195,7 +195,7 @@ async def test_memory_enabled_persists_saved_chat_in_background(monkeypatch):
 
     monkeypatch.setattr(settings, "memory_enabled", True)
     monkeypatch.setattr(chat_service, "async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda *args, **kwargs: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_save_chat_turn)
@@ -299,7 +299,7 @@ async def test_reasoning_content_debug_log_is_aggregated(monkeypatch, caplog):
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", fake_create_react_agent)
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
@@ -349,9 +349,6 @@ async def test_selected_blog_context_is_injected_into_prompt_and_user_message(mo
         async def execute(self, stmt):
             return FakeResult()
 
-    class FakeBlogTool:
-        name = "blog_edit_post"
-
     class FakeChunk:
         content = "已处理"
         tool_call_chunks = []
@@ -366,7 +363,7 @@ async def test_selected_blog_context_is_injected_into_prompt_and_user_message(mo
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
@@ -431,9 +428,6 @@ async def test_blog_edit_patch_streams_from_model_tool_arguments(monkeypatch, sp
         async def execute(self, stmt):
             return FakeResult()
 
-    class FakeBlogTool:
-        name = "blog_edit_post"
-
     class FakeChunk:
         content = ""
         additional_kwargs = {}
@@ -486,7 +480,7 @@ async def test_blog_edit_patch_streams_from_model_tool_arguments(monkeypatch, sp
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
@@ -542,9 +536,6 @@ async def test_blog_write_stream_carries_post_and_stream_identity(monkeypatch):
         async def execute(self, stmt):
             return FakeResult()
 
-    class FakeBlogTool:
-        name = "blog_write_post"
-
     class FakeChunk:
         content = ""
         additional_kwargs = {}
@@ -584,7 +575,7 @@ async def test_blog_write_stream_carries_post_and_stream_identity(monkeypatch):
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
@@ -662,7 +653,7 @@ async def test_tool_prep_emitted_and_stream_id_propagated(monkeypatch):
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
@@ -705,9 +696,6 @@ async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monke
         async def execute(self, stmt):
             return FakeResult()
 
-    class FakeBlogTool:
-        name = "blog_edit_post"
-
     class FakeChunk:
         content = ""
         additional_kwargs = {}
@@ -742,7 +730,7 @@ async def test_blog_edit_patch_decodes_unicode_escapes_split_across_chunks(monke
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [FakeBlogTool()])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_add_message_pair)
@@ -810,7 +798,7 @@ async def test_round_protocol_streams_structured_text_and_confirms_final(monkeyp
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_save_chat_turn)
@@ -980,7 +968,7 @@ async def test_empty_final_is_confirmed_and_saved(monkeypatch):
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_save_chat_turn)
@@ -1024,7 +1012,7 @@ async def test_empty_agent_stream_emits_error_and_does_not_save(monkeypatch):
         raise AssertionError("空模型流不应保存消息")
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", save_should_not_run)
@@ -1073,7 +1061,7 @@ async def test_stream_error_discards_unconfirmed_round_and_does_not_save(monkeyp
         raise AssertionError("异常流不应保存假 final")
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", save_should_not_run)
@@ -1129,7 +1117,7 @@ async def test_parallel_tool_events_use_stable_call_ids(monkeypatch):
         return 7, SimpleNamespace(id=6), SimpleNamespace(id=8)
 
     monkeypatch.setattr("src.database.session.async_session", lambda: FakeSession())
-    monkeypatch.setattr(chat_service, "BLOG_TOOLS", [])
+    # 1.2 起工具由 assemble_tools 装配，不再 mock BLOG_TOOLS（FakeAgent 忽略具体工具；test_auto_mode 靠桩默认装配 base_search_file）
     monkeypatch.setattr(chat_service, "_create_llm", lambda model_kwargs, thinking_mode: object())
     monkeypatch.setattr(chat_service, "create_react_agent", lambda llm, tools, prompt: FakeAgent())
     monkeypatch.setattr(chat_service, "save_chat_turn", fake_save_chat_turn)
