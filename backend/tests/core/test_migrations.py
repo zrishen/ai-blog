@@ -33,6 +33,7 @@ async def test_init_db_builds_full_schema_and_is_idempotent(monkeypatch):
                     "file_documents", "file_processing_jobs", "redemption_codes",
                     "subscription_weekly_usage", "workspace_nodes", "rag_sources",
                     "platform_plugins", "llm_settings", "public_chat_daily_usage",
+                    "web_tool_daily_usage",
                 }.issubset(tables)
                 # 旧幂等迁移概念已并入 baseline（models 含全部列）
                 conv_cols = {c["name"] for c in insp.get_columns("conversations")}

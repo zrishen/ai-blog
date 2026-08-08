@@ -8,6 +8,7 @@ from src.tools.provider import (
     McpToolProvider,
     ToolContext,
     ToolFeatureFlags,
+    WebToolProvider,
     assemble_tools,
 )
 from src.tools.registry import TOOL_REGISTRY, tool_names_by_tag
@@ -20,7 +21,7 @@ _DEFAULT_REQUIRED = BLOG_7 | tool_names_by_tag("base")
 _EXPECTED_ORDER = [name for name in TOOL_REGISTRY if name in _DEFAULT_REQUIRED]
 
 
-def _ctx(*, memory_enabled=True, mcp_plugins=(), required=None) -> ToolContext:
+def _ctx(*, memory_enabled=True, web_tools_enabled=False, mcp_plugins=(), required=None) -> ToolContext:
     return ToolContext(
         user_id=1,
         skill=SkillContext(
@@ -28,7 +29,10 @@ def _ctx(*, memory_enabled=True, mcp_plugins=(), required=None) -> ToolContext:
             enabled_segment_names=frozenset(),
         ),
         mcp_plugins=tuple(mcp_plugins),
-        feature_flags=ToolFeatureFlags(memory_enabled=memory_enabled),
+        feature_flags=ToolFeatureFlags(
+            memory_enabled=memory_enabled,
+            web_tools_enabled=web_tools_enabled,
+        ),
     )
 
 
@@ -70,6 +74,19 @@ def test_unknown_required_tool_raises():
 
 def test_mcp_provider_empty_when_no_plugins():
     assert McpToolProvider().provide(_ctx(mcp_plugins=())) == []
+
+
+def test_web_provider_is_feature_gated():
+    assert WebToolProvider().provide(_ctx()) == []
+    assert [tool.name for tool in WebToolProvider().provide(_ctx(web_tools_enabled=True))] == [
+        "web_search",
+        "web_fetch",
+    ]
+
+
+def test_web_tools_append_after_registry_tools_when_enabled():
+    asm = assemble_tools(_ctx(web_tools_enabled=True))
+    assert [tool.name for tool in asm.tools][-2:] == ["web_search", "web_fetch"]
 
 
 def test_mcp_skipped_when_plugins_have_no_capabilities():

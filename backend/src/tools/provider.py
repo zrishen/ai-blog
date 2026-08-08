@@ -15,6 +15,7 @@ from langchain_core.tools import BaseTool
 from src.config import settings
 from src.tools.mcp import build_mcp_call_tool, normalize_mcp_capabilities
 from src.tools.registry import TOOL_REGISTRY
+from src.tools.web import web_fetch, web_search
 
 if TYPE_CHECKING:
     from src.services.skill.context import SkillContext
@@ -26,14 +27,16 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ToolFeatureFlags:
     memory_enabled: bool
-    web_tools_enabled: bool = False        # WebToolProvider
+    web_tools_enabled: bool = False
     workspace_files_enabled: bool = False  # WorkspaceFilesProvider
     code_execution_enabled: bool = False   # CodeExecutionProvider
 
     @classmethod
     def from_settings(cls) -> "ToolFeatureFlags":
-        # getattr 兜底，不耦合尚未存在的配置项（防 import 崩）
-        return cls(memory_enabled=getattr(settings, "memory_enabled", True))
+        return cls(
+            memory_enabled=settings.memory_enabled,
+            web_tools_enabled=settings.web_tools_enabled,
+        )
 
 
 @dataclass(frozen=True)
@@ -74,8 +77,17 @@ class McpToolProvider:
         return [build_mcp_call_tool(plugins, capabilities)]
 
 
-# 固定序；预留槽：WebToolProvider / WorkspaceFilesProvider / CodeExecutionProvider
-_PROVIDERS: tuple[ToolProvider, ...] = (McpToolProvider(),)
+class WebToolProvider:
+    name = "web"
+
+    def provide(self, ctx: ToolContext) -> list[BaseTool]:
+        if not ctx.feature_flags.web_tools_enabled:
+            return []
+        return [web_search, web_fetch]
+
+
+# 固定序；预留槽：WorkspaceFilesProvider / CodeExecutionProvider
+_PROVIDERS: tuple[ToolProvider, ...] = (McpToolProvider(), WebToolProvider())
 
 
 def assemble_tools(

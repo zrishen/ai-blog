@@ -174,6 +174,23 @@ class Settings(BaseSettings):
     # ---- MCP ----
     mcp_call_timeout_seconds: float = 30.0
 
+    # ---- Web 工具 ----
+    # 默认关闭：仅在显式配置精确出站主机后开启，避免把任意 URL 读取面暴露给所有用户。
+    web_tools_enabled: bool = False
+    web_tool_daily_request_limit: int = Field(30, ge=1)
+    web_fetch_connect_timeout_seconds: float = Field(10.0, gt=0)
+    web_fetch_read_timeout_seconds: float = Field(20.0, gt=0)
+    web_fetch_write_timeout_seconds: float = Field(10.0, gt=0)
+    web_fetch_max_response_bytes: int = Field(2 * 1024 * 1024, ge=1)
+    web_fetch_max_text_chars: int = Field(20_000, ge=1)
+    web_fetch_max_redirects: int = Field(3, ge=0, le=10)
+    web_fetch_allowed_hosts: str = ""
+    web_fetch_allowed_ports: str = "80,443"
+    web_fetch_allowed_content_types: str = "text/html,text/plain,application/json"
+    # SearXNG 兼容 JSON 搜索端点；未配置时 web_search 明确返回不可用，web_fetch 不受影响。
+    web_search_endpoint: str | None = None
+    web_search_max_results: int = Field(5, ge=1, le=10)
+
     # ---- 流式超时兜底 ----
     # 思考期可能长时间无 event：调大 langchain 超时防误判卡死；agent_stream_idle_timeout 做最终兜底
     langchain_stream_chunk_timeout: float | None = 600.0

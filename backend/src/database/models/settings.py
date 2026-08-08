@@ -55,3 +55,17 @@ class PublicChatDailyUsage(Base):
     request_count = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+
+
+class WebToolDailyUsage(Base):
+    __tablename__ = "web_tool_daily_usage"
+    __table_args__ = (
+        UniqueConstraint("user_id", "usage_date", name="uq_web_tool_daily_usage_user_date"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    usage_date = Column(Date, nullable=False)
+    request_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=_utcnow, nullable=False)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
