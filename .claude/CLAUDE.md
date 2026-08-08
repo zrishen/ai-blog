@@ -33,4 +33,4 @@ AI 写作 + 知识库 RAG；前后端分离 + LangGraph。
 
 验证：前端 `npm run lint && npm run build && npm run test`，后端 `uv run pytest`（自动覆盖率、不设硬阈值）；按改动跑域测试即可。
 
-注释：注释简洁，必要情况下才写
+注释：注释简洁，必要情况下才写；注释只需要说明使用方法和作用即可
