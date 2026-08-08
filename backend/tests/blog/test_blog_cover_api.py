@@ -34,7 +34,8 @@ async def test_blog_cover_can_be_loaded_from_its_public_url(client, db_session, 
     post.published_revision_id = rev.id
     await db_session.commit()
     (tmp_path / "generated-cover.webp").write_bytes(b"cover-image")
-    monkeypatch.setattr(files_api, "get_user_upload_dir", lambda _user_id: tmp_path)
+    # 1.1 起 get_blog_cover 用 ensure_within 解析路径（不再 get_user_upload_dir）；patch 使其落到 tmp_path
+    monkeypatch.setattr(files_api, "ensure_within", lambda _uid, fn, **_kw: tmp_path / fn)
 
     response = await client.get("/api/v1/blog/cover/generated-cover.webp")
 
@@ -45,7 +46,8 @@ async def test_blog_cover_can_be_loaded_from_its_public_url(client, db_session, 
 
 async def test_blog_cover_requires_a_post_reference(client, tmp_path, monkeypatch):
     (tmp_path / "orphan-cover.webp").write_bytes(b"cover-image")
-    monkeypatch.setattr(files_api, "get_user_upload_dir", lambda _user_id: tmp_path)
+    # 1.1 起 get_blog_cover 用 ensure_within 解析路径（不再 get_user_upload_dir）；patch 使其落到 tmp_path
+    monkeypatch.setattr(files_api, "ensure_within", lambda _uid, fn, **_kw: tmp_path / fn)
 
     response = await client.get("/api/v1/blog/cover/orphan-cover.webp")
 

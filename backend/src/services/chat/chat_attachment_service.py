@@ -69,10 +69,6 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _attachment_root() -> Path:
-    return Path(settings.chat_attachment_dir).resolve()
-
-
 def _validated_settings() -> tuple[int, int, int, int]:
     max_size = settings.chat_attachment_max_file_size_bytes
     chunk_size = settings.chat_attachment_upload_chunk_size_bytes
@@ -158,14 +154,18 @@ def _validate_file_signature(path: Path, extension: str) -> None:
 
 
 def _resolve_stored_path(stored_path: str) -> Path:
-    relative = Path(stored_path)
-    if relative.is_absolute() or ".." in relative.parts:
-        raise ChatAttachmentError("Attachment storage path is invalid")
-    root = _attachment_root()
-    resolved = (root / relative).resolve()
-    if not resolved.is_relative_to(root):
-        raise ChatAttachmentError("Attachment storage path escapes its root")
-    return resolved
+    """薄 shim：委托 path_guard.ensure_within（ATTACHMENT scope）保现状语义 + ChatAttachmentError。
+    ATTACHMENT scope root=chat_attachment_dir（stored_path 自带 <user_id>/ 前缀，user_id 不参与隔离，user_id=0 占位）；
+    返回未 resolve 的 path（旧实现返回 resolved，附件路径无 symlink 故观测等价）。
+    ChatAttachmentError message 由旧英文字面改为 path_guard 中文（类型不变、无消费方读文本）；
+    P2 收敛后随 Scope.ATTACHMENT 退役。"""
+    from src.core.exceptions import OwnershipError
+    from src.core.path_guard import Scope, ensure_within
+
+    try:
+        return ensure_within(0, stored_path, mode="read", scope=Scope.ATTACHMENT)
+    except OwnershipError as exc:
+        raise ChatAttachmentError(str(exc)) from exc
 
 
 async def _safe_unlink(path: Path) -> None:

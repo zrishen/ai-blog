@@ -23,7 +23,7 @@ async def test_base_recall_memory_touches_hits_after_recall(monkeypatch):
     async def fake_embeddings(texts):
         return [[0.1, 0.2]]
 
-    monkeypatch.setattr("src.tools.blog.current_user_id_cv", SimpleNamespace(get=lambda: 7))
+    monkeypatch.setattr("src.core.context.current_user_id_cv", SimpleNamespace(get=lambda: 7))
     monkeypatch.setattr(embedding_service, "get_embeddings", fake_embeddings)
     monkeypatch.setattr(embedding_service, "get_embedding_collection_suffix", lambda: "_test")
     monkeypatch.setattr(graph_store, "recall", fake_recall)
@@ -50,7 +50,7 @@ async def test_base_recall_memory_skips_touch_when_no_hits(monkeypatch):
     async def fake_embeddings(texts):
         return [[0.1]]
 
-    monkeypatch.setattr("src.tools.blog.current_user_id_cv", SimpleNamespace(get=lambda: 7))
+    monkeypatch.setattr("src.core.context.current_user_id_cv", SimpleNamespace(get=lambda: 7))
     monkeypatch.setattr(embedding_service, "get_embeddings", fake_embeddings)
     monkeypatch.setattr(embedding_service, "get_embedding_collection_suffix", lambda: "_test")
     monkeypatch.setattr(graph_store, "recall", fake_recall)
@@ -76,7 +76,7 @@ async def test_base_recall_memory_tolerates_touch_failure(monkeypatch):
     async def fake_embeddings(texts):
         return [[0.1]]
 
-    monkeypatch.setattr("src.tools.blog.current_user_id_cv", SimpleNamespace(get=lambda: 7))
+    monkeypatch.setattr("src.core.context.current_user_id_cv", SimpleNamespace(get=lambda: 7))
     monkeypatch.setattr(embedding_service, "get_embeddings", fake_embeddings)
     monkeypatch.setattr(embedding_service, "get_embedding_collection_suffix", lambda: "_test")
     monkeypatch.setattr(graph_store, "recall", fake_recall)
@@ -97,7 +97,7 @@ async def test_base_recall_memory_rejects_unauthenticated(monkeypatch):
         recalled.append(kwargs)
         return []
 
-    monkeypatch.setattr("src.tools.blog.current_user_id_cv", SimpleNamespace(get=lambda: None))
+    monkeypatch.setattr("src.core.context.current_user_id_cv", SimpleNamespace(get=lambda: None))
     monkeypatch.setattr(graph_store, "recall", fake_recall)
 
     result = await memory_tool.base_recall_memory.ainvoke("query")
@@ -120,7 +120,7 @@ async def test_base_recall_memory_handles_embedding_failure(monkeypatch):
     async def boom_embeddings(texts):
         raise RuntimeError("embedding service down")
 
-    monkeypatch.setattr("src.tools.blog.current_user_id_cv", SimpleNamespace(get=lambda: 7))
+    monkeypatch.setattr("src.core.context.current_user_id_cv", SimpleNamespace(get=lambda: 7))
     monkeypatch.setattr(embedding_service, "get_embeddings", boom_embeddings)
     monkeypatch.setattr(embedding_service, "get_embedding_collection_suffix", lambda: "_test")
     monkeypatch.setattr(graph_store, "recall", fake_recall)

@@ -14,6 +14,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
+from src.core.exceptions import OwnershipError
+from src.core.path_guard import Scope, ensure_within
 from src.database.engine import FileDocument, get_db
 from src.database.models import BlogPost, BlogPostRevision, User
 from src.schemas.file_base import (
@@ -163,10 +165,9 @@ async def get_public_uploaded_image(
         if await _find_published_post_referencing_image(db, filename, username=username) is None:
             raise HTTPException(status_code=404, detail="File not found")
 
-    user_dir = get_user_upload_dir(username)
-    file_path = user_dir / filename
-    resolved = file_path.resolve()
-    if not resolved.is_relative_to(user_dir.resolve()):
+    try:
+        file_path = ensure_within(username, filename, scope=Scope.UPLOAD)
+    except OwnershipError:
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -194,10 +195,9 @@ async def get_blog_cover(
     if post is None:
         raise HTTPException(status_code=404, detail="Cover image not found")
 
-    user_dir = get_user_upload_dir(post.user_id)
-    file_path = user_dir / filename
-    resolved = file_path.resolve()
-    if not resolved.is_relative_to(user_dir.resolve()):
+    try:
+        file_path = ensure_within(post.user_id, filename, scope=Scope.UPLOAD)
+    except OwnershipError:
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Cover image not found")
@@ -223,10 +223,9 @@ async def get_uploaded_file(filename: str, user: User = Depends(get_current_user
     ):
         raise HTTPException(status_code=404, detail="File not found")
 
-    user_dir = get_user_upload_dir(user.id)
-    file_path = user_dir / filename
-    resolved = file_path.resolve()
-    if not resolved.is_relative_to(user_dir.resolve()):
+    try:
+        file_path = ensure_within(user.id, filename, scope=Scope.UPLOAD)
+    except OwnershipError:
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")

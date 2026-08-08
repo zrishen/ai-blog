@@ -23,7 +23,7 @@ async def base_recall_memory(query: str) -> str:
     （区别于文件库文档检索 base_search_file——后者检索上传的文档原文）。
     参数 query: 回忆查询字符串。"""
     from src.services.embeddings.embedding_service import get_embedding_collection_suffix, get_embeddings
-    from src.tools.blog import current_user_id_cv
+    from src.core.context import current_user_id_cv
 
     user_id = current_user_id_cv.get()
     if user_id is None:

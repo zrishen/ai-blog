@@ -5,9 +5,11 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.exceptions import OwnershipError
+from src.core.path_guard import Scope, ensure_within
 from src.database.engine import get_db
 from src.database.models import User
-from src.services.file.file_service import convert_to_html, get_user_upload_dir, is_hidden_soft_deleted_file
+from src.services.file.file_service import convert_to_html, is_hidden_soft_deleted_file
 from src.config import settings
 from src.utils.auth import (
     create_preview_token,
@@ -76,10 +78,9 @@ async def preview_file(
     ):
         raise HTTPException(status_code=404, detail="File not found")
 
-    user_dir = get_user_upload_dir(user.id)
-    path = user_dir / filename
-    resolved = path.resolve()
-    if not resolved.is_relative_to(user_dir.resolve()):
+    try:
+        path = ensure_within(user.id, filename, scope=Scope.UPLOAD)
+    except OwnershipError:
         raise HTTPException(status_code=403, detail="Access denied")
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
