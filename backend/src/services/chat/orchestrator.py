@@ -25,6 +25,8 @@ from src.prompts import (
     CTX_SELECTED_SECTION,
     CTX_SELECTED_TEXT,
     CTX_SELECTED_TEXT_LABEL,
+    CTX_LEFTBAR_HEIGHT,
+    CTX_LEFTBAR_HTML,
     PromptContext,
     resolve_active_segments,
 )
@@ -271,6 +273,59 @@ async def _astream_agent_with_vision_fallback(
             active_messages = _append_vision_fallback_instruction(active_messages)
 
 
+def _build_page_context_parts(
+    context: dict[str, Any] | None,
+    mounted_tool_names: frozenset[str],
+) -> list[str]:
+    """构建页面上下文片段列表，用于追加到最后一条 user message。
+
+    页面上下文是 per-request 运行时状态（用户当前看哪页/选中了什么/左栏 HTML），
+    语义属 user context，整体归 user message。指向写作工具的片段按工具挂载门控——
+    CTX_SELECTED_TEXT/SECTION 需 blog_edit_post 挂载、leftbar 需 update_blog_sidebar 挂载，
+    工具未挂时不注入指向未挂载工具的指令；选中原文（CTX_SELECTED_TEXT_LABEL）不门控，
+    属用户运行时状态，无工具时模型仍需感知。
+    """
+    if not context:
+        return []
+    parts: list[str] = []
+    page_type = context.get("page_type", "other")
+    if page_type == "post":
+        parts.append(CTX_POST.format(
+            title=context.get("post_title", ""), post_id=context.get("post_id"),
+        ))
+    elif page_type == "files":
+        parts.append(CTX_FILES)
+    elif page_type == "home":
+        parts.append(CTX_HOME)
+    elif page_type == "about":
+        parts.append(CTX_ABOUT)
+
+    selected = context.get("selected_text")
+    if selected:
+        if page_type != "post" and context.get("post_id"):
+            parts.append(CTX_POST.format(
+                title=context.get("post_title", ""), post_id=context["post_id"],
+            ))
+        if "blog_edit_post" in mounted_tool_names:
+            parts.append(CTX_SELECTED_TEXT)
+            section_index = context.get("section_index") or 0
+            if section_index > 0:
+                parts.append(CTX_SELECTED_SECTION.format(section_index=section_index))
+        parts.append(CTX_SELECTED_TEXT_LABEL.format(selected=selected))
+
+    leftbar_html = context.get("current_leftbar_html")
+    leftbar_height = context.get("current_leftbar_height_px")
+    if (leftbar_html is not None or leftbar_height) and "update_blog_sidebar" in mounted_tool_names:
+        leftbar_lines: list[str] = []
+        if leftbar_height:
+            leftbar_lines.append(CTX_LEFTBAR_HEIGHT.format(height=leftbar_height))
+        if leftbar_html:
+            leftbar_lines.append(CTX_LEFTBAR_HTML.format(html=leftbar_html))
+        parts.append("\n".join(leftbar_lines))
+
+    return parts
+
+
 # ── Main stream ──
 
 async def stream_chat(
@@ -457,73 +512,18 @@ async def stream_chat(
         try:
             if not has_usable_api_key(model_kwargs):
                 raise _MissingApiKeyError()
-            # 页面上下文注入
-            if context:
-                parts: list[str] = []
-                page_context_parts: list[str] = []
-                page_type = context.get("page_type", "other")
-                if page_type == "post":
-                    page_info = CTX_POST.format(
-                        title=context.get("post_title", ""), post_id=context.get("post_id")
-                    )
-                    parts.append(page_info)
-                    page_context_parts.append(page_info)
-                elif page_type == "files":
-                    parts.append(CTX_FILES)
-                    page_context_parts.append(CTX_FILES)
-                elif page_type == "home":
-                    parts.append(CTX_HOME)
-                    page_context_parts.append(CTX_HOME)
-                elif page_type == "about":
-                    parts.append(CTX_ABOUT)
-                    page_context_parts.append(CTX_ABOUT)
-
-                selected = context.get("selected_text")
-                if selected:
-                    if page_type != "post" and context.get("post_id"):
-                        parts.append(
-                            CTX_POST.format(
-                                title=context.get("post_title", ""), post_id=context["post_id"]
-                            )
-                        )
-                    parts.append(CTX_SELECTED_TEXT)
-                    section_index = context.get("section_index") or 0
-                    if section_index > 0:
-                        parts.append(CTX_SELECTED_SECTION.format(section_index=section_index))
-                    page_context_parts.append(CTX_SELECTED_TEXT_LABEL.format(selected=selected))
-
-                # 博客左栏自定义编辑上下文：把当前 HTML + 卡片可用高度透传给 AI，
-                # 让其基于现状修改、并按高度生成刚好填满的内容
-                leftbar_html = context.get("current_leftbar_html")
-                leftbar_height = context.get("current_leftbar_height_px")
-                if leftbar_html is not None or leftbar_height:
-                    leftbar_lines: list[str] = []
-                    if leftbar_height:
-                        leftbar_lines.append(
-                            f"当前左栏卡片可用高度约 {leftbar_height}px（宽约 240–320px），"
-                            "请生成刚好填满该高度的内容（避免溢出或大片留白）。"
-                        )
-                    if leftbar_html:
-                        leftbar_lines.append(f"当前左栏 HTML（可基于其修改或重做）：\n{leftbar_html}")
-                    leftbar_info = "\n".join(leftbar_lines)
-                    parts.append(leftbar_info)
-                    page_context_parts.append(leftbar_info)
-
-                # 将页面上下文追加到用户消息（最高优先级）
-                if page_context_parts:
-                    last_msg = api_messages[-1]
-                    appended = "\n\n---\n" + "\n".join(page_context_parts)
-                    if isinstance(last_msg["content"], str):
-                        last_msg["content"] += appended
-                    elif isinstance(last_msg["content"], list):
-                        for part in last_msg["content"]:
-                            if part.get("type") == "text":
-                                part["text"] += appended
-                                break
-
-                if parts:
-                    # system 消息须连续置于最前（Anthropic 400 限制），统一插入列表头部
-                    api_messages.insert(0, {"role": "system", "content": "\n".join(parts)})
+            # 页面上下文 → 追加到最后一条 user message（单 user 通道）
+            page_context_parts = _build_page_context_parts(context, asm.mounted_tool_names)
+            if page_context_parts:
+                last_msg = api_messages[-1]
+                appended = "\n\n---\n" + "\n".join(page_context_parts)
+                if isinstance(last_msg["content"], str):
+                    last_msg["content"] += appended
+                elif isinstance(last_msg["content"], list):
+                    for part in last_msg["content"]:
+                        if part.get("type") == "text":
+                            part["text"] += appended
+                            break
 
             llm = _create_llm(model_kwargs, thinking_mode)
 

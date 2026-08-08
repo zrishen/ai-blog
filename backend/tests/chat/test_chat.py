@@ -387,12 +387,52 @@ async def test_selected_blog_context_is_injected_into_prompt_and_user_message(mo
     system_text = "\n".join(message["content"] for message in captured["messages"] if message["role"] == "system")
     user_text = captured["messages"][-1]["content"]
     assert "DONE" in output
-    assert "测试文章" in system_text
-    assert "ID=42" in system_text
-    assert "blog_edit_post" in system_text
-    assert "第 2 节" in system_text
+    # 页面上下文全归 user message（单 user 通道，不再插第二条 system）
+    assert system_text == ""
+    assert "测试文章" in user_text
+    assert "ID=42" in user_text
+    assert "blog_edit_post" in user_text
+    assert "第 2 节" in user_text
     assert user_text.startswith("请润色得更简洁")
     assert "需要被润色的中文原文" in user_text
+
+
+def test_build_page_context_parts_gates_writing_instructions_by_tool_mount():
+    """页面上下文指令按工具挂载门控：blog_edit_post 未挂时不注入 CTX_SELECTED_TEXT/SECTION/leftbar；选中原文不门控。"""
+    from src.services.chat.orchestrator import _build_page_context_parts
+
+    ctx = {
+        "page_type": "other", "post_id": 42, "post_title": "测试文章",
+        "selected_text": "原文片段", "section_index": 2,
+        "current_leftbar_html": "<div>x</div>", "current_leftbar_height_px": 300,
+    }
+    full = "\n".join(_build_page_context_parts(ctx, frozenset({"blog_edit_post", "update_blog_sidebar"})))
+    assert "测试文章" in full and "blog_edit_post" in full and "第 2 节" in full
+    assert "原文片段" in full
+    assert "<div>x</div>" in full and "300px" in full
+
+    off = "\n".join(_build_page_context_parts(ctx, frozenset()))
+    assert "测试文章" in off
+    assert "原文片段" in off
+    assert "blog_edit_post" not in off
+    assert "第 2 节" not in off
+    assert "<div>x</div>" not in off
+
+
+def test_build_page_context_parts_page_types_and_empty_context():
+    """page_type 四态注入对应 CTX；context=None/{} 返回空列表。"""
+    from src.services.chat.orchestrator import _build_page_context_parts
+    from src.prompts import CTX_ABOUT, CTX_FILES, CTX_HOME, CTX_POST
+
+    mounted = frozenset({"blog_edit_post"})
+    assert _build_page_context_parts(None, mounted) == []
+    assert _build_page_context_parts({}, mounted) == []
+    assert _build_page_context_parts({"page_type": "files"}, mounted) == [CTX_FILES]
+    assert _build_page_context_parts({"page_type": "home"}, mounted) == [CTX_HOME]
+    assert _build_page_context_parts({"page_type": "about"}, mounted) == [CTX_ABOUT]
+    assert _build_page_context_parts(
+        {"page_type": "post", "post_id": 7, "post_title": "T"}, mounted,
+    ) == [CTX_POST.format(title="T", post_id=7)]
 
 
 @pytest.mark.asyncio

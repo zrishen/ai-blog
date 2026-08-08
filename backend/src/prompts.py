@@ -115,6 +115,13 @@ CTX_SELECTED_TEXT = (
 CTX_SELECTED_TEXT_LABEL = "选中的内容：\n「{selected}」"
 CTX_SELECTED_SECTION = "选中内容位于文章第 {section_index} 节。调用 blog_edit_post 时把此序号传入 section_index。"
 
+# 博客左栏（侧栏）自定义编辑上下文：透传当前 HTML + 卡片可用高度，让 AI 基于现状修改、按高度生成填满内容
+CTX_LEFTBAR_HEIGHT = (
+    "当前左栏卡片可用高度约 {height}px（宽约 240–320px），"
+    "请生成刚好填满该高度的内容（避免溢出或大片留白）。"
+)
+CTX_LEFTBAR_HTML = "当前左栏 HTML（可基于其修改或重做）：\n{html}"
+
 # 上下文压缩（compact）摘要提示词
 
 COMPACT_SUMMARY_PROMPT = (
