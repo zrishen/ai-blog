@@ -51,6 +51,7 @@ from src.services.subscription import (
 from src.core.context import current_user_id_cv
 from src.services.skill import resolve_skills
 from src.tools.mcp import format_mcp_capabilities, normalize_mcp_capabilities
+from src.tools.behavior import ResultContext
 from src.tools.provider import ToolContext, ToolFeatureFlags, assemble_tools
 
 from src.services.llm.llm_factory import _chat_model_kwargs, _create_llm, _system_prompt
@@ -60,25 +61,17 @@ from .messages import (
     _has_image_blocks,
     _without_image_blocks,
 )
-from .references import _extract_blog_meta, _extract_references
 from .streaming import (
-    _BLOGDELTA_MARKER,
-    _BLOGSTART_MARKER,
     _DONE_MARKER,
-    _PATCHDELTA_MARKER,
-    _PATCHSTART_MARKER,
     _REASONING_MARKER,
     _ROUNDDELTA_MARKER,
     _ROUNDEND_MARKER,
     _STREAMERROR_MARKER,
     _TOOLPREP_MARKER,
     _compact_json,
-    _extract_partial_content,
-    _extract_partial_int,
-    _extract_partial_replacement,
-    _extract_partial_target,
 )
 from .token_estimate import _extract_reasoning_content, _extract_text_content, estimate_tokens
+from .tool_behaviors import BEHAVIORS
 
 logger = logging.getLogger(__name__)
 
@@ -465,7 +458,7 @@ async def stream_chat(
         skill=skill_ctx,
         mcp_plugins=tuple(mcp_plugins),
         feature_flags=ToolFeatureFlags.from_settings(),
-    ))
+    ), behaviors=BEHAVIORS)
     agent_tools = asm.tools
 
     if use_platform_key:
@@ -489,13 +482,11 @@ async def stream_chat(
     _reasoning_logged_up_to = 0
     tool_events_for_history: list[dict[str, Any]] = []
     loop_steps_for_history: list[str] = []
-    _pending_blog_tool: dict[int, str] = {}
-    _pending_blog_args: dict[int, str] = {}
-    _pending_blog_content_yielded: dict[int, str] = {}
-    _pending_blog_started: dict[int, bool] = {}
-    _pending_patch_started: dict[int, bool] = {}
-    _pending_patch_target: dict[int, str] = {}
-    _pending_patch_replacement_yielded: dict[int, str] = {}
+    # 通用流式 infra：idx → 工具名（name 路由）/ idx → 累积 args（partial JSON）/ idx → projector 实例。
+    # 投射专属状态封进 projector 实例本身，不再散落多个 dict。
+    _stream_name: dict[int, str] = {}
+    _stream_args: dict[int, str] = {}
+    _projectors: dict[int, Any] = {}
     _last_tool_input: dict[str, Any] | None = None
     _current_round_text: list[str] = []
     _round_id = 1
@@ -574,13 +565,11 @@ async def stream_chat(
                     call_meta = _tool_calls_by_id.get(call_id, {})
                     tool_round_id = int(call_meta.get("round_id", max(1, _round_id - 1)))
                     loop_step_index = int(call_meta.get("loop_step_index", max(0, _loop_step_index - 1)))
-                    _pending_blog_tool.clear()
-                    _pending_blog_args.clear()
-                    _pending_blog_content_yielded.clear()
-                    _pending_blog_started.clear()
-                    _pending_patch_started.clear()
-                    _pending_patch_target.clear()
-                    _pending_patch_replacement_yielded.clear()
+                    # GLOBAL CLEAR：清空所有 idx 的流式状态（name/args/projector）。
+                    # load-bearing——下一轮 name chunk 因此判 _is_new 重发 TOOLPREP。
+                    _stream_name.clear()
+                    _stream_args.clear()
+                    _projectors.clear()
                     history_start = {
                         "type": "start", "toolName": tool_name, "call_id": call_id,
                         "round_id": tool_round_id, "loop_step_index": loop_step_index,
@@ -625,27 +614,25 @@ async def stream_chat(
                         "loop_step_index": loop_step_index,
                         "stream_id": str(call_meta.get("stream_id", "")),
                     }
-                    if tool_name.startswith("blog_"):
-                        blog_meta = _extract_blog_meta(tool_name, result_text)
-                        if blog_meta:
-                            payload["blog_meta"] = blog_meta
-                    elif tool_name == "update_blog_sidebar":
-                        # 把工具输入的 html 回传前端，左栏 iframe 即时渲染（无需改 SSE 协议）
-                        sidebar_input = _tool_call_input_by_id.get(call_id, _last_tool_input)
-                        sidebar_html = sidebar_input.get("html") if isinstance(sidebar_input, dict) else None
-                        if sidebar_html:
-                            payload["blog_meta"] = {"html": sidebar_html}
-                    tool_input_for_call = _tool_call_input_by_id.get(call_id, _last_tool_input)
-                    refs = _extract_references(tool_name, result_text, tool_input_for_call)
-                    if refs:
-                        payload["references"] = refs
+                    # 行为分派：descriptor.on_result 统一产 blog_meta/references（消灭 tool_name if/elif）
+                    descriptor = asm.behaviors.get(tool_name)
+                    merge: dict[str, object] = {}
+                    if descriptor and descriptor.on_result:
+                        tool_input_for_call = _tool_call_input_by_id.get(call_id, _last_tool_input)
+                        merge = descriptor.on_result(ResultContext(
+                            tool_name=tool_name,
+                            result_text=result_text,
+                            tool_input=tool_input_for_call,
+                        ))
+                        if merge:
+                            payload.update(merge)
                     history_event: dict[str, Any] = {
                         "type": "end", "toolName": tool_name, "result": result_text,
                         "call_id": call_id, "round_id": tool_round_id,
                         "loop_step_index": loop_step_index,
                     }
-                    if refs:
-                        history_event["references"] = refs
+                    if "references" in merge:
+                        history_event["references"] = merge["references"]
                     tool_events_for_history.append(history_event)
                     yield f"\n\n{_DONE_MARKER}TOOLDONE{_DONE_MARKER}\n"
                     yield json.dumps(payload)
@@ -690,14 +677,15 @@ async def stream_chat(
 
                             if tc_chunk.get("name"):
                                 _tool_name_chunk = tc_chunk["name"]
-                                _is_new_tool = idx not in _pending_blog_tool
-                                _pending_blog_tool[idx] = _tool_name_chunk
-                                _pending_blog_args[idx] = ""
-                                _pending_blog_content_yielded[idx] = ""
-                                _pending_blog_started[idx] = False
-                                _pending_patch_started[idx] = False
-                                _pending_patch_target[idx] = ""
-                                _pending_patch_replacement_yielded[idx] = ""
+                                _is_new_tool = idx not in _stream_name
+                                _stream_name[idx] = _tool_name_chunk
+                                _stream_args[idx] = ""
+                                # 按 descriptor 重建 per-idx projector（有 factory 则建实例，否则清旧）
+                                descriptor = asm.behaviors.get(_tool_name_chunk)
+                                if descriptor and descriptor.stream_projector_factory:
+                                    _projectors[idx] = descriptor.stream_projector_factory()
+                                elif idx in _projectors:
+                                    del _projectors[idx]
                                 if _is_new_tool:
                                     yield _TOOLPREP_MARKER + _compact_json({
                                         "tool_name": _tool_name_chunk,
@@ -705,60 +693,12 @@ async def stream_chat(
                                     })
 
                             if tc_chunk.get("args"):
-                                _pending_blog_args[idx] = (_pending_blog_args.get(idx, "") or "") + tc_chunk["args"]
-
-                                tool_name = _pending_blog_tool.get(idx, "")
-
-                                stream_id = f"{_round_id}:{idx}"
-                                args_so_far = _pending_blog_args[idx]
-                                post_id = _extract_partial_int(args_so_far, "post_id")
-
-                                if tool_name == "blog_write_post" and post_id is not None:
-                                    if not _pending_blog_started.get(idx, False):
-                                        _pending_blog_started[idx] = True
-                                        yield _BLOGSTART_MARKER + _compact_json({
-                                            "post_id": post_id,
-                                            "stream_id": stream_id,
-                                        })
-                                    content_so_far = _extract_partial_content(args_so_far)
-                                    if content_so_far is not None:
-                                        prev = _pending_blog_content_yielded.get(idx, "")
-                                        new_part = content_so_far[len(prev):]
-                                        if new_part:
-                                            _pending_blog_content_yielded[idx] = content_so_far
-                                            yield _BLOGDELTA_MARKER + _compact_json({
-                                                "post_id": post_id,
-                                                "stream_id": stream_id,
-                                                "content_delta": new_part,
-                                            })
-
-                                elif tool_name == "blog_edit_post" and post_id is not None:
-                                    target_so_far = _extract_partial_target(args_so_far) or ""
-                                    if (
-                                        target_so_far
-                                        and '"replacement_text"' in args_so_far
-                                        and not _pending_patch_started.get(idx, False)
-                                    ):
-                                        _pending_patch_started[idx] = True
-                                        _pending_patch_target[idx] = target_so_far
-                                        _pending_patch_replacement_yielded[idx] = ""
-                                        yield _PATCHSTART_MARKER + _compact_json({
-                                            "post_id": post_id,
-                                            "stream_id": stream_id,
-                                            "target_text": target_so_far,
-                                        })
-                                    if _pending_patch_started.get(idx, False):
-                                        replacement_so_far = _extract_partial_replacement(args_so_far)
-                                        if replacement_so_far is not None:
-                                            prev_repl = _pending_patch_replacement_yielded.get(idx, "")
-                                            new_repl = replacement_so_far[len(prev_repl):]
-                                            if new_repl:
-                                                _pending_patch_replacement_yielded[idx] = replacement_so_far
-                                                yield _PATCHDELTA_MARKER + _compact_json({
-                                                    "post_id": post_id,
-                                                    "stream_id": stream_id,
-                                                    "replacement_delta": new_repl,
-                                                })
+                                _stream_args[idx] = (_stream_args.get(idx, "") or "") + tc_chunk["args"]
+                                proj = _projectors.get(idx)
+                                if proj is not None:
+                                    stream_id = f"{_round_id}:{idx}"
+                                    for marker in proj.on_args(_stream_args[idx], stream_id):
+                                        yield marker
 
                 elif kind == "on_chat_model_end":
                     ai_msg = event.get("data", {}).get("output")

@@ -2,6 +2,7 @@
 
 import json
 import re
+from typing import Protocol
 
 _DONE_MARKER = chr(0)
 _BLOGSTART_MARKER = f"{_DONE_MARKER}BLOGSTART{_DONE_MARKER}"
@@ -133,3 +134,83 @@ def _extract_partial_target(args_json: str) -> str | None:
 
 def _extract_partial_replacement(args_json: str) -> str | None:
     return _extract_partial_json_string(args_json, "replacement_text")
+
+
+class StreamProjector(Protocol):
+    """单 idx 的流式投射状态机：累积 args → 增量 marker 列表。每并发工具 idx 一个实例。"""
+
+    def on_args(self, args_so_far: str, stream_id: str) -> list[str]: ...
+
+
+class BlogWriteProjector:
+    """blog_write_post 流式投射：BLOGSTART 一次 + BLOGDELTA content 增量。
+
+    content 用 _extract_partial_content（不解 \\u，与现状逐字一致）；post_id 用
+    _extract_partial_int 的数字定界（半截返回 None，防误投射）。
+    """
+
+    __slots__ = ("started", "content_yielded")
+
+    def __init__(self) -> None:
+        self.started = False
+        self.content_yielded = ""
+
+    def on_args(self, args_so_far: str, stream_id: str) -> list[str]:
+        post_id = _extract_partial_int(args_so_far, "post_id")
+        if post_id is None:
+            return []
+        markers: list[str] = []
+        if not self.started:
+            self.started = True
+            markers.append(_BLOGSTART_MARKER + _compact_json(
+                {"post_id": post_id, "stream_id": stream_id}
+            ))
+        content_so_far = _extract_partial_content(args_so_far)
+        if content_so_far is not None:
+            new_part = content_so_far[len(self.content_yielded):]
+            if new_part:
+                self.content_yielded = content_so_far
+                markers.append(_BLOGDELTA_MARKER + _compact_json(
+                    {"post_id": post_id, "stream_id": stream_id, "content_delta": new_part}
+                ))
+        return markers
+
+
+class BlogEditProjector:
+    """blog_edit_post patch 流式投射：PATCHSTART + PATCHDELTA replacement 增量。
+
+    PATCHSTART 与 PATCHDELTA 是两个独立判断（非 elif），同一 args 分片内可先后都发
+    ——复刻原 orchestrator 的 fall-through 语义。target/replacement 用
+    _extract_partial_json_string（全解码 \\u 含 surrogate pair）。
+    """
+
+    __slots__ = ("started", "target", "replacement_yielded")
+
+    def __init__(self) -> None:
+        self.started = False
+        self.target = ""
+        self.replacement_yielded = ""
+
+    def on_args(self, args_so_far: str, stream_id: str) -> list[str]:
+        post_id = _extract_partial_int(args_so_far, "post_id")
+        if post_id is None:
+            return []
+        markers: list[str] = []
+        target_so_far = _extract_partial_target(args_so_far) or ""
+        if target_so_far and '"replacement_text"' in args_so_far and not self.started:
+            self.started = True
+            self.target = target_so_far
+            self.replacement_yielded = ""
+            markers.append(_PATCHSTART_MARKER + _compact_json(
+                {"post_id": post_id, "stream_id": stream_id, "target_text": target_so_far}
+            ))
+        if self.started:
+            replacement_so_far = _extract_partial_replacement(args_so_far)
+            if replacement_so_far is not None:
+                new_repl = replacement_so_far[len(self.replacement_yielded):]
+                if new_repl:
+                    self.replacement_yielded = replacement_so_far
+                    markers.append(_PATCHDELTA_MARKER + _compact_json(
+                        {"post_id": post_id, "stream_id": stream_id, "replacement_delta": new_repl}
+                    ))
+        return markers

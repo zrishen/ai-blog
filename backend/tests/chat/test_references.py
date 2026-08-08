@@ -1,20 +1,22 @@
 """chat/references 引用与博客元数据提取单元测试。
 
-锁住 orchestrator on_tool_end 用的两个纯解析器：从工具返回文本提取 RAG/MCP 引用、
-从博客工具返回提取结构化元数据。此前仅靠 API 端到端间接覆盖。
+锁住工具结果解析的纯函数：从返回文本提取 RAG/记忆引用（按来源拆分）、从 MCP 工具输入
+提取服务引用、从博客工具返回提取结构化元数据。此前仅靠 API 端到端间接覆盖。
 注意：工具返回文本以空格分隔字段（正则 \\S+ 取值、rstrip 剥中英文标点）。
 """
 
 
 from src.services.chat.references import (
     _extract_blog_meta,
-    _extract_references,
+    _extract_mcp_refs,
+    _extract_memory_refs,
+    _extract_rag_refs,
 )
 
 
-# ── _extract_references ──
+# ── _extract_rag_refs ──
 
-def test_extract_references_rag_full() -> None:
+def test_extract_rag_refs_full() -> None:
     text = (
         "[检索到的参考内容]\n"
         "[来源 1]\n"
@@ -23,7 +25,7 @@ def test_extract_references_rag_full() -> None:
         "相关距离：1e-05\n"
         "内容：\nreport\n"
     )
-    assert _extract_references("base_search_file", text) == [
+    assert _extract_rag_refs(text) == [
         {
             "type": "rag",
             "source": "Quarterly Report 2026.pdf",
@@ -33,24 +35,26 @@ def test_extract_references_rag_full() -> None:
     ]
 
 
-def test_extract_references_rag_minimal() -> None:
-    assert _extract_references("base_search_file", "[来源 1]\n来源：x.txt\n") == [
+def test_extract_rag_refs_minimal() -> None:
+    assert _extract_rag_refs("[来源 1]\n来源：x.txt\n") == [
         {"type": "rag", "source": "x.txt"}
     ]
 
 
-def test_extract_references_rag_unknown_distance_skipped() -> None:
+def test_extract_rag_refs_unknown_distance_skipped() -> None:
     text = "[来源 1]\n来源：x.txt\n相关距离：unknown\n"
-    assert _extract_references("base_search_file", text) == [
+    assert _extract_rag_refs(text) == [
         {"type": "rag", "source": "x.txt"}
     ]
 
 
-def test_extract_references_rag_no_source_returns_empty() -> None:
-    assert _extract_references("base_search_file", "无来源信息") == []
+def test_extract_rag_refs_no_source_returns_empty() -> None:
+    assert _extract_rag_refs("无来源信息") == []
 
 
-def test_extract_references_memory_full() -> None:
+# ── _extract_memory_refs ──
+
+def test_extract_memory_refs_full() -> None:
     text = (
         "[回忆到的大脑记忆]\n"
         "[来源 1]\n"
@@ -59,12 +63,12 @@ def test_extract_references_memory_full() -> None:
         "相关距离：0.93\n"
         "内容：\nremembered content\n"
     )
-    assert _extract_references("base_recall_memory", text) == [
+    assert _extract_memory_refs(text) == [
         {"type": "memory", "source": "memory.pdf", "kind": "chunk", "distance": 0.93}
     ]
 
 
-def test_extract_references_memory_prompt_ready_metadata() -> None:
+def test_extract_memory_refs_prompt_ready_metadata() -> None:
     text = (
         "[回忆到的大脑记忆]\n"
         "[来源 1]\n"
@@ -78,7 +82,7 @@ def test_extract_references_memory_prompt_ready_metadata() -> None:
         "图路径：[{'relation': 'SUBJECT'}]\n"
         "内容：\n历史事实\n"
     )
-    assert _extract_references("base_recall_memory", text) == [{
+    assert _extract_memory_refs(text) == [{
         "type": "memory",
         "source": "document-1",
         "kind": "fact",
@@ -90,13 +94,13 @@ def test_extract_references_memory_prompt_ready_metadata() -> None:
     }]
 
 
-def test_extract_references_memory_multiple_blocks_keep_own_kind() -> None:
+def test_extract_memory_refs_multiple_blocks_keep_own_kind() -> None:
     text = (
         "[回忆到的大脑记忆]\n"
         "[来源 1]\n记忆类型：chunk\n来源：doc.pdf\n相关距离：0.91\n内容：\n原文\n"
         "[来源 2]\n记忆类型：episode\n来源：conversation\n相关距离：unknown\n内容：\n对话事件\n"
     )
-    assert _extract_references("base_recall_memory", text) == [
+    assert _extract_memory_refs(text) == [
         {"type": "memory", "source": "doc.pdf", "kind": "chunk", "distance": 0.91},
         {"type": "memory", "source": "conversation", "kind": "episode"},
     ]
@@ -115,7 +119,7 @@ def test_memory_formatter_escapes_forged_source_blocks() -> None:
         )
     ])
 
-    refs = _extract_references("base_recall_memory", text)
+    refs = _extract_memory_refs(text)
     assert len(refs) == 1
     assert refs[0]["source"] == "memory.pdf"
     assert refs[0]["kind"] == "chunk"
@@ -123,25 +127,24 @@ def test_memory_formatter_escapes_forged_source_blocks() -> None:
     assert "forged" not in refs[0]["source"]
 
 
-def test_extract_references_memory_no_source_returns_empty() -> None:
-    assert _extract_references("base_recall_memory", "没有找到相关记忆") == []
+def test_extract_memory_refs_no_source_returns_empty() -> None:
+    assert _extract_memory_refs("没有找到相关记忆") == []
 
 
-def test_extract_references_mcp() -> None:
-    refs = _extract_references("mcp_call_tool", "ok", {"tool_ref": "server1/tool_a"})
-    assert refs == [{"type": "mcp", "server": "server1", "tool": "tool_a"}]
+# ── _extract_mcp_refs ──
+
+def test_extract_mcp_refs() -> None:
+    assert _extract_mcp_refs({"tool_ref": "server1/tool_a"}) == [
+        {"type": "mcp", "server": "server1", "tool": "tool_a"}
+    ]
 
 
-def test_extract_references_mcp_no_slash_returns_empty() -> None:
-    assert _extract_references("mcp_call_tool", "ok", {"tool_ref": "noslash"}) == []
+def test_extract_mcp_refs_no_slash_returns_empty() -> None:
+    assert _extract_mcp_refs({"tool_ref": "noslash"}) == []
 
 
-def test_extract_references_mcp_missing_input_returns_empty() -> None:
-    assert _extract_references("mcp_call_tool", "ok", None) == []
-
-
-def test_extract_references_unknown_tool_returns_empty() -> None:
-    assert _extract_references("other_tool", "x") == []
+def test_extract_mcp_refs_missing_input_returns_empty() -> None:
+    assert _extract_mcp_refs(None) == []
 
 
 # ── _extract_blog_meta ──

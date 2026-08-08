@@ -7,7 +7,7 @@ base_recall_memory(memory_enabled) + 条件 mcp_call_tool(mcp_plugins 非空)。
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
 from langchain_core.tools import BaseTool
@@ -18,6 +18,7 @@ from src.tools.registry import TOOL_REGISTRY
 
 if TYPE_CHECKING:
     from src.services.skill.context import SkillContext
+    from src.tools.behavior import ToolBehaviorDescriptor
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class ToolContext:
 class AssembleResult:
     tools: list[BaseTool]
     mounted_tool_names: frozenset[str]
+    behaviors: dict[str, "ToolBehaviorDescriptor"] = field(default_factory=dict)
 
 
 class ToolProvider(Protocol):
@@ -76,7 +78,9 @@ class McpToolProvider:
 _PROVIDERS: tuple[ToolProvider, ...] = (McpToolProvider(),)
 
 
-def assemble_tools(ctx: ToolContext) -> AssembleResult:
+def assemble_tools(
+    ctx: ToolContext, behaviors: dict[str, "ToolBehaviorDescriptor"] | None = None
+) -> AssembleResult:
     """唯一装配入口，替换 orchestrator 硬编码。
 
     (1) 校验 required_tool_names 全登记（未登记 → ValueError fail loud）；
@@ -112,4 +116,12 @@ def assemble_tools(ctx: ToolContext) -> AssembleResult:
             tools.append(tool)
             seen.add(tool.name)
 
-    return AssembleResult(tools=tools, mounted_tool_names=frozenset(seen))
+    # 行为描述符按已挂载名过滤——mcp_call_tool 等动态工具的 behavior 同样经此收割
+    beh_table = behaviors or {}
+    mounted_behaviors = {name: beh_table[name] for name in seen if name in beh_table}
+
+    return AssembleResult(
+        tools=tools,
+        mounted_tool_names=frozenset(seen),
+        behaviors=mounted_behaviors,
+    )
