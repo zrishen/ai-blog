@@ -401,10 +401,10 @@ async def stream_chat(
             })
             return
 
-    # 3. Build agent（assemble_tools 唯一装配入口，seam-conventions §3；行为等价原硬编码）
+    # 3. Build agent（assemble_tools 唯一装配入口；行为等价原硬编码）
     skill_ctx = resolve_skills(
         enabled_ids=frozenset(enabled_skills) if enabled_skills is not None else None
-    )  # 1.4：None→默认；[] 显式禁用所有 skill（is not None 区分空列表与缺省）
+    )  # None→默认；[] 显式禁用所有 skill（is not None 区分空列表与缺省）
     asm = assemble_tools(ToolContext(
         user_id=user_id,
         skill=skill_ctx,
@@ -527,9 +527,9 @@ async def stream_chat(
 
             llm = _create_llm(model_kwargs, thinking_mode)
 
-            # 1.3：prompt 注入走 PromptSegment 注册表（resolve_active_segments 按 priority 装配）。
-            # enabled_segments 取 skill_ctx（1.2 桩返回空集；1.4 skill 框架填写作段名）。
-            # 写作段 1.3 期 default_active=True 保默认快照；1.5 翻 False 后靠此 enabled_segments 激活。
+            # prompt 注入走 PromptSegment 注册表（resolve_active_segments 按 priority 装配）。
+            # enabled_segments 取 skill_ctx（writing skill 启用 → writing×3）；写作段 default_active=False
+            # 后靠此 enabled_segments 激活（OR 语义），condition=_writing_on 双保险。
             prompt_ctx = PromptContext(
                 user_id=user_id,
                 mounted_tool_names=asm.mounted_tool_names,
@@ -665,7 +665,7 @@ async def stream_chat(
                             reasoning_debug_parts.append(content_reasoning)
                             yield f"{_REASONING_MARKER}{{\"reasoning_delta\":{json.dumps(content_reasoning)}}}"
 
-                    # 1.5) 模型推理内容（多字段兼容）
+                    # 模型推理内容（多字段兼容）
                     if chunk and hasattr(chunk, "additional_kwargs"):
                         rc = getattr(chunk.additional_kwargs, "get", None)
                         reasoning = None

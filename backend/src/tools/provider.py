@@ -1,6 +1,6 @@
-"""工具装配唯一入口 assemble_tools + ToolProvider 协议（seam-conventions §3）。
+"""工具装配唯一入口 assemble_tools + ToolProvider 协议。
 
-替换 orchestrator L400-409 硬编码 append。装配 = 静态领域工具（TOOL_REGISTRY 查表 + gate）
+替换 orchestrator 硬编码 append。装配 = 静态领域工具（TOOL_REGISTRY 查表 + gate）
 + 动态平台工具（_PROVIDERS.provide）。行为等价现状：blog_7 + base_search_file + 条件
 base_recall_memory(memory_enabled) + 条件 mcp_call_tool(mcp_plugins 非空)。
 """
@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ToolFeatureFlags:
     memory_enabled: bool
-    web_tools_enabled: bool = False        # P1.6 WebToolProvider
-    workspace_files_enabled: bool = False  # P2.4 WorkspaceFilesProvider
-    code_execution_enabled: bool = False   # P3 CodeExecutionProvider
+    web_tools_enabled: bool = False        # WebToolProvider
+    workspace_files_enabled: bool = False  # WorkspaceFilesProvider
+    code_execution_enabled: bool = False   # CodeExecutionProvider
 
     @classmethod
     def from_settings(cls) -> "ToolFeatureFlags":
@@ -72,7 +72,7 @@ class McpToolProvider:
         return [build_mcp_call_tool(plugins, capabilities)]
 
 
-# 固定序；P1.6 +WebToolProvider / P2.4 +WorkspaceFilesProvider / P3 +CodeExecutionProvider 预留槽
+# 固定序；预留槽：WebToolProvider / WorkspaceFilesProvider / CodeExecutionProvider
 _PROVIDERS: tuple[ToolProvider, ...] = (McpToolProvider(),)
 
 
@@ -84,7 +84,7 @@ def assemble_tools(ctx: ToolContext) -> AssembleResult:
         （memory_enabled=False 属预期降级，不告警；仅未登记名才 fail loud）；
     (3) 遍历 _PROVIDERS.provide(ctx)（固定序）追加动态工具；
     (4) 按名去重（首现保留，跨源同名 warning）；
-    (5) 返回 tools + mounted_tool_names（名集合，喂 PromptContext 门控，1.3）。
+    (5) 返回 tools + mounted_tool_names（名集合，喂 PromptContext 门控）。
     """
     required = ctx.skill.required_tool_names
     unknown = set(required) - TOOL_REGISTRY.keys()

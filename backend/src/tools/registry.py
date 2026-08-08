@@ -1,7 +1,7 @@
 """工具注册表：静态领域工具的单一查表源（assemble_tools 内部用，orchestrator 不直连）。
 
 TOOL_REGISTRY 按「现状装配顺序」定义——assemble_tools 遍历此 dict 保插入序，asm.tools 顺序
-== 旧 agent_tools 顺序（行为等价）。新工具进 registry 或经 ToolProvider 动态产（seam-conventions §3）。
+== 旧 agent_tools 顺序（行为等价）。新工具进 registry 或经 ToolProvider 动态产。
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class ToolSpec:
     tags: frozenset[str] = frozenset()  # skill 归属标签（"writing"/"base"）；skill required_tools = tool_names_by_tag(tag)
 
 
-# tags：writing=写作 skill；base=通用底座（always required；P2 知识库/记忆 skill 化时改 knowledge/memory + 建 skill）
+# tags：writing=写作 skill；base=通用底座（always required；知识库/记忆 skill 化时改 knowledge/memory + 建 skill）
 _WRITING = frozenset({"writing"})
 _BASE = frozenset({"base"})
 

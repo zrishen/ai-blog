@@ -1,8 +1,8 @@
-"""Skill 声明注册表（seam-conventions §7）：skill = {声明工具 tag + 启用的 prompt 段名}。
+"""Skill 声明注册表：skill = {声明工具 tag + 启用的 prompt 段名}。
 
-1.4 落地：SKILL_REGISTRY + DEFAULT_ENABLED_SKILLS。resolve_skills 读此派生 SkillContext。
+SKILL_REGISTRY + DEFAULT_ENABLED_SKILLS 为唯一源，resolve_skills 读此派生 SkillContext。
 指令文本是 PromptSegment 段（prompts.py 唯一源）；skill 只声明「启用哪些段名」（字符串契约，
-不 import prompts，解耦）。删 instructions（seam-conventions §6 裁定#2）。
+不 import prompts，解耦）；不内嵌 instructions 文本（由 prompts.py 段承载）。
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ class SkillDescriptor:
     - required_tool_tag：TOOL_REGISTRY 中此 tag 的工具 = skill 声明挂载的工具
       （tool_names_by_tag 派生，统一工具名源，无工具名字面量副本）。
     - enabled_segment_names：skill 启用时激活的 PromptSegment 段名（prompts.py SEG_*.name）。
-      1.4 段多 default_active=True，此集合为 1.5 翻 default_active=False 后的激活源铺路。
+      写作段在 prompts.py 中默认 default_active=False，此集合为其激活源（skill 启用 → enabled_segments 含 writing×3）。
     """
 
     id: str
@@ -39,5 +39,5 @@ SKILL_REGISTRY: dict[str, SkillDescriptor] = {
     ),
 }
 
-# 默认启用的 skill（用户未传 enabled_skills 时）；1.4 仅 writing（知识库/记忆 P2 skill 化）
+# 默认启用的 skill（用户未传 enabled_skills 时）；目前仅 writing（知识库/记忆待 skill 化）
 DEFAULT_ENABLED_SKILLS: frozenset[str] = frozenset({"writing"})

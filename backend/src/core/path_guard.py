@@ -1,15 +1,15 @@
 """path_guard: 跨切面文件系统安全咽喉点。
 
 把 (属主, 相对路径) 解析为【已校验归属 + 已防穿越】的安全物理 Path。唯一入口 ensure_within。
-@require_user 把 current_user_id_cv 桥接到工具层（1.1 仅定义，工具接入留后续）。
+@require_user 把 current_user_id_cv 桥接到工具层（当前仅定义，工具接入留后续）。
 
 Scope:
 - UPLOAD     upload_dir/resolve_username(属主)            现状 file_service.get_user_upload_dir
-- ATTACHMENT chat_attachment_dir（1.1 现状兼容：stored_path 自带 <user_id>/ 前缀，root 不拼 identity；
-             P2 收敛后改 chat_attachment_dir/str(user_id) + rel_path 不含 user 段，届时退役本 scope）
-- WORKSPACE  workspace_root/resolve_username(属主)         P2 真实工作目录默认（Phase 2 落地 settings.workspace_root）
+- ATTACHMENT chat_attachment_dir（现状兼容：stored_path 自带 <user_id>/ 前缀，root 不拼 identity；
+             收敛后改 chat_attachment_dir/str(user_id) + rel_path 不含 user 段，届时退役本 scope）
+- WORKSPACE  workspace_root/resolve_username(属主)         真实工作目录默认（依赖 settings.workspace_root 配置）
 
-属主语义（seam-conventions §5 裁定#5）：ensure_within 第一参数是【资源属主】（非 viewer）。
+属主语义：ensure_within 第一参数是【资源属主】（非 viewer）。
 公共读路径传 author username/id；chat 路径属主=current user（@require_user 从 cv 取）。
 """
 
@@ -39,7 +39,7 @@ def _base_dir(scope: Scope) -> Path:
         return Path(settings.upload_dir).resolve()
     root = getattr(settings, "workspace_root", None)
     if not root:
-        raise OwnershipError("workspace scope 未配置（Phase 2 落地）")
+        raise OwnershipError("workspace scope 未配置（settings.workspace_root 未设置）")
     return Path(root).resolve()
 
 
@@ -72,8 +72,8 @@ def ensure_within(
 
     gate ④ 说明：strict=True 保证父目录真实存在（调用方 write 前无需再判）；其 is_relative_to 复检为
     defense-in-depth（③ 已逻辑覆盖：target.resolve() 在 root 内 ⟹ parent.resolve() 亦在 root 内），
-    非跨调用 TOCTOU 真防护——那需 O_NOFOLLOW/fchdir，留 P2/P3 沙箱。当前生产无 write 经 mode="write"
-    （_resolve_stored_path 用 read、save_file 绕过 path_guard），④ 实质生效待 P2 写路径迁移。
+    非跨调用 TOCTOU 真防护——那需 O_NOFOLLOW/fchdir，留待沙箱化。当前生产无 write 经 mode="write"
+    （_resolve_stored_path 用 read、save_file 绕过 path_guard），④ 实质生效待写路径迁移。
     """
     root = user_root(user_id, scope=scope)
     p = Path(rel_path)
@@ -106,8 +106,8 @@ def require_user(tool: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable
     纯校验装饰器——不注入 user_id 参数（避免泄露给 LLM 的工具 schema），工具内部仍 cv.get()
     （此时保证非 None）。仅支持 async 工具（wrapper 内 await tool(...))；sync @tool 需先改 async。
     @functools.wraps 保留 __name__/__doc__，供后续 LangChain @tool 的 schema 生成依赖。
-    1.1 仅定义；工具接入留后续（接入把 None 分支从"返回字符串"改"抛 403"，
-    需 1.7 回归确认，见 seam-conventions §5 risk）。
+    当前仅定义；工具接入留后续（接入把 None 分支从"返回字符串"改"抛 403"，
+    接入时需回归确认）。
     """
 
     @functools.wraps(tool)
