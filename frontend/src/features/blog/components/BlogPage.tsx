@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useChat } from "../../../stores/chatStore";
 import type { BlogPost } from "../../../stores/chatStore";
-import { listSitePosts } from "../../../api/client";
+import { listSitePosts } from "@/api/blog";
 import { BlogPostCard } from "./BlogPostCard";
 import { BlogEditor } from "./BlogEditor";
 import { splitBlogTags } from "../utils/blogTags";

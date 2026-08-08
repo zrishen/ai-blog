@@ -1,4 +1,4 @@
-import type { AdminPluginDraft, PluginPermissionLevel, PluginTransport } from "@/api/client";
+import type { AdminPluginDraft, PluginPermissionLevel, PluginTransport } from "@/api/plugins";
 
 function asObject(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {

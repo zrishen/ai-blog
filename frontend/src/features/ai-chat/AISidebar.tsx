@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../../stores/authStore";
 import { useChat } from "../../stores/chatStore";
 import type { AISidebarConversationKey, Conversation, ToolEvent } from "../../stores/chatStore";
-import { fetchConversations } from "../../api/client";
+import { fetchConversations } from "@/api/conversations";
 import { MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";

@@ -2,7 +2,8 @@ import { useCallback, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useChat } from "../../../stores/chatStore";
 import { useAuth } from "../../../stores/authStore";
-import { createBlogPost, generateBlogCover, suggestBlogTags, uploadFile } from "../../../api/client";
+import { createBlogPost, generateBlogCover, suggestBlogTags } from "@/api/blog";
+import { uploadFile } from "@/api/chat";
 import { generateExcerpt } from "../utils/blogExcerpt";
 import type { BlogPost } from "../types";
 

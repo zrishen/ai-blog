@@ -38,19 +38,18 @@ vi.mock("vditor", () => ({
 vi.mock("vditor/dist/index.css", () => ({}));
 vi.mock("vditor/dist/js/i18n/zh_CN", () => ({}));
 
-vi.mock("../../src/api/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/api/client")>();
-  return {
-    ...actual,
-    createBlogPost: vi.fn(() => Promise.resolve({ id: 1 })),
-    updateBlogPost: vi.fn(() => Promise.resolve({ id: 1 })),
-    getBlogPost: vi.fn(() => Promise.resolve(null)),
-    listBlogPosts: vi.fn(() => Promise.resolve([])),
-    generateBlogCover: vi.fn(() => Promise.resolve("")),
-    uploadFile: vi.fn(() => Promise.resolve("")),
-    suggestBlogTags: vi.fn(() => Promise.resolve([])),
-  };
-});
+vi.mock("../../src/api/blog", () => ({
+  createBlogPost: vi.fn(() => Promise.resolve({ id: 1 })),
+  updateBlogPost: vi.fn(() => Promise.resolve({ id: 1 })),
+  getBlogPost: vi.fn(() => Promise.resolve(null)),
+  listBlogPosts: vi.fn(() => Promise.resolve([])),
+  generateBlogCover: vi.fn(() => Promise.resolve("")),
+  suggestBlogTags: vi.fn(() => Promise.resolve([])),
+}));
+
+vi.mock("../../src/api/chat", () => ({
+  uploadFile: vi.fn(() => Promise.resolve("")),
+}));
 
 describe("BlogEditor 工具区折叠/展开", () => {
   beforeEach(() => {

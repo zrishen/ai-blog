@@ -77,17 +77,3 @@ async function readErrorDetail(res: Response, fallback: string): Promise<string>
 }
 
 export { API_BASE, apiFetch, readErrorDetail, refreshOnce };
-
-// Re-export domain modules for backward compatibility.
-export * from "./auth";
-export * from "./conversations";
-export * from "./chat";
-export * from "./plugins";
-export * from "./blog";
-export * from "./workspace";
-export * from "./files";
-export * from "./chatAttachments";
-export * from "./trash";
-export * from "./admin";
-export * from "./subscription";
-export * from "./brain";

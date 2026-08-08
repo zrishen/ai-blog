@@ -25,17 +25,17 @@ import {
   attachResource,
   createFolder,
   deleteNode,
-  getBlogPost,
   getWorkspaceTree,
-  listFileDocuments,
   moveNode,
   moveResource,
   patchNode,
   reorderNodes,
-  type FileDocument,
   type WorkspaceNode,
-} from "../../api/client";
-import { useFileProcessing } from "../file-processing/FileProcessingProvider";
+} from "@/api/workspace";
+import { getBlogPost } from "@/api/blog";
+import { listFileDocuments } from "@/api/files";
+import type { FileDocument } from "@/api/files";
+import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
 import {
   ContextMenu,
   ContextMenuContent,

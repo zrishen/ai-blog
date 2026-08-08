@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import { entityTypeColor } from "../utils/brainStyle";
-import type { BrainGraphNode } from "@/api/client";
+import type { BrainGraphNode } from "@/api/brain";
 
 export function BrainEntityNode({ data, selected }: NodeProps) {
   const entity = (data as { entity: BrainGraphNode }).entity;

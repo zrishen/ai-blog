@@ -7,15 +7,18 @@ import "@testing-library/jest-dom/vitest";
 
 // 阻止 NavBar 在挂载时拉取 LLM 设置
 vi.mock("../../src/api/client", () => ({
-  getLLMSettings: vi.fn(() => Promise.resolve({ protocol: "openai", base_url: "", api_key: "", model: "", supports_thinking: true })),
-  updateLLMSettings: vi.fn(),
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn(() => null),
 }));
 
+vi.mock("../../src/api/auth", () => ({
+  getLLMSettings: vi.fn(() => Promise.resolve({ protocol: "openai", base_url: "", api_key: "", model: "", supports_thinking: true })),
+  updateLLMSettings: vi.fn(),
+}));
+
 import { AuthProvider } from "../../src/stores/authStore";
 import { ChatProvider } from "../../src/stores/chatStore";
-import { FileProcessingProvider } from "../../src/features/file-processing/FileProcessingProvider";
+import { FileProcessingProvider } from "../../src/lib/providers/FileProcessingProvider";
 import { NavBar } from "../../src/components/NavBar";
 
 async function renderNav(authed = true) {

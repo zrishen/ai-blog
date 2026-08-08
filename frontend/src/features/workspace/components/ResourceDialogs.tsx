@@ -1,6 +1,6 @@
 /* resource 操作的共享弹窗：移动 / 删除。挂在持有 useResourceActions 的组件根部。 */
 
-import type { WorkspaceNode } from "../../../api/client";
+import type { WorkspaceNode } from "@/api/workspace";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import {

@@ -5,7 +5,7 @@ import "./index.css";
 import { ChatProvider } from "./stores/chatStore";
 import { AuthProvider } from "./stores/authStore";
 import App from "./App";
-import { FileProcessingProvider } from "./features/file-processing/FileProcessingProvider";
+import { FileProcessingProvider } from "./lib/providers/FileProcessingProvider";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

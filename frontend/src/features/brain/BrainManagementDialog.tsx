@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { BrainFact, BrainMemoryType, BrainPreference } from "@/api/client";
+import type { BrainFact, BrainMemoryType, BrainPreference } from "@/api/brain";
 
 export type BrainManagementAction =
   | { kind: "correct-fact"; fact: BrainFact }

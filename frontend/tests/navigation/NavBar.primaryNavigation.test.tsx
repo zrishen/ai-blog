@@ -5,10 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
 vi.mock("../../src/api/client", () => ({
-  getLLMSettings: vi.fn(),
-  updateLLMSettings: vi.fn(),
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn(() => null),
+}));
+
+vi.mock("../../src/api/auth", () => ({
+  getLLMSettings: vi.fn(),
+  updateLLMSettings: vi.fn(),
 }));
 
 vi.mock("../../src/features/auth/LoginDialog", () => ({
@@ -22,7 +25,7 @@ vi.mock("../../src/features/auth/LoginDialog", () => ({
 }));
 
 import { NavBar } from "../../src/components/NavBar";
-import { FileProcessingProvider } from "../../src/features/file-processing/FileProcessingProvider";
+import { FileProcessingProvider } from "../../src/lib/providers/FileProcessingProvider";
 import { AuthProvider } from "../../src/stores/authStore";
 import { ChatProvider } from "../../src/stores/chatStore";
 

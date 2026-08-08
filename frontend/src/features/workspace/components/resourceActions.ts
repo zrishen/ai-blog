@@ -9,10 +9,10 @@
 import { useCallback, useState } from "react";
 
 import { useChat } from "../../../stores/chatStore";
-import type { WorkspaceNode } from "../../../api/client";
-import { deleteFileDocument, updateFileDocument } from "../../../api/files";
-import { deleteBlogPost, listBlogPosts, updateBlogPost } from "../../../api/blog";
-import { detachResource, moveResource, patchNode } from "../../../api/workspace";
+import type { WorkspaceNode } from "@/api/workspace";
+import { deleteFileDocument, updateFileDocument } from "@/api/files";
+import { deleteBlogPost, listBlogPosts, updateBlogPost } from "@/api/blog";
+import { detachResource, moveResource, patchNode } from "@/api/workspace";
 
 export interface RenameState {
   nodeId: number;

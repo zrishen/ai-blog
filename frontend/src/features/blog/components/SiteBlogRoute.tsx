@@ -1,6 +1,6 @@
 import { useEffect, useReducer } from "react";
 import { useParams } from "react-router-dom";
-import { getSiteUser } from "../../../api/client";
+import { getSiteUser } from "@/api/blog";
 import { useAuth } from "../../../stores/authStore";
 import { useChat } from "../../../stores/chatStore";
 import { BlogPage } from "./BlogPage";

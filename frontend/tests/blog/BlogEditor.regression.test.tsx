@@ -136,7 +136,30 @@ const api = vi.hoisted(() => ({
   setAccessToken: vi.fn(),
 }));
 
-vi.mock("../../src/api/client", () => api);
+vi.mock("../../src/api/client", () => ({
+  getAccessToken: api.getAccessToken,
+  setAccessToken: api.setAccessToken,
+}));
+
+vi.mock("../../src/api/blog", () => ({
+  createBlogPost: api.createBlogPost,
+  updateBlogPost: api.updateBlogPost,
+  publishBlogPost: api.publishBlogPost,
+  listBlogRevisions: api.listBlogRevisions,
+  getBlogRevision: api.getBlogRevision,
+  commitBlogRevision: api.commitBlogRevision,
+  restoreBlogRevision: api.restoreBlogRevision,
+  deleteBlogRevision: api.deleteBlogRevision,
+  deleteBlogPost: api.deleteBlogPost,
+  getBlogPost: api.getBlogPost,
+  listBlogPosts: api.listBlogPosts,
+  suggestBlogTags: api.suggestBlogTags,
+  generateBlogCover: api.generateBlogCover,
+}));
+
+vi.mock("../../src/api/chat", () => ({
+  uploadFile: api.uploadFile,
+}));
 
 const EXISTING_POST = {
   id: 17,

@@ -6,12 +6,11 @@ import "@testing-library/jest-dom/vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-vi.mock("../../src/api/client", () => ({
+vi.mock("../../src/api/blog", () => ({
   deleteBlogPost: vi.fn(() => Promise.resolve()),
   publishBlogPost: vi.fn(() =>
     Promise.resolve({ id: 1, status: "published", published_at: "2026-07-07T00:00:00Z" }),
   ),
-  resolveMarkdownImageSrc: (src: string) => src,
 }));
 
 import { ChatProvider, useChat } from "../../src/stores/chatStore";

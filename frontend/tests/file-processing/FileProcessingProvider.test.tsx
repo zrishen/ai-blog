@@ -39,7 +39,7 @@ vi.mock("../../src/stores/chatStore", () => ({
 }));
 
 import { FileUploadNetworkError } from "../../src/api/files";
-import { FileProcessingProvider, useFileProcessing } from "../../src/features/file-processing/FileProcessingProvider";
+import { FileProcessingProvider, useFileProcessing } from "../../src/lib/providers/FileProcessingProvider";
 
 function makeJob(overrides: Partial<FileProcessingJob> = {}): FileProcessingJob {
   return {

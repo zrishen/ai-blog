@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Archive, FileText, Plus, Trash2 } from "lucide-react";
-import { listBlogPosts, type BlogPostData } from "../../../api/client";
+import { listBlogPosts } from "@/api/blog";
+import type { BlogPostData } from "@/api/blog";
 import { useChat } from "../../../stores/chatStore";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Badge } from "@/components/ui/badge";

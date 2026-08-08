@@ -1,6 +1,6 @@
 import { useEffect, useReducer } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { getSitePost } from "../../../api/client";
+import { getSitePost } from "@/api/blog";
 import { useAuth } from "../../../stores/authStore";
 import { useChat } from "../../../stores/chatStore";
 import { BlogPostView } from "./BlogPostView";

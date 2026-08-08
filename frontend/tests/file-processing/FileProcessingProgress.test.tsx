@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FileProcessingProgress } from "../../src/features/file-processing/FileProcessingProgress";
+import { FileProcessingProgress } from "../../src/lib/providers/FileProcessingProgress";
 import type { FileProcessingJob } from "../../src/api/files";
 
 function makeJob(overrides: Partial<FileProcessingJob> = {}): FileProcessingJob {

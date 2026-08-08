@@ -4,8 +4,8 @@ import {
   generateAdminCodes,
   listAdminCodes,
   revokeAdminCode,
-  type AdminCodeItem,
-} from "@/api/client";
+} from "@/api/admin";
+import type { AdminCodeItem } from "@/api/admin";
 import { formatDateTime as formatBjDateTime } from "@/lib/datetime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

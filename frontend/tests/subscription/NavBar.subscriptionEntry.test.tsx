@@ -5,8 +5,16 @@ import "@testing-library/jest-dom/vitest";
 import { MemoryRouter } from "react-router-dom";
 
 vi.mock("../../src/api/client", () => ({
+  setAccessToken: vi.fn(),
+  getAccessToken: vi.fn(() => null),
+}));
+
+vi.mock("../../src/api/auth", () => ({
   getLLMSettings: vi.fn(() => Promise.resolve({ protocol: "openai", base_url: "", api_key: "", model: "", supports_thinking: true })),
   updateLLMSettings: vi.fn(),
+}));
+
+vi.mock("../../src/api/subscription", () => ({
   getSubscriptionStatus: vi.fn(() => Promise.resolve({
     active: true,
     expires_at: "2099-01-01T00:00:00Z",
@@ -16,13 +24,11 @@ vi.mock("../../src/api/client", () => ({
     period: "2099-W01",
   })),
   redeemSubscriptionCode: vi.fn(),
-  setAccessToken: vi.fn(),
-  getAccessToken: vi.fn(() => null),
 }));
 
 import { AuthProvider } from "../../src/stores/authStore";
 import { ChatProvider } from "../../src/stores/chatStore";
-import { FileProcessingProvider } from "../../src/features/file-processing/FileProcessingProvider";
+import { FileProcessingProvider } from "../../src/lib/providers/FileProcessingProvider";
 import { NavBar } from "../../src/components/NavBar";
 
 function renderNav() {

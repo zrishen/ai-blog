@@ -13,12 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { surfaceVariants } from "@/lib/visualVariants";
-import {
-  getAdminUserUsage,
-  listAdminUsers,
-  type AdminUserItem,
-  type AdminUserWeeklyUsage,
-} from "@/api/client";
+import { getAdminUserUsage, listAdminUsers } from "@/api/admin";
+import type { AdminUserItem, AdminUserWeeklyUsage } from "@/api/admin";
 import { AdminPage, AdminPageHeader } from "./AdminPage";
 
 // 周额度固定上限 100M tokens（展示用 M 单位，÷1e6 保留 1 位）。

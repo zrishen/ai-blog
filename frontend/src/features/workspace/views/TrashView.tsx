@@ -11,7 +11,7 @@ import {
   type TrashItem,
 } from "../../../api/trash";
 import { useChat } from "../../../stores/chatStore";
-import { useFileProcessing } from "@/features/file-processing/FileProcessingProvider";
+import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";

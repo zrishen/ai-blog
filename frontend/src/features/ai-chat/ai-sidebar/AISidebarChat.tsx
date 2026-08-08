@@ -2,15 +2,10 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../../../stores/authStore";
 import { isDisplayableMessage, useChat } from "../../../stores/chatStore";
 import type { AISidebarConversationKey, Message, Reference } from "../../../stores/chatStore";
-import {
-  sendChat,
-  sendSharedLandingChat,
-  sendSharedUserChat,
-  getMessages,
-  listSitePosts,
-  getBlogPost,
-} from "../../../api/client";
-import type { BlogToolMeta, StreamReference } from "../../../api/client";
+import { sendChat, sendSharedLandingChat, sendSharedUserChat } from "@/api/chat";
+import { getMessages } from "@/api/conversations";
+import { listSitePosts, getBlogPost } from "@/api/blog";
+import type { BlogToolMeta, StreamReference } from "@/api/chat";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, AlertCircle } from "lucide-react";
 import { LoginDialog } from "../../auth/LoginDialog";

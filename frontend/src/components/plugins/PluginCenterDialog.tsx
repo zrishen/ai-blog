@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Blocks, Wrench } from "lucide-react";
-import { listPlugins, setPluginEnabled, type PluginSummary } from "@/api/client";
+import { listPlugins, setPluginEnabled } from "@/api/plugins";
+import type { PluginSummary } from "@/api/plugins";
 import {
   Dialog,
   DialogContent,

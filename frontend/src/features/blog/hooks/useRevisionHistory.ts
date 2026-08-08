@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  commitBlogRevision,
-  deleteBlogRevision,
-  getBlogRevision,
-  listBlogRevisions,
-  restoreBlogRevision,
-} from "../../../api/client";
-import type {
-  BlogPostData,
-  BlogRevision,
-  BlogRevisionSummary,
-} from "../../../api/blog";
+import { commitBlogRevision, deleteBlogRevision, getBlogRevision, listBlogRevisions, restoreBlogRevision } from "@/api/blog";
+import type { BlogPostData, BlogRevision, BlogRevisionSummary } from "@/api/blog";
 
 /** Revision APIs are deliberately scoped to the article being edited. */
 export function useRevisionHistory(postId?: number) {

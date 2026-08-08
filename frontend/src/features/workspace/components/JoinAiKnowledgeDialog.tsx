@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileStack, FileText } from "lucide-react";
-import { listBlogPosts, listFileDocuments } from "../../../api/client";
-import type { RagSource } from "../../../api/workspace";
+import { listBlogPosts } from "@/api/blog";
+import { listFileDocuments } from "@/api/files";
+import type { RagSource } from "@/api/workspace";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,7 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useFileProcessing } from "@/features/file-processing/FileProcessingProvider";
+import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
 
 interface Candidate {
   key: string; // "file:123" / "blog_post:456"

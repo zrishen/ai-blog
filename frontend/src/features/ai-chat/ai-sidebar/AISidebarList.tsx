@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../../../stores/authStore";
 import { useChat } from "../../../stores/chatStore";
 import type { AISidebarConversationKey } from "../../../stores/chatStore";
-import { deleteConversation } from "../../../api/client";
+import { deleteConversation } from "@/api/conversations";
 import { ConversationListView, type ConversationListItem } from "./ConversationListView";
 import {
   Dialog,

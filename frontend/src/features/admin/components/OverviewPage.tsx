@@ -21,7 +21,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getAdminOverview, type AdminOverview } from "@/api/client";
+import { getAdminOverview } from "@/api/admin";
+import type { AdminOverview } from "@/api/admin";
 import { AdminPage, AdminPageHeader } from "./AdminPage";
 
 function formatM(n: number): string {

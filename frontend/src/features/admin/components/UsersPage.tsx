@@ -4,8 +4,8 @@ import {
   listAdminUsers,
   grantAdminSubscription,
   setAdminUser,
-  type AdminUserItem,
-} from "@/api/client";
+} from "@/api/admin";
+import type { AdminUserItem } from "@/api/admin";
 import { formatDateTime } from "@/lib/datetime";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";

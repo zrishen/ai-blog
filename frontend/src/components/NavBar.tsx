@@ -40,11 +40,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LoginDialog } from "@/features/auth/LoginDialog";
-import { SubscriptionPanel } from "@/features/subscription/components/SubscriptionPanel";
+import { LoginDialog } from "@/features/auth";
+import { SubscriptionPanel } from "@/components/subscription/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
-import { getLLMSettings, updateLLMSettings, updateSidebarSettings } from "../api/client";
-import type { LLMProtocol, LLMSettingsUpdate } from "../api/client";
+import { getLLMSettings, updateLLMSettings } from "@/api/auth";
+import { updateSidebarSettings } from "@/api/blog";
+import type { LLMProtocol, LLMSettingsUpdate } from "@/api/auth";
 import { cn } from "@/lib/utils";
 import { navItemVariants } from "@/lib/visualVariants";
 import { useWorkspacePrimaryNavigation } from "@/components/useWorkspacePrimaryNavigation";

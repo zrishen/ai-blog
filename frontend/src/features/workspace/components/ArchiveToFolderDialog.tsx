@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Folder } from "lucide-react";
-import { attachResource, getWorkspaceTree } from "../../../api/client";
+import { attachResource, getWorkspaceTree } from "@/api/workspace";
 import { useChat } from "../../../stores/chatStore";
 import { Button } from "@/components/ui/button";
 import {

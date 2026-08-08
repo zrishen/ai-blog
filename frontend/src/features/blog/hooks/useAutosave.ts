@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { API_BASE, createBlogPost, getAccessToken, updateBlogPost } from "../../../api/client";
-import type { BlogPostData } from "../../../api/blog";
+import { API_BASE, getAccessToken } from "@/api/client";
+import { createBlogPost, updateBlogPost } from "@/api/blog";
+import type { BlogPostData } from "@/api/blog";
 import { useAuth } from "../../../stores/authStore";
 import { generateExcerpt } from "../utils/blogExcerpt";
 import { draftRecoveryKey } from "../utils/draftStorage";

@@ -3,19 +3,17 @@ import type { ChangeEvent, ReactNode } from "react";
 import { Archive, Inbox, Plus, Trash2, Upload } from "lucide-react";
 import { BlogIcon, PublishedIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
-import {
-  listBlogPosts,
-  listFileDocuments,
-  type BlogPostData,
-  type FileDocument,
-} from "../../../api/client";
+import { listBlogPosts } from "@/api/blog";
+import type { BlogPostData } from "@/api/blog";
+import { listFileDocuments } from "@/api/files";
+import type { FileDocument } from "@/api/files";
 import { useChat } from "../../../stores/chatStore";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArchiveToFolderDialog, type ArchiveTarget } from "../components/ArchiveToFolderDialog";
 import { DeleteResourceDialog, type DeleteResourceTarget } from "../components/DeleteResourceDialog";
-import { useFileProcessing } from "@/features/file-processing/FileProcessingProvider";
+import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
 import { formatDate } from "./utils";
 

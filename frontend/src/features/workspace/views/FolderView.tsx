@@ -11,8 +11,10 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import { useChat } from "../../../stores/chatStore";
-import { listFileDocuments, type FileDocument, type WorkspaceNode } from "../../../api/client";
-import { getWorkspaceTree } from "../../../api/workspace";
+import { listFileDocuments } from "@/api/files";
+import type { FileDocument } from "@/api/files";
+import { getWorkspaceTree } from "@/api/workspace";
+import type { WorkspaceNode } from "@/api/workspace";
 import { flattenFolders, useResourceActions } from "../components/resourceActions";
 import { ResourceDialogs } from "../components/ResourceDialogs";
 import { Badge } from "@/components/ui/badge";

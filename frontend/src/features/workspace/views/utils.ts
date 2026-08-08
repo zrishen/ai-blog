@@ -1,4 +1,4 @@
-import type { WorkspaceNode } from "../../../api/client";
+import type { WorkspaceNode } from "@/api/workspace";
 import { formatDate as formatBjDate } from "@/lib/datetime";
 
 /** 文件夹树节点：children=子文件夹，resources=挂靠的文件/文章资源 */

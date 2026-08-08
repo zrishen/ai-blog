@@ -1,7 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
-import type { BrainStats, WorkspaceNode } from "../api/client";
-import type { ThinkingMode } from "../api/chat";
+import type { BrainStats } from "@/api/brain";
+import type { WorkspaceNode } from "@/api/workspace";
+import type { ThinkingMode } from "@/api/chat";
 import type {
   AISidebarConversationKey,
   AISidebarHistoryState,
@@ -15,9 +16,8 @@ import type {
 } from "../features/ai-chat/types";
 import { isDisplayableMessage } from "../features/ai-chat/types";
 import type { BlogPost, BlogView } from "../features/blog/types";
-import type { FileDocument } from "../api/client";
-import type { BrainTab, Page, Panel, Theme, WorkspaceView } from "./types";
-import { conversationReducer } from "./slices/conversationSlice";
+import type { FileDocument } from "@/api/files";
+import type { BrainTab, Page, Theme, WorkspaceView } from "./types";
 import { blogReducer } from "./slices/blogSlice";
 import { uiReducer } from "./slices/uiSlice";
 import { revisionReducer } from "./slices/revisionSlice";
@@ -38,22 +38,14 @@ export interface BlogPatchStreamingState {
 }
 
 interface ChatState {
-  conversations: Conversation[];
-  currentConversationId: number | null;
-  messages: Message[];
-  isLoading: boolean;
-  isStreaming: boolean;
   theme: Theme;
-  activePanel: Panel;
 
   currentPage: Page;
-  gearMenuOpen: boolean;
   pluginCenterOpen: boolean;
 
   aiSidebarOpen: boolean;
   aiSidebarConversationId: number | null;
   aiSidebarSelectedKey: AISidebarConversationKey | null;
-  aiSidebarMessages: Message[];
   aiSidebarMessagesByKey: Record<AISidebarConversationKey, Message[]>;
   aiSidebarStreamingByKey: Record<AISidebarConversationKey, boolean>;
   aiSidebarInputsByKey: Record<AISidebarConversationKey, string>;
@@ -104,30 +96,16 @@ interface ChatState {
 }
 
 type ChatAction =
-  | { type: "SET_CONVERSATIONS"; payload: Conversation[] }
-  | { type: "SET_CURRENT_CONVERSATION"; payload: number | null }
-  | { type: "SET_MESSAGES"; payload: Message[] }
-  | { type: "ADD_MESSAGE"; payload: Message }
-  | { type: "UPDATE_MESSAGE"; payload: { id: number; content?: string; image_url?: string; tool_calls?: Array<{ id: string; name: string; arguments: string }>; tool_results?: string[] } }
-  | { type: "APPLY_MESSAGE_STREAM_EVENT"; payload: { id: number; event: AIStreamEvent } }
-  | { type: "SET_LOADING"; payload: boolean }
-  | { type: "SET_STREAMING"; payload: boolean }
   | { type: "SET_THEME"; payload: Theme }
-  | { type: "SET_ACTIVE_PANEL"; payload: Panel }
   | { type: "SET_PAGE"; payload: Page }
-  | { type: "TOGGLE_GEAR_MENU"; payload?: boolean }
   | { type: "TOGGLE_PLUGIN_CENTER"; payload?: boolean }
   | { type: "SET_AI_SIDEBAR_OPEN"; payload: boolean }
   | { type: "SET_AI_SIDEBAR_CONV_ID"; payload: number | null }
   | { type: "SET_AI_SIDEBAR_SELECTED_KEY"; payload: AISidebarConversationKey | null }
-  | { type: "SET_AI_SIDEBAR_MSGS"; payload: Message[] }
   | { type: "SET_AI_SIDEBAR_MSGS_FOR_KEY"; payload: { key: AISidebarConversationKey; messages: Message[] } }
-  | { type: "ADD_AI_SIDEBAR_MSG"; payload: Message }
   | { type: "ADD_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; message: Message } }
-  | { type: "UPDATE_AI_SIDEBAR_MSG"; payload: { id: number; content?: string; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number } }
   | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number } }
   | { type: "RECONCILE_AI_SIDEBAR_MESSAGE_IDS"; payload: { key: AISidebarConversationKey; optimisticUserId: number; userMessageId: number; optimisticAssistantId: number; assistantMessageId: number } }
-  | { type: "APPLY_AI_STREAM_EVENT"; payload: { id: number; event: AIStreamEvent } }
   | { type: "APPLY_AI_STREAM_EVENT_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; event: AIStreamEvent } }
   | { type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY"; payload: { key: AISidebarConversationKey; streaming: boolean } }
   | { type: "SET_AI_SIDEBAR_INPUT_FOR_KEY"; payload: { key: AISidebarConversationKey; input: string } }
@@ -136,7 +114,6 @@ type ChatAction =
   | { type: "ADD_AI_SIDEBAR_ATTACHMENTS_FOR_KEY"; payload: { key: AISidebarConversationKey; attachments: DraftAttachment[] } }
   | { type: "UPDATE_AI_SIDEBAR_ATTACHMENT_FOR_KEY"; payload: { key: AISidebarConversationKey; localId: string; patch: Partial<DraftAttachment> } }
   | { type: "REMOVE_AI_SIDEBAR_ATTACHMENT_FOR_KEY"; payload: { key: AISidebarConversationKey; localId: string } }
-  | { type: "SORT_AI_SIDEBAR_ATTACHMENTS_FOR_KEY"; payload: { key: AISidebarConversationKey; localIds: string[] } }
   | { type: "CLEAR_AI_SIDEBAR_ATTACHMENTS_FOR_KEY"; payload: { key: AISidebarConversationKey } }
   | { type: "MIGRATE_AI_SIDEBAR_TEMP_KEY"; payload: { fromKey: AISidebarConversationKey; toKey: AISidebarConversationKey; conversationId: number } }
   | { type: "REMOVE_AI_SIDEBAR_THREAD"; payload: { key: AISidebarConversationKey } }
@@ -176,7 +153,6 @@ type ChatAction =
   | { type: "LOGOUT" };
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
-  state = conversationReducer(state, action);
   state = blogReducer(state, action);
   state = uiReducer(state, action);
   state = revisionReducer(state, action);
@@ -188,12 +164,8 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "LOGOUT":
       return {
         ...state,
-        conversations: [],
-        currentConversationId: null,
-        messages: [],
         aiSidebarConversationId: null,
         aiSidebarSelectedKey: null,
-        aiSidebarMessages: [],
         aiSidebarMessagesByKey: {},
         aiSidebarStreamingByKey: {},
         aiSidebarInputsByKey: {},
@@ -250,23 +222,15 @@ function loadWorkspaceFolder(): number | null {
 }
 
 const initialState: ChatState = {
-  conversations: [],
-  currentConversationId: null,
-  messages: [],
-  isLoading: false,
-  isStreaming: false,
   theme: savedTheme,
-  activePanel: "conversations",
 
   currentPage: getInitialPage(),
-  gearMenuOpen: false,
   pluginCenterOpen: false,
 
   // AI Sidebar — default open, no conversation yet
   aiSidebarOpen: true,
   aiSidebarConversationId: null,
   aiSidebarSelectedKey: null,
-  aiSidebarMessages: [],
   aiSidebarMessagesByKey: {},
   aiSidebarStreamingByKey: {},
   aiSidebarInputsByKey: {},

@@ -8,7 +8,7 @@ import { SectionTitle } from "@/components/ui/section-title";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/stores/authStore";
 import { useChat } from "@/stores/chatStore";
-import { LoginDialog } from "@/features/auth/LoginDialog";
+import { LoginDialog } from "@/features/auth";
 import {
   correctBrainFact,
   deleteBrainMemory,
@@ -18,15 +18,17 @@ import {
   listBrainEpisodes,
   listBrainFacts,
   listBrainPreferences,
-  type BrainEntity,
-  type BrainEpisode,
-  type BrainFact,
-  type BrainGraph,
-  type BrainGraphNode,
-  type BrainMemoryType,
-  type BrainPreference,
   updateBrainPreference,
-} from "@/api/client";
+} from "@/api/brain";
+import type {
+  BrainEntity,
+  BrainEpisode,
+  BrainFact,
+  BrainGraph,
+  BrainGraphNode,
+  BrainMemoryType,
+  BrainPreference,
+} from "@/api/brain";
 import { BrainManagementDialog, type BrainManagementAction } from "./BrainManagementDialog";
 import { BrainGraphView } from "./BrainGraphView";
 import { EntityDetailPanel } from "./EntityDetailPanel";

@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 
 import { useChat } from "../../stores/chatStore";
-import { getBlogPost } from "../../api/client";
-import { BlogEditor } from "../blog/components/BlogEditor";
+import { getBlogPost } from "@/api/blog";
+import { BlogEditor } from "../blog";
 import { FilePreviewView } from "./views/FilePreviewView";
 import { OverviewView } from "./views/OverviewView";
 import { BlogPostsView } from "./views/BlogPostsView";

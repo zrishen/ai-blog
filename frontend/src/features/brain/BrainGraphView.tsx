@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { BrainEntityNode } from "./nodes/BrainEntityNode";
 import { useForceLayout } from "./hooks/useForceLayout";
 import { edgeTone } from "./utils/brainStyle";
-import type { BrainGraph, BrainGraphNode } from "@/api/client";
+import type { BrainGraph, BrainGraphNode } from "@/api/brain";
 
 const nodeTypes = { brainEntity: BrainEntityNode };
 

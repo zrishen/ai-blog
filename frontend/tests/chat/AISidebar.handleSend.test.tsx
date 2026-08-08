@@ -27,7 +27,24 @@ const attachmentApi = vi.hoisted(() => ({
   getChatAttachmentBlob: vi.fn(),
 }));
 
-vi.mock("../../src/api/client", () => api);
+vi.mock("../../src/api/client", () => ({
+  getAccessToken: api.getAccessToken,
+  setAccessToken: api.setAccessToken,
+}));
+vi.mock("../../src/api/chat", () => ({
+  sendChat: api.sendChat,
+  sendSharedLandingChat: api.sendSharedLandingChat,
+  sendSharedUserChat: api.sendSharedUserChat,
+}));
+vi.mock("../../src/api/conversations", () => ({
+  fetchConversations: api.fetchConversations,
+  deleteConversation: api.deleteConversation,
+  getMessages: api.getMessages,
+}));
+vi.mock("../../src/api/blog", () => ({
+  getBlogPost: api.getBlogPost,
+  listSitePosts: api.listSitePosts,
+}));
 vi.mock("../../src/api/chatAttachments", () => attachmentApi);
 vi.mock("../../src/features/ai-chat/ai-sidebar/AISidebarHeader", () => ({
   AISidebarHeader: () => <div>侧栏标题</div>,

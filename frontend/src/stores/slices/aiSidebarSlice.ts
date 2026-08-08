@@ -36,21 +36,14 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         ...state,
         aiSidebarSelectedKey: action.payload,
         aiSidebarConversationId: action.payload?.startsWith("server:") ? Number(action.payload.slice(7)) : null,
-        aiSidebarMessages: action.payload ? state.aiSidebarMessagesByKey[action.payload] ?? [] : [],
       };
-    case "SET_AI_SIDEBAR_MSGS":
-      return { ...state, aiSidebarMessages: action.payload.filter(isDisplayableMessage) };
     case "SET_AI_SIDEBAR_MSGS_FOR_KEY": {
       const messages = action.payload.messages.filter(isDisplayableMessage);
       return {
         ...state,
         aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
       };
     }
-    case "ADD_AI_SIDEBAR_MSG":
-      if (!isDisplayableMessage(action.payload)) return state;
-      return { ...state, aiSidebarMessages: [...state.aiSidebarMessages, action.payload] };
     case "ADD_AI_SIDEBAR_MSG_FOR_KEY": {
       if (!isDisplayableMessage(action.payload.message)) return state;
       const current = state.aiSidebarMessagesByKey[action.payload.key] ?? [];
@@ -58,16 +51,8 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
       return {
         ...state,
         aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
       };
     }
-    case "UPDATE_AI_SIDEBAR_MSG":
-      return {
-        ...state,
-        aiSidebarMessages: state.aiSidebarMessages.map((m) =>
-          m.id === action.payload.id ? updateMessageWithPayload(m, action.payload) : m
-        ),
-      };
     case "UPDATE_AI_SIDEBAR_MSG_FOR_KEY": {
       const current = state.aiSidebarMessagesByKey[action.payload.key] ?? [];
       const messages = current.map((m) =>
@@ -76,7 +61,6 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
       return {
         ...state,
         aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [action.payload.key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === action.payload.key ? messages : state.aiSidebarMessages,
       };
     }
     case "RECONCILE_AI_SIDEBAR_MESSAGE_IDS": {
@@ -90,16 +74,8 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
       return {
         ...state,
         aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === key ? messages : state.aiSidebarMessages,
       };
     }
-    case "APPLY_AI_STREAM_EVENT":
-      return {
-        ...state,
-        aiSidebarMessages: state.aiSidebarMessages.map((m) =>
-          m.id === action.payload.id ? applyStreamEvent(m, action.payload.event) : m
-        ),
-      };
     case "APPLY_AI_STREAM_EVENT_FOR_KEY": {
       const { key, id, event } = action.payload;
       const current = state.aiSidebarMessagesByKey[key] ?? [];
@@ -107,7 +83,6 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
       return {
         ...state,
         aiSidebarMessagesByKey: { ...state.aiSidebarMessagesByKey, [key]: messages },
-        aiSidebarMessages: state.aiSidebarSelectedKey === key ? messages : state.aiSidebarMessages,
       };
     }
     case "SET_AI_SIDEBAR_STREAMING_FOR_KEY":
@@ -162,19 +137,6 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         },
       };
     }
-    case "SORT_AI_SIDEBAR_ATTACHMENTS_FOR_KEY": {
-      const current = state.aiSidebarAttachmentsByKey[action.payload.key] ?? [];
-      const positions = new Map(action.payload.localIds.map((localId, index) => [localId, index]));
-      return {
-        ...state,
-        aiSidebarAttachmentsByKey: {
-          ...state.aiSidebarAttachmentsByKey,
-          [action.payload.key]: [...current]
-            .sort((a, b) => (positions.get(a.localId) ?? a.position) - (positions.get(b.localId) ?? b.position))
-            .map((item, position) => ({ ...item, position })),
-        },
-      };
-    }
     case "CLEAR_AI_SIDEBAR_ATTACHMENTS_FOR_KEY": {
       const { [action.payload.key]: removedAttachments, ...attachmentsByKey } = state.aiSidebarAttachmentsByKey;
       void removedAttachments;
@@ -198,7 +160,6 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         ...state,
         aiSidebarSelectedKey: state.aiSidebarSelectedKey === fromKey ? toKey : state.aiSidebarSelectedKey,
         aiSidebarConversationId: state.aiSidebarSelectedKey === fromKey ? conversationId : state.aiSidebarConversationId,
-        aiSidebarMessages: state.aiSidebarSelectedKey === fromKey ? toMessages : state.aiSidebarMessages,
         aiSidebarMessagesByKey: { ...messagesByKey, [toKey]: toMessages },
         aiSidebarStreamingByKey: { ...streamingByKey, [toKey]: removedStreaming ?? false },
         aiSidebarInputsByKey: { ...inputsByKey, [toKey]: removedInput ?? "" },
@@ -225,7 +186,6 @@ export function aiSidebarReducer(state: ChatState, action: ChatAction): ChatStat
         ...state,
         aiSidebarSelectedKey: state.aiSidebarSelectedKey === key ? null : state.aiSidebarSelectedKey,
         aiSidebarConversationId: state.aiSidebarSelectedKey === key ? null : state.aiSidebarConversationId,
-        aiSidebarMessages: state.aiSidebarSelectedKey === key ? [] : state.aiSidebarMessages,
         aiSidebarMessagesByKey: messagesByKey,
         aiSidebarStreamingByKey: streamingByKey,
         aiSidebarInputsByKey: inputsByKey,

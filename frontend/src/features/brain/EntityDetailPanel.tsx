@@ -2,7 +2,7 @@ import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { entityTypeColor } from "./utils/brainStyle";
-import type { BrainFact, BrainGraphNode } from "@/api/client";
+import type { BrainFact, BrainGraphNode } from "@/api/brain";
 
 function factStatus(fact: BrainFact): { label: string; tone: "success" | "warning" } {
   return fact.valid_to

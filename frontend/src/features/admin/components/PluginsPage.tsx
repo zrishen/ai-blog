@@ -6,10 +6,12 @@ import {
   listAdminPlugins,
   setAdminPluginPublished,
   updateAdminPlugin,
-  type AdminPlugin,
-  type PluginPermissionLevel,
-  type PluginTransport,
-} from "@/api/client";
+} from "@/api/plugins";
+import type {
+  AdminPlugin,
+  PluginPermissionLevel,
+  PluginTransport,
+} from "@/api/plugins";
 import { Spinner } from "@/components/ui/spinner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

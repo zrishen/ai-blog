@@ -19,7 +19,24 @@ const api = vi.hoisted(() => ({
   setAccessToken: vi.fn(),
 }));
 
-vi.mock("../../src/api/client", () => api);
+vi.mock("../../src/api/client", () => ({
+  getAccessToken: api.getAccessToken,
+  setAccessToken: api.setAccessToken,
+}));
+vi.mock("../../src/api/chat", () => ({
+  sendChat: api.sendChat,
+  sendSharedLandingChat: api.sendSharedLandingChat,
+  sendSharedUserChat: api.sendSharedUserChat,
+}));
+vi.mock("../../src/api/conversations", () => ({
+  fetchConversations: api.fetchConversations,
+  deleteConversation: api.deleteConversation,
+  getMessages: api.getMessages,
+}));
+vi.mock("../../src/api/blog", () => ({
+  getBlogPost: api.getBlogPost,
+  listSitePosts: api.listSitePosts,
+}));
 // 会话管理聚焦 list 视图交互；chat 内容（MessageList/ChatInputBar）简化 mock
 vi.mock("../../src/features/ai-chat/ai-sidebar/MessageList", () => ({ MessageList: () => <div>消息列表</div> }));
 vi.mock("../../src/features/ai-chat/ai-sidebar/ChatInputBar", () => ({ ChatInputBar: () => <div>输入栏</div> }));

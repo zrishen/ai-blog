@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { apiFetch, getPreviewBaseUrl, getPreviewPdfUrl } from "@/api/client";
+import { apiFetch } from "@/api/client";
+import { getPreviewBaseUrl, getPreviewPdfUrl } from "@/api/files";
 
 interface Props {
   filename: string;

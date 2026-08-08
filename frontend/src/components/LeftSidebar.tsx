@@ -1,9 +1,8 @@
 import { useChat } from "../stores/chatStore";
-import { BlogTocPanel } from "../features/blog/components/BlogTocPanel";
-import { BrainNav } from "../features/brain/BrainNav";
-import { BlogOverviewPanel } from "../features/blog/components/BlogOverviewPanel";
-import { WorkspaceNav } from "../features/workspace/WorkspaceNav";
-import { AdminNav } from "../features/admin/components/AdminNav";
+import { BlogTocPanel, BlogOverviewPanel } from "../features/blog";
+import { BrainNav } from "../features/brain";
+import { WorkspaceNav } from "../features/workspace";
+import { AdminNav } from "../features/admin";
 
 export function LeftSidebar() {
   const { state } = useChat();

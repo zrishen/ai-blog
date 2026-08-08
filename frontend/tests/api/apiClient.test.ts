@@ -1,15 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import {
-  sendChat,
-  fetchConversations,
-  createConversation,
-  deleteConversation,
-  getMessages,
-  setAccessToken,
-  getAccessToken,
-  type StreamToolMeta,
-  type StreamRoundEnd,
-} from "../../src/api/client";
+import { setAccessToken, getAccessToken } from "../../src/api/client";
+import { sendChat, type StreamToolMeta, type StreamRoundEnd } from "../../src/api/chat";
+import { fetchConversations, createConversation, deleteConversation, getMessages } from "../../src/api/conversations";
 
 function makeChunkedStream(chunks: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();

@@ -8,7 +8,7 @@ const { listSitePostsMock } = vi.hoisted(() => ({
   listSitePostsMock: vi.fn(),
 }));
 
-vi.mock("../../src/api/client", () => ({
+vi.mock("../../src/api/blog", () => ({
   listSitePosts: listSitePostsMock,
 }));
 

@@ -2,7 +2,7 @@ import { Network } from "lucide-react";
 import { getFileIcon } from "@/components/fileIcons";
 import blogIcon from "@/components/icons/blog.svg";
 import publishedIcon from "@/components/icons/published.svg";
-import type { WorkspaceNode } from "@/api/client";
+import type { WorkspaceNode } from "@/api/workspace";
 
 /**
  * 工作区资源图标（左侧目录树 + 中栏平铺共用）：
