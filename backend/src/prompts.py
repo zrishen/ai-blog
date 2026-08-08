@@ -1,14 +1,13 @@
 """LLM 提示词的单一来源：所有 system prompt 与运行时上下文集中在此；工具描述取自各工具函数 docstring。
 
-1.3 起 prompt 注入改为 PromptSegment 注册表（resolve_active_segments 按 priority 装配），
+prompt 注入采用 PromptSegment 注册表（resolve_active_segments 按 priority 装配），
 取代旧 module 级 ``+=`` 拼接。owner = 本文件；llm_factory._system_prompt 仅做瘦渲染。
-详见 seam-conventions.md §4。
 """
 
 from dataclasses import dataclass
 from typing import Callable
 
-from src.tools.registry import tool_names_by_tag  # WRITING_TOOL_NAMES 派生（1.4 统一工具名源）
+from src.tools.registry import tool_names_by_tag  # WRITING_TOOL_NAMES 派生（统一工具名源）
 
 # 系统提示词 — 基础角色
 
@@ -18,11 +17,11 @@ SYSTEM_BASE = (
 )
 
 # 注入当前日期(运行时 .format(today=...))
-# 1.3：去"撰写文章时"写作定位词（通用 agent 不把日期段绑写作语义），保留时间线相关性
+# 去"撰写文章时"写作定位词（通用 agent 不把日期段绑写作语义），保留时间线相关性
 SYSTEM_DATE = "当前日期：{today}。请基于当前日期判断时间线，不要把过去的日期当作未来。"
 
 # 系统提示词 — 工具使用规则
-# 1.3：原 SYSTEM_TOOL_RULES 整坨（core+写作）经 module += 拼接，现拆 PromptSegment 按 priority 注入。
+# 原 SYSTEM_TOOL_RULES 整坨（core+写作）经 module += 拼接，现拆 PromptSegment 按 priority 注入。
 #   CORE_TOOL_RULES_TEXT 逐字取原 SYSTEM_TOOL_RULES 到"…说明原因。"（core 段，tool_names 非空门控）；
 #   WRITING_CREATE_TEXT 取"处理博客时…"起，首字符无 \n\n（写作段，blog_* 门控；拼接后与原逐字等价）。
 
@@ -43,7 +42,7 @@ WRITING_CREATE_TEXT = (
 
 # 博客文章配图（mermaid）规范
 # 独立成段便于维护；禁止 classDef 自定义颜色（会覆盖前端统一配色，深色模式刺眼）。
-# 1.3：由 PromptSegment SEG_WRITING_MERMAID 注入（写作 skill 激活时，priority=12）
+# 由 PromptSegment SEG_WRITING_MERMAID 注入（写作 skill 激活时，priority=12）
 BLOG_MERMAID_GUIDE = (
     "\n\n文章配图（mermaid）规范："
     "正文支持 ```mermaid 代码块，需要示意图时直接写在正文中（前端渲染为手绘风图表，配色与明暗主题由前端统一控制）。"
@@ -61,7 +60,7 @@ BLOG_MERMAID_GUIDE = (
 
 # 博客左栏（侧栏）定制规范
 # update_blog_sidebar 工具生成自包含 HTML，前端用 iframe 沙箱渲染。
-# 1.3：由 PromptSegment SEG_WRITING_SIDEBAR 注入（写作 skill 激活时，priority=13）
+# 由 PromptSegment SEG_WRITING_SIDEBAR 注入（写作 skill 激活时，priority=13）
 SIDEBAR_TOOL_RULES = (
     "\n\n博客左栏（侧栏）定制规范："
     "当用户要求设计或修改其博客主页左栏的外观与内容时，调用 update_blog_sidebar(html)，"
@@ -130,8 +129,8 @@ COMPACT_SUMMARY_PROMPT = (
 
 
 # ============================================================================
-# PromptSegment 注册表（S2 prompt 注入唯一模型，1.3 落地）
-# 详见 seam-conventions.md §4。owner = prompts.py；llm_factory._system_prompt 仅瘦渲染。
+# PromptSegment 注册表（prompt 注入唯一模型）
+# owner = prompts.py；llm_factory._system_prompt 仅瘦渲染。
 # ============================================================================
 
 
@@ -149,9 +148,7 @@ class PromptContext:
 class PromptSegment:
     """一段可条件注入的 system prompt 文本。
 
-    - default_active=True：常驻段（base/date/core/rag）；False：需 skill 显式启用。
-      （1.3 写作段暂 default_active=True 保默认快照；1.4 skill 框架就绪后翻 False，
-      靠 enabled_segments 激活。）
+    - default_active=True：常驻段（base/date/core/rag）；False：需 skill 显式启用（写作三段）。
     - priority：拼接升序，取代旧 module 级 +=。
     - format_keys：非空才 str.format（值由调用方传 today/cap_text），避免裸 {} 崩。
     - condition：接收 PromptContext，None 表示无条件。
@@ -165,7 +162,7 @@ class PromptSegment:
     condition: Callable[[PromptContext], bool] | None = None
 
 
-# 写作工具集合——从 TOOL_REGISTRY 派生（1.4 统一工具名源；禁 startswith：update_blog_sidebar 无 blog_ 前缀）
+# 写作工具集合——从 TOOL_REGISTRY 派生（统一工具名源；禁 startswith：update_blog_sidebar 无 blog_ 前缀）
 WRITING_TOOL_NAMES = tool_names_by_tag("writing")
 
 
@@ -181,18 +178,21 @@ SEG_CORE_RULES = PromptSegment(
     "core_tool_rules", CORE_TOOL_RULES_TEXT, priority=10,
     condition=lambda c: bool(c.mounted_tool_names),
 )
-# 写作三段：1.3 default_active=True 保默认快照（resolve_skills 尚不存在、enabled_segments 暂空）；
-#           1.4 skill 框架就绪后翻 default_active=False，靠 enabled_segments 激活。
+# 写作三段 default_active=False，靠 enabled_segments（writing skill 启用）激活；
+#           condition=_writing_on 双保险（挂写作工具才注入），防 skill 启用但工具 gated off 时仍注入。
 SEG_WRITING_CREATE = PromptSegment(
-    "writing_create_flow", WRITING_CREATE_TEXT, priority=11, condition=_writing_on,
+    "writing_create_flow", WRITING_CREATE_TEXT, priority=11,
+    default_active=False, condition=_writing_on,
 )
 SEG_WRITING_MERMAID = PromptSegment(
-    "writing_mermaid", BLOG_MERMAID_GUIDE, priority=12, condition=_writing_on,
+    "writing_mermaid", BLOG_MERMAID_GUIDE, priority=12,
+    default_active=False, condition=_writing_on,
 )
 SEG_WRITING_SIDEBAR = PromptSegment(
-    "writing_sidebar", SIDEBAR_TOOL_RULES, priority=13, condition=_writing_on,
+    "writing_sidebar", SIDEBAR_TOOL_RULES, priority=13,
+    default_active=False, condition=_writing_on,
 )
-# RAG_AUTO 原 _system_prompt 无条件追加；1.3 改 base_search_file 门控。
+# RAG_AUTO 原 _system_prompt 无条件追加，现改 base_search_file 门控。
 # 默认场景（恒挂 base_search_file）等价；非默认（无该工具）更严格——不引导 LLM 调不存在的工具。
 SEG_RAG_AUTO = PromptSegment(
     "rag_auto", RAG_AUTO, priority=30,

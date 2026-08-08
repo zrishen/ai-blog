@@ -247,7 +247,7 @@ def test_system_date_dropped_writing_locator():
 
 
 def test_resolve_writing_segments_condition_filters_without_blog_tools():
-    """挂非写作工具 → _writing_on=False → 写作三段不激活（AND：default_active 不能绕过 condition）。"""
+    """挂非写作工具 → _writing_on=False → 写作三段不激活（condition 双保险；1.5 翻 default_active=False 后仍由 condition 把关）。"""
     ctx = PromptContext(
         user_id=1,
         mounted_tool_names=frozenset({"mcp_call_tool"}),
@@ -259,6 +259,41 @@ def test_resolve_writing_segments_condition_filters_without_blog_tools():
     assert "writing_sidebar" not in names
     assert "core_tool_rules" in names  # core 仍激活（mounted 非空）
     assert "rag_auto" not in names  # 无 base_search_file
+
+
+def test_writing_segments_off_when_skill_disabled_but_tools_mounted():
+    """1.5-A skill 化核心：writing skill 关闭（enabled_segments 不含写作段）即便工具仍挂载，
+    写作指令段也不注入（default_active=False + enabled 不含 → OR 得 False）。
+
+    这是 skill 化的价值：关 skill = 不再向 LLM 注入该领域指令段（工具是否挂载是另一层）。
+    翻 default_active=False 前此处会因 default_active=True 而激活，故测试 1.5 同步加。
+    """
+    ctx = PromptContext(
+        user_id=1,
+        mounted_tool_names=frozenset({"blog_create_post", "blog_edit_post"}),
+        enabled_segments=frozenset(),  # writing skill 关闭
+    )
+    names = {s.name for s in resolve_active_segments(ctx)}
+    assert "writing_create_flow" not in names
+    assert "writing_mermaid" not in names
+    assert "writing_sidebar" not in names
+
+
+def test_writing_segments_off_when_skill_enabled_but_tools_not_mounted():
+    """1.5-A 双保险：writing skill 启用（enabled_segments 含 writing×3）但工具未挂载
+    （mounted_tool_names 无写作工具）→ _writing_on=False → 写作段仍不注入。
+
+    防 skill 声明了写作段、但因 gate off 工具没挂时，仍向 LLM 注入指向未挂载工具的指令。
+    """
+    ctx = PromptContext(
+        user_id=1,
+        mounted_tool_names=frozenset({"mcp_call_tool"}),
+        enabled_segments=frozenset({"writing_create_flow", "writing_mermaid", "writing_sidebar"}),
+    )
+    names = {s.name for s in resolve_active_segments(ctx)}
+    assert "writing_create_flow" not in names
+    assert "writing_mermaid" not in names
+    assert "writing_sidebar" not in names
 
 
 def test_resolve_core_rules_condition_requires_tools():
@@ -286,11 +321,10 @@ def test_resolve_mcp_segment_condition_requires_cap_text():
 
 
 def test_resolve_enabled_segments_activates_default_inactive(monkeypatch):
-    """OR 语义：default_active=False 的段仅靠 enabled_segments 激活（1.5 skill 启用路径）。
+    """OR 语义：default_active=False 的段仅靠 enabled_segments 激活（skill 启用路径）。
 
-    注册表现状全 default_active=True（enabled 分支被短路、无法测）；临时注入一个
-    default_active=False 段，验证它仅在被 enable 时激活——锁定 OR 的 enabled 分支，
-    防 1.5 翻 default_active=False 后该激活路径无人覆盖（1.3 审查 N1）。
+    用独立 monkeypatch 段隔离测 OR 的 enabled 分支（写作三段 1.5 已翻 default_active=False，
+    见 test_writing_segments_off_when_skill_disabled_*；此处保留独立段测通用 OR 机制，不耦合写作段内容）。
     """
     from src.prompts import PROMPT_SEGMENT_REGISTRY, PromptSegment
 
