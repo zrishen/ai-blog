@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import ConflictError, ValidationFailedError
 from src.services.workspace import workspace_file_service
 from src.services.workspace.blog.blog_body_service import get_post_body
+from src.services.workspace.blog.blog_document_store import BlogDocument, write_blog_document
 from src.services.workspace.blog.blog_service import create_post
 
 TEST_USER_ID = 1
@@ -51,6 +52,34 @@ async def test_moving_blog_document_updates_its_real_path(db_session: AsyncSessi
     assert moved.kind == "blog"
     assert post.file_path == "Writing/a-post.md"
     assert await get_post_body(post) == "File body"
+
+
+@pytest.mark.asyncio
+async def test_listing_workspace_lazily_reconciles_managed_blog_documents(db_session: AsyncSession):
+    post = await create_post(
+        db_session,
+        {"title": "A post", "slug": "a-post", "content": "Initial body"},
+        TEST_USER_ID,
+    )
+    write_blog_document(
+        TEST_USER_ID,
+        post.file_path,
+        BlogDocument(
+            slug=post.slug,
+            title="Edited through the workspace",
+            body="Filesystem body",
+            created_at=post.created_at,
+            status="draft",
+            author=post.author or "ai-blog",
+        ),
+    )
+
+    entries = await workspace_file_service.list_entries(db_session, TEST_USER_ID)
+    await db_session.refresh(post)
+
+    assert any(entry.path == post.file_path and entry.kind == "blog" for entry in entries)
+    assert post.title == "Edited through the workspace"
+    assert post.content == "Filesystem body"
 
 
 @pytest.mark.asyncio

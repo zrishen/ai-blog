@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -13,9 +14,11 @@ from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, Va
 from src.core.path_guard import workspace_dir, workspace_path
 from src.database.models import BlogPost
 from src.services.workspace.blog.blog_document_store import validate_blog_document_path
+from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
 
 _MAX_SEGMENT_LENGTH = 300
 _MAX_PATH_LENGTH = 500
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -92,6 +95,16 @@ async def list_entries(db: AsyncSession, user_id: int) -> list[WorkspaceEntry]:
             )
         ).scalars()
     )
+    for post in posts:
+        if post.file_path is None:
+            continue
+        try:
+            path = _entry_path(user_id, post.file_path)
+            if path.is_symlink() or not path.is_file():
+                continue
+            await reconcile_blog_document(db, user_id=user_id, relative_path=post.file_path)
+        except Exception:
+            logger.warning("Unable to reconcile workspace blog document: post_id=%s", post.id, exc_info=True)
     blogs = {post.file_path: post for post in posts if post.file_path}
     entries: list[WorkspaceEntry] = []
     for current_root, directories, filenames in os.walk(root, followlinks=False):

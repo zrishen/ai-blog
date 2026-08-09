@@ -15,6 +15,7 @@ from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, Va
 from src.core.path_guard import require_user, workspace_dir, workspace_path
 from src.database.models import BlogPost
 from src.database.session import async_session
+from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
 from src.services.workspace.workspace_file_service import move_entry
 
 _MAX_PATH_LENGTH = 500
@@ -112,6 +113,11 @@ def _write_text(user_id: int, relative_path: str, content: str) -> None:
     _atomic_write(_prepare_write_target(user_id, relative_path), content)
 
 
+async def _sync_managed_blog_document(user_id: int, relative_path: str) -> None:
+    async with async_session() as db:
+        await reconcile_blog_document(db, user_id=user_id, relative_path=relative_path)
+
+
 def _iter_workspace_files(user_id: int, pattern: str):
     root = workspace_dir(user_id)
     if not root.is_dir():
@@ -155,7 +161,9 @@ async def workspace_write_file(path: str, content: str) -> str:
     """Atomically replace or create a UTF-8 file inside the workspace."""
 
     relative_path = _relative_path(path)
-    await asyncio.to_thread(_write_text, _user_id(), relative_path, content)
+    user_id = _user_id()
+    await asyncio.to_thread(_write_text, user_id, relative_path, content)
+    await _sync_managed_blog_document(user_id, relative_path)
     return f"Wrote {relative_path}"
 
 
@@ -173,6 +181,7 @@ async def workspace_edit_file(path: str, old_text: str, new_text: str) -> str:
     if count != 1:
         return f"Edit not applied: expected one exact match in {relative_path}, found {count}"
     await asyncio.to_thread(_write_text, user_id, relative_path, text.replace(old_text, new_text, 1))
+    await _sync_managed_blog_document(user_id, relative_path)
     return f"Edited {relative_path}"
 
 

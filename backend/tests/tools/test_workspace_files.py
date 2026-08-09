@@ -17,6 +17,14 @@ def user_context():
         current_user_id_cv.reset(token)
 
 
+@pytest.fixture(autouse=True)
+def bypass_blog_reconcile(monkeypatch):
+    async def no_op(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(workspace_files, "_sync_managed_blog_document", no_op)
+
+
 @pytest.mark.asyncio
 async def test_workspace_text_tools_round_trip_and_search(user_context):
     assert await workspace_files.workspace_write_file.ainvoke(
@@ -109,3 +117,19 @@ async def test_workspace_delete_removes_unmanaged_regular_file(monkeypatch, user
 
     assert await workspace_files.workspace_delete_file.ainvoke({"path": "notes/delete.txt"}) == "Deleted notes/delete.txt"
     assert not (workspace_dir(1) / "notes" / "delete.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_workspace_write_and_edit_notify_managed_blog_reconcile(monkeypatch, user_context):
+    calls = []
+
+    async def record_reconcile(user_id, relative_path):
+        calls.append((user_id, relative_path))
+
+    monkeypatch.setattr(workspace_files, "_sync_managed_blog_document", record_reconcile)
+    await workspace_files.workspace_write_file.ainvoke({"path": "notes/reconcile.md", "content": "first"})
+    await workspace_files.workspace_edit_file.ainvoke(
+        {"path": "notes/reconcile.md", "old_text": "first", "new_text": "second"}
+    )
+
+    assert calls == [(1, "notes/reconcile.md"), (1, "notes/reconcile.md")]
