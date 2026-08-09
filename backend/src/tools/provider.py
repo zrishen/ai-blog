@@ -19,6 +19,10 @@ from src.tools.web import web_fetch, web_search
 from src.tools.workspace_files import (
     workspace_delete_file,
     workspace_edit_file,
+    workspace_git_diff,
+    workspace_git_history,
+    workspace_git_restore_file,
+    workspace_git_status,
     workspace_glob,
     workspace_grep,
     workspace_move_file,
@@ -110,6 +114,10 @@ class WorkspaceFilesProvider:
             workspace_grep,
             workspace_move_file,
             workspace_delete_file,
+            workspace_git_status,
+            workspace_git_history,
+            workspace_git_diff,
+            workspace_git_restore_file,
         ]
 
 

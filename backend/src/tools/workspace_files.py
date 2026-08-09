@@ -18,6 +18,14 @@ from src.database.session import async_session
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
 from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
 from src.services.workspace.workspace_file_service import move_entry
+from src.services.workspace.workspace_git_service import (
+    ensure_workspace_repository,
+    get_workspace_git_diff,
+    get_workspace_git_status,
+    list_workspace_git_revisions,
+    record_workspace_change,
+    restore_workspace_file,
+)
 
 _MAX_PATH_LENGTH = 500
 _MAX_TEXT_BYTES = 1_000_000
@@ -163,8 +171,10 @@ async def workspace_write_file(path: str, content: str) -> str:
 
     relative_path = _relative_path(path)
     user_id = _user_id()
+    await asyncio.to_thread(ensure_workspace_repository, user_id)
     await asyncio.to_thread(_write_text, user_id, relative_path, content)
     await _sync_managed_blog_document(user_id, relative_path)
+    await asyncio.to_thread(record_workspace_change, user_id, f"Write {relative_path}")
     return f"Wrote {relative_path}"
 
 
@@ -177,12 +187,14 @@ async def workspace_edit_file(path: str, old_text: str, new_text: str) -> str:
     if not old_text:
         raise ValidationFailedError("old_text must not be empty")
     user_id = _user_id()
+    await asyncio.to_thread(ensure_workspace_repository, user_id)
     text = await asyncio.to_thread(_read_text, user_id, relative_path)
     count = text.count(old_text)
     if count != 1:
         return f"Edit not applied: expected one exact match in {relative_path}, found {count}"
     await asyncio.to_thread(_write_text, user_id, relative_path, text.replace(old_text, new_text, 1))
     await _sync_managed_blog_document(user_id, relative_path)
+    await asyncio.to_thread(record_workspace_change, user_id, f"Edit {relative_path}")
     return f"Edited {relative_path}"
 
 
@@ -240,8 +252,10 @@ async def workspace_move_file(path: str, target_folder: str = "") -> str:
 
     relative_path = _relative_path(path)
     target_path = _relative_path(target_folder) if target_folder else None
+    await asyncio.to_thread(ensure_workspace_repository, _user_id())
     async with async_session() as db:
         entry = await move_entry(db, _user_id(), path=relative_path, target_path=target_path)
+    await asyncio.to_thread(record_workspace_change, _user_id(), f"Move {relative_path} to {entry.path}")
     return f"Moved {relative_path} to {entry.path}"
 
 
@@ -252,6 +266,7 @@ async def workspace_delete_file(path: str) -> str:
 
     relative_path = _relative_path(path)
     user_id = _user_id()
+    await asyncio.to_thread(ensure_workspace_repository, user_id)
     async with async_session() as db:
         post = (
             await db.execute(
@@ -266,9 +281,61 @@ async def workspace_delete_file(path: str) -> str:
             from src.services.workspace.blog.blog_service import delete_post
 
             await delete_post(db, post.id, user_id)
+            await asyncio.to_thread(record_workspace_change, user_id, f"Delete managed blog {relative_path}")
             return f"Moved managed blog {relative_path} to the recycle bin"
 
     async with async_session() as db:
         await move_workspace_entry_to_trash(db, user_id=user_id, relative_path=relative_path)
         await db.commit()
+    await asyncio.to_thread(record_workspace_change, user_id, f"Delete {relative_path}")
     return f"Moved {relative_path} to the recycle bin"
+
+
+@tool
+@require_user
+async def workspace_git_status() -> str:
+    """Show the current workspace Git branch, latest revision, and uncommitted paths."""
+
+    status = await asyncio.to_thread(get_workspace_git_status, _user_id())
+    changed = "\n".join(status.changed_paths) if status.changed_paths else "clean"
+    return f"branch: {status.branch}\nHEAD: {status.head}\nchanges:\n{changed}"
+
+
+@tool
+@require_user
+async def workspace_git_history(limit: int = 10) -> str:
+    """List recent local workspace revisions. Limit is capped at 50."""
+
+    revisions = await asyncio.to_thread(list_workspace_git_revisions, _user_id(), limit=limit)
+    return "\n".join(f"{item.revision} {item.committed_at} {item.subject}" for item in revisions)
+
+
+@tool
+@require_user
+async def workspace_git_diff(base_revision: str = "HEAD~1", target_revision: str = "HEAD") -> str:
+    """Show a local workspace diff between two safe revisions, such as HEAD~1 and HEAD."""
+
+    return await asyncio.to_thread(
+        get_workspace_git_diff,
+        _user_id(),
+        base_revision=base_revision,
+        target_revision=target_revision,
+    )
+
+
+@tool
+@require_user
+async def workspace_git_restore_file(path: str, revision: str = "HEAD") -> str:
+    """Restore one regular workspace file from a local revision, then commit that restoration."""
+
+    user_id = _user_id()
+    relative_path = _relative_path(path)
+    restored_path = await asyncio.to_thread(
+        restore_workspace_file,
+        user_id,
+        relative_path=relative_path,
+        revision=revision,
+    )
+    await _sync_managed_blog_document(user_id, restored_path)
+    await asyncio.to_thread(record_workspace_change, user_id, f"Restore {restored_path} from {revision}")
+    return f"Restored {restored_path} from {revision}"

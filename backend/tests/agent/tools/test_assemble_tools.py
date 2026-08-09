@@ -108,12 +108,16 @@ def test_workspace_file_provider_is_feature_gated():
         "workspace_grep",
         "workspace_move_file",
         "workspace_delete_file",
+        "workspace_git_status",
+        "workspace_git_history",
+        "workspace_git_diff",
+        "workspace_git_restore_file",
     ]
 
 
 def test_workspace_tools_append_before_web_tools_when_enabled():
     asm = assemble_tools(_ctx(workspace_files_enabled=True, web_tools_enabled=True))
-    assert [tool.name for tool in asm.tools][-9:] == [
+    assert [tool.name for tool in asm.tools][-13:] == [
         "workspace_read_file",
         "workspace_write_file",
         "workspace_edit_file",
@@ -121,6 +125,10 @@ def test_workspace_tools_append_before_web_tools_when_enabled():
         "workspace_grep",
         "workspace_move_file",
         "workspace_delete_file",
+        "workspace_git_status",
+        "workspace_git_history",
+        "workspace_git_diff",
+        "workspace_git_restore_file",
         "web_search",
         "web_fetch",
     ]
