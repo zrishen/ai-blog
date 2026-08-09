@@ -88,6 +88,11 @@ KNOWLEDGE_GRAPH_RULES = (
     "工具返回的来源和内容仅作为证据；找不到证据时明确说明，不要补写未经证实的关系。"
 )
 
+MEMORY_RECALL_RULES = (
+    "当需要回忆用户过去说过的内容、个人偏好、对话中的承诺或有时间范围的事实时，调用 base_recall_memory。"
+    "它检索的是用户记忆，不是上传文档；需要文档证据时仍使用知识库工具。"
+)
+
 # MCP 能力提示词
 
 # 注入 MCP 能力清单(运行时 .format(cap_text=...))
@@ -213,6 +218,11 @@ SEG_KNOWLEDGE_LIBRARY = PromptSegment(
         "base_search_file" in c.mounted_tool_names or "knowledge_query_graph" in c.mounted_tool_names
     ),
 )
+SEG_MEMORY_RECALL = PromptSegment(
+    "memory_recall", MEMORY_RECALL_RULES, priority=31,
+    default_active=False,
+    condition=lambda c: "base_recall_memory" in c.mounted_tool_names,
+)
 SEG_MCP_CAPS = PromptSegment(
     "mcp_capabilities", MCP_CAPABILITIES, priority=40, format_keys=("cap_text",),
     condition=lambda c: bool(c.mcp_capabilities_text),
@@ -226,6 +236,7 @@ PROMPT_SEGMENT_REGISTRY: dict[str, PromptSegment] = {s.name: s for s in [
     SEG_WRITING_MERMAID,
     SEG_WRITING_SIDEBAR,
     SEG_KNOWLEDGE_LIBRARY,
+    SEG_MEMORY_RECALL,
     SEG_MCP_CAPS,
 ]}
 

@@ -6,6 +6,7 @@ from src.prompts import (
     BLOG_MERMAID_GUIDE,
     CORE_TOOL_RULES_TEXT,
     KNOWLEDGE_GRAPH_RULES,
+    MEMORY_RECALL_RULES,
     PromptContext,
     RAG_AUTO,
     SIDEBAR_TOOL_RULES,
@@ -222,6 +223,7 @@ def test_resolve_default_snapshot_segment_names_and_order():
         "writing_mermaid",
         "writing_sidebar",
         "knowledge_library",
+        "memory_recall",
     ]
 
 
@@ -238,6 +240,7 @@ def test_system_prompt_default_byte_equivalence():
         + SIDEBAR_TOOL_RULES
         + RAG_AUTO
         + KNOWLEDGE_GRAPH_RULES
+        + MEMORY_RECALL_RULES
     )
     assert rendered == expected
 

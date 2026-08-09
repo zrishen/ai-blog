@@ -10,6 +10,7 @@ from src.tools.registry import tool_names_by_tag
 
 _WRITING_SEGMENTS = frozenset({"writing_create_flow", "writing_mermaid", "writing_sidebar"})
 _KNOWLEDGE_SEGMENTS = frozenset({"knowledge_library"})
+_MEMORY_SEGMENTS = frozenset({"memory_recall"})
 
 
 def test_resolve_skills_default_equals_writing_plus_base():
@@ -18,9 +19,10 @@ def test_resolve_skills_default_equals_writing_plus_base():
     assert isinstance(ctx, SkillContext)
     assert ctx.required_tool_names == (
         tool_names_by_tag("writing") | tool_names_by_tag("knowledge") | tool_names_by_tag("base")
+        | tool_names_by_tag("memory")
     )
     assert len(ctx.required_tool_names) == 10
-    assert ctx.enabled_segment_names == _WRITING_SEGMENTS | _KNOWLEDGE_SEGMENTS
+    assert ctx.enabled_segment_names == _WRITING_SEGMENTS | _KNOWLEDGE_SEGMENTS | _MEMORY_SEGMENTS
 
 
 def test_resolve_skills_explicit_empty_enabled_ids():
@@ -38,7 +40,7 @@ def test_resolve_skills_unknown_id_raises():
 
 def test_default_enabled_skills_is_writing():
     """DEFAULT_ENABLED_SKILLS={'writing'}（1.4 仅 writing；知识库/记忆 P2 skill 化）。"""
-    assert DEFAULT_ENABLED_SKILLS == frozenset({"writing", "knowledge"})
+    assert DEFAULT_ENABLED_SKILLS == frozenset({"writing", "knowledge", "memory"})
 
 
 def test_writing_segment_names_match_prompts():
@@ -64,7 +66,15 @@ def test_knowledge_segment_names_match_prompts():
     assert KNOWLEDGE_SEGMENT_NAMES == {SEG_KNOWLEDGE_LIBRARY.name}
 
 
+def test_memory_segment_names_match_prompts():
+    from src.prompts import SEG_MEMORY_RECALL
+    from src.services.agent.skill.descriptor import MEMORY_SEGMENT_NAMES
+
+    assert MEMORY_SEGMENT_NAMES == {SEG_MEMORY_RECALL.name}
+
+
 def test_base_tool_set_snapshot():
     """base 标签内容锁定——防误重标（如 base_search_file→writing）致 base 集合静默收缩。"""
     assert tool_names_by_tag("knowledge") == {"base_search_file", "knowledge_query_graph"}
-    assert tool_names_by_tag("base") == {"base_recall_memory"}
+    assert tool_names_by_tag("memory") == {"base_recall_memory"}
+    assert tool_names_by_tag("base") == frozenset()

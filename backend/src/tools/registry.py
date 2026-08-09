@@ -37,7 +37,7 @@ class ToolSpec:
 # tags：writing=写作 skill；base=通用底座（always required；知识库/记忆 skill 化时改 knowledge/memory + 建 skill）
 _WRITING = frozenset({"writing"})
 _KNOWLEDGE = frozenset({"knowledge"})
-_BASE = frozenset({"base"})
+_MEMORY = frozenset({"memory"})
 
 # 顺序 = 现状 agent_tools（blog_7 + base_search_file + base_recall_memory）；
 # mcp_call_tool 经 McpToolProvider 在末尾追加（保现状序）
@@ -55,7 +55,7 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
         gate=lambda c: c.feature_flags.memory_enabled,
         tags=_KNOWLEDGE,
     ),
-    "base_recall_memory": ToolSpec(base_recall_memory, gate=lambda c: c.feature_flags.memory_enabled, tags=_BASE),
+    "base_recall_memory": ToolSpec(base_recall_memory, gate=lambda c: c.feature_flags.memory_enabled, tags=_MEMORY),
 }
 
 

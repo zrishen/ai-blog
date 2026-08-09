@@ -20,7 +20,7 @@ def resolve_skills(enabled_ids: frozenset[str] | None = None) -> SkillContext:
     """
     enabled = enabled_ids if enabled_ids is not None else DEFAULT_ENABLED_SKILLS
 
-    required: set[str] = set(tool_names_by_tag("base"))  # 通用底座 always required
+    required: set[str] = set()
     segments: set[str] = set()
     for sid in enabled:
         if sid not in SKILL_REGISTRY:
