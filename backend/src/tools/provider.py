@@ -16,6 +16,15 @@ from src.config import settings
 from src.tools.mcp import build_mcp_call_tool, normalize_mcp_capabilities
 from src.tools.registry import TOOL_REGISTRY
 from src.tools.web import web_fetch, web_search
+from src.tools.workspace_files import (
+    workspace_delete_file,
+    workspace_edit_file,
+    workspace_glob,
+    workspace_grep,
+    workspace_move_file,
+    workspace_read_file,
+    workspace_write_file,
+)
 
 if TYPE_CHECKING:
     from src.services.agent.skill.context import SkillContext
@@ -36,6 +45,7 @@ class ToolFeatureFlags:
         return cls(
             memory_enabled=settings.memory_enabled,
             web_tools_enabled=settings.web_tools_enabled,
+            workspace_files_enabled=settings.workspace_files_enabled,
         )
 
 
@@ -86,8 +96,25 @@ class WebToolProvider:
         return [web_search, web_fetch]
 
 
+class WorkspaceFilesProvider:
+    name = "workspace_files"
+
+    def provide(self, ctx: ToolContext) -> list[BaseTool]:
+        if not ctx.feature_flags.workspace_files_enabled:
+            return []
+        return [
+            workspace_read_file,
+            workspace_write_file,
+            workspace_edit_file,
+            workspace_glob,
+            workspace_grep,
+            workspace_move_file,
+            workspace_delete_file,
+        ]
+
+
 # 固定序；预留槽：WorkspaceFilesProvider / CodeExecutionProvider
-_PROVIDERS: tuple[ToolProvider, ...] = (McpToolProvider(), WebToolProvider())
+_PROVIDERS: tuple[ToolProvider, ...] = (McpToolProvider(), WorkspaceFilesProvider(), WebToolProvider())
 
 
 def assemble_tools(

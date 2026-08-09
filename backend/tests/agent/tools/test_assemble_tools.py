@@ -9,6 +9,7 @@ from src.tools.provider import (
     ToolContext,
     ToolFeatureFlags,
     WebToolProvider,
+    WorkspaceFilesProvider,
     assemble_tools,
 )
 from src.tools.registry import TOOL_REGISTRY, tool_names_by_tag
@@ -21,7 +22,14 @@ _DEFAULT_REQUIRED = BLOG_7 | tool_names_by_tag("base")
 _EXPECTED_ORDER = [name for name in TOOL_REGISTRY if name in _DEFAULT_REQUIRED]
 
 
-def _ctx(*, memory_enabled=True, web_tools_enabled=False, mcp_plugins=(), required=None) -> ToolContext:
+def _ctx(
+    *,
+    memory_enabled=True,
+    web_tools_enabled=False,
+    workspace_files_enabled=False,
+    mcp_plugins=(),
+    required=None,
+) -> ToolContext:
     return ToolContext(
         user_id=1,
         skill=SkillContext(
@@ -32,6 +40,7 @@ def _ctx(*, memory_enabled=True, web_tools_enabled=False, mcp_plugins=(), requir
         feature_flags=ToolFeatureFlags(
             memory_enabled=memory_enabled,
             web_tools_enabled=web_tools_enabled,
+            workspace_files_enabled=workspace_files_enabled,
         ),
     )
 
@@ -87,6 +96,34 @@ def test_web_provider_is_feature_gated():
 def test_web_tools_append_after_registry_tools_when_enabled():
     asm = assemble_tools(_ctx(web_tools_enabled=True))
     assert [tool.name for tool in asm.tools][-2:] == ["web_search", "web_fetch"]
+
+
+def test_workspace_file_provider_is_feature_gated():
+    assert WorkspaceFilesProvider().provide(_ctx()) == []
+    assert [tool.name for tool in WorkspaceFilesProvider().provide(_ctx(workspace_files_enabled=True))] == [
+        "workspace_read_file",
+        "workspace_write_file",
+        "workspace_edit_file",
+        "workspace_glob",
+        "workspace_grep",
+        "workspace_move_file",
+        "workspace_delete_file",
+    ]
+
+
+def test_workspace_tools_append_before_web_tools_when_enabled():
+    asm = assemble_tools(_ctx(workspace_files_enabled=True, web_tools_enabled=True))
+    assert [tool.name for tool in asm.tools][-9:] == [
+        "workspace_read_file",
+        "workspace_write_file",
+        "workspace_edit_file",
+        "workspace_glob",
+        "workspace_grep",
+        "workspace_move_file",
+        "workspace_delete_file",
+        "web_search",
+        "web_fetch",
+    ]
 
 
 def test_mcp_skipped_when_plugins_have_no_capabilities():
