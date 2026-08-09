@@ -107,8 +107,11 @@ class Settings(BaseSettings):
     chat_attachment_dir: str = str(DATA_DIR / "content" / "chat_attachments")
     # Phase 2 真实工作目录：<workspace_root>/<username>/。内容文件的唯一 owner 根。
     workspace_root: str = str(DATA_DIR / "workspace")
-    # 默认关闭。仅逗号分隔的受控用户可把 DB 工作副本导出并校验为 Markdown；读取仍走 DB。
+    # 默认 allowlist；列表为空时等价关闭。保留旧配置以平滑启用 verified-document canary。
     blog_document_canary_user_ids: str = ""
+    blog_document_writer_scope: Literal["off", "allowlist", "all"] = "allowlist"
+    # 已验证文档的默认读取语义；紧急时设为 db 可立即回退到数据库镜像。
+    blog_document_reader_policy: Literal["db", "verified"] = "verified"
 
     # ---- 聊天附件限制 ----
     chat_attachment_max_file_size_bytes: int = 10 * 1024 * 1024

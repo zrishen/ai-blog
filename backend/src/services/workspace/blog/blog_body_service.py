@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import logging
 
+from src.config import settings
 from src.database.models import BlogPost
 from src.services.workspace.blog.blog_document_store import read_blog_document
 
@@ -19,6 +20,8 @@ def _canonical_file_path(post: BlogPost) -> str:
 async def get_post_body(post: BlogPost) -> str:
     """Return verified Markdown content, falling back safely to the DB copy."""
 
+    if settings.blog_document_reader_policy == "db":
+        return post.content
     if getattr(post, "content_storage_state", "legacy") != "verified":
         return post.content
     if post.file_path != _canonical_file_path(post):

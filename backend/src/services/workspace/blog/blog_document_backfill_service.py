@@ -179,6 +179,46 @@ async def _recover_marker_commit_failure(
     raise BlogDocumentBackfillError("Document verification marker commit failed") from marker_error
 
 
+async def _recover_verified_check_commit_failure(
+    db: AsyncSession,
+    *,
+    post_id: int,
+    user_id: int,
+    check_error: Exception,
+) -> BlogDocumentBackfillResult:
+    """Re-check a verified no-op after its lock-release commit was ambiguous."""
+
+    await db.rollback()
+    post = await _get_owned_post_for_update(db, post_id=post_id, user_id=user_id)
+    if post is None:
+        raise BlogDocumentBackfillError("Post disappeared while checking verified document") from check_error
+
+    if post.content_storage_state != "verified":
+        await db.rollback()
+        raise BlogDocumentBackfillError("Blog document state changed while checking verification") from check_error
+
+    try:
+        expected = await _document_from_post(db, post)
+        relative_path, digest = await _verify_existing(post, expected)
+    except Exception as consistency_error:
+        try:
+            await _mark_error(db, post, consistency_error)
+        except Exception as error_recording_error:
+            raise BlogDocumentBackfillError(
+                "Verified document check failed and its error state could not be recorded"
+            ) from error_recording_error
+        raise BlogDocumentBackfillError("Verified blog document is inconsistent after commit failure") from consistency_error
+
+    result = BlogDocumentBackfillResult(
+        post_id=post.id,
+        file_path=relative_path,
+        content_sha256=digest,
+        wrote_document=False,
+    )
+    await db.rollback()
+    return result
+
+
 async def backfill_blog_post_document(
     db: AsyncSession,
     *,
@@ -200,9 +240,9 @@ async def backfill_blog_post_document(
         await db.rollback()
         raise BlogDocumentBackfillError("Blog document backfill is in an error state and requires explicit repair")
 
-    try:
-        expected = await _document_from_post(db, post)
-        if post.content_storage_state == "verified":
+    if post.content_storage_state == "verified":
+        try:
+            expected = await _document_from_post(db, post)
             relative_path, digest = await _verify_existing(post, expected)
             result = BlogDocumentBackfillResult(
                 post_id=post.id,
@@ -210,9 +250,25 @@ async def backfill_blog_post_document(
                 content_sha256=digest,
                 wrote_document=False,
             )
-            await db.commit()
-            return result
+        except Exception as exc:
+            await _mark_error(db, post, exc)
+            if isinstance(exc, BlogDocumentBackfillError):
+                raise
+            raise BlogDocumentBackfillError("Blog document backfill failed") from exc
 
+        try:
+            await db.commit()
+        except Exception as exc:
+            return await _recover_verified_check_commit_failure(
+                db,
+                post_id=post_id,
+                user_id=user_id,
+                check_error=exc,
+            )
+        return result
+
+    try:
+        expected = await _document_from_post(db, post)
         path = await asyncio.to_thread(write_blog_document, post.user_id, expected)
         read_back, digest = await _read_and_hash(post.user_id, post.slug)
         if read_back != expected:

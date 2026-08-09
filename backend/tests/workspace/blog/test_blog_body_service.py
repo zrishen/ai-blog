@@ -54,6 +54,22 @@ async def test_get_post_body_reads_strict_verified_markdown(workspace: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_get_post_body_reader_db_policy_forces_database_mirror(
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    post = _post(content="Database mirror")
+    document = BlogDocument(slug=post.slug, title=post.title, body="Markdown body", created_at=post.created_at)
+    write_blog_document(post.user_id, document)
+    post.content_storage_state = "verified"
+    post.file_path = "posts/post.md"
+    post.content_sha256 = sha256(document.body.encode("utf-8")).hexdigest()
+    monkeypatch.setattr(settings, "blog_document_reader_policy", "db")
+
+    assert await get_post_body(post) == "Database mirror"
+
+
+@pytest.mark.asyncio
 async def test_get_post_body_falls_back_for_bad_verified_marker(caplog: pytest.LogCaptureFixture) -> None:
     post = _post()
     post.content_storage_state = "verified"

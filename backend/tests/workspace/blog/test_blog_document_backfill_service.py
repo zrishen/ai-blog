@@ -110,6 +110,80 @@ async def test_verified_consistent_post_is_not_rewritten(
 
 
 @pytest.mark.asyncio
+async def test_verified_check_commit_ambiguous_success_is_rechecked_without_error(
+    db_session: AsyncSession,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    post = await _post_with_category(db_session, slug="ambiguous-verified-check")
+    await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
+    real_commit = db_session.commit
+    real_rollback = db_session.rollback
+    commit_calls = 0
+    rollback_calls = 0
+
+    async def commit_after_persist_then_fail_once() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 1:
+            await real_commit()
+            raise RuntimeError("connection dropped after verified check")
+        await real_commit()
+
+    async def track_rollback() -> None:
+        nonlocal rollback_calls
+        rollback_calls += 1
+        await real_rollback()
+
+    monkeypatch.setattr(db_session, "commit", commit_after_persist_then_fail_once)
+    monkeypatch.setattr(db_session, "rollback", track_rollback)
+
+    result = await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
+
+    await db_session.refresh(post)
+    assert not result.wrote_document
+    assert post.content_storage_state == "verified"
+    assert post.last_storage_error is None
+    assert read_blog_document(post.user_id, post.slug).body == "Legacy working body"
+    assert workspace.joinpath("owner-41", "posts", "ambiguous-verified-check.md").exists()
+    assert commit_calls == 1
+    assert rollback_calls >= 2
+
+
+@pytest.mark.asyncio
+async def test_verified_check_commit_failure_marks_inconsistent_document_error(
+    db_session: AsyncSession,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    post = await _post_with_category(db_session, slug="inconsistent-verified-check")
+    await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
+    path = workspace / "owner-41" / "posts" / "inconsistent-verified-check.md"
+    real_commit = db_session.commit
+    commit_calls = 0
+
+    async def commit_then_damage_file_and_fail_once() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 1:
+            await real_commit()
+            path.write_text("not canonical markdown", encoding="utf-8")
+            raise RuntimeError("connection dropped after verified check")
+        await real_commit()
+
+    monkeypatch.setattr(db_session, "commit", commit_then_damage_file_and_fail_once)
+
+    with pytest.raises(BlogDocumentBackfillError, match="inconsistent after commit failure"):
+        await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
+
+    await db_session.refresh(post)
+    assert post.content_storage_state == "error"
+    assert post.last_storage_error
+    assert path.read_text(encoding="utf-8") == "not canonical markdown"
+    assert commit_calls == 2
+
+
+@pytest.mark.asyncio
 async def test_error_state_is_terminal_and_does_not_overwrite_the_document(
     db_session: AsyncSession,
     workspace: Path,

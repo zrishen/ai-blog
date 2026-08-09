@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def canary_enabled_for_user(user_id: int) -> bool:
-    """Return whether this user is explicitly enrolled in document export."""
+    """Return whether this user is explicitly enrolled in the legacy allowlist."""
 
     configured = settings.blog_document_canary_user_ids.strip()
     if not configured:
@@ -24,6 +24,17 @@ def canary_enabled_for_user(user_id: int) -> bool:
     except ValueError:
         logger.error("Ignoring invalid BLOG_DOCUMENT_CANARY_USER_IDS configuration")
         return False
+
+
+def document_writer_enabled_for_user(user_id: int) -> bool:
+    """Return whether this user is enrolled in the configured write-through scope."""
+
+    scope = settings.blog_document_writer_scope
+    if scope == "off":
+        return False
+    if scope == "all":
+        return True
+    return canary_enabled_for_user(user_id)
 
 
 def invalidate_verified_document(post: BlogPost) -> None:
@@ -39,7 +50,7 @@ def invalidate_verified_document(post: BlogPost) -> None:
 async def sync_document_if_canary(db: AsyncSession, post: BlogPost) -> None:
     """Best-effort post-commit export; author writes remain successful on FS errors."""
 
-    if not canary_enabled_for_user(post.user_id):
+    if not document_writer_enabled_for_user(post.user_id):
         return
     try:
         await backfill_blog_post_document(db, post_id=post.id, user_id=post.user_id)
