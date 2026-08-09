@@ -72,6 +72,7 @@ interface ChatState {
 
   workspaceTree: WorkspaceEntry[];
   workspaceSelectedView: WorkspaceView;
+  workspaceSelectedFolderPath: string | null;
   // 工作区内联编辑的博客 id（null=不在编辑，显示视图列表）
   workspaceEditingBlogId: number | null;
 
@@ -140,6 +141,7 @@ type ChatAction =
   | { type: "SET_WORKSPACE_TREE"; payload: WorkspaceEntry[] }
   | { type: "SET_WORKSPACE_BLOG_STATUS"; payload: { id: number; status: string } }
   | { type: "SET_WORKSPACE_SELECTED_VIEW"; payload: WorkspaceView }
+  | { type: "SET_WORKSPACE_SELECTED_FOLDER_PATH"; payload: string | null }
   | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
   | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
   | { type: "INCREMENT_TRASH_REVISION" }
@@ -245,6 +247,7 @@ const initialState: ChatState = {
 
   workspaceTree: [],
   workspaceSelectedView: loadWorkspaceView(),
+  workspaceSelectedFolderPath: null,
   workspaceEditingBlogId: null,
 
   brainTab: "graph",

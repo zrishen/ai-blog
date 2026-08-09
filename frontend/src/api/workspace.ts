@@ -70,6 +70,15 @@ export async function deleteFolder(path: string): Promise<void> {
   await unwrap(res, "删除文件夹失败");
 }
 
+export async function deleteUnmanagedWorkspaceFile(path: string): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/workspace/entries`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  await unwrap(res, "删除文件失败");
+}
+
 export interface AiKnowledgeJoinResult {
   rag_source: RagSource;
   job: FileProcessingJob | null;

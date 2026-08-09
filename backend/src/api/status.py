@@ -6,12 +6,12 @@
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
 
 from src.config import settings
 from src.schemas.status import StatusComponents, StatusResponse
-from src.services.workspace.file.file_service import UPLOAD_DIR
 from src.utils.rate_limit import check_rate_limit
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ async def check_status(request: Request):
 
     try:
         # 仅确保目录存在可写，不遍历统计（防磁盘 IO 被高频请求放大）
-        UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        Path(settings.workspace_root).mkdir(parents=True, exist_ok=True)
     except Exception:
         logger.warning("/status uploads check failed", exc_info=True)
         uploads_status = "error"

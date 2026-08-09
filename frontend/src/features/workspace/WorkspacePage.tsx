@@ -8,6 +8,7 @@ import { OverviewView } from "./views/OverviewView";
 import { BlogPostsView } from "./views/BlogPostsView";
 import { AiKnowledgeView } from "./views/AiKnowledgeView";
 import { TrashView } from "./views/TrashView";
+import { FolderView } from "./views/FolderView";
 
 export function WorkspacePage() {
   const { state, dispatch } = useChat();
@@ -66,6 +67,17 @@ export function WorkspacePage() {
   if (editingPost || isCreatingBlog) return <BlogEditor onBack={exitBlogEdit} />;
 
   if (state.fileSelectedFile) return <FilePreviewView onBack={exitFilePreview} />;
+
+  if (state.workspaceSelectedFolderPath) {
+    return (
+      <FolderView
+        folderPath={state.workspaceSelectedFolderPath}
+        onOpenBlog={openBlog}
+        onOpenFile={openFile}
+        onBack={() => dispatch({ type: "SET_WORKSPACE_SELECTED_FOLDER_PATH", payload: null })}
+      />
+    );
+  }
 
   if (view === "trash") return <TrashView />;
 

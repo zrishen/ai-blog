@@ -37,7 +37,7 @@ from src.services.workspace.file.file_processing_service import (
     has_active_restore,
     schedule_job,
 )
-from src.services.workspace.file.file_service import get_user_upload_dir
+from src.services.workspace.file.file_service import get_uploaded_file_path
 from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 from src.services.workspace import rag_service
 from src.services.workspace.trash.workspace_trash_service import (
@@ -341,7 +341,7 @@ async def _restore_file_document(db: AsyncSession, *, item_id: int, user_id: int
     if doc is None:
         raise _not_found_error()
 
-    upload_path = get_user_upload_dir(user_id) / doc.file_path
+    upload_path = get_uploaded_file_path(user_id, doc.file_path)
     exists, is_file = await asyncio.gather(
         asyncio.to_thread(upload_path.exists),
         asyncio.to_thread(upload_path.is_file),
@@ -433,7 +433,7 @@ async def _purge_uploaded_file_if_exclusive(
     if msg_refs > 0:
         return False
 
-    upload_path = get_user_upload_dir(user_id) / stored_name
+    upload_path = get_uploaded_file_path(user_id, stored_name)
     if not upload_path.exists():
         return True
     if not upload_path.is_file():

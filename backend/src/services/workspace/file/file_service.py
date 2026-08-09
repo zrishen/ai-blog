@@ -1,31 +1,56 @@
 import asyncio
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from fastapi import UploadFile
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import settings
+from src.core.path_guard import workspace_dir, workspace_path
 from src.utils import file_parser
-from src.utils.user_dir import resolve_username as _resolve_username
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-UPLOAD_DIR = Path(settings.upload_dir)
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_ROOT = "uploads"
 
 
-def get_user_upload_dir(user_id: int | str) -> Path:
+def normalize_workspace_file_path(stored_path: str) -> str:
+    """Return the canonical workspace-relative path for a stored upload."""
+    path = PurePosixPath(stored_path)
+    if (
+        not stored_path
+        or path.is_absolute()
+        or path.as_posix() != stored_path
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
+        raise ValueError("Invalid stored upload path")
+    return path.as_posix() if path.parts[0] == UPLOAD_ROOT else f"{UPLOAD_ROOT}/{path.as_posix()}"
+
+
+def get_user_upload_dir(user_id: int) -> Path:
     """Return the per-user upload directory path (does NOT create it).
 
     纯取路径：读接口（预览/下载/公共图片）不应有建目录副作用，否则未校验的 username
     会被滥用来制造大量空目录。写入场景（save_file 等）自行 mkdir。
     """
-    return UPLOAD_DIR / _resolve_username(user_id)
+    return workspace_dir(user_id) / UPLOAD_ROOT
+
+
+def get_uploaded_file_path(
+    user_id: int,
+    stored_path: str,
+    *,
+    mode: str = "read",
+) -> Path:
+    """Resolve one document path within the user's real workspace."""
+    return workspace_path(
+        user_id,
+        normalize_workspace_file_path(stored_path),
+        mode="write" if mode == "write" else "read",
+    )
 
 
 async def _store_document_chunks(
@@ -159,9 +184,9 @@ async def save_file(file: UploadFile, *, allow_images: bool = True, user_id: int
     return stored_name, filename
 
 
-def delete_uploaded_file(stored_name: str, user_id: int | str) -> bool:
+def delete_uploaded_file(stored_name: str, user_id: int) -> bool:
     """Delete a single uploaded file by stored name and user directory. Returns True if deleted."""
-    path = get_user_upload_dir(user_id) / stored_name
+    path = get_uploaded_file_path(user_id, stored_name)
     try:
         if path.exists() and path.is_file():
             path.unlink()
@@ -182,11 +207,13 @@ async def is_hidden_soft_deleted_file(
     """仅当文件只被软删除的文件库记录引用时隐藏。"""
     from src.database.models import BlogPost, Conversation, FileDocument, Message
 
+    canonical_path = normalize_workspace_file_path(filename)
+    legacy_name = PurePosixPath(canonical_path).name
     states = (
         await db.execute(
             select(FileDocument.deleted_at).where(
                 FileDocument.user_id == str(user_id),
-                FileDocument.file_path == filename,
+                FileDocument.file_path.in_({filename, canonical_path, legacy_name}),
             )
         )
     ).scalars().all()
@@ -195,9 +222,14 @@ async def is_hidden_soft_deleted_file(
 
     references = {
         filename,
+        canonical_path,
+        legacy_name,
         f"/api/v1/uploads/{filename}",
+        f"/api/v1/uploads/{canonical_path}",
         f"/api/v1/public/uploads/{username}/{filename}",
+        f"/api/v1/public/uploads/{username}/{canonical_path}",
         f"/api/v1/blog/cover/{filename}",
+        f"/api/v1/blog/cover/{canonical_path}",
     }
     message_ref = await db.execute(
         select(Message.id)
@@ -253,7 +285,7 @@ async def vectorize_and_store(
         if progress_reporter:
             asyncio.run_coroutine_threadsafe(report("parse", completed, total, unit), loop).result()
 
-    path = get_user_upload_dir(user_id) / stored_filename
+    path = get_uploaded_file_path(int(user_id), stored_filename)
     await report("parse", 0, 1, "operation")
     text = await asyncio.to_thread(file_parser.parse_path, path, parser_progress)
     logger.info(
@@ -433,7 +465,7 @@ async def vectorize_text_and_store(
 
 async def convert_to_html(stored_filename: str, *, user_id: int | str = 1) -> str:
     """Convert a stored file to HTML for browser preview; PDF is served as-is (browser renders natively)."""
-    path = get_user_upload_dir(user_id) / stored_filename
+    path = get_uploaded_file_path(int(user_id), stored_filename)
     ext = _get_extension(stored_filename)
     if ext == ".docx":
         return _docx_to_html(path)

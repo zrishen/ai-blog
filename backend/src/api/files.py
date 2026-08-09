@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.core.exceptions import OwnershipError
-from src.core.path_guard import Scope, ensure_within
 from src.database.engine import FileDocument, get_db
 from src.database.models import BlogPost, BlogPostRevision, User
 from src.schemas.file_base import (
@@ -40,6 +39,7 @@ from src.services.workspace.file.file_service import (
     MAX_FILE_SIZE,
     _get_extension,
     _validate_file,
+    get_uploaded_file_path,
     get_user_upload_dir,
     is_hidden_soft_deleted_file,
     matches_magic,
@@ -161,13 +161,16 @@ async def get_public_uploaded_image(
         raise HTTPException(status_code=403, detail="Only images can be public")
 
     # 作者本人（带凭证）放行自己目录的图片；否则仅"被已发布文章引用"才公开
-    if not (viewer is not None and viewer.username == username):
-        if await _find_published_post_referencing_image(db, filename, username=username) is None:
+    owner_id = viewer.id if viewer is not None and viewer.username == username else None
+    if owner_id is None:
+        post = await _find_published_post_referencing_image(db, filename, username=username)
+        if post is None:
             raise HTTPException(status_code=404, detail="File not found")
+        owner_id = post.user_id
 
     try:
-        file_path = ensure_within(username, filename, scope=Scope.UPLOAD)
-    except OwnershipError:
+        file_path = get_uploaded_file_path(owner_id, filename)
+    except (OwnershipError, ValueError):
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -196,8 +199,8 @@ async def get_blog_cover(
         raise HTTPException(status_code=404, detail="Cover image not found")
 
     try:
-        file_path = ensure_within(post.user_id, filename, scope=Scope.UPLOAD)
-    except OwnershipError:
+        file_path = get_uploaded_file_path(post.user_id, filename)
+    except (OwnershipError, ValueError):
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Cover image not found")
@@ -208,7 +211,7 @@ async def get_blog_cover(
     )
 
 
-@router.get("/uploads/{filename}")
+@router.get("/uploads/{filename:path}")
 async def get_uploaded_file(filename: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Serve an uploaded file (requires authentication).
 
@@ -224,8 +227,8 @@ async def get_uploaded_file(filename: str, user: User = Depends(get_current_user
         raise HTTPException(status_code=404, detail="File not found")
 
     try:
-        file_path = ensure_within(user.id, filename, scope=Scope.UPLOAD)
-    except OwnershipError:
+        file_path = get_uploaded_file_path(user.id, filename)
+    except (OwnershipError, ValueError):
         raise HTTPException(status_code=403, detail="Access denied")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
@@ -278,7 +281,7 @@ async def upload_to_file_library(
     user_dir = get_user_upload_dir(user.id)
     processing_dir = user_dir / ".processing"
     processing_dir.mkdir(parents=True, exist_ok=True)
-    stored_name = f"{uuid.uuid4().hex}{_get_extension(original_name)}"
+    stored_name = f"uploads/{uuid.uuid4().hex}{_get_extension(original_name)}"
     collection_name = _user_collection(user.id)
     try:
         job, created = await create_or_reuse_upload_job(
@@ -300,7 +303,7 @@ async def upload_to_file_library(
         return FileProcessingJobResponse.model_validate(job)
 
     staging_path = Path(job.staging_path)
-    final_path = user_dir / stored_name
+    final_path = get_uploaded_file_path(user.id, stored_name, mode="write")
     total = 0
     output = None
     moved_to_final = False

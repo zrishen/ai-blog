@@ -12,9 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import workspace_dir, workspace_path
-from src.database.models import BlogPost
+from src.database.models import BlogPost, FileDocument
 from src.services.workspace.blog.blog_document_store import validate_blog_document_path
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
+from src.services.workspace.file.file_service import normalize_workspace_file_path
+from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
 
 _MAX_SEGMENT_LENGTH = 300
 _MAX_PATH_LENGTH = 500
@@ -95,6 +97,16 @@ async def list_entries(db: AsyncSession, user_id: int) -> list[WorkspaceEntry]:
             )
         ).scalars()
     )
+    documents = list(
+        (
+            await db.execute(
+                select(FileDocument).where(
+                    FileDocument.user_id == str(user_id),
+                    FileDocument.deleted_at.is_(None),
+                )
+            )
+        ).scalars()
+    )
     for post in posts:
         if post.file_path is None:
             continue
@@ -106,6 +118,7 @@ async def list_entries(db: AsyncSession, user_id: int) -> list[WorkspaceEntry]:
         except Exception:
             logger.warning("Unable to reconcile workspace blog document: post_id=%s", post.id, exc_info=True)
     blogs = {post.file_path: post for post in posts if post.file_path}
+    files = {normalize_workspace_file_path(document.file_path): document for document in documents}
     entries: list[WorkspaceEntry] = []
     for current_root, directories, filenames in os.walk(root, followlinks=False):
         current = Path(current_root)
@@ -122,13 +135,14 @@ async def list_entries(db: AsyncSession, user_id: int) -> list[WorkspaceEntry]:
                 continue
             relative = path.relative_to(root).as_posix()
             post = blogs.get(relative)
+            document = files.get(relative)
             entries.append(
                 WorkspaceEntry(
                     path=relative,
                     name=name,
                     kind="blog" if post else "file",
-                    resource_type="blog_post" if post else None,
-                    resource_id=post.id if post else None,
+                    resource_type="blog_post" if post else "file" if document else None,
+                    resource_id=post.id if post else document.id if document else None,
                     blog_status=post.status if post else None,
                 )
             )
@@ -215,6 +229,19 @@ async def move_entry(
             )
         ).scalars()
     )
+    documents = [
+        document
+        for document in (
+            await db.execute(
+                select(FileDocument).where(
+                    FileDocument.user_id == str(user_id),
+                    FileDocument.deleted_at.is_(None),
+                )
+            )
+        ).scalars()
+        if normalize_workspace_file_path(document.file_path) == source_relative
+        or normalize_workspace_file_path(document.file_path).startswith(f"{source_relative}/")
+    ]
     try:
         os.replace(source, destination)
     except OSError as exc:
@@ -224,16 +251,35 @@ async def move_entry(
         assert post.file_path is not None
         suffix = post.file_path.removeprefix(source_relative)
         post.file_path = f"{destination_relative}{suffix}"
-    if posts:
+    for document in documents:
+        source_path = normalize_workspace_file_path(document.file_path)
+        suffix = source_path.removeprefix(source_relative)
+        document.file_path = f"{destination_relative}{suffix}"
+        if source_path == source_relative:
+            document.original_name = destination.name
+    if posts or documents:
         await db.commit()
+    if documents:
+        from src.services.workspace import rag_service
+
+        for document in documents:
+            source_record = await rag_service.mark_stale(db, user_id, "file", document.id)
+            if source_record is not None:
+                await rag_service.schedule_reindex_for_source(
+                    db,
+                    user_id=user_id,
+                    resource_type="file",
+                    resource_id=document.id,
+                )
     kind = "folder" if destination.is_dir() else "blog" if posts else "file"
     post = posts[0] if len(posts) == 1 and kind == "blog" else None
+    document = documents[0] if len(documents) == 1 and kind == "file" else None
     return WorkspaceEntry(
         path=destination_relative,
         name=destination.name,
         kind=kind,
-        resource_type="blog_post" if post else None,
-        resource_id=post.id if post else None,
+        resource_type="blog_post" if post else "file" if document else None,
+        resource_id=post.id if post else document.id if document else None,
         blog_status=post.status if post else None,
     )
 
@@ -248,3 +294,41 @@ async def delete_folder(db: AsyncSession, user_id: int, *, path: str) -> None:
         directory.rmdir()
     except OSError as exc:
         raise ConflictError("Workspace folder must be empty before deletion") from exc
+
+
+async def delete_unmanaged_file(db: AsyncSession, user_id: int, *, path: str) -> None:
+    """Move one non-resource workspace file to the physical workspace trash."""
+
+    relative_path = _relative_path(path)
+    source = _entry_path(user_id, relative_path)
+    if source.is_symlink() or not source.is_file():
+        raise NotFoundError("Workspace file not found")
+
+    managed_post = await db.scalar(
+        select(BlogPost.id).where(
+            BlogPost.user_id == user_id,
+            BlogPost.deleted_at.is_(None),
+            BlogPost.file_path == relative_path,
+        )
+    )
+    documents = list(
+        (
+            await db.execute(
+                select(FileDocument).where(
+                    FileDocument.user_id == str(user_id),
+                    FileDocument.deleted_at.is_(None),
+                )
+            )
+        ).scalars()
+    )
+    if managed_post is not None or any(
+        normalize_workspace_file_path(document.file_path) == relative_path for document in documents
+    ):
+        raise ConflictError("Managed workspace resources must use their dedicated delete action")
+
+    await move_workspace_entry_to_trash(
+        db,
+        user_id=user_id,
+        relative_path=relative_path,
+    )
+    await db.commit()

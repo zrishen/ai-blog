@@ -53,12 +53,13 @@ async def test_upload_file_document_passes_numeric_user_id_to_vectorizer(
 
 
 def test_numeric_user_id_resolves_username_upload_directory(tmp_path, monkeypatch):
-    upload_root = tmp_path / "uploads"
-    monkeypatch.setattr(file_service, "UPLOAD_DIR", upload_root)
+    from src.config import settings
+
+    workspace_root = tmp_path / "workspace"
+    monkeypatch.setattr(settings, "workspace_root", str(workspace_root))
     monkeypatch.setitem(user_dir._username_cache, 7, "named-user")
 
-    assert file_service.get_user_upload_dir(7) == upload_root / "named-user"
-    assert file_service.get_user_upload_dir("7") == upload_root / "7"
+    assert file_service.get_user_upload_dir(7) == workspace_root / "named-user" / "uploads"
 
 
 @pytest.mark.asyncio

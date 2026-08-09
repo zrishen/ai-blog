@@ -9,7 +9,6 @@ from sqlalchemy import select
 from src.config import settings
 from src.database.models import BlogPost as BlogPostModel
 from src.main import app
-from src.services.workspace.file import file_service
 from src.services.workspace.file.file_service import get_user_upload_dir
 from src.utils.auth import get_current_user, get_optional_user
 
@@ -33,11 +32,8 @@ def real_auth():
 
 @pytest.fixture(autouse=True)
 def isolated_dirs(tmp_path, monkeypatch):
-    upload_path = tmp_path / "uploads"
-    upload_path.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(settings, "blog_content_dir", str(tmp_path / "blog"))
-    monkeypatch.setattr(settings, "upload_dir", str(upload_path))
-    monkeypatch.setattr(file_service, "UPLOAD_DIR", upload_path)
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path / "workspace"))
 
 
 async def _register(client: AsyncClient, username: str) -> tuple[str, int]:

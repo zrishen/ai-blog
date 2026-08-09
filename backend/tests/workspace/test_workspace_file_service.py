@@ -4,10 +4,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, ValidationFailedError
+from src.core.path_guard import workspace_dir
 from src.services.workspace import workspace_file_service
 from src.services.workspace.blog.blog_body_service import get_post_body
 from src.services.workspace.blog.blog_document_store import BlogDocument, write_blog_document
 from src.services.workspace.blog.blog_service import create_post
+from src.services.workspace.trash.workspace_trash_service import list_workspace_trash_entries
 
 TEST_USER_ID = 1
 
@@ -97,6 +99,24 @@ async def test_folder_delete_requires_empty_directory(db_session: AsyncSession):
     await workspace_file_service.delete_folder(db_session, TEST_USER_ID, path="Empty/Nested")
     await workspace_file_service.delete_folder(db_session, TEST_USER_ID, path=folder.path)
     assert await workspace_file_service.list_entries(db_session, TEST_USER_ID) == []
+
+
+@pytest.mark.asyncio
+async def test_deleting_unmanaged_file_moves_it_to_workspace_trash(db_session: AsyncSession):
+    root = workspace_dir(TEST_USER_ID, create=True)
+    note = root / "agent-note.txt"
+    note.write_text("Created by the agent", encoding="utf-8")
+
+    await workspace_file_service.delete_unmanaged_file(
+        db_session,
+        TEST_USER_ID,
+        path="agent-note.txt",
+    )
+
+    assert not note.exists()
+    entries = await list_workspace_trash_entries(db_session, user_id=TEST_USER_ID)
+    assert len(entries) == 1
+    assert entries[0].original_path == "agent-note.txt"
 
 
 @pytest.mark.asyncio

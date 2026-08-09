@@ -2,6 +2,7 @@
 
 import io
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
@@ -10,7 +11,6 @@ from src.database.models import BlogPost, BlogPostRevision, Conversation, FileDo
 
 from src.config import settings
 from src.main import app
-from src.services.workspace.file import file_service
 from src.utils.auth import get_current_user, get_optional_user
 
 
@@ -30,10 +30,7 @@ def real_auth():
 
 @pytest.fixture(autouse=True)
 def isolated_dirs(tmp_path, monkeypatch):
-    upload_path = tmp_path / "uploads"
-    upload_path.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(file_service, "UPLOAD_DIR", upload_path)
-    monkeypatch.setattr(settings, "upload_dir", str(upload_path))
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path / "workspace"))
     # 注册用户会触发 _seed_intro_article 写盘，必须隔离 blog_content_dir，否则污染真实数据。
     monkeypatch.setattr(settings, "blog_content_dir", str(tmp_path / "blog"))
 
@@ -394,4 +391,4 @@ async def test_public_upload_does_not_create_dir_for_arbitrary_username(client: 
     fake = "nonexistent_user_xyz"
     resp = await client.get(f"/api/v1/public/uploads/{fake}/img.png")
     assert resp.status_code == 404
-    assert not (file_service.UPLOAD_DIR / fake).exists()
+    assert not (Path(settings.workspace_root) / fake).exists()

@@ -69,11 +69,15 @@ async def test_soft_deleted_library_file_stays_downloadable_when_chat_references
 
 def test_get_user_upload_dir_does_not_create_directory(tmp_path, monkeypatch):
     """get_user_upload_dir 纯取路径，无建目录副作用（根治空目录滥用）。"""
+    from src.config import settings
     from src.services.workspace.file import file_service
+    from src.utils import user_dir
 
-    monkeypatch.setattr(file_service, "UPLOAD_DIR", tmp_path)
-    target = tmp_path / "never_created_user"
-    assert file_service.get_user_upload_dir("never_created_user") == target
+    workspace_root = tmp_path / "workspace"
+    monkeypatch.setattr(settings, "workspace_root", str(workspace_root))
+    monkeypatch.setitem(user_dir._username_cache, 7, "never_created_user")
+    target = workspace_root / "never_created_user" / "uploads"
+    assert file_service.get_user_upload_dir(7) == target
     assert not target.exists()
 
 

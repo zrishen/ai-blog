@@ -73,6 +73,16 @@ async def delete_folder(
     return None
 
 
+@router.delete("/workspace/entries", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_unmanaged_workspace_file(
+    data: EntryDelete,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await workspace_file_service.delete_unmanaged_file(db, user.id, path=data.path)
+    return None
+
+
 @router.post("/workspace/ai-knowledge", response_model=RagJoinResponse, status_code=201)
 async def join_ai_knowledge(
     data: RagJoinRequest,

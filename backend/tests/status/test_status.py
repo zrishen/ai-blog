@@ -13,7 +13,7 @@ async def _ping_ok():
 @pytest.fixture(autouse=True)
 def _isolated_status_paths(tmp_path, monkeypatch):
     """隔离 uploads 目录（避免污染真实 data）；把 conftest 的同步 ping 覆盖为可 await。"""
-    monkeypatch.setattr("src.api.status.UPLOAD_DIR", tmp_path / "uploads")
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path / "workspace"))
     monkeypatch.setattr("src.services.memory.graph_store.ping", _ping_ok)
 
 
