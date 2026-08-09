@@ -1,16 +1,38 @@
-"""Working-copy body seam for blog consumers.
+"""Verified working-copy body seam for blog consumers."""
 
-The implementation deliberately remains the legacy DB body until the file
-storage cutover. Consumers must use this seam so that cutover is localized.
-"""
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import logging
 
 from src.database.models import BlogPost
+from src.services.workspace.blog.blog_document_store import read_blog_document
+
+logger = logging.getLogger(__name__)
 
 
-def get_post_body(post: BlogPost) -> str:
-    """Return the author's editable working-copy body.
+def _canonical_file_path(post: BlogPost) -> str:
+    return f"posts/{post.slug}.md"
 
-    This is exactly ``post.content`` in the current legacy-storage phase.
-    """
 
-    return post.content
+async def get_post_body(post: BlogPost) -> str:
+    """Return verified Markdown content, falling back safely to the DB copy."""
+
+    if getattr(post, "content_storage_state", "legacy") != "verified":
+        return post.content
+    if post.file_path != _canonical_file_path(post):
+        logger.warning("Verified blog document has a non-canonical path: post_id=%s", post.id)
+        return post.content
+
+    try:
+        document = await asyncio.to_thread(read_blog_document, post.user_id, post.slug)
+    except Exception:
+        logger.warning("Verified blog document could not be read: post_id=%s", post.id, exc_info=True)
+        return post.content
+
+    digest = hashlib.sha256(document.body.encode("utf-8")).hexdigest()
+    if post.content_sha256 != digest:
+        logger.warning("Verified blog document SHA-256 mismatch: post_id=%s", post.id)
+        return post.content
+    return document.body

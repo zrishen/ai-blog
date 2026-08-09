@@ -61,7 +61,7 @@ class RagSource(Base):
     resource_type = Column(String(30), nullable=False)  # blog_post / file
     resource_id = Column(Integer, nullable=False)
     index_status = Column(String(20), nullable=False, default="pending")  # pending / active / stale / failed
-    indexed_version = Column(String(60), nullable=True)  # 内容版本指纹，判断是否 stale
+    indexed_version = Column(String(64), nullable=True)  # 内容版本指纹，判断是否 stale
     collection_name = Column(String(200), nullable=False)  # RAG collection key
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=_utcnow)

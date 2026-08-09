@@ -53,6 +53,8 @@ async def test_init_db_builds_full_schema_and_is_idempotent(monkeypatch):
                 assert "ck_blog_posts_content_storage_state" in {
                     constraint["name"] for constraint in insp.get_check_constraints("blog_posts")
                 }
+                rag_source_columns = {column["name"]: column for column in insp.get_columns("rag_sources")}
+                assert rag_source_columns["indexed_version"]["type"].length == 64
                 assert "alembic_version" in tables
             async with eng.connect() as conn:
                 await conn.run_sync(check)

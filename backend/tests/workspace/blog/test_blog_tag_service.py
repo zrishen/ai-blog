@@ -66,7 +66,10 @@ async def test_suggest_tags_reads_working_body_through_seam(monkeypatch) -> None
         return "AI"
 
     monkeypatch.setattr(blog_tag_service, "_call_llm", fake_call)
-    monkeypatch.setattr(blog_tag_service, "get_post_body", lambda _post: "body from seam")
+    async def body_from_seam(_post):
+        return "body from seam"
+
+    monkeypatch.setattr(blog_tag_service, "get_post_body", body_from_seam)
     post = SimpleNamespace(id=1, title="T", excerpt="", content="legacy body")
 
     assert await blog_tag_service.suggest_tags(post) == ["AI"]

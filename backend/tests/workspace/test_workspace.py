@@ -1,5 +1,6 @@
 """工作区组织层服务测试：目录树 CRUD + 资源挂靠 + RAG 源状态机。"""
 
+import hashlib
 from datetime import datetime, timezone
 
 import pytest
@@ -369,6 +370,31 @@ async def test_mark_indexed_and_stale(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_blog_index_snapshot_mismatch_stays_stale(db_session: AsyncSession):
+    post = BlogPost(title="snapshot", slug="snapshot", content="first", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+    await rag_service.add_to_ai_knowledge(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id
+    )
+
+    snapshot_sha256 = hashlib.sha256(b"first").hexdigest()
+    post.content = "second"
+    await db_session.commit()
+
+    source = await rag_service.mark_blog_post_indexed_if_current(
+        db_session,
+        TEST_USER_ID,
+        post.id,
+        body_sha256=snapshot_sha256,
+    )
+    assert source is not None
+    assert source.index_status == "stale"
+    assert source.indexed_version is None
+
+
+@pytest.mark.asyncio
 async def test_update_post_content_marks_ai_knowledge_stale(db_session: AsyncSession):
     """博客正文变更 → 已加入 AI 知识的资源标 stale（旧索引保留可用，用户手动刷新后重建）。"""
     from src.services.workspace.blog.blog_service import update_post
@@ -704,6 +730,7 @@ async def test_index_blog_job_runs_to_active(db_session: AsyncSession, monkeypat
     monkeypatch.setattr(file_processing_service, "vectorize_text_and_store", fake_text_vectorize)
 
     post_id = post.id
+    expected_sha256 = hashlib.sha256(post.content.encode("utf-8")).hexdigest()
     _, job = await rag_service.index_blog_post(db_session, TEST_USER_ID, post_id)
     job_id = job.id
     await _run_job(job_id)
@@ -711,9 +738,44 @@ async def test_index_blog_job_runs_to_active(db_session: AsyncSession, monkeypat
     db_session.expire_all()
     source = await rag_service.get_rag_source(db_session, TEST_USER_ID, "blog_post", post_id)
     assert source is not None and source.index_status == "active"
-    assert source.indexed_version == "1"
+    assert source.indexed_version == expected_sha256
     succeeded = await db_session.get(FileProcessingJob, job_id)
     assert succeeded.status == "succeeded"
+
+
+@pytest.mark.asyncio
+async def test_blog_body_snapshot_failure_keeps_existing_vectors(db_session: AsyncSession, monkeypatch):
+    from src.services.workspace.file.file_processing_service import _run_job
+
+    post = BlogPost(title="keep-vectors", slug="keep-vectors", content="body", user_id=TEST_USER_ID)
+    db_session.add(post)
+    await db_session.commit()
+    await db_session.refresh(post)
+    await rag_service.add_to_ai_knowledge(
+        db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id
+    )
+    await rag_service.mark_indexed(db_session, TEST_USER_ID, "blog_post", post.id)
+
+    async def broken_body(_post):
+        raise RuntimeError("body validation failed")
+
+    deleted_sources: list[tuple[str, str]] = []
+
+    async def record_chunk_delete(collection_name: str, stored_name: str):
+        deleted_sources.append((collection_name, stored_name))
+
+    monkeypatch.setattr(file_processing_service, "get_post_body", broken_body)
+    monkeypatch.setattr(file_processing_service, "schedule_job", lambda job_id: None)
+    monkeypatch.setattr(file_processing_service.graph_store, "delete_document_chunks", record_chunk_delete)
+
+    _, job = await rag_service.index_blog_post(db_session, TEST_USER_ID, post.id)
+    job_id = job.id
+    await _run_job(job_id)
+
+    assert deleted_sources == []
+    db_session.expire_all()
+    failed_job = await db_session.get(FileProcessingJob, job_id)
+    assert failed_job is not None and failed_job.status == "failed"
 
 
 @pytest.mark.asyncio

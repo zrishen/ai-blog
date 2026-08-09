@@ -109,7 +109,7 @@ async def blog_write_post(
             "excerpt": post.excerpt,
             "cover_image": post.cover_image,
         }
-        body = get_post_body(post)
+        body = await get_post_body(post)
 
         if title.strip():
             meta["title"] = title.strip()
@@ -186,7 +186,7 @@ async def blog_edit_post(
         if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
 
-        body = get_post_body(post)
+        body = await get_post_body(post)
 
         search_body = body
         search_start = 0
@@ -295,7 +295,7 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
             if not post or post.user_id != user_id or post.deleted_at is not None:
                 return f"文章不存在: id={post_id}"
 
-            body = get_post_body(post)
+            body = await get_post_body(post)
             blocks = post.blocks_json or parse_to_blocks(body)
             outline = extract_outline(blocks) if blocks else []
             matches: list[str] = []
@@ -400,7 +400,7 @@ async def _read_post_full(post_id: int) -> str:
         if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
 
-        body = get_post_body(post)
+        body = await get_post_body(post)
 
         return (
             f"标题: {post.title}\n"
@@ -426,7 +426,7 @@ async def _get_post_blocks(post_id: int) -> tuple[BlogPostModel | None, list[dic
         if not post or post.user_id != user_id or post.deleted_at is not None:
             return None, []
 
-        body = get_post_body(post)
+        body = await get_post_body(post)
         blocks = post.blocks_json or []
         if not blocks and body:
             # 旧文章无缓存,即时解析

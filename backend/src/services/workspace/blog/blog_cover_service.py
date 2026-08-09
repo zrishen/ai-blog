@@ -21,10 +21,10 @@ def _plain_text(value: str | None, limit: int) -> str:
     return " ".join(text.split())[:limit]
 
 
-def _build_prompt(post: BlogPost) -> str:
+async def _build_prompt(post: BlogPost) -> str:
     title = _plain_text(post.title, 120)
     tags = _plain_text(post.tags, 100)
-    excerpt = _plain_text(post.excerpt or get_post_body(post), 700)
+    excerpt = _plain_text(post.excerpt or await get_post_body(post), 700)
     return (
         f"Create a cute, hand-drawn cartoon editorial illustration for a {settings.image_generation_size} "
         "ultra-wide blog cover. "
@@ -100,7 +100,7 @@ async def _generate_siliconflow_cover(post: BlogPost, prompt: str) -> str:
 
 
 async def generate_cover_image(post: BlogPost) -> str:
-    prompt = _build_prompt(post)
+    prompt = await _build_prompt(post)
     if settings.image_generation_provider == "siliconflow":
         stored_name = await _generate_siliconflow_cover(post, prompt)
         logger.info(

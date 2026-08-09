@@ -3,6 +3,8 @@
 索引动作通过 FileProcessingJob worker 执行向量化并回写状态；collection_name 默认按用户隔离。
 """
 
+import hashlib
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -108,6 +110,46 @@ async def mark_indexed(
     await db.commit()
     await db.refresh(source)
     return source
+
+
+async def mark_blog_post_indexed_if_current(
+    db: AsyncSession,
+    user_id: int,
+    post_id: int,
+    *,
+    body_sha256: str,
+) -> RagSourceModel | None:
+    """Activate a blog source only while its indexed body snapshot is current.
+
+    The row lock orders this terminal transition before a concurrent blog write:
+    a prior write leaves the source stale, and a following write marks a just
+    activated source stale.  A mismatched snapshot is never promoted to active.
+    """
+
+    post = (
+        await db.execute(
+            select(BlogPostModel)
+            .where(BlogPostModel.id == post_id, BlogPostModel.user_id == user_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if post is None or post.deleted_at is not None:
+        return await mark_stale(db, user_id, "blog_post", post_id)
+
+    from src.services.workspace.blog.blog_body_service import get_post_body
+
+    current_body = await get_post_body(post)
+    current_sha256 = hashlib.sha256((current_body or "").encode("utf-8")).hexdigest()
+    if current_sha256 != body_sha256:
+        return await mark_stale(db, user_id, "blog_post", post_id)
+    return await mark_indexed(
+        db,
+        user_id,
+        "blog_post",
+        post_id,
+        version=body_sha256,
+    )
 
 
 async def mark_failed(

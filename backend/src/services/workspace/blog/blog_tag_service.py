@@ -75,7 +75,7 @@ def _clean_tag(raw: str) -> str | None:
 
 async def suggest_tags(post: BlogPost) -> list[str]:
     title = post.title or ""
-    excerpt = (post.excerpt or get_post_body(post) or "")[:500]
+    excerpt = (post.excerpt or await get_post_body(post) or "")[:500]
     if not title and not excerpt:
         return []
 

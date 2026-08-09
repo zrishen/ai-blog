@@ -38,11 +38,12 @@ class FakeAsyncClient:
         return FakeResponse(content=b"image-bytes", content_type="image/webp")
 
 
-def test_cover_prompt_derives_a_cute_hand_drawn_scene_from_article_content(monkeypatch):
+@pytest.mark.asyncio
+async def test_cover_prompt_derives_a_cute_hand_drawn_scene_from_article_content(monkeypatch):
     post = SimpleNamespace(title="Creative work", tags="writing", excerpt="A guide to ideas", content="")
     monkeypatch.setattr(settings, "image_generation_size", "1440x400")
 
-    prompt = blog_cover_service._build_prompt(post)
+    prompt = await blog_cover_service._build_prompt(post)
 
     assert "cute, hand-drawn cartoon editorial illustration" in prompt
     assert "1440x400 ultra-wide blog cover" in prompt
@@ -53,11 +54,16 @@ def test_cover_prompt_derives_a_cute_hand_drawn_scene_from_article_content(monke
     assert "Content summary: A guide to ideas." in prompt
 
 
-def test_cover_prompt_reads_working_body_through_seam(monkeypatch):
+@pytest.mark.asyncio
+async def test_cover_prompt_reads_working_body_through_seam(monkeypatch):
     post = SimpleNamespace(title="Creative work", tags="writing", excerpt="", content="legacy body")
-    monkeypatch.setattr(blog_cover_service, "get_post_body", lambda _post: "body from seam")
 
-    prompt = blog_cover_service._build_prompt(post)
+    async def body_from_seam(_post):
+        return "body from seam"
+
+    monkeypatch.setattr(blog_cover_service, "get_post_body", body_from_seam)
+
+    prompt = await blog_cover_service._build_prompt(post)
 
     assert "Content summary: body from seam." in prompt
     assert "legacy body" not in prompt

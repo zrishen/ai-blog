@@ -23,6 +23,7 @@ from src.services.workspace.file.file_processing_service import (
     _claim_job,
     _index_document_knowledge,
     _run_job,
+    _snapshot_blog_post_body,
     _vectorize_blog_post,
     calculate_progress_percent,
     empty_progress,
@@ -36,7 +37,7 @@ def _request_headers() -> dict[str, str]:
 
 
 @pytest.mark.asyncio
-async def test_blog_vectorization_reads_working_body_through_seam(monkeypatch):
+async def test_blog_vectorization_snapshots_working_body_through_async_seam(monkeypatch):
     post = SimpleNamespace(id=7, user_id=1, deleted_at=None, content="legacy body")
     job = SimpleNamespace(
         target_resource_id=post.id,
@@ -55,12 +56,17 @@ async def test_blog_vectorization_reads_working_body_through_seam(monkeypatch):
         captured.update(body=body, collection_name=collection_name, **kwargs)
         return ["chunk-1"]
 
-    monkeypatch.setattr(file_processing_service, "get_post_body", lambda _post: "body from seam")
+    async def get_body(_post):
+        return "body from seam"
+
+    monkeypatch.setattr(file_processing_service, "get_post_body", get_body)
     monkeypatch.setattr(file_processing_service, "vectorize_text_and_store", fake_vectorize)
 
-    assert await _vectorize_blog_post(FakeSession(), job, reporter=None) == ["chunk-1"]
+    snapshot = await _snapshot_blog_post_body(FakeSession(), job)
+    assert await _vectorize_blog_post(job, snapshot, reporter=None) == ["chunk-1"]
     assert captured["body"] == "body from seam"
     assert captured["source_id"] == "blog_post:7"
+    assert snapshot.sha256 == "e0bfa1ea80b2661f1a0165f211fd68f041e8de43f290180a10d5055b38bb01cf"
 
 
 @pytest.mark.asyncio

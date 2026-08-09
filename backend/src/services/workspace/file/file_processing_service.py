@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 import math
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -33,6 +35,12 @@ class FileProcessingActiveError(RuntimeError):
     def __init__(self, job: FileProcessingJob):
         super().__init__("A file upload is already being processed")
         self.job = job
+
+
+@dataclass(frozen=True)
+class _BlogBodySnapshot:
+    body: str
+    sha256: str
 
 
 PROGRESS_MODELS: dict[str, dict[str, int]] = {
@@ -568,22 +576,30 @@ async def _heartbeat_job(job_id: str, token: str) -> None:
                 return
 
 
-async def _vectorize_blog_post(
-    db: AsyncSession, job: FileProcessingJob, reporter
-) -> list[str]:
-    """index job 的 blog_post 分支：读 MD 正文 → vectorize_text_and_store。"""
+async def _snapshot_blog_post_body(db: AsyncSession, job: FileProcessingJob) -> _BlogBodySnapshot:
+    """Read a blog body and its SHA-256 before destructive index cleanup."""
     post = await db.get(BlogPost, job.target_resource_id)
     if post is None or post.user_id != job.user_id or post.deleted_at is not None:
         raise RuntimeError("Blog post is no longer available for indexing")
-    body = get_post_body(post) or ""
+    body = await get_post_body(post) or ""
+    return _BlogBodySnapshot(
+        body=body,
+        sha256=hashlib.sha256(body.encode("utf-8")).hexdigest(),
+    )
+
+
+async def _vectorize_blog_post(
+    job: FileProcessingJob, snapshot: _BlogBodySnapshot, reporter
+) -> list[str]:
+    """Vectorize the immutable blog-body snapshot prepared before cleanup."""
     return await vectorize_text_and_store(
-        body,
+        snapshot.body,
         job.collection_name,
-        source_id=job.stored_name or f"blog_post:{post.id}",
+        source_id=job.stored_name or f"blog_post:{job.target_resource_id}",
         original_name=job.original_name,
         user_id=job.user_id,
         resource_type="blog_post",
-        resource_id=post.id,
+        resource_id=job.target_resource_id,
         progress_reporter=reporter,
     )
 
@@ -691,6 +707,7 @@ async def _run_job(job_id: str) -> None:
             )
             last_report: tuple[str, int, float] | None = None
             progress_state = _normalize_progress(job.progress_json, job.progress_model_version, job.current_stage)
+            cleaned_index = False
             try:
                 # auto_index=False（默认）：上传仅存文件 + 建 FileDocument 元记录，不索引；
                 # 索引由「加入 AI 知识」(rag_service) 触发。
@@ -708,6 +725,11 @@ async def _run_job(job_id: str) -> None:
                     ) is None:
                         await _finalize_success(db, job.id, token, [], indexed=False)
                         return
+                blog_snapshot: _BlogBodySnapshot | None = None
+                if job.job_type == "index" and job.target_resource_type == "blog_post":
+                    blog_snapshot = await _snapshot_blog_post_body(db, job)
+
+                cleaned_index = True
                 await graph_store.delete_document_chunks(job.collection_name, job.stored_name or "")
                 # 重建索引前完整清理旧记忆（Document/事实/孤立实体），避免新旧事实并存
                 if job.job_type == "index" and job.target_resource_type and job.target_resource_id:
@@ -746,7 +768,9 @@ async def _run_job(job_id: str) -> None:
                         last_report = (stage, persisted, now_monotonic)
 
                 if job.job_type == "index" and job.target_resource_type == "blog_post":
-                    chunks = await _vectorize_blog_post(db, job, reporter)
+                    if blog_snapshot is None:  # pragma: no cover - guarded by the branch above
+                        raise RuntimeError("Blog body snapshot was not prepared")
+                    chunks = await _vectorize_blog_post(job, blog_snapshot, reporter)
                 else:
                     chunks = await vectorize_and_store(
                         job.stored_name or "",
@@ -766,13 +790,30 @@ async def _run_job(job_id: str) -> None:
                         indexed_doc = await db.get(FileDocument, job.target_resource_id)
                         if indexed_doc is not None:
                             indexed_doc.chunk_content = f"{len(chunks)} chunks"
-                    await rag_service.mark_indexed(
-                        db,
-                        job.user_id,
-                        job.target_resource_type,
-                        job.target_resource_id,
-                        version=str(len(chunks)),
-                    )
+                        await rag_service.mark_indexed(
+                            db,
+                            job.user_id,
+                            job.target_resource_type,
+                            job.target_resource_id,
+                            version=str(len(chunks)),
+                        )
+                    elif job.target_resource_type == "blog_post":
+                        if blog_snapshot is None:  # pragma: no cover - guarded by the branch above
+                            raise RuntimeError("Blog body snapshot was not prepared")
+                        await rag_service.mark_blog_post_indexed_if_current(
+                            db,
+                            job.user_id,
+                            job.target_resource_id,
+                            body_sha256=blog_snapshot.sha256,
+                        )
+                    else:
+                        await rag_service.mark_indexed(
+                            db,
+                            job.user_id,
+                            job.target_resource_type,
+                            job.target_resource_id,
+                            version=str(len(chunks)),
+                        )
                 logger.info(
                     "file job done job_id=%s job_type=%s user_id=%s resource=%s/%s chunks=%d indexed=True duration_ms=%d",
                     job.id, job.job_type, job.user_id,
@@ -785,7 +826,7 @@ async def _run_job(job_id: str) -> None:
                 raise
             except Exception as exc:
                 logger.exception("File processing job failed: %s", job_id)
-                await _finalize_failure(job.id, token, exc)
+                await _finalize_failure(job.id, token, exc, cleanup_vectors=cleaned_index)
             finally:
                 heartbeat_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
@@ -845,7 +886,13 @@ async def _finalize_success(
     await db.commit()
 
 
-async def _finalize_failure(job_id: str, token: str, exc: Exception) -> None:
+async def _finalize_failure(
+    job_id: str,
+    token: str,
+    exc: Exception,
+    *,
+    cleanup_vectors: bool = True,
+) -> None:
     async with async_session() as db:
         job = await db.get(FileProcessingJob, job_id)
         if not job or job.execution_token != token or job.status != "running":
@@ -856,10 +903,11 @@ async def _finalize_failure(job_id: str, token: str, exc: Exception) -> None:
         job_type = job.job_type
         target_resource_type = job.target_resource_type
         target_resource_id = job.target_resource_id
-    try:
-        await graph_store.delete_document_chunks(collection_name, stored_name)
-    except Exception:
-        logger.exception("Failed to clean partial chunks for job %s", job_id)
+    if cleanup_vectors:
+        try:
+            await graph_store.delete_document_chunks(collection_name, stored_name)
+        except Exception:
+            logger.exception("Failed to clean partial chunks for job %s", job_id)
     if job_type == "upload" and stored_name:
         await asyncio.to_thread(delete_uploaded_file, stored_name, user_id)
     if job_type == "index" and target_resource_type and target_resource_id:

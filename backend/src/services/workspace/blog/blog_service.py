@@ -265,7 +265,7 @@ async def _create_revision(
         kind=kind,
         title=post.title,
         slug=post.slug,
-        content=get_post_body(post),
+        content=await get_post_body(post),
         excerpt=post.excerpt,
         cover_image=post.cover_image,
         category_id=post.category_id,
@@ -331,7 +331,7 @@ async def create_post(db: AsyncSession, data: dict, user_id: int) -> BlogPostMod
 async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) -> Optional[BlogPostModel]:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     requested_status = data.get("status") if "status" in data else None
-    current_body = get_post_body(post)
+    current_body = await get_post_body(post)
     content_changed = "content" in data and (data["content"] or "") != (current_body or "")
     meta = _meta_from_post(post)
     slug = post.slug

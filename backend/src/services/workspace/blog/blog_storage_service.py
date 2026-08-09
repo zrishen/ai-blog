@@ -141,7 +141,7 @@ async def upsert_post_from_meta(
     try:
         from src.services.workspace.markdown.markdown_ast_service import parse_to_blocks
 
-        post.blocks_json = parse_to_blocks(get_post_body(post))
+        post.blocks_json = parse_to_blocks(await get_post_body(post))
     except Exception:
         logger.warning("Unable to parse blog blocks for slug=%s", slug, exc_info=True)
         post.blocks_json = None
