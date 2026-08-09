@@ -20,6 +20,7 @@ from src.tools.blog import (
     update_blog_sidebar,
 )
 from src.tools.file import base_search_file
+from src.tools.knowledge import knowledge_query_graph
 from src.tools.memory import base_recall_memory
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ class ToolSpec:
 
 # tags：writing=写作 skill；base=通用底座（always required；知识库/记忆 skill 化时改 knowledge/memory + 建 skill）
 _WRITING = frozenset({"writing"})
+_KNOWLEDGE = frozenset({"knowledge"})
 _BASE = frozenset({"base"})
 
 # 顺序 = 现状 agent_tools（blog_7 + base_search_file + base_recall_memory）；
@@ -47,7 +49,12 @@ TOOL_REGISTRY: dict[str, ToolSpec] = {
     "blog_search_posts": ToolSpec(blog_search_posts, tags=_WRITING),
     "blog_read_post": ToolSpec(blog_read_post, tags=_WRITING),
     "update_blog_sidebar": ToolSpec(update_blog_sidebar, tags=_WRITING),
-    "base_search_file": ToolSpec(base_search_file, tags=_BASE),
+    "base_search_file": ToolSpec(base_search_file, tags=_KNOWLEDGE),
+    "knowledge_query_graph": ToolSpec(
+        knowledge_query_graph,
+        gate=lambda c: c.feature_flags.memory_enabled,
+        tags=_KNOWLEDGE,
+    ),
     "base_recall_memory": ToolSpec(base_recall_memory, gate=lambda c: c.feature_flags.memory_enabled, tags=_BASE),
 }
 

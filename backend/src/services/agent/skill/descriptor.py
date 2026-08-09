@@ -28,6 +28,7 @@ class SkillDescriptor:
 
 # 写作 skill 启用的 prompt 段名（与 prompts.py SEG_WRITING_*.name 一致——字符串契约，不 import prompts）
 WRITING_SEGMENT_NAMES = frozenset({"writing_create_flow", "writing_mermaid", "writing_sidebar"})
+KNOWLEDGE_SEGMENT_NAMES = frozenset({"knowledge_library"})
 
 SKILL_REGISTRY: dict[str, SkillDescriptor] = {
     "writing": SkillDescriptor(
@@ -37,7 +38,14 @@ SKILL_REGISTRY: dict[str, SkillDescriptor] = {
         required_tool_tag="writing",
         enabled_segment_names=WRITING_SEGMENT_NAMES,
     ),
+    "knowledge": SkillDescriptor(
+        id="knowledge",
+        name="知识库",
+        description="检索已加入知识库的文档，并查询其中提取出的实体与事实关系",
+        required_tool_tag="knowledge",
+        enabled_segment_names=KNOWLEDGE_SEGMENT_NAMES,
+    ),
 }
 
 # 默认启用的 skill（用户未传 enabled_skills 时）；目前仅 writing（知识库/记忆待 skill 化）
-DEFAULT_ENABLED_SKILLS: frozenset[str] = frozenset({"writing"})
+DEFAULT_ENABLED_SKILLS: frozenset[str] = frozenset({"writing", "knowledge"})

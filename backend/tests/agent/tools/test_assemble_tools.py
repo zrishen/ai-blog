@@ -16,7 +16,8 @@ from src.tools.registry import TOOL_REGISTRY, tool_names_by_tag
 
 # 1.4：从 TOOL_REGISTRY 派生（统一工具名源，消灭字面量副本；BLOG_TOOLS 已退役）
 BLOG_7 = tool_names_by_tag("writing")
-_DEFAULT_REQUIRED = BLOG_7 | tool_names_by_tag("base")
+KNOWLEDGE_TOOLS = tool_names_by_tag("knowledge")
+_DEFAULT_REQUIRED = BLOG_7 | KNOWLEDGE_TOOLS | tool_names_by_tag("base")
 
 # 装配顺序 = TOOL_REGISTRY 中 required 的插入序（assemble_tools 遍历 registry 保序 == 旧 agent_tools）
 _EXPECTED_ORDER = [name for name in TOOL_REGISTRY if name in _DEFAULT_REQUIRED]
@@ -57,6 +58,7 @@ def test_memory_gate_off_skips_recall():
     asm = assemble_tools(_ctx(memory_enabled=False))
     names = {t.name for t in asm.tools}
     assert "base_recall_memory" not in names
+    assert "knowledge_query_graph" not in names
     assert "base_search_file" in names
     assert BLOG_7 <= names
 

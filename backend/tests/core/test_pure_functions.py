@@ -5,6 +5,7 @@ import pytest
 from src.prompts import (
     BLOG_MERMAID_GUIDE,
     CORE_TOOL_RULES_TEXT,
+    KNOWLEDGE_GRAPH_RULES,
     PromptContext,
     RAG_AUTO,
     SIDEBAR_TOOL_RULES,
@@ -220,7 +221,7 @@ def test_resolve_default_snapshot_segment_names_and_order():
         "writing_create_flow",
         "writing_mermaid",
         "writing_sidebar",
-        "rag_auto",
+        "knowledge_library",
     ]
 
 
@@ -236,6 +237,7 @@ def test_system_prompt_default_byte_equivalence():
         + BLOG_MERMAID_GUIDE
         + SIDEBAR_TOOL_RULES
         + RAG_AUTO
+        + KNOWLEDGE_GRAPH_RULES
     )
     assert rendered == expected
 
@@ -258,7 +260,7 @@ def test_resolve_writing_segments_condition_filters_without_blog_tools():
     assert "writing_mermaid" not in names
     assert "writing_sidebar" not in names
     assert "core_tool_rules" in names  # core 仍激活（mounted 非空）
-    assert "rag_auto" not in names  # 无 base_search_file
+    assert "knowledge_library" not in names  # 无知识库工具
 
 
 def test_writing_segments_off_when_skill_disabled_but_tools_mounted():
@@ -307,7 +309,7 @@ def test_resolve_core_rules_condition_requires_tools():
     assert "core_tool_rules" not in names
     assert "system_base" in names
     assert "system_date" in names
-    assert "rag_auto" not in names
+    assert "knowledge_library" not in names
 
 
 def test_resolve_mcp_segment_condition_requires_cap_text():

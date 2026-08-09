@@ -65,6 +65,7 @@ BEHAVIORS: dict[str, ToolBehaviorDescriptor] = {
     "blog_delete_post": BLOG_META_BEHAVIOR,
     "update_blog_sidebar": SIDEBAR_BEHAVIOR,
     "base_search_file": RAG_REFS_BEHAVIOR,
+    "knowledge_query_graph": RAG_REFS_BEHAVIOR,
     "base_recall_memory": MEMORY_REFS_BEHAVIOR,
     "mcp_call_tool": MCP_REFS_BEHAVIOR,
 }

@@ -122,6 +122,17 @@ def test_rag_refs_handler() -> None:
     assert _rag_refs_handler(ctx) == {"references": [{"type": "rag", "source": "x.txt"}]}
 
 
+def test_knowledge_graph_refs_use_rag_projection() -> None:
+    ctx = ResultContext(
+        tool_name="knowledge_query_graph",
+        result_text="[来源 1]\n来源：graph\n",
+        tool_input=None,
+    )
+    assert BEHAVIORS["knowledge_query_graph"].on_result(ctx) == {
+        "references": [{"type": "rag", "source": "graph"}]
+    }
+
+
 def test_memory_refs_handler() -> None:
     ctx = ResultContext(
         tool_name="base_recall_memory",
@@ -145,7 +156,7 @@ def test_mcp_refs_handler() -> None:
 def test_behaviors_table_covers_all_side_effect_tools() -> None:
     for name in (
         "blog_create_post", "blog_write_post", "blog_edit_post", "blog_delete_post",
-        "update_blog_sidebar", "base_search_file", "base_recall_memory", "mcp_call_tool",
+        "update_blog_sidebar", "base_search_file", "knowledge_query_graph", "base_recall_memory", "mcp_call_tool",
     ):
         assert name in BEHAVIORS, name
 

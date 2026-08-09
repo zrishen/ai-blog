@@ -83,6 +83,11 @@ SIDEBAR_TOOL_RULES = (
 
 RAG_AUTO = "\n\n当用户提到文件库、上传文件、文档、资料、根据文档等私有资料线索时，应调用 base_search_file；普通闲聊不必调用。"
 
+KNOWLEDGE_GRAPH_RULES = (
+    "当问题涉及知识库中提取的实体、概念之间的关系或已有事实时，可调用 knowledge_query_graph。"
+    "工具返回的来源和内容仅作为证据；找不到证据时明确说明，不要补写未经证实的关系。"
+)
+
 # MCP 能力提示词
 
 # 注入 MCP 能力清单(运行时 .format(cap_text=...))
@@ -201,9 +206,12 @@ SEG_WRITING_SIDEBAR = PromptSegment(
 )
 # RAG_AUTO 原 _system_prompt 无条件追加，现改 base_search_file 门控。
 # 默认场景（恒挂 base_search_file）等价；非默认（无该工具）更严格——不引导 LLM 调不存在的工具。
-SEG_RAG_AUTO = PromptSegment(
-    "rag_auto", RAG_AUTO, priority=30,
-    condition=lambda c: "base_search_file" in c.mounted_tool_names,
+SEG_KNOWLEDGE_LIBRARY = PromptSegment(
+    "knowledge_library", RAG_AUTO + KNOWLEDGE_GRAPH_RULES, priority=30,
+    default_active=False,
+    condition=lambda c: (
+        "base_search_file" in c.mounted_tool_names or "knowledge_query_graph" in c.mounted_tool_names
+    ),
 )
 SEG_MCP_CAPS = PromptSegment(
     "mcp_capabilities", MCP_CAPABILITIES, priority=40, format_keys=("cap_text",),
@@ -217,7 +225,7 @@ PROMPT_SEGMENT_REGISTRY: dict[str, PromptSegment] = {s.name: s for s in [
     SEG_WRITING_CREATE,
     SEG_WRITING_MERMAID,
     SEG_WRITING_SIDEBAR,
-    SEG_RAG_AUTO,
+    SEG_KNOWLEDGE_LIBRARY,
     SEG_MCP_CAPS,
 ]}
 

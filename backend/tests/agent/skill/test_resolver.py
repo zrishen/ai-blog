@@ -9,15 +9,18 @@ from src.services.agent.skill.context import SkillContext
 from src.tools.registry import tool_names_by_tag
 
 _WRITING_SEGMENTS = frozenset({"writing_create_flow", "writing_mermaid", "writing_sidebar"})
+_KNOWLEDGE_SEGMENTS = frozenset({"knowledge_library"})
 
 
 def test_resolve_skills_default_equals_writing_plus_base():
     """默认（None）== DEFAULT_ENABLED_SKILLS={'writing'}：required=writing+base 共 9 工具，segments=writing×3。"""
     ctx = resolve_skills()
     assert isinstance(ctx, SkillContext)
-    assert ctx.required_tool_names == tool_names_by_tag("writing") | tool_names_by_tag("base")
-    assert len(ctx.required_tool_names) == 9
-    assert ctx.enabled_segment_names == _WRITING_SEGMENTS
+    assert ctx.required_tool_names == (
+        tool_names_by_tag("writing") | tool_names_by_tag("knowledge") | tool_names_by_tag("base")
+    )
+    assert len(ctx.required_tool_names) == 10
+    assert ctx.enabled_segment_names == _WRITING_SEGMENTS | _KNOWLEDGE_SEGMENTS
 
 
 def test_resolve_skills_explicit_empty_enabled_ids():
@@ -35,7 +38,7 @@ def test_resolve_skills_unknown_id_raises():
 
 def test_default_enabled_skills_is_writing():
     """DEFAULT_ENABLED_SKILLS={'writing'}（1.4 仅 writing；知识库/记忆 P2 skill 化）。"""
-    assert DEFAULT_ENABLED_SKILLS == frozenset({"writing"})
+    assert DEFAULT_ENABLED_SKILLS == frozenset({"writing", "knowledge"})
 
 
 def test_writing_segment_names_match_prompts():
@@ -54,6 +57,14 @@ def test_writing_segment_names_match_prompts():
     }
 
 
+def test_knowledge_segment_names_match_prompts():
+    from src.prompts import SEG_KNOWLEDGE_LIBRARY
+    from src.services.agent.skill.descriptor import KNOWLEDGE_SEGMENT_NAMES
+
+    assert KNOWLEDGE_SEGMENT_NAMES == {SEG_KNOWLEDGE_LIBRARY.name}
+
+
 def test_base_tool_set_snapshot():
     """base 标签内容锁定——防误重标（如 base_search_file→writing）致 base 集合静默收缩。"""
-    assert tool_names_by_tag("base") == {"base_search_file", "base_recall_memory"}
+    assert tool_names_by_tag("knowledge") == {"base_search_file", "knowledge_query_graph"}
+    assert tool_names_by_tag("base") == {"base_recall_memory"}
