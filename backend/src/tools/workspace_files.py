@@ -16,6 +16,7 @@ from src.core.path_guard import require_user, workspace_dir, workspace_path
 from src.database.models import BlogPost
 from src.database.session import async_session
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
+from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
 from src.services.workspace.workspace_file_service import move_entry
 
 _MAX_PATH_LENGTH = 500
@@ -267,19 +268,7 @@ async def workspace_delete_file(path: str) -> str:
             await delete_post(db, post.id, user_id)
             return f"Moved managed blog {relative_path} to the recycle bin"
 
-    def delete_regular() -> None:
-        target = workspace_path(user_id, relative_path)
-        if target.is_symlink() or not target.exists():
-            raise NotFoundError("Workspace entry not found")
-        try:
-            if target.is_dir():
-                target.rmdir()
-            elif target.is_file():
-                target.unlink()
-            else:
-                raise NotFoundError("Workspace entry not found")
-        except OSError as exc:
-            raise ConflictError("Workspace folder must be empty before deletion") from exc
-
-    await asyncio.to_thread(delete_regular)
-    return f"Deleted {relative_path}"
+    async with async_session() as db:
+        await move_workspace_entry_to_trash(db, user_id=user_id, relative_path=relative_path)
+        await db.commit()
+    return f"Moved {relative_path} to the recycle bin"

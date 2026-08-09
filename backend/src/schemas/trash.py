@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-TrashType = Literal["conversation", "file_document", "blog_post"]
+TrashType = Literal["conversation", "file_document", "blog_post", "workspace_file"]
 
 
 class TrashItem(BaseModel):

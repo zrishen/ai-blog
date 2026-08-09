@@ -484,6 +484,16 @@ async def delete_revision(db: AsyncSession, post_id: int, revision_id: int, user
 
 async def delete_post(db: AsyncSession, post_id: int, user_id: int) -> bool:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
+    if post.file_path:
+        from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
+
+        await move_workspace_entry_to_trash(
+            db,
+            user_id=user_id,
+            relative_path=post.file_path,
+            entry_type="blog_post",
+            blog_post_id=post.id,
+        )
     post.deleted_at = _now()
     await db.commit()
     logger.info("blog post soft-deleted user_id=%s post_id=%s", user_id, post_id)

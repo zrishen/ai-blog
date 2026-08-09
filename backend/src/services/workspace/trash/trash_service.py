@@ -40,11 +40,18 @@ from src.services.workspace.file.file_processing_service import (
 from src.services.workspace.file.file_service import get_user_upload_dir
 from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 from src.services.workspace import rag_service
+from src.services.workspace.trash.workspace_trash_service import (
+    get_blog_trash_entry,
+    get_workspace_trash_entry,
+    list_workspace_trash_entries,
+    purge_workspace_trash_entry,
+    restore_workspace_trash_entry,
+)
 
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_TYPES = {"conversation", "file_document", "blog_post"}
+SUPPORTED_TYPES = {"conversation", "file_document", "blog_post", "workspace_file"}
 
 
 def _now() -> datetime:
@@ -238,6 +245,17 @@ async def list_trash(db: AsyncSession, *, user_id: int) -> list[TrashItem]:
             continue
         items.append(TrashItem(type="blog_post", id=p.id, name=p.title, deleted_at=p.deleted_at))
 
+    workspace_entries = await list_workspace_trash_entries(db, user_id=user_id)
+    for entry in workspace_entries:
+        items.append(
+            TrashItem(
+                type="workspace_file",
+                id=entry.id,
+                name=PurePath(entry.original_path).name,
+                deleted_at=entry.deleted_at,
+            )
+        )
+
     items.sort(
         key=lambda it: it.deleted_at.timestamp() if it.deleted_at else 0.0,
         reverse=True,
@@ -292,10 +310,23 @@ async def _restore_blog_post(db: AsyncSession, *, item_id: int, user_id: int) ->
     assert post.deleted_at is not None
     deleted_at = post.deleted_at
 
+    entry = await get_blog_trash_entry(db, user_id=user_id, blog_post_id=post.id)
+    if entry is not None:
+        await restore_workspace_trash_entry(db, entry=entry)
+
     post.deleted_at = None
     await db.commit()
     await db.refresh(post)
     return TrashItem(type="blog_post", id=post.id, name=post.title, deleted_at=deleted_at)
+
+
+async def _restore_workspace_file(db: AsyncSession, *, item_id: int, user_id: int) -> TrashItem:
+    entry = await get_workspace_trash_entry(db, user_id=user_id, entry_id=item_id)
+    deleted_at = entry.deleted_at
+    name = PurePath(entry.original_path).name
+    await restore_workspace_trash_entry(db, entry=entry)
+    await db.commit()
+    return TrashItem(type="workspace_file", id=item_id, name=name, deleted_at=deleted_at)
 
 
 async def _restore_file_document(db: AsyncSession, *, item_id: int, user_id: int) -> FileProcessingJob:
@@ -340,6 +371,8 @@ async def restore_item(
         return await _restore_conversation(db, item_id=item_id, user_id=user_id)
     if item_type == "file_document":
         return await _restore_file_document(db, item_id=item_id, user_id=user_id)
+    if item_type == "workspace_file":
+        return await _restore_workspace_file(db, item_id=item_id, user_id=user_id)
     return await _restore_blog_post(db, item_id=item_id, user_id=user_id)
 
 
@@ -561,6 +594,7 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
     post = result.scalar_one_or_none()
     if post is None:
         raise _not_found_error()
+    trash_entry = await get_blog_trash_entry(db, user_id=user_id, blog_post_id=post.id)
 
     # commit 前先收集物理资源信息
     post_id = post.id
@@ -606,6 +640,15 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
             logger.warning(
                 "封面清理失败（留待孤儿清理）: stored_name=%s", cover_stored, exc_info=True
             )
+    if trash_entry is not None:
+        await purge_workspace_trash_entry(db, entry=trash_entry)
+        await db.commit()
+
+
+async def _purge_workspace_file(db: AsyncSession, *, item_id: int, user_id: int) -> None:
+    entry = await get_workspace_trash_entry(db, user_id=user_id, entry_id=item_id)
+    await purge_workspace_trash_entry(db, entry=entry)
+    await db.commit()
 
 
 async def purge_item(
@@ -621,6 +664,8 @@ async def purge_item(
         return await _purge_conversation(db, item_id=item_id, user_id=user_id)
     if item_type == "file_document":
         return await _purge_file_document(db, item_id=item_id, user_id=user_id)
+    if item_type == "workspace_file":
+        return await _purge_workspace_file(db, item_id=item_id, user_id=user_id)
     return await _purge_blog_post(db, item_id=item_id, user_id=user_id)
 
 

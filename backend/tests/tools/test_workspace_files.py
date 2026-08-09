@@ -4,7 +4,6 @@ import pytest
 
 from src.core.context import current_user_id_cv
 from src.core.exceptions import NotFoundError, OwnershipError, ValidationFailedError
-from src.core.path_guard import workspace_dir
 from src.tools import workspace_files
 
 
@@ -98,6 +97,8 @@ async def test_workspace_move_delegates_to_path_service(monkeypatch, user_contex
 
 @pytest.mark.asyncio
 async def test_workspace_delete_removes_unmanaged_regular_file(monkeypatch, user_context):
+    calls = []
+
     class Result:
         def scalar_one_or_none(self):
             return None
@@ -112,11 +113,18 @@ async def test_workspace_delete_removes_unmanaged_regular_file(monkeypatch, user
         async def execute(self, _statement):
             return Result()
 
+        async def commit(self):
+            return None
+
     monkeypatch.setattr(workspace_files, "async_session", Session)
+    async def fake_move(db, *, user_id, relative_path):
+        calls.append((db, user_id, relative_path))
+
+    monkeypatch.setattr(workspace_files, "move_workspace_entry_to_trash", fake_move)
     await workspace_files.workspace_write_file.ainvoke({"path": "notes/delete.txt", "content": "temporary"})
 
-    assert await workspace_files.workspace_delete_file.ainvoke({"path": "notes/delete.txt"}) == "Deleted notes/delete.txt"
-    assert not (workspace_dir(1) / "notes" / "delete.txt").exists()
+    assert await workspace_files.workspace_delete_file.ainvoke({"path": "notes/delete.txt"}) == "Moved notes/delete.txt to the recycle bin"
+    assert calls[0][1:] == (1, "notes/delete.txt")
 
 
 @pytest.mark.asyncio

@@ -25,3 +25,21 @@ class RagSource(Base):
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
     indexed_at = Column(DateTime, nullable=True)
+
+
+class WorkspaceTrashEntry(Base):
+    """Physical workspace item moved into a user's recoverable trash area."""
+
+    __tablename__ = "workspace_trash_entries"
+    __table_args__ = (
+        Index("ix_workspace_trash_entries_user_deleted", "user_id", "deleted_at"),
+        Index("ix_workspace_trash_entries_blog", "blog_post_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    entry_type = Column(String(30), nullable=False)  # workspace_file / blog_post
+    blog_post_id = Column(Integer, nullable=True)
+    original_path = Column(String(500), nullable=False)
+    trashed_path = Column(String(600), nullable=False, unique=True)
+    deleted_at = Column(DateTime, default=_utcnow, nullable=False)

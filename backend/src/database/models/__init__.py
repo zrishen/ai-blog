@@ -9,4 +9,4 @@ from .file import FileDocument, FileProcessingJob
 from .plugin import PlatformPlugin, UserPlugin
 from .settings import BlogSidebarSettings, LLMSettings, PublicChatDailyUsage, WebToolDailyUsage
 from .subscription import RedemptionCode, SubscriptionWeeklyUsage
-from .workspace import RagSource
+from .workspace import RagSource, WorkspaceTrashEntry
