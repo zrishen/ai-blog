@@ -6,6 +6,7 @@
 """
 
 import logging
+from pathlib import PurePosixPath, PureWindowsPath
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,37 @@ logger = logging.getLogger(__name__)
 
 # user_id → username 内存缓存：bootstrap 启动 warm，注册/改名 refresh
 _username_cache: dict[int, str] = {}
+
+_WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+}
+_WINDOWS_FORBIDDEN_CHARS = frozenset('<>:"/\\|?*')
+
+
+def validate_user_directory_name(username: str) -> str:
+    """Return a username only when it is safe as one cross-platform path segment.
+
+    Usernames are intentionally human-readable workspace directory names.  Validate
+    even values read from the DB/cache so legacy or manually inserted rows cannot
+    turn an owner root into a path outside the configured storage root.
+    """
+    if not isinstance(username, str) or not username:
+        raise ValueError("用户名不能为空")
+    if username in {".", ".."} or username != username.strip() or username.endswith("."):
+        raise ValueError("用户名不能作为安全目录名")
+    if any(ord(char) < 32 or char in _WINDOWS_FORBIDDEN_CHARS for char in username):
+        raise ValueError("用户名包含目录不支持的字符")
+
+    posix = PurePosixPath(username)
+    windows = PureWindowsPath(username)
+    if posix.parts != (username,) or windows.parts != (username,) or windows.drive or windows.root:
+        raise ValueError("用户名必须是单个目录名")
+
+    if username.split(".", 1)[0].upper() in _WINDOWS_RESERVED_NAMES:
+        raise ValueError("用户名是 Windows 保留设备名")
+    return username
 
 
 def resolve_username(user_id: int | str) -> str:

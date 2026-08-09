@@ -9,6 +9,7 @@ from sqlalchemy import select
 from src.core.context import current_user_id_cv
 from src.database.session import async_session
 from src.database.models import BlogPost as BlogPostModel
+from src.services.workspace.blog.blog_body_service import get_post_body
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,7 @@ async def blog_create_post(title: str, tags: str = "", excerpt: str = "") -> str
     参数 title: 文章标题（必填）。标题会单独显示在页面顶部。
     参数 tags: 标签，逗号分隔，如 "ai, agent"。
     参数 excerpt: 文章摘要（可选）。"""
-    from src.services.blog.blog_storage_service import (
+    from src.services.workspace.blog.blog_storage_service import (
         slug_from_title,
         ensure_unique_slug,
         upsert_post_from_meta,
@@ -80,7 +81,7 @@ async def blog_write_post(
     参数 tags: 新标签，逗号分隔（可选）。
     参数 status: 新状态 draft/published（可选）。
     参数 excerpt: 新摘要（可选）。"""
-    from src.services.blog.blog_storage_service import (
+    from src.services.workspace.blog.blog_storage_service import (
         slug_from_title,
         ensure_unique_slug,
         upsert_post_from_meta,
@@ -105,7 +106,7 @@ async def blog_write_post(
             "excerpt": post.excerpt,
             "cover_image": post.cover_image,
         }
-        body = post.content
+        body = get_post_body(post)
 
         if title.strip():
             meta["title"] = title.strip()
@@ -133,11 +134,11 @@ async def blog_write_post(
         if updated is None:
             return f"文章更新失败: id={post_id}"
         if status.strip() == "published":
-            from src.services.blog.blog_service import publish_post
+            from src.services.workspace.blog.blog_service import publish_post
 
             updated = await publish_post(db, updated.id, True, user_id)
         elif status.strip() == "draft":
-            from src.services.blog.blog_service import publish_post
+            from src.services.workspace.blog.blog_service import publish_post
 
             updated = await publish_post(db, updated.id, False, user_id)
         if updated is None:
@@ -161,8 +162,8 @@ async def blog_edit_post(
     参数 target_text: 需要被替换的原文片段（必填），必须与正文中完全一致。
     参数 replacement_text: 替换后的新文本（必填）。
     参数 section_index: 章节序号（可选，从 1 开始，来自 outline 或上下文）。传入后只在该章节范围内匹配 target_text，章节内唯一即可替换，避免全文重复时被拒绝。"""
-    from src.services.markdown.markdown_ast_service import get_section_char_range, parse_to_blocks
-    from src.services.blog.blog_storage_service import upsert_post_from_meta
+    from src.services.workspace.markdown.markdown_ast_service import get_section_char_range, parse_to_blocks
+    from src.services.workspace.blog.blog_storage_service import upsert_post_from_meta
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -178,7 +179,7 @@ async def blog_edit_post(
         if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
 
-        body = post.content
+        body = get_post_body(post)
 
         search_body = body
         search_start = 0
@@ -243,7 +244,7 @@ async def blog_delete_post(post_id: int) -> str:
     """将指定的博客文章移入回收站。
     当用户要求删除、移除博客文章时优先使用此工具。
     参数 post_id: 文章的数据库 ID（必填）。"""
-    from src.services.blog.blog_service import delete_post, get_owned_post
+    from src.services.workspace.blog.blog_service import delete_post, get_owned_post
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -268,7 +269,7 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
     参数 post_id: 文章 ID；大于 0 时只搜索该文章正文，默认 0 表示搜索文章列表。
     参数 status: 搜索文章列表时按状态筛选，draft（草稿）或 published（发布），留空则全部搜索。
     参数 page: 搜索文章列表时的页码，默认第 1 页，每页 20 篇。"""
-    from src.services.markdown.markdown_ast_service import extract_outline, get_section_text, parse_to_blocks
+    from src.services.workspace.markdown.markdown_ast_service import extract_outline, get_section_text, parse_to_blocks
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -284,7 +285,7 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
             if not post or post.user_id != user_id or post.deleted_at is not None:
                 return f"文章不存在: id={post_id}"
 
-            body = post.content
+            body = get_post_body(post)
             blocks = post.blocks_json or parse_to_blocks(body)
             outline = extract_outline(blocks) if blocks else []
             matches: list[str] = []
@@ -389,7 +390,7 @@ async def _read_post_full(post_id: int) -> str:
         if post.user_id != user_id:
             return f"文章不存在: id={post_id}"
 
-        body = post.content
+        body = get_post_body(post)
 
         return (
             f"标题: {post.title}\n"
@@ -415,12 +416,13 @@ async def _get_post_blocks(post_id: int) -> tuple[BlogPostModel | None, list[dic
         if not post or post.user_id != user_id or post.deleted_at is not None:
             return None, []
 
+        body = get_post_body(post)
         blocks = post.blocks_json or []
-        if not blocks and post.content:
+        if not blocks and body:
             # 旧文章无缓存,即时解析
-            from src.services.markdown.markdown_ast_service import parse_to_blocks
+            from src.services.workspace.markdown.markdown_ast_service import parse_to_blocks
 
-            blocks = parse_to_blocks(post.content)
+            blocks = parse_to_blocks(body)
             # 异步回填缓存(不阻塞返回)
             if blocks:
                 post.blocks_json = blocks
@@ -432,7 +434,7 @@ async def _get_post_blocks(post_id: int) -> tuple[BlogPostModel | None, list[dic
 
 
 async def _read_post_outline(post_id: int) -> str:
-    from src.services.markdown.markdown_ast_service import extract_outline
+    from src.services.workspace.markdown.markdown_ast_service import extract_outline
 
     post, blocks = await _get_post_blocks(post_id)
     if post is None:
@@ -460,7 +462,7 @@ async def _read_post_outline(post_id: int) -> str:
 
 
 async def _read_post_section(post_id: int, section_index: int) -> str:
-    from src.services.markdown.markdown_ast_service import get_section_text
+    from src.services.workspace.markdown.markdown_ast_service import get_section_text
 
     post, blocks = await _get_post_blocks(post_id)
     if post is None:

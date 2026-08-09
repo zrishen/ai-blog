@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import BlogPost, FileDocument
-from src.services.file import file_processing_service
+from src.services.workspace.file import file_processing_service
 
 
 @pytest.mark.asyncio

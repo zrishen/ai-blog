@@ -10,7 +10,7 @@ from src.schemas.settings import (
     SidebarSettingsResponse,
     SidebarSettingsUpdate,
 )
-from src.services.llm.llm_settings_service import (
+from src.services.infra.llm.llm_settings_service import (
     get_user_llm_settings,
     model_supports_thinking,
     normalize_llm_base_url,

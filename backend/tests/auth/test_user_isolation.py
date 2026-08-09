@@ -9,8 +9,8 @@ from sqlalchemy import select
 from src.config import settings
 from src.database.models import BlogPost as BlogPostModel
 from src.main import app
-from src.services.file import file_service
-from src.services.file.file_service import get_user_upload_dir
+from src.services.workspace.file import file_service
+from src.services.workspace.file.file_service import get_user_upload_dir
 from src.utils.auth import get_current_user, get_optional_user
 
 

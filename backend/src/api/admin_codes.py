@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from src.database.models import User
 from src.database.session import async_session
-from src.services.admin.codes_service import list_codes, revoke_code
-from src.services.subscription import create_codes
+from src.services.accounts.admin.codes_service import list_codes, revoke_code
+from src.services.accounts.subscription import create_codes
 from src.utils.auth import require_admin
 
 router = APIRouter(prefix="/admin/codes", tags=["admin"])

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from src.database.models import User
 from src.database.session import async_session
-from src.services.admin.users_service import grant_subscription, list_users, set_admin
+from src.services.accounts.admin.users_service import grant_subscription, list_users, set_admin
 from src.utils.auth import require_admin, require_super_admin
 
 router = APIRouter(prefix="/admin/users", tags=["admin"])

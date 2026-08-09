@@ -1,6 +1,7 @@
 """博客域模型：分类 + 文章。"""
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     ForeignKey,
@@ -35,6 +36,10 @@ class BlogPost(Base):
     __tablename__ = "blog_posts"
     __table_args__ = (
         UniqueConstraint("user_id", "slug", name="uq_blog_posts_user_slug"),
+        CheckConstraint(
+            "content_storage_state IN ('legacy', 'verified', 'error')",
+            name="ck_blog_posts_content_storage_state",
+        ),
         Index("ix_blog_posts_user_deleted", "user_id", "deleted_at"),
         Index("ix_blog_posts_published_revision", "published_revision_id"),
     )
@@ -53,6 +58,12 @@ class BlogPost(Base):
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
     published_at = Column(DateTime, nullable=True)
+    # Phase 2 file-content migration state.  The legacy DB body remains the
+    # source of truth until a future verified backfill changes this state.
+    content_storage_state = Column(String(20), nullable=False, default="legacy", server_default="legacy")
+    content_sha256 = Column(String(64), nullable=True)
+    file_migrated_at = Column(DateTime, nullable=True)
+    last_storage_error = Column(Text, nullable=True)
     file_path = Column(String(500), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, default=1)
     # AST 缓存(派生数据,可随时从 content 重建):文章正文的块结构数组,

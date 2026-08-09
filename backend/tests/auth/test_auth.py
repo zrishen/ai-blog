@@ -54,6 +54,21 @@ async def test_register_duplicate(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "username",
+    ["../escape", "name/child", r"name\child", "C:drive", "CON", "name.", "name "],
+)
+async def test_register_rejects_username_unsafe_for_workspace_directory(client: AsyncClient, username: str):
+    response = await client.post("/api/v1/auth/register", json={
+        "username": username,
+        "password": "test1234",
+        "invite_code": settings.registration_invite_code,
+    })
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_register_succeeds_when_intro_article_fails(client: AsyncClient, monkeypatch):
     """入门文章创建失败时不阻断注册：用户仍可拿到 access token 并登录（best-effort）。"""
 

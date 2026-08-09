@@ -10,7 +10,7 @@ from typing import Any
 
 from src.config import settings
 from src.services.memory import graph_store
-from src.services.embeddings import embedding_service
+from src.services.infra.embeddings import embedding_service
 
 logger = logging.getLogger(__name__)
 

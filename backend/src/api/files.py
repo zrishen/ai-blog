@@ -26,7 +26,7 @@ from src.schemas.file_base import (
 )
 from src.schemas.files import FileUploadResponse
 from src.schemas.file_processing import FileProcessingJobResponse
-from src.services.file.file_processing_service import (
+from src.services.workspace.file.file_processing_service import (
     FileProcessingActiveError,
     cancel_jobs_for_resource,
     create_or_reuse_upload_job,
@@ -36,7 +36,7 @@ from src.services.file.file_processing_service import (
     mark_upload_queued,
     schedule_job,
 )
-from src.services.file.file_service import (
+from src.services.workspace.file.file_service import (
     MAX_FILE_SIZE,
     _get_extension,
     _validate_file,
@@ -240,7 +240,7 @@ async def get_uploaded_file(filename: str, user: User = Depends(get_current_user
 
 
 def _user_collection(user_id: int) -> str:
-    from src.services.embeddings.embedding_service import get_embedding_collection_suffix
+    from src.services.infra.embeddings.embedding_service import get_embedding_collection_suffix
 
     return f"user_{user_id}_file{get_embedding_collection_suffix()}"
 

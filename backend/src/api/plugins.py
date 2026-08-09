@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.engine import get_db
 from src.database.models import User
 from src.schemas.plugins import PluginEnabledRequest, UserPluginListResponse, UserPluginResponse
-from src.services.plugins.plugin_service import (
+from src.services.infra.plugins.plugin_service import (
     PluginNotFoundError,
     PluginNotReadyError,
     list_user_plugins,

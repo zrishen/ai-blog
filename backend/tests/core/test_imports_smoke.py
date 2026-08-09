@@ -19,14 +19,14 @@ import pytest
 # bootstrap.startup() 函数体内 lazy 引用的全部模块（与 bootstrap.py startup() 保持一致）。
 # 改动 startup() 的 lazy import 时须同步本列表。
 _STARTUP_LAZY_MODULES = (
-    "src.services.file.file_processing_service",
-    "src.services.blog.blog_service",
-    "src.services.user.official_intro_service",
-    "src.services.user.user_service",
+    "src.services.workspace.file.file_processing_service",
+    "src.services.workspace.blog.blog_service",
+    "src.services.accounts.user.official_intro_service",
+    "src.services.accounts.user.user_service",
     "src.utils.user_dir",
     "src.services.memory.graph_store",
     "src.services.memory.jobs",
-    "src.services.embeddings.embedding_service",
+    "src.services.infra.embeddings.embedding_service",
 )
 
 

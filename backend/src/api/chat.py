@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from src.database.models import User
 from src.schemas.chat import ChatResponse
 from src.schemas.conversation import MessageRequest
-from src.services.chat import stream_chat
+from src.services.agent import stream_chat
 from src.utils.auth import get_current_user
 
 router = APIRouter()

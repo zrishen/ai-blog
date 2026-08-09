@@ -17,7 +17,7 @@ from src.schemas.trash import (
     TrashListResponse,
     TrashRestoreResponse,
 )
-from src.services.trash.trash_service import (
+from src.services.workspace.trash.trash_service import (
     SUPPORTED_TYPES,
     empty_trash,
     list_trash,

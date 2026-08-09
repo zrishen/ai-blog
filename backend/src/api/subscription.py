@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.engine import get_db
 from src.database.models import User
-from src.services.subscription import (
+from src.services.accounts.subscription import (
     current_period_yw,
     get_weekly_usage,
     is_subscription_active,

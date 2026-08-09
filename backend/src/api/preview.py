@@ -9,7 +9,7 @@ from src.core.exceptions import OwnershipError
 from src.core.path_guard import Scope, ensure_within
 from src.database.engine import get_db
 from src.database.models import User
-from src.services.file.file_service import convert_to_html, is_hidden_soft_deleted_file
+from src.services.workspace.file.file_service import convert_to_html, is_hidden_soft_deleted_file
 from src.config import settings
 from src.utils.auth import (
     create_preview_token,

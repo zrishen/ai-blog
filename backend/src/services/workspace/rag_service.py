@@ -23,7 +23,7 @@ def default_collection_name(user_id: int) -> str:
 
 def blog_collection_name(user_id: int) -> str:
     """文章向量集合：按用户 + embedding 模型隔离（不要用无后缀版本——换模型后旧向量无法定位）。"""
-    from src.services.embeddings.embedding_service import get_embedding_collection_suffix
+    from src.services.infra.embeddings.embedding_service import get_embedding_collection_suffix
 
     return f"user_{user_id}_blog{get_embedding_collection_suffix()}"
 
@@ -183,7 +183,7 @@ async def index_file_document(
     db: AsyncSession, user_id: int, document_id: int
 ) -> tuple[RagSourceModel, FileProcessingJob]:
     """对已上传文件触发异步索引：建 RagSource(pending) + 创建 index job 调度；worker 完成回写 active、失败标 failed，重新索引先 cleanup 覆盖旧向量。"""
-    from src.services.file.file_processing_service import (
+    from src.services.workspace.file.file_processing_service import (
         create_or_reuse_index_job,
         schedule_job,
     )
@@ -213,7 +213,7 @@ async def index_blog_post(
     db: AsyncSession, user_id: int, post_id: int
 ) -> tuple[RagSourceModel, FileProcessingJob]:
     """对文章触发异步索引：建 RagSource(pending) + 创建 index job 调度；worker 读 MD 正文向量化并回写状态。"""
-    from src.services.file.file_processing_service import (
+    from src.services.workspace.file.file_processing_service import (
         create_or_reuse_index_job,
         schedule_job,
     )
@@ -244,11 +244,28 @@ async def index_blog_post(
     return source, job
 
 
+async def schedule_reindex_for_source(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    resource_type: str,
+    resource_id: int,
+) -> FileProcessingJob | None:
+    """为已加入 AI 知识的资源调度重建；不支持的资源类型不创建 job。"""
+    if resource_type == "file":
+        _, job = await index_file_document(db, user_id, resource_id)
+        return job
+    if resource_type == "blog_post":
+        _, job = await index_blog_post(db, user_id, resource_id)
+        return job
+    return None
+
+
 async def unindex_file_document(
     db: AsyncSession, user_id: int, document_id: int
 ) -> None:
     """从 AI 知识移除文件：删向量 + 删 RagSource，文件本身保留并标记 not indexed。"""
-    from src.services.file.file_processing_service import cancel_jobs_for_resource
+    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
     from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 
     doc = await _get_owned_file_document(db, user_id, document_id)
@@ -268,7 +285,7 @@ async def unindex_blog_post(
     db: AsyncSession, user_id: int, post_id: int
 ) -> None:
     """从 AI 知识移除文章：删向量 + 删 RagSource，文章本身保留。"""
-    from src.services.file.file_processing_service import cancel_jobs_for_resource
+    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
     from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 
     source = await get_rag_source(db, user_id, "blog_post", post_id)

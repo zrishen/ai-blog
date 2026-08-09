@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.database.models import User
 from src.database.session import async_session
-from src.services.admin.usage_service import get_overview, get_user_weekly_usage
+from src.services.accounts.admin.usage_service import get_overview, get_user_weekly_usage
 from src.utils.auth import require_admin
 
 router = APIRouter(prefix="/admin/usage", tags=["admin"])

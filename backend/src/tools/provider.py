@@ -18,7 +18,7 @@ from src.tools.registry import TOOL_REGISTRY
 from src.tools.web import web_fetch, web_search
 
 if TYPE_CHECKING:
-    from src.services.skill.context import SkillContext
+    from src.services.agent.skill.context import SkillContext
     from src.tools.behavior import ToolBehaviorDescriptor
 
 logger = logging.getLogger(__name__)

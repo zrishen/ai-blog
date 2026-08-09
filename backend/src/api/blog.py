@@ -62,7 +62,7 @@ async def get_public_user(
     viewer: Optional[User] = Depends(get_optional_user),
 ):
     from src.database.models import BlogSidebarSettings
-    from src.services.blog.blog_service import get_user_by_username
+    from src.services.workspace.blog.blog_service import get_user_by_username
 
     owner = await get_user_by_username(db, username)
     if not owner:
@@ -93,7 +93,7 @@ async def list_public_user_posts(
     db: AsyncSession = Depends(get_db),
     viewer: Optional[User] = Depends(get_optional_user),
 ):
-    from src.services.blog.blog_service import get_user_by_username, list_posts
+    from src.services.workspace.blog.blog_service import get_user_by_username, list_posts
 
     owner = await get_user_by_username(db, username)
     if not owner:
@@ -124,7 +124,7 @@ async def get_public_user_post(
     db: AsyncSession = Depends(get_db),
     viewer: Optional[User] = Depends(get_optional_user),
 ):
-    from src.services.blog.blog_service import get_post_for_site_viewer, increment_view_count
+    from src.services.workspace.blog.blog_service import get_post_for_site_viewer, increment_view_count
 
     post = await get_post_for_site_viewer(db, username, slug, viewer.id if viewer else None)
     if not post:
@@ -149,7 +149,7 @@ async def list_blog_posts(
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_optional_user),
 ):
-    from src.services.blog.blog_service import list_posts
+    from src.services.workspace.blog.blog_service import list_posts
 
     result = await list_posts(
         db,
@@ -174,7 +174,7 @@ async def get_blog_post(
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_optional_user),
 ):
-    from src.services.blog.blog_service import get_post, get_published_post_by_id, increment_view_count
+    from src.services.workspace.blog.blog_service import get_post, get_published_post_by_id, increment_view_count
 
     post = await get_post(db, post_id)
     if not post:
@@ -194,7 +194,7 @@ async def get_blog_post(
 
 @router.post("/blog/posts", response_model=BlogPostResponse, status_code=201)
 async def create_blog_post(data: BlogPostCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    from src.services.blog.blog_service import create_post
+    from src.services.workspace.blog.blog_service import create_post
 
     try:
         post = await create_post(db, data.model_dump(), user.id)
@@ -205,7 +205,7 @@ async def create_blog_post(data: BlogPostCreate, db: AsyncSession = Depends(get_
 
 @router.put("/blog/posts/{post_id}", response_model=BlogPostResponse)
 async def update_blog_post(post_id: int, data: BlogPostUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    from src.services.blog.blog_service import update_post
+    from src.services.workspace.blog.blog_service import update_post
 
     try:
         post = await update_post(db, post_id, data.model_dump(exclude_unset=True), user.id)
@@ -221,7 +221,7 @@ async def update_blog_post(post_id: int, data: BlogPostUpdate, db: AsyncSession 
 
 @router.delete("/blog/posts/{post_id}")
 async def delete_blog_post(post_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    from src.services.blog.blog_service import delete_post
+    from src.services.workspace.blog.blog_service import delete_post
 
     try:
         deleted = await delete_post(db, post_id, user.id)
@@ -234,7 +234,7 @@ async def delete_blog_post(post_id: int, db: AsyncSession = Depends(get_db), use
 
 @router.put("/blog/posts/{post_id}/publish", response_model=BlogPostResponse)
 async def publish_blog_post(post_id: int, data: BlogPublishRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    from src.services.blog.blog_service import publish_post
+    from src.services.workspace.blog.blog_service import publish_post
 
     try:
         post = await publish_post(db, post_id, data.publish, user.id)
@@ -251,7 +251,7 @@ async def list_blog_post_revisions(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from src.services.blog.blog_service import get_owned_post, list_revisions
+    from src.services.workspace.blog.blog_service import get_owned_post, list_revisions
 
     post = await get_owned_post(db, post_id, user.id)
     if not post:
@@ -269,7 +269,7 @@ async def get_blog_post_revision(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from src.services.blog.blog_service import get_owned_post, get_revision
+    from src.services.workspace.blog.blog_service import get_owned_post, get_revision
 
     post = await get_owned_post(db, post_id, user.id)
     if not post:
@@ -287,7 +287,7 @@ async def commit_blog_post_revision(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from src.services.blog.blog_service import commit_revision, get_owned_post
+    from src.services.workspace.blog.blog_service import commit_revision, get_owned_post
 
     post = await get_owned_post(db, post_id, user.id)
     if not post:
@@ -303,7 +303,7 @@ async def restore_blog_post_revision(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from src.services.blog.blog_service import restore_revision
+    from src.services.workspace.blog.blog_service import restore_revision
 
     try:
         post = await restore_revision(db, post_id, revision_id, user.id)
@@ -320,7 +320,7 @@ async def delete_blog_post_revision(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    from src.services.blog.blog_service import delete_revision
+    from src.services.workspace.blog.blog_service import delete_revision
 
     try:
         await delete_revision(db, post_id, revision_id, user.id)
@@ -333,8 +333,8 @@ async def delete_blog_post_revision(
 
 @router.post("/blog/posts/{post_id}/generate-cover", response_model=BlogPostResponse)
 async def generate_blog_cover(post_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    from src.services.blog.blog_cover_service import generate_cover_image
-    from src.services.blog.blog_service import get_owned_post, update_post
+    from src.services.workspace.blog.blog_cover_service import generate_cover_image
+    from src.services.workspace.blog.blog_service import get_owned_post, update_post
 
     post = await get_owned_post(db, post_id, user.id)
     if not post:
@@ -354,8 +354,8 @@ async def generate_blog_cover(post_id: int, db: AsyncSession = Depends(get_db), 
 
 @router.post("/blog/posts/{post_id}/suggest-tags")
 async def suggest_blog_tags(post_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    from src.services.blog.blog_service import get_owned_post
-    from src.services.blog.blog_tag_service import suggest_tags
+    from src.services.workspace.blog.blog_service import get_owned_post
+    from src.services.workspace.blog.blog_tag_service import suggest_tags
 
     post = await get_owned_post(db, post_id, user.id)
     if not post:

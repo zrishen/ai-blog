@@ -10,7 +10,15 @@ from src.config import settings
 from src.core import path_guard
 from src.core.context import current_user_id_cv
 from src.core.exceptions import OwnershipError
-from src.core.path_guard import Scope, ensure_within, require_user, user_root
+from src.core.path_guard import (
+    Scope,
+    attachment_stored_path,
+    ensure_within,
+    require_user,
+    user_root,
+    workspace_dir,
+    workspace_path,
+)
 
 
 @pytest.fixture
@@ -18,14 +26,14 @@ def roots(tmp_path, monkeypatch):
     """把 settings 目录 + resolve_username 指到 tmp_path，隔离真实 FS。"""
     upload = tmp_path / "uploads"
     attach = tmp_path / "attachments"
+    workspace = tmp_path / "workspace"
     upload.mkdir()
     attach.mkdir()
     monkeypatch.setattr(settings, "upload_dir", str(upload))
     monkeypatch.setattr(settings, "chat_attachment_dir", str(attach))
+    monkeypatch.setattr(settings, "workspace_root", str(workspace))
     monkeypatch.setattr(path_guard, "resolve_username", lambda uid: f"u{uid}")
-    # WORKSPACE 未配置：确保 settings 无 workspace_root（防未来加默认值让 test_workspace_unconfigured_raises 假阴性）
-    monkeypatch.delattr(settings, "workspace_root", raising=False)
-    return {"upload": upload, "attach": attach}
+    return {"upload": upload, "attach": attach, "workspace": workspace}
 
 
 # ---- 门控 ⓪ 空 / '.' ----
@@ -110,12 +118,107 @@ def test_attachment_reject_traversal(roots):
         ensure_within(0, "../../../etc/passwd", scope=Scope.ATTACHMENT)
 
 
-# ---- Scope.WORKSPACE（P2 才加 settings.workspace_root）----
+def test_attachment_stored_path_requires_matching_owner_prefix(roots):
+    (roots["attach"] / "1").mkdir()
+    (roots["attach"] / "1" / "f.bin").write_bytes(b"x")
 
-def test_workspace_unconfigured_raises(roots):
-    # 现状未配置 → WORKSPACE scope 抛 OwnershipError；happy path 留 P2（Settings 加字段后，pydantic 现拒 setattr 未知字段）
+    assert attachment_stored_path(1, "1/f.bin") == roots["attach"] / "1" / "f.bin"
+    with pytest.raises(OwnershipError):
+        attachment_stored_path(1, "2/f.bin")
+
+
+def test_attachment_stored_path_rejects_symlink_escape(roots, tmp_path):
+    attachment_dir = roots["attach"] / "1"
+    attachment_dir.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret")
+    try:
+        (attachment_dir / "link.txt").symlink_to(outside)
+    except OSError:
+        pytest.skip("symlink needs dev mode/admin on Windows")
+
+    with pytest.raises(OwnershipError):
+        attachment_stored_path(1, "1/link.txt")
+
+
+# ---- Scope.WORKSPACE ----
+
+def test_workspace_unconfigured_raises(roots, monkeypatch):
+    monkeypatch.setattr(settings, "workspace_root", "")
     with pytest.raises(OwnershipError):
         ensure_within(1, "notes/x.md", scope=Scope.WORKSPACE)
+
+
+def test_workspace_dir_read_has_no_side_effect_and_create_is_explicit(roots):
+    root = roots["workspace"] / "u1"
+
+    assert workspace_dir(1) == root
+    assert not root.exists()
+    assert workspace_path(1, "notes/todo.md") == root / "notes" / "todo.md"
+    assert not root.exists()
+
+    assert workspace_dir(1, create=True) == root
+    assert root.is_dir()
+    assert not (root / "notes").exists()
+
+
+def test_workspace_path_write_requires_existing_parent(roots):
+    root = workspace_dir(1, create=True)
+    with pytest.raises(OwnershipError):
+        workspace_path(1, "notes/todo.md", mode="write")
+
+    (root / "notes").mkdir()
+    assert workspace_path(1, "notes/todo.md", mode="write") == root / "notes" / "todo.md"
+
+
+def test_workspace_paths_are_owner_isolated(roots):
+    owner_root = workspace_dir(1, create=True)
+    other_root = workspace_dir(2, create=True)
+    (owner_root / "secret.txt").write_text("secret")
+
+    assert workspace_path(1, "secret.txt") == owner_root / "secret.txt"
+    assert workspace_path(2, "secret.txt") == other_root / "secret.txt"
+    assert not workspace_path(2, "secret.txt").exists()
+
+
+@pytest.mark.parametrize("relative_path", ["../escape", "notes/../escape", "/etc/passwd"])
+def test_workspace_path_rejects_traversal(roots, relative_path):
+    workspace_dir(1, create=True)
+    with pytest.raises(OwnershipError):
+        workspace_path(1, relative_path)
+
+
+def test_workspace_path_rejects_symlink_escape(roots, tmp_path):
+    root = workspace_dir(1, create=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        (root / "link").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink needs dev mode/admin on Windows")
+
+    with pytest.raises(OwnershipError):
+        workspace_path(1, "link/secret.txt")
+    with pytest.raises(OwnershipError):
+        workspace_path(1, "link/secret.txt", mode="write")
+
+
+def test_workspace_rejects_symlinked_user_root(roots):
+    workspace_dir(2, create=True)
+    try:
+        (roots["workspace"] / "u1").symlink_to(roots["workspace"] / "u2", target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink needs dev mode/admin on Windows")
+
+    with pytest.raises(OwnershipError):
+        workspace_dir(1)
+
+
+@pytest.mark.parametrize("username", ["..", "../other", "name/child", r"name\child", "C:drive", "CON", "name.", "name "])
+def test_workspace_rejects_unsafe_cached_or_legacy_username(roots, monkeypatch, username):
+    monkeypatch.setattr(path_guard, "resolve_username", lambda _user_id: username)
+    with pytest.raises(OwnershipError):
+        workspace_dir(1)
 
 
 # ---- 属主身份语义（裁定#5：第一参数=属主，非 viewer）----

@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from src.config import settings
 from src.schemas.status import StatusComponents, StatusResponse
-from src.services.file.file_service import UPLOAD_DIR
+from src.services.workspace.file.file_service import UPLOAD_DIR
 from src.utils.rate_limit import check_rate_limit
 
 logger = logging.getLogger(__name__)

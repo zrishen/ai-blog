@@ -6,7 +6,7 @@ from typing import Any
 from langchain_core.tools import BaseTool, StructuredTool
 
 from src.config import settings
-from src.services.plugins.mcp_client import tool_manager
+from src.services.infra.plugins.mcp_client import tool_manager
 
 
 def _parse_tools(raw_tools: Any) -> list[Any]:

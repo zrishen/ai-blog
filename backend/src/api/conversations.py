@@ -15,7 +15,7 @@ from src.schemas.conversation import (
     ConversationResponse,
     MessageResponse,
 )
-from src.services.conversation.conversation_service import (
+from src.services.agent.conversation_service import (
     delete_conversation,
     get_messages,
     list_conversations,

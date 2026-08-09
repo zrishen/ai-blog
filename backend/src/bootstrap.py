@@ -48,10 +48,10 @@ async def startup() -> None:
     init_sentry()
     await init_db()
 
-    from src.services.file.file_processing_service import reconcile_jobs
-    from src.services.blog.blog_service import ensure_intro_post
-    from src.services.user.official_intro_service import build_intro_post_payload
-    from src.services.user.user_service import ensure_system_user
+    from src.services.workspace.file.file_processing_service import reconcile_jobs
+    from src.services.workspace.blog.blog_service import ensure_intro_post
+    from src.services.accounts.user.official_intro_service import build_intro_post_payload
+    from src.services.accounts.user.user_service import ensure_system_user
 
     await reconcile_jobs()
     async with async_session() as session:
@@ -89,7 +89,7 @@ async def startup() -> None:
     if settings.embedding_provider == "local":
         import threading
 
-        from src.services.embeddings.embedding_service import _get_local_model
+        from src.services.infra.embeddings.embedding_service import _get_local_model
 
         def _preload_local_model() -> None:
             try:

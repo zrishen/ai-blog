@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.database.models import BlogPost, FileDocument, FileProcessingJob, WorkspaceNode
-from src.services.file import file_processing_service
+from src.services.workspace.file import file_processing_service
 from src.services.workspace import node_service, rag_service, resource_service
 
 TEST_USER_ID = 1
@@ -329,7 +329,7 @@ async def test_attach_revives_soft_deleted_node(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_list_trash_workspace_folder_deletion_roots(db_session: AsyncSession):
     """list_trash 只列删除根 folder，连带软删的子 folder 不重复出现。"""
-    from src.services.trash.trash_service import list_trash
+    from src.services.workspace.trash.trash_service import list_trash
 
     root = await node_service.create_folder(db_session, TEST_USER_ID, name="root")
     await node_service.create_folder(db_session, TEST_USER_ID, name="child", parent_id=root.id)
@@ -371,7 +371,7 @@ async def test_mark_indexed_and_stale(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_update_post_content_marks_ai_knowledge_stale(db_session: AsyncSession):
     """博客正文变更 → 已加入 AI 知识的资源标 stale（旧索引保留可用，用户手动刷新后重建）。"""
-    from src.services.blog.blog_service import update_post
+    from src.services.workspace.blog.blog_service import update_post
 
     post = BlogPost(title="原标", slug="stale-on-edit", content="原正文", user_id=TEST_USER_ID, status="draft")
     db_session.add(post)
@@ -393,7 +393,7 @@ async def test_update_post_content_marks_ai_knowledge_stale(db_session: AsyncSes
 @pytest.mark.asyncio
 async def test_update_post_without_content_change_keeps_active(db_session: AsyncSession):
     """正文未实质变更 → 不标 stale，索引保持 active。"""
-    from src.services.blog.blog_service import update_post
+    from src.services.workspace.blog.blog_service import update_post
 
     post = BlogPost(title="原标", slug="active-on-edit", content="原正文", user_id=TEST_USER_ID, status="draft")
     db_session.add(post)
@@ -457,7 +457,7 @@ async def test_delete_post_cancels_active_index_job(db_session: AsyncSession):
     """博客进回收站（软删）即取消进行中的索引任务，不等到永久删除。"""
     import uuid
 
-    from src.services.blog.blog_service import delete_post
+    from src.services.workspace.blog.blog_service import delete_post
 
     post = BlogPost(title="t", slug="cancel-on-soft-delete", content="c", user_id=TEST_USER_ID)
     db_session.add(post)
@@ -630,9 +630,38 @@ async def test_index_blog_post_creates_pending_and_schedules_job(
 
 
 @pytest.mark.asyncio
+async def test_schedule_reindex_for_source_dispatches_supported_resource_types(monkeypatch):
+    file_job = object()
+    blog_job = object()
+    calls: list[tuple[str, int, int]] = []
+
+    async def index_file(db, user_id: int, resource_id: int):
+        calls.append(("file", user_id, resource_id))
+        return object(), file_job
+
+    async def index_blog(db, user_id: int, resource_id: int):
+        calls.append(("blog_post", user_id, resource_id))
+        return object(), blog_job
+
+    monkeypatch.setattr(rag_service, "index_file_document", index_file)
+    monkeypatch.setattr(rag_service, "index_blog_post", index_blog)
+
+    assert await rag_service.schedule_reindex_for_source(
+        object(), user_id=1, resource_type="file", resource_id=2
+    ) is file_job
+    assert await rag_service.schedule_reindex_for_source(
+        object(), user_id=1, resource_type="blog_post", resource_id=3
+    ) is blog_job
+    assert await rag_service.schedule_reindex_for_source(
+        object(), user_id=1, resource_type="note", resource_id=4
+    ) is None
+    assert calls == [("file", 1, 2), ("blog_post", 1, 3)]
+
+
+@pytest.mark.asyncio
 async def test_index_file_job_runs_to_active(db_session: AsyncSession, monkeypatch):
     """index job(file) 在 worker 内跑完 → RagSource active + 回写 chunk 数。"""
-    from src.services.file.file_processing_service import _run_job
+    from src.services.workspace.file.file_processing_service import _run_job
 
     doc = _make_file_document(chunk_content="not indexed")
     db_session.add(doc)
@@ -662,7 +691,7 @@ async def test_index_file_job_runs_to_active(db_session: AsyncSession, monkeypat
 @pytest.mark.asyncio
 async def test_index_blog_job_runs_to_active(db_session: AsyncSession, monkeypatch):
     """index job(blog_post) 在 worker 内跑完 → RagSource active。"""
-    from src.services.file.file_processing_service import _run_job
+    from src.services.workspace.file.file_processing_service import _run_job
 
     post = BlogPost(title="t", slug="blog-run", content="正文内容", user_id=TEST_USER_ID)
     db_session.add(post)
@@ -692,7 +721,7 @@ async def test_index_file_job_failure_marks_rag_source_failed(
     db_session: AsyncSession, monkeypatch
 ):
     """index job 在 worker 内 vectorize 失败 → RagSource 标 failed。"""
-    from src.services.file.file_processing_service import _run_job
+    from src.services.workspace.file.file_processing_service import _run_job
 
     doc = _make_file_document(chunk_content="not indexed")
     db_session.add(doc)

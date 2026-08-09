@@ -2,7 +2,7 @@
 
 纯接口定义——封装工具的「结果投影」（on_tool_end → blog_meta/references）与「流式
 投射」（on_chat_model_stream → 增量 marker）两类副作用。handler 实现与 descriptor
-单例在 services/chat/tool_behaviors.py，由 orchestrator 注入 assemble_tools。
+单例在 services/agent/tool_behaviors.py，由 orchestrator 注入 assemble_tools。
 registry/provider 仅引用此接口，保持 tools→services 零运行时依赖。
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
-    from src.services.chat.streaming import StreamProjector
+    from src.services.agent.streaming import StreamProjector
 
 
 @dataclass(frozen=True)

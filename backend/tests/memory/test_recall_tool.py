@@ -9,7 +9,7 @@ from src.services.memory.graph_store import MemoryHit
 @pytest.mark.asyncio
 async def test_base_recall_memory_touches_hits_after_recall(monkeypatch):
     """base_recall_memory 在 recall 有命中后调 touch_memories，驱动衰减闭环。"""
-    from src.services.embeddings import embedding_service
+    from src.services.infra.embeddings import embedding_service
     from src.tools import memory as memory_tool
 
     touched: list = []
@@ -36,7 +36,7 @@ async def test_base_recall_memory_touches_hits_after_recall(monkeypatch):
 @pytest.mark.asyncio
 async def test_base_recall_memory_skips_touch_when_no_hits(monkeypatch):
     """recall 无命中时不调 touch_memories。"""
-    from src.services.embeddings import embedding_service
+    from src.services.infra.embeddings import embedding_service
     from src.tools import memory as memory_tool
 
     touched: list = []
@@ -64,7 +64,7 @@ async def test_base_recall_memory_skips_touch_when_no_hits(monkeypatch):
 @pytest.mark.asyncio
 async def test_base_recall_memory_tolerates_touch_failure(monkeypatch):
     """touch 失败不影响 recall 结果返回（衰减降级，对话不受影响）。"""
-    from src.services.embeddings import embedding_service
+    from src.services.infra.embeddings import embedding_service
     from src.tools import memory as memory_tool
 
     async def fake_recall(**kwargs):
@@ -108,7 +108,7 @@ async def test_base_recall_memory_rejects_unauthenticated(monkeypatch):
 @pytest.mark.asyncio
 async def test_base_recall_memory_handles_embedding_failure(monkeypatch):
     """查询嵌入失败时返回提示，不触发 recall/touch。"""
-    from src.services.embeddings import embedding_service
+    from src.services.infra.embeddings import embedding_service
     from src.tools import memory as memory_tool
 
     recalled: list = []

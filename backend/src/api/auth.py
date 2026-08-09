@@ -9,7 +9,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,7 @@ from src.utils.auth import (
     verify_password,
 )
 from src.utils.rate_limit import check_rate_limit
+from src.utils.user_dir import validate_user_directory_name
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,11 @@ class AuthRequest(BaseModel):
 class RegisterRequest(AuthRequest):
     invite_code: str = Field(min_length=1, max_length=256)
     password: str = Field(min_length=8, max_length=100)
+
+    @field_validator("username")
+    @classmethod
+    def _validate_workspace_directory_name(cls, value: str) -> str:
+        return validate_user_directory_name(value)
 
     @model_validator(mode="after")
     def _validate_password_strength(self) -> "RegisterRequest":
@@ -173,8 +179,8 @@ async def register(
 
 async def _seed_intro_article(db: AsyncSession, user_id: int):
     """为新注册用户创建一篇入门文章（来自官方介绍模板）。"""
-    from src.services.blog.blog_service import create_post
-    from src.services.user.official_intro_service import build_intro_post_payload
+    from src.services.workspace.blog.blog_service import create_post
+    from src.services.accounts.user.official_intro_service import build_intro_post_payload
 
     intro_data = build_intro_post_payload()
     await create_post(db, intro_data, user_id)

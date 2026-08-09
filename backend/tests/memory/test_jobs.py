@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import FileDocument, RagSource
 from src.services.memory import jobs
+from src.services.workspace import rag_service
 
 
 @pytest.mark.asyncio
@@ -51,7 +52,7 @@ async def test_reconcile_removes_orphans_and_marks_missing_active_index_stale(
     monkeypatch.setattr(jobs.graph_store, "list_resource_memory", list_resource_memory)
     monkeypatch.setattr(jobs.graph_store, "delete_resource_memory", delete_resource_memory)
     monkeypatch.setattr(jobs.graph_store, "has_resource_memory", has_resource_memory)
-    monkeypatch.setattr(jobs, "_schedule_reindex", schedule_reindex)
+    monkeypatch.setattr(rag_service, "schedule_reindex_for_source", schedule_reindex)
 
     assert await jobs.reconcile_orphans(db_session) == 2
     await db_session.refresh(source)
@@ -105,7 +106,7 @@ async def test_reconcile_preserves_soft_deleted_rag_source(db_session: AsyncSess
     monkeypatch.setattr(jobs.graph_store, "list_resource_memory", list_resource_memory)
     monkeypatch.setattr(jobs.graph_store, "delete_resource_memory", delete_resource_memory)
     monkeypatch.setattr(jobs.graph_store, "has_resource_memory", has_resource_memory)
-    monkeypatch.setattr(jobs, "_schedule_reindex", schedule_reindex)
+    monkeypatch.setattr(rag_service, "schedule_reindex_for_source", schedule_reindex)
 
     assert await jobs.reconcile_orphans(db_session) == 0
     assert removed == []

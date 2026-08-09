@@ -19,7 +19,7 @@ from src.config import settings
 from src.core.context import current_user_id_cv
 from src.core.path_guard import require_user
 from src.database.session import async_session
-from src.services.web_tool_rate_limit_service import consume_web_tool_request
+from src.services.agent.web_tool_rate_limit_service import consume_web_tool_request
 
 
 class _UnsafeWebTarget(ValueError):

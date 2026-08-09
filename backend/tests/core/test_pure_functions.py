@@ -13,13 +13,13 @@ from src.prompts import (
     WRITING_CREATE_TEXT,
     resolve_active_segments,
 )
-from src.services.llm.llm_factory import _system_prompt
-from src.services.llm.llm_settings_service import (
+from src.services.infra.llm.llm_factory import _system_prompt
+from src.services.infra.llm.llm_settings_service import (
     SUPPORTED_LLM_PROTOCOLS,
     build_llm_model_kwargs,
     normalize_llm_protocol,
 )
-from src.services.blog.blog_storage_service import normalize_post_body
+from src.services.workspace.blog.blog_storage_service import normalize_post_body
 from src.tools.registry import tool_names_by_tag
 from src.utils.slug import slugify
 
@@ -198,7 +198,7 @@ def test_blog_tools_expose_read_edit_write_tools():
 
 def _default_writing_ctx(**overrides):
     """默认写作场景 ctx == orchestrator 真实接线形状（resolve_skills 默认 required+segments）。"""
-    from src.services.skill import resolve_skills
+    from src.services.agent.skill import resolve_skills
 
     default = resolve_skills()  # DEFAULT_ENABLED_SKILLS：required=writing+base，segments=writing×3
     base = dict(

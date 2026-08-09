@@ -12,7 +12,7 @@ from src.schemas.plugins import (
     AdminPluginResponse,
     AdminPluginUpdate,
 )
-from src.services.plugins.plugin_service import (
+from src.services.infra.plugins.plugin_service import (
     PluginNotFoundError,
     create_admin_plugin,
     delete_admin_plugin,

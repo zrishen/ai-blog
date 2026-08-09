@@ -71,21 +71,6 @@ async def _resource_state(
     return "absent"
 
 
-async def _schedule_reindex(
-    db: AsyncSession,
-    *,
-    user_id: int,
-    resource_type: str,
-    resource_id: int,
-) -> None:
-    from src.services.workspace import rag_service
-
-    if resource_type == "file":
-        await rag_service.index_file_document(db, user_id, resource_id)
-    elif resource_type == "blog_post":
-        await rag_service.index_blog_post(db, user_id, resource_id)
-
-
 async def _reconcile_orphans_in_session(db: AsyncSession) -> int:
     """Remove graph state whose business record is gone and flag missing graph indexes."""
     changes = 0
@@ -154,14 +139,23 @@ async def _reconcile_orphans_in_session(db: AsyncSession) -> int:
     if changes:
         await db.commit()
         logger.info("Brain reconciliation applied %d repair(s)", changes)
+    if to_reindex:
+        from src.services.workspace.rag_service import schedule_reindex_for_source
+
     for user_id, resource_type, resource_id in to_reindex:
         try:
-            await _schedule_reindex(
+            job = await schedule_reindex_for_source(
                 db,
                 user_id=user_id,
                 resource_type=resource_type,
                 resource_id=resource_id,
             )
+            if job is None:
+                logger.warning(
+                    "No brain reindex handler for resource type %s/%s",
+                    resource_type,
+                    resource_id,
+                )
         except Exception:
             logger.exception(
                 "Failed to schedule brain reindex for %s/%s", resource_type, resource_id

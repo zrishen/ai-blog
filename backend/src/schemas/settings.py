@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 
-from src.services.llm.llm_settings_service import (
+from src.services.infra.llm.llm_settings_service import (
     SUPPORTED_LLM_PROTOCOLS,
     normalize_llm_base_url,
 )

@@ -105,6 +105,8 @@ class Settings(BaseSettings):
     blog_content_dir: str = str(DATA_DIR / "content" / "blog")
     upload_dir: str = str(DATA_DIR / "content" / "uploads")
     chat_attachment_dir: str = str(DATA_DIR / "content" / "chat_attachments")
+    # Phase 2 真实工作目录：<workspace_root>/<username>/。内容文件的唯一 owner 根。
+    workspace_root: str = str(DATA_DIR / "workspace")
 
     # ---- 聊天附件限制 ----
     chat_attachment_max_file_size_bytes: int = 10 * 1024 * 1024
