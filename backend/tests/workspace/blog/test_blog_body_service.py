@@ -1,17 +1,21 @@
-"""Tests for the verified working-copy body seam."""
+"""Tests for the file-authoritative blog working-body seam."""
 
 from datetime import UTC, datetime
-from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
 from src.config import settings
 from src.core import path_guard
-from src.core.path_guard import workspace_dir
 from src.database.models import BlogPost
 from src.services.workspace.blog.blog_body_service import get_post_body
-from src.services.workspace.blog.blog_document_store import BlogDocument, write_blog_document
+from src.services.workspace.blog.blog_document_store import (
+    BlogDocument,
+    BlogDocumentCorruptError,
+    BlogDocumentNotFoundError,
+    blog_document_path,
+    write_blog_document,
+)
 
 
 @pytest.fixture
@@ -22,7 +26,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def _post(*, content: str = "legacy body") -> BlogPost:
+def _post(*, content: str = "database mirror") -> BlogPost:
     return BlogPost(
         id=7,
         user_id=1,
@@ -34,74 +38,25 @@ def _post(*, content: str = "legacy body") -> BlogPost:
 
 
 @pytest.mark.asyncio
-async def test_get_post_body_returns_legacy_working_copy_until_verified() -> None:
-    body = "First line\r\nSecond line\n"
-    post = _post(content=body)
-
-    assert await get_post_body(post) is body
-
-
-@pytest.mark.asyncio
-async def test_get_post_body_reads_strict_verified_markdown(workspace: Path) -> None:
-    post = _post()
-    document = BlogDocument(slug=post.slug, title=post.title, body="Markdown body", created_at=post.created_at)
-    write_blog_document(post.user_id, document)
-    post.content_storage_state = "verified"
-    post.file_path = "posts/post.md"
-    post.content_sha256 = sha256(document.body.encode("utf-8")).hexdigest()
-
-    assert await get_post_body(post) == "Markdown body"
-
-
-@pytest.mark.asyncio
-async def test_get_post_body_reader_db_policy_forces_database_mirror(
-    workspace: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_get_post_body_reads_canonical_markdown_not_database_mirror(workspace: Path) -> None:
     post = _post(content="Database mirror")
-    document = BlogDocument(slug=post.slug, title=post.title, body="Markdown body", created_at=post.created_at)
-    write_blog_document(post.user_id, document)
-    post.content_storage_state = "verified"
-    post.file_path = "posts/post.md"
-    post.content_sha256 = sha256(document.body.encode("utf-8")).hexdigest()
-    monkeypatch.setattr(settings, "blog_document_reader_policy", "db")
+    write_blog_document(
+        post.user_id,
+        BlogDocument(slug=post.slug, title=post.title, body="Markdown authority", created_at=post.created_at),
+    )
 
-    assert await get_post_body(post) == "Database mirror"
+    assert await get_post_body(post) == "Markdown authority"
 
 
 @pytest.mark.asyncio
-async def test_get_post_body_falls_back_for_bad_verified_marker(caplog: pytest.LogCaptureFixture) -> None:
+async def test_get_post_body_rejects_missing_or_corrupt_canonical_document(workspace: Path) -> None:
     post = _post()
-    post.content_storage_state = "verified"
-    post.file_path = "posts/other.md"
-    post.content_sha256 = "0" * 64
 
-    assert await get_post_body(post) == "legacy body"
-    assert "non-canonical path" in caplog.text
+    with pytest.raises(BlogDocumentNotFoundError):
+        await get_post_body(post)
 
-
-@pytest.mark.asyncio
-async def test_get_post_body_falls_back_for_missing_corrupt_or_hash_mismatched_document(
-    workspace: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    post = _post()
-    post.content_storage_state = "verified"
-    post.file_path = "posts/post.md"
-    post.content_sha256 = "0" * 64
-
-    assert await get_post_body(post) == "legacy body"
-    assert "could not be read" in caplog.text
-
-    posts_dir = workspace_dir(post.user_id, create=True) / "posts"
-    posts_dir.mkdir()
-    (posts_dir / "post.md").write_text("not canonical markdown", encoding="utf-8")
-    caplog.clear()
-    assert await get_post_body(post) == "legacy body"
-    assert "could not be read" in caplog.text
-
-    document = BlogDocument(slug=post.slug, title=post.title, body="Markdown body", created_at=post.created_at)
-    write_blog_document(post.user_id, document)
-    caplog.clear()
-    assert await get_post_body(post) == "legacy body"
-    assert "SHA-256 mismatch" in caplog.text
+    path = blog_document_path(post.user_id, post.slug)
+    path.parent.mkdir(parents=True)
+    path.write_text("not canonical markdown", encoding="utf-8")
+    with pytest.raises(BlogDocumentCorruptError):
+        await get_post_body(post)

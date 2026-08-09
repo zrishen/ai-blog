@@ -116,6 +116,18 @@ async def setup_database(_pg):
         await conn.run_sync(Base.metadata.drop_all)
 
 
+@pytest.fixture(autouse=True)
+def isolate_workspace_root(tmp_path, monkeypatch):
+    """Give every test the same isolated filesystem boundary as its database."""
+
+    from src.utils.user_dir import _username_cache
+
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path / "workspace"))
+    _username_cache.clear()
+    yield
+    _username_cache.clear()
+
+
 @pytest_asyncio.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)

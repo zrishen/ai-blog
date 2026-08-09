@@ -57,9 +57,9 @@ async def blog_create_post(title: str, tags: str = "", excerpt: str = "") -> str
         post = await upsert_post_from_meta(db, user_id=user_id, slug=slug, meta=meta, body="")
         if post is None:
             return f"文章创建失败: slug={slug}"
-        from src.services.workspace.blog.blog_document_sync_service import sync_document_if_canary
+        from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
 
-        await sync_document_if_canary(db, post)
+        await sync_blog_document(db, post)
         return (
             f"文章草稿已创建: id={post.id}, slug={slug}, "
             f"title={title.strip()}, status={meta['status']}。"
@@ -145,9 +145,9 @@ async def blog_write_post(
 
             updated = await publish_post(db, updated.id, False, user_id)
         else:
-            from src.services.workspace.blog.blog_document_sync_service import sync_document_if_canary
+            from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
 
-            await sync_document_if_canary(db, updated)
+            await sync_blog_document(db, updated)
         if updated is None:
             return f"文章更新失败: id={post_id}"
         return (
@@ -239,9 +239,9 @@ async def blog_edit_post(
         )
         if updated is None:
             return f"文章更新失败: id={post_id}"
-        from src.services.workspace.blog.blog_document_sync_service import sync_document_if_canary
+        from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
 
-        await sync_document_if_canary(db, updated)
+        await sync_blog_document(db, updated)
         scope_suffix = f", section={section_index}" if section_index > 0 else ""
         return (
             f"文章已精准修改: id={updated.id}, slug={slug}, "

@@ -86,7 +86,11 @@ async def test_suggest_tags_empty_input_returns_empty(monkeypatch) -> None:
         called = True
         return "x"
 
+    async def fake_body(post):
+        return ""
+
     monkeypatch.setattr(blog_tag_service, "_call_llm", fake_call)
+    monkeypatch.setattr(blog_tag_service, "get_post_body", fake_body)
     post = SimpleNamespace(id=1, title="", excerpt="", content="")
     assert await blog_tag_service.suggest_tags(post) == []
     assert called is False  # 未调 LLM

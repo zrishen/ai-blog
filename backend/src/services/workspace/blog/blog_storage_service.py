@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import BlogCategory as BlogCategoryModel
 from src.database.models import BlogPost as BlogPostModel
-from src.services.workspace.blog.blog_body_service import get_post_body
 from src.services.workspace.blog.blog_document_sync_service import invalidate_verified_document
 from src.utils.slug import slugify
 
@@ -141,7 +140,7 @@ async def upsert_post_from_meta(
     try:
         from src.services.workspace.markdown.markdown_ast_service import parse_to_blocks
 
-        post.blocks_json = parse_to_blocks(await get_post_body(post))
+        post.blocks_json = parse_to_blocks(post.content)
     except Exception:
         logger.warning("Unable to parse blog blocks for slug=%s", slug, exc_info=True)
         post.blocks_json = None

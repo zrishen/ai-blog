@@ -33,7 +33,8 @@ async def test_working_copy_autosave_updates_db_without_a_revision(client: Async
     post = await db_session.get(BlogPost, created["id"])
     assert post is not None
     assert post.content == "Autosaved working copy"
-    assert post.file_path is None
+    assert post.file_path == f"posts/{post.slug}.md"
+    assert post.content_storage_state == "verified"
     assert post.blocks_json is not None
     revisions = await client.get(f"/api/v1/blog/posts/{post.id}/revisions")
     assert revisions.status_code == 200

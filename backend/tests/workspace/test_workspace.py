@@ -15,6 +15,22 @@ TEST_USER_ID = 1
 OTHER_USER_ID = 2
 
 
+async def _create_file_backed_blog_post(
+    db: AsyncSession,
+    *,
+    title: str,
+    slug: str,
+    content: str,
+) -> BlogPost:
+    from src.services.workspace.blog.blog_service import create_post
+
+    return await create_post(
+        db,
+        {"title": title, "slug": slug, "content": content},
+        TEST_USER_ID,
+    )
+
+
 # ---- node_service: 目录树 ----
 
 
@@ -371,17 +387,17 @@ async def test_mark_indexed_and_stale(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_blog_index_snapshot_mismatch_stays_stale(db_session: AsyncSession):
-    post = BlogPost(title="snapshot", slug="snapshot", content="first", user_id=TEST_USER_ID)
-    db_session.add(post)
-    await db_session.commit()
-    await db_session.refresh(post)
+    post = await _create_file_backed_blog_post(
+        db_session, title="snapshot", slug="snapshot", content="first"
+    )
     await rag_service.add_to_ai_knowledge(
         db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id
     )
 
     snapshot_sha256 = hashlib.sha256(b"first").hexdigest()
-    post.content = "second"
-    await db_session.commit()
+    from src.services.workspace.blog.blog_service import update_post
+
+    await update_post(db_session, post.id, {"content": "second"}, TEST_USER_ID)
 
     source = await rag_service.mark_blog_post_indexed_if_current(
         db_session,
@@ -399,10 +415,9 @@ async def test_update_post_content_marks_ai_knowledge_stale(db_session: AsyncSes
     """博客正文变更 → 已加入 AI 知识的资源标 stale（旧索引保留可用，用户手动刷新后重建）。"""
     from src.services.workspace.blog.blog_service import update_post
 
-    post = BlogPost(title="原标", slug="stale-on-edit", content="原正文", user_id=TEST_USER_ID, status="draft")
-    db_session.add(post)
-    await db_session.commit()
-    await db_session.refresh(post)
+    post = await _create_file_backed_blog_post(
+        db_session, title="原标", slug="stale-on-edit", content="原正文"
+    )
 
     await rag_service.add_to_ai_knowledge(
         db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id
@@ -421,10 +436,9 @@ async def test_update_post_without_content_change_keeps_active(db_session: Async
     """正文未实质变更 → 不标 stale，索引保持 active。"""
     from src.services.workspace.blog.blog_service import update_post
 
-    post = BlogPost(title="原标", slug="active-on-edit", content="原正文", user_id=TEST_USER_ID, status="draft")
-    db_session.add(post)
-    await db_session.commit()
-    await db_session.refresh(post)
+    post = await _create_file_backed_blog_post(
+        db_session, title="原标", slug="active-on-edit", content="原正文"
+    )
 
     await rag_service.add_to_ai_knowledge(
         db_session, TEST_USER_ID, resource_type="blog_post", resource_id=post.id
@@ -719,9 +733,9 @@ async def test_index_blog_job_runs_to_active(db_session: AsyncSession, monkeypat
     """index job(blog_post) 在 worker 内跑完 → RagSource active。"""
     from src.services.workspace.file.file_processing_service import _run_job
 
-    post = BlogPost(title="t", slug="blog-run", content="正文内容", user_id=TEST_USER_ID)
-    db_session.add(post)
-    await db_session.commit()
+    post = await _create_file_backed_blog_post(
+        db_session, title="t", slug="blog-run", content="正文内容"
+    )
 
     async def fake_text_vectorize(*args, **kwargs):
         return ["c1"]
