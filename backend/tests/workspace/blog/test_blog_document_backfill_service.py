@@ -110,6 +110,31 @@ async def test_verified_consistent_post_is_not_rewritten(
 
 
 @pytest.mark.asyncio
+async def test_error_state_is_terminal_and_does_not_overwrite_the_document(
+    db_session: AsyncSession,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    post = await _post_with_category(db_session, slug="terminal-error-post")
+    post.content_storage_state = "error"
+    post.last_storage_error = "previous verification failure"
+    await db_session.commit()
+
+    def must_not_write(*_args, **_kwargs):
+        raise AssertionError("an error-state post must not be automatically rewritten")
+
+    monkeypatch.setattr(blog_document_backfill_service, "write_blog_document", must_not_write)
+
+    with pytest.raises(BlogDocumentBackfillError, match="error state"):
+        await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
+
+    await db_session.refresh(post)
+    assert post.content_storage_state == "error"
+    assert post.last_storage_error == "previous verification failure"
+    assert not workspace.joinpath("owner-41", "posts", "terminal-error-post.md").exists()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("damage", ["missing", "corrupt", "hash-mismatch"])
 async def test_verified_file_damage_is_marked_error_without_changing_content(
     db_session: AsyncSession,
@@ -157,3 +182,81 @@ async def test_backfill_failure_is_recorded_and_does_not_block_another_post(
     assert result.wrote_document
     assert healthy.content_storage_state == "verified"
     assert workspace.joinpath("owner-42", "posts", "healthy-post.md").exists()
+
+
+@pytest.mark.asyncio
+async def test_marker_commit_ambiguous_success_is_rechecked_as_verified(
+    db_session: AsyncSession,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    post = await _post_with_category(db_session, slug="ambiguous-marker-post")
+    real_commit = db_session.commit
+    real_rollback = db_session.rollback
+    commit_calls = 0
+    rollback_calls = 0
+
+    async def commit_after_persist_then_fail_once() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 1:
+            await real_commit()
+            raise RuntimeError("connection dropped after commit")
+        await real_commit()
+
+    async def track_rollback() -> None:
+        nonlocal rollback_calls
+        rollback_calls += 1
+        await real_rollback()
+
+    monkeypatch.setattr(db_session, "commit", commit_after_persist_then_fail_once)
+    monkeypatch.setattr(db_session, "rollback", track_rollback)
+
+    result = await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
+
+    await db_session.refresh(post)
+    assert result.wrote_document
+    assert post.content_storage_state == "verified"
+    assert post.file_path == "posts/ambiguous-marker-post.md"
+    assert workspace.joinpath("owner-41", "posts", "ambiguous-marker-post.md").exists()
+    assert commit_calls == 1
+    assert rollback_calls >= 2
+
+
+@pytest.mark.asyncio
+async def test_marker_commit_failure_rolls_back_then_records_error(
+    db_session: AsyncSession,
+    workspace: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    post = await _post_with_category(db_session, slug="failed-marker-post")
+    real_commit = db_session.commit
+    real_rollback = db_session.rollback
+    commit_calls = 0
+    rollback_calls = 0
+
+    async def fail_marker_commit_once() -> None:
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 1:
+            raise RuntimeError("database unavailable")
+        await real_commit()
+
+    async def track_rollback() -> None:
+        nonlocal rollback_calls
+        rollback_calls += 1
+        await real_rollback()
+
+    monkeypatch.setattr(db_session, "commit", fail_marker_commit_once)
+    monkeypatch.setattr(db_session, "rollback", track_rollback)
+
+    with pytest.raises(BlogDocumentBackfillError, match="marker commit failed"):
+        await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
+
+    await db_session.refresh(post)
+    assert post.content == "Legacy working body"
+    assert post.content_storage_state == "error"
+    assert post.last_storage_error == "database unavailable"
+    assert workspace.joinpath("owner-41", "posts", "failed-marker-post.md").exists()
+    assert commit_calls == 2
+    assert rollback_calls >= 1

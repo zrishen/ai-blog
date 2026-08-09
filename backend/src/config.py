@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     chat_attachment_dir: str = str(DATA_DIR / "content" / "chat_attachments")
     # Phase 2 真实工作目录：<workspace_root>/<username>/。内容文件的唯一 owner 根。
     workspace_root: str = str(DATA_DIR / "workspace")
+    # 默认关闭。仅逗号分隔的受控用户可把 DB 工作副本导出并校验为 Markdown；读取仍走 DB。
+    blog_document_canary_user_ids: str = ""
 
     # ---- 聊天附件限制 ----
     chat_attachment_max_file_size_bytes: int = 10 * 1024 * 1024

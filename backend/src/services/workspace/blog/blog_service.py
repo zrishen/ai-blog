@@ -12,6 +12,10 @@ from sqlalchemy.orm import defer
 from src.database.models import BlogPost as BlogPostModel
 from src.database.models import BlogPostRevision, User
 from src.services.workspace.blog.blog_body_service import get_post_body
+from src.services.workspace.blog.blog_document_sync_service import (
+    invalidate_verified_document,
+    sync_document_if_canary,
+)
 from src.services.workspace.blog.blog_storage_service import (
     ensure_unique_slug,
     slug_from_title,
@@ -320,6 +324,7 @@ async def create_post(db: AsyncSession, data: dict, user_id: int) -> BlogPostMod
         if published is None:
             raise RuntimeError("Unable to publish blog post")
         return published
+    await sync_document_if_canary(db, post)
     return post
 
 
@@ -360,8 +365,11 @@ async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) 
         updated.published_at = None
         await db.commit()
         await db.refresh(updated)
+        await sync_document_if_canary(db, updated)
     elif requested_status == "published":
         return await publish_post(db, updated.id, True, user_id)
+    else:
+        await sync_document_if_canary(db, updated)
     return updated
 
 
@@ -381,8 +389,10 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
         post.published_revision_id = None
         post.published_at = None
         post.updated_at = _now()
+        invalidate_verified_document(post)
         await db.commit()
         await db.refresh(post)
+        await sync_document_if_canary(db, post)
         logger.info("blog unpublish user_id=%s post_id=%s", user_id, post.id)
         return post
 
@@ -391,9 +401,11 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
     post.status = "published"
     post.published_at = _now()
     post.updated_at = _now()
+    invalidate_verified_document(post)
     await _prune_revisions(db, post)
     await db.commit()
     await db.refresh(post)
+    await sync_document_if_canary(db, post)
     logger.info(
         "blog publish user_id=%s post_id=%s revision_id=%s",
         user_id, post.id, post.published_revision_id,
@@ -450,6 +462,7 @@ async def restore_revision(
     restored.category_id = revision.category_id
     await db.commit()
     await db.refresh(restored)
+    await sync_document_if_canary(db, restored)
     logger.info(
         "blog revision restored user_id=%s post_id=%s revision_id=%s revision_no=%s",
         user_id, post_id, revision_id, revision.revision_number,

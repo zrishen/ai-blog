@@ -1,7 +1,8 @@
 """Explicit, one-post export from the legacy BlogPost working copy to markdown.
 
-This service intentionally has no scheduler or application entry point.  It is
-only the verified data-preparation step for the later storage cutover.
+This service intentionally has no scheduler or public API entry point. It is
+the verified single-post export primitive used by the opt-in canary and later
+storage-cutover tooling.
 """
 
 from __future__ import annotations
@@ -78,16 +79,46 @@ async def _document_from_post(db: AsyncSession, post: BlogPost) -> BlogDocument:
     )
 
 
+async def _get_owned_post_for_update(
+    db: AsyncSession,
+    *,
+    post_id: int,
+    user_id: int,
+) -> BlogPost | None:
+    """Re-read the mutable working copy while holding its row lock."""
+
+    return (
+        await db.execute(
+            select(BlogPost)
+            .where(
+                BlogPost.id == post_id,
+                BlogPost.user_id == user_id,
+                BlogPost.deleted_at.is_(None),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+
+
 async def _read_and_hash(user_id: int, slug: str) -> tuple[BlogDocument, str]:
     document = await asyncio.to_thread(read_blog_document, user_id, slug)
     return document, hashlib.sha256(document.body.encode("utf-8")).hexdigest()
 
 
 async def _mark_error(db: AsyncSession, post: BlogPost, error: Exception) -> None:
+    """Persist an error only from a live transaction and never replace one."""
+
+    if post.content_storage_state == "error":
+        await db.rollback()
+        return
     post.content_storage_state = "error"
     post.last_storage_error = str(error)[:_MAX_STORAGE_ERROR_LENGTH] or error.__class__.__name__
-    await db.commit()
-    await db.refresh(post)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
 
 async def _verify_existing(
@@ -105,6 +136,49 @@ async def _verify_existing(
     return relative_path, digest
 
 
+async def _recover_marker_commit_failure(
+    db: AsyncSession,
+    *,
+    post_id: int,
+    user_id: int,
+    marker_error: Exception,
+) -> BlogDocumentBackfillResult:
+    """Resolve an ambiguous marker commit without trusting its failed session.
+
+    A database error can be reported after the server has committed the marker.
+    Roll back first, then lock and re-read the row.  Only a fully matching
+    verified row is considered successful; every other still-owned row is
+    explicitly marked as an error from the fresh transaction.
+    """
+
+    await db.rollback()
+    post = await _get_owned_post_for_update(db, post_id=post_id, user_id=user_id)
+    if post is None:
+        raise BlogDocumentBackfillError("Post disappeared while recording document verification") from marker_error
+
+    if post.content_storage_state == "verified":
+        try:
+            expected = await _document_from_post(db, post)
+            relative_path, digest = await _verify_existing(post, expected)
+        except Exception:
+            pass
+        else:
+            result = BlogDocumentBackfillResult(
+                post_id=post.id,
+                file_path=relative_path,
+                content_sha256=digest,
+                wrote_document=True,
+            )
+            await db.rollback()
+            return result
+
+    try:
+        await _mark_error(db, post, marker_error)
+    except Exception as error_recording_error:
+        raise BlogDocumentBackfillError("Document verification marker failed and its error state could not be recorded") from error_recording_error
+    raise BlogDocumentBackfillError("Document verification marker commit failed") from marker_error
+
+
 async def backfill_blog_post_document(
     db: AsyncSession,
     *,
@@ -118,20 +192,26 @@ async def backfill_blog_post_document(
     raised explicitly instead of being silently trusted or overwritten.
     """
 
-    post = await db.get(BlogPost, post_id)
-    if post is None or post.deleted_at is not None or post.user_id != user_id:
+    post = await _get_owned_post_for_update(db, post_id=post_id, user_id=user_id)
+    if post is None:
         raise ValueError("Post not found")
+
+    if post.content_storage_state == "error":
+        await db.rollback()
+        raise BlogDocumentBackfillError("Blog document backfill is in an error state and requires explicit repair")
 
     try:
         expected = await _document_from_post(db, post)
         if post.content_storage_state == "verified":
             relative_path, digest = await _verify_existing(post, expected)
-            return BlogDocumentBackfillResult(
+            result = BlogDocumentBackfillResult(
                 post_id=post.id,
                 file_path=relative_path,
                 content_sha256=digest,
                 wrote_document=False,
             )
+            await db.commit()
+            return result
 
         path = await asyncio.to_thread(write_blog_document, post.user_id, expected)
         read_back, digest = await _read_and_hash(post.user_id, post.slug)
@@ -145,9 +225,7 @@ async def backfill_blog_post_document(
         post.content_sha256 = digest
         post.file_migrated_at = _utcnow()
         post.last_storage_error = None
-        await db.commit()
-        await db.refresh(post)
-        return BlogDocumentBackfillResult(
+        result = BlogDocumentBackfillResult(
             post_id=post.id,
             file_path=post.file_path,
             content_sha256=digest,
@@ -158,3 +236,14 @@ async def backfill_blog_post_document(
         if isinstance(exc, BlogDocumentBackfillError):
             raise
         raise BlogDocumentBackfillError("Blog document backfill failed") from exc
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        return await _recover_marker_commit_failure(
+            db,
+            post_id=post_id,
+            user_id=user_id,
+            marker_error=exc,
+        )
+    return result

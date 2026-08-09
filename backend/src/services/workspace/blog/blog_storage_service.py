@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.models import BlogCategory as BlogCategoryModel
 from src.database.models import BlogPost as BlogPostModel
 from src.services.workspace.blog.blog_body_service import get_post_body
+from src.services.workspace.blog.blog_document_sync_service import invalidate_verified_document
 from src.utils.slug import slugify
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ async def upsert_post_from_meta(
     post.status = meta.get("status") or post.status or "draft"
     post.tags = meta.get("tags")
     post.author = meta.get("author") or post.author or "ai-blog"
-    post.file_path = None
+    invalidate_verified_document(post)
     post.user_id = user_id
     if "category" in meta:
         post.category_id = await resolve_category(db, meta.get("category"), user_id=user_id)
