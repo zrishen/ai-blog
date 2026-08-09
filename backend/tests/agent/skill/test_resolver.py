@@ -32,6 +32,13 @@ def test_resolve_skills_explicit_empty_enabled_ids():
     assert ctx.enabled_segment_names == frozenset()
 
 
+def test_resolve_skills_composes_knowledge_and_memory_without_writing():
+    ctx = resolve_skills(enabled_ids=frozenset({"knowledge", "memory"}))
+
+    assert ctx.required_tool_names == tool_names_by_tag("knowledge") | tool_names_by_tag("memory")
+    assert ctx.enabled_segment_names == _KNOWLEDGE_SEGMENTS | _MEMORY_SEGMENTS
+
+
 def test_resolve_skills_unknown_id_raises():
     """unknown skill id → ValueError fail loud（防 typo 静默丢 skill）。"""
     with pytest.raises(ValueError, match="unknown skill"):

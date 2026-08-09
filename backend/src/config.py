@@ -108,6 +108,7 @@ class Settings(BaseSettings):
     # Phase 2 真实工作目录：<workspace_root>/<username>/。内容文件的唯一 owner 根。
     workspace_root: str = str(DATA_DIR / "workspace")
     workspace_files_enabled: bool = True
+    skill_prompt_max_chars: int = 12_000
     # ---- 聊天附件限制 ----
     chat_attachment_max_file_size_bytes: int = 10 * 1024 * 1024
     chat_attachment_max_image_size_bytes: int = 5 * 1024 * 1024

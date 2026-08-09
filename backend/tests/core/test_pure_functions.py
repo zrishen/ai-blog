@@ -343,3 +343,11 @@ def test_resolve_enabled_segments_activates_default_inactive(monkeypatch):
     # enable → 激活（OR 第二项 True；condition None 放行）
     ctx_on = PromptContext(enabled_segments=frozenset({test_seg.name}), **base_ctx)
     assert test_seg.name in {s.name for s in resolve_active_segments(ctx_on)}
+
+
+def test_skill_prompt_segments_have_a_hard_character_limit(monkeypatch):
+    from src.config import settings
+
+    monkeypatch.setattr(settings, "skill_prompt_max_chars", 1)
+    with pytest.raises(ValueError, match="skill prompt length"):
+        resolve_active_segments(_default_writing_ctx())

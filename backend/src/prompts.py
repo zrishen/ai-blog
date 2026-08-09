@@ -7,6 +7,7 @@ prompt 注入采用 PromptSegment 注册表（resolve_active_segments 按 priori
 from dataclasses import dataclass
 from typing import Callable
 
+from src.config import settings
 from src.tools.registry import tool_names_by_tag  # WRITING_TOOL_NAMES 派生（统一工具名源）
 
 # 系统提示词 — 基础角色
@@ -243,8 +244,14 @@ PROMPT_SEGMENT_REGISTRY: dict[str, PromptSegment] = {s.name: s for s in [
 
 def resolve_active_segments(ctx: PromptContext) -> list[PromptSegment]:
     """eligible = (default_active OR in enabled_segments) AND condition；按 priority 升序返回。"""
-    return [
+    active = [
         seg for seg in sorted(PROMPT_SEGMENT_REGISTRY.values(), key=lambda s: s.priority)
         if (seg.default_active or seg.name in ctx.enabled_segments)
         and (seg.condition is None or seg.condition(ctx))
     ]
+    skill_chars = sum(len(seg.template) for seg in active if not seg.default_active)
+    if skill_chars > settings.skill_prompt_max_chars:
+        raise ValueError(
+            f"enabled skill prompt length {skill_chars} exceeds {settings.skill_prompt_max_chars} characters"
+        )
+    return active
