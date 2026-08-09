@@ -8,5 +8,4 @@ export type WorkspaceView =
   | "drafts"
   | "published"
   | "ai_knowledge"
-  | "inbox"
   | "trash";

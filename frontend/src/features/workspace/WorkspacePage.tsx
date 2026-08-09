@@ -6,14 +6,11 @@ import { BlogEditor } from "../blog";
 import { FilePreviewView } from "./views/FilePreviewView";
 import { OverviewView } from "./views/OverviewView";
 import { BlogPostsView } from "./views/BlogPostsView";
-import { UnarchivedView } from "./views/UnarchivedView";
 import { AiKnowledgeView } from "./views/AiKnowledgeView";
-import { FolderView } from "./views/FolderView";
 import { TrashView } from "./views/TrashView";
 
 export function WorkspacePage() {
   const { state, dispatch } = useChat();
-  const folderId = state.workspaceSelectedFolderId;
   const view = state.workspaceSelectedView;
   const [isCreatingBlog, setIsCreatingBlog] = useState(false);
 
@@ -61,11 +58,6 @@ export function WorkspacePage() {
     [dispatch],
   );
 
-  const exitFolder = useCallback(
-    () => dispatch({ type: "SET_WORKSPACE_SELECTED_FOLDER", payload: null }),
-    [dispatch],
-  );
-
   // 内联编辑：editingBlogId 命中 blogPosts 时中柱渲染 BlogEditor（目录树常驻）
   const editingPost =
     state.workspaceEditingBlogId != null
@@ -75,15 +67,6 @@ export function WorkspacePage() {
 
   if (state.fileSelectedFile) return <FilePreviewView onBack={exitFilePreview} />;
 
-  if (folderId != null)
-    return (
-      <FolderView
-        folderId={folderId}
-        onOpenBlog={openBlog}
-        onOpenFile={openFile}
-        onBack={exitFolder}
-      />
-    );
   if (view === "trash") return <TrashView />;
 
   switch (view) {
@@ -93,8 +76,6 @@ export function WorkspacePage() {
       return <BlogPostsView key={view} status="draft" title="草稿" onOpen={openBlog} onCreate={createBlog} />;
     case "published":
       return <BlogPostsView key={view} status="published" title="已发布" onOpen={openBlog} onCreate={createBlog} />;
-    case "inbox":
-      return <UnarchivedView onOpenFile={openFile} onOpenBlog={openBlog} onCreateBlog={createBlog} />;
     case "ai_knowledge":
       return <AiKnowledgeView onOpenBlog={openBlog} onOpenFile={openFile} />;
     default:

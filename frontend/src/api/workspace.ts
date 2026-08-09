@@ -1,18 +1,13 @@
 import { API_BASE, apiFetch, readErrorDetail } from "./client";
 import type { FileProcessingJob } from "./files";
 
-export interface WorkspaceNode {
-  id: number;
-  parent_id: number | null;
-  node_type: "folder" | "resource";
+export interface WorkspaceEntry {
+  path: string;
+  name: string;
+  kind: "folder" | "blog" | "file";
   resource_type: string | null;
   resource_id: number | null;
-  blog_status?: string | null;
-  name: string;
-  slug: string;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
+  blog_status: string | null;
 }
 
 export interface RagSource {
@@ -33,96 +28,46 @@ async function unwrap(res: Response, fallback: string) {
   return res.json();
 }
 
-export async function getWorkspaceTree(): Promise<WorkspaceNode[]> {
+export async function getWorkspaceTree(): Promise<WorkspaceEntry[]> {
   const res = await apiFetch(`${API_BASE}/workspace/tree`);
-  const data = await unwrap(res, "加载工作区失败");
-  return (data?.nodes ?? []) as WorkspaceNode[];
+  const data = await unwrap(res, "加载工作目录失败");
+  return (data?.entries ?? []) as WorkspaceEntry[];
 }
 
-export async function createFolder(
-  name: string,
-  parentId: number | null = null,
-): Promise<WorkspaceNode> {
+export async function createFolder(name: string, parentPath: string | null = null): Promise<WorkspaceEntry> {
   const res = await apiFetch(`${API_BASE}/workspace/folders`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, parent_id: parentId }),
+    body: JSON.stringify({ name, parent_path: parentPath }),
   });
-  return (await unwrap(res, "创建文件夹失败")) as WorkspaceNode;
+  return (await unwrap(res, "创建文件夹失败")) as WorkspaceEntry;
 }
 
-export async function deleteNode(id: number): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/workspace/nodes/${id}`, { method: "DELETE" });
-  await unwrap(res, "删除失败");
-}
-
-export async function patchNode(
-  id: number,
-  patch: { name?: string },
-): Promise<WorkspaceNode> {
-  const res = await apiFetch(`${API_BASE}/workspace/nodes/${id}`, {
+export async function renameEntry(path: string, name: string): Promise<WorkspaceEntry> {
+  const res = await apiFetch(`${API_BASE}/workspace/entries`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
+    body: JSON.stringify({ path, name }),
   });
-  return (await unwrap(res, "更新失败")) as WorkspaceNode;
+  return (await unwrap(res, "重命名失败")) as WorkspaceEntry;
 }
 
-export async function moveNode(id: number, parentId: number | null): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/workspace/nodes/${id}/move`, {
+export async function moveEntry(path: string, targetPath: string | null): Promise<WorkspaceEntry> {
+  const res = await apiFetch(`${API_BASE}/workspace/entries/move`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ parent_id: parentId }),
+    body: JSON.stringify({ path, target_path: targetPath }),
   });
-  await unwrap(res, "移动失败");
+  return (await unwrap(res, "移动失败")) as WorkspaceEntry;
 }
 
-export async function reorderNodes(
-  parentId: number | null,
-  orderedIds: number[],
-): Promise<WorkspaceNode[]> {
-  const res = await apiFetch(`${API_BASE}/workspace/nodes/reorder`, {
-    method: "POST",
+export async function deleteFolder(path: string): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/workspace/folders`, {
+    method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ parent_id: parentId, ordered_ids: orderedIds }),
+    body: JSON.stringify({ path }),
   });
-  return ((await unwrap(res, "排序失败")) ?? []) as WorkspaceNode[];
-}
-
-export async function attachResource(
-  resourceType: string,
-  resourceId: number,
-  parentId: number,
-  name?: string,
-): Promise<WorkspaceNode> {
-  const res = await apiFetch(`${API_BASE}/workspace/resources/attach`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      resource_type: resourceType,
-      resource_id: resourceId,
-      parent_id: parentId,
-      ...(name ? { name } : {}),
-    }),
-  });
-  return (await unwrap(res, "挂靠失败")) as WorkspaceNode;
-}
-
-export async function moveResource(
-  resourceType: string,
-  resourceId: number,
-  parentId: number,
-): Promise<WorkspaceNode> {
-  const res = await apiFetch(`${API_BASE}/workspace/resources/${resourceType}/${resourceId}/move`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ new_parent_id: parentId }),
-  });
-  return (await unwrap(res, "移动失败")) as WorkspaceNode;
-}
-
-export async function detachResource(resourceType: string, resourceId: number): Promise<void> {
-  await apiFetch(`${API_BASE}/workspace/resources/${resourceType}/${resourceId}`, { method: "DELETE" });
+  await unwrap(res, "删除文件夹失败");
 }
 
 export interface AiKnowledgeJoinResult {
@@ -143,7 +88,8 @@ export async function joinAiKnowledge(
 }
 
 export async function leaveAiKnowledge(resourceType: string, resourceId: number): Promise<void> {
-  await apiFetch(`${API_BASE}/workspace/ai-knowledge/${resourceType}/${resourceId}`, { method: "DELETE" });
+  const res = await apiFetch(`${API_BASE}/workspace/ai-knowledge/${resourceType}/${resourceId}`, { method: "DELETE" });
+  await unwrap(res, "移除 AI 知识失败");
 }
 
 export async function listAiKnowledge(): Promise<RagSource[]> {

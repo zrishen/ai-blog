@@ -191,15 +191,23 @@ async def _without_soft_deleted_sources(
     db: AsyncSession, sources: list[RagSourceModel]
 ) -> list[RagSourceModel]:
     """剔除底层资源已软删（进回收站）的 RAG 源，使 AI 知识与删除状态一致；恢复后自动重现。"""
-    from src.services.workspace.resource_service import soft_deleted_resource_ids
-
     by_type: dict[str, list[int]] = {}
     for s in sources:
         if s.resource_id is not None:
             by_type.setdefault(s.resource_type, []).append(s.resource_id)
     hidden: set[tuple[str, int]] = set()
     for rtype, rids in by_type.items():
-        for rid in await soft_deleted_resource_ids(db, rtype, rids):
+        if rtype == "blog_post":
+            stmt = select(BlogPostModel.id).where(
+                BlogPostModel.id.in_(rids), BlogPostModel.deleted_at.is_not(None)
+            )
+        elif rtype == "file":
+            stmt = select(FileDocumentModel.id).where(
+                FileDocumentModel.id.in_(rids), FileDocumentModel.deleted_at.is_not(None)
+            )
+        else:
+            continue
+        for rid in (await db.execute(stmt)).scalars():
             hidden.add((rtype, rid))
     if not hidden:
         return sources

@@ -34,7 +34,7 @@ async def test_init_db_builds_full_schema_and_is_idempotent(monkeypatch):
                 assert {
                     "users", "conversations", "messages", "blog_posts", "blog_post_revisions",
                     "file_documents", "file_processing_jobs", "redemption_codes",
-                    "subscription_weekly_usage", "workspace_nodes", "rag_sources",
+                    "subscription_weekly_usage", "rag_sources",
                     "platform_plugins", "llm_settings", "public_chat_daily_usage",
                     "web_tool_daily_usage",
                 }.issubset(tables)
@@ -56,6 +56,7 @@ async def test_init_db_builds_full_schema_and_is_idempotent(monkeypatch):
                 rag_source_columns = {column["name"]: column for column in insp.get_columns("rag_sources")}
                 assert rag_source_columns["indexed_version"]["type"].length == 64
                 assert "alembic_version" in tables
+                assert "workspace_nodes" not in tables
             async with eng.connect() as conn:
                 await conn.run_sync(check)
 

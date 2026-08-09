@@ -15,8 +15,6 @@ export function workspaceReducer(state: ChatState, action: ChatAction): ChatStat
             : node,
         ),
       };
-    case "SET_WORKSPACE_SELECTED_FOLDER":
-      return { ...state, workspaceSelectedFolderId: action.payload };
     case "SET_WORKSPACE_SELECTED_VIEW":
       return { ...state, workspaceSelectedView: action.payload };
     case "SET_WORKSPACE_EDITING_BLOG":

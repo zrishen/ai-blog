@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
 import type { BrainStats } from "@/api/brain";
-import type { WorkspaceNode } from "@/api/workspace";
+import type { WorkspaceEntry } from "@/api/workspace";
 import type { ThinkingMode } from "@/api/chat";
 import type {
   AISidebarConversationKey,
@@ -70,8 +70,7 @@ interface ChatState {
   // 工作区内联预览选中的文件路径（FilePreviewView）
   fileSelectedFile: string | null;
 
-  workspaceTree: WorkspaceNode[];
-  workspaceSelectedFolderId: number | null;
+  workspaceTree: WorkspaceEntry[];
   workspaceSelectedView: WorkspaceView;
   // 工作区内联编辑的博客 id（null=不在编辑，显示视图列表）
   workspaceEditingBlogId: number | null;
@@ -138,9 +137,8 @@ type ChatAction =
   | { type: "APPEND_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string; replacementDelta: string } }
   | { type: "CLEAR_BLOG_PATCH_STREAMING"; payload: { postId: number; runId: string } }
   | { type: "SET_FILE_SELECTED_FILE"; payload: string | null }
-  | { type: "SET_WORKSPACE_TREE"; payload: WorkspaceNode[] }
+  | { type: "SET_WORKSPACE_TREE"; payload: WorkspaceEntry[] }
   | { type: "SET_WORKSPACE_BLOG_STATUS"; payload: { id: number; status: string } }
-  | { type: "SET_WORKSPACE_SELECTED_FOLDER"; payload: number | null }
   | { type: "SET_WORKSPACE_SELECTED_VIEW"; payload: WorkspaceView }
   | { type: "INCREMENT_FILE_LIBRARY_REVISION" }
   | { type: "INCREMENT_FILE_RESTORE_REVISIONS" }
@@ -185,7 +183,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         blogPatchStreamingByPostId: {},
         fileSelectedFile: null,
         workspaceTree: [],
-        workspaceSelectedFolderId: null,
         workspaceSelectedView: "overview",
         workspaceEditingBlogId: null,
         brainTab: "graph",
@@ -209,18 +206,11 @@ function getInitialPage(): Page {
 }
 
 // 工作区选中视图/目录持久化：刷新页面后恢复上次位置，不回退到「全部」。
-const WS_VIEWS: WorkspaceView[] = ["overview", "drafts", "published", "ai_knowledge", "inbox", "trash"];
+const WS_VIEWS: WorkspaceView[] = ["overview", "drafts", "published", "ai_knowledge", "trash"];
 function loadWorkspaceView(): WorkspaceView {
   const v = localStorage.getItem("ws_view");
   return v && WS_VIEWS.includes(v as WorkspaceView) ? (v as WorkspaceView) : "overview";
 }
-function loadWorkspaceFolder(): number | null {
-  const raw = localStorage.getItem("ws_folder");
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
-
 const initialState: ChatState = {
   theme: savedTheme,
 
@@ -254,7 +244,6 @@ const initialState: ChatState = {
   fileSelectedFile: null,
 
   workspaceTree: [],
-  workspaceSelectedFolderId: loadWorkspaceFolder(),
   workspaceSelectedView: loadWorkspaceView(),
   workspaceEditingBlogId: null,
 
@@ -280,11 +269,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     localStorage.setItem("ws_view", state.workspaceSelectedView);
   }, [state.workspaceSelectedView]);
-  useEffect(() => {
-    if (state.workspaceSelectedFolderId == null) localStorage.removeItem("ws_folder");
-    else localStorage.setItem("ws_folder", String(state.workspaceSelectedFolderId));
-  }, [state.workspaceSelectedFolderId]);
-
   useEffect(() => {
     const handleAuthLogout = () => dispatch({ type: "LOGOUT" });
     window.addEventListener("auth:logout", handleAuthLogout);

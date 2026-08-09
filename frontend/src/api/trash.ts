@@ -4,8 +4,7 @@ import type { FileProcessingJob } from "./files";
 export type TrashItemType =
   | "conversation"
   | "file_document"
-  | "blog_post"
-  | "workspace_folder";
+  | "blog_post";
 
 export interface TrashItem {
   type: TrashItemType;

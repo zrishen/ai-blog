@@ -73,7 +73,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
   } = useWorkspacePrimaryNavigation();
   const goTrash = () => {
     dispatch({ type: "SET_WORKSPACE_SELECTED_VIEW", payload: "trash" });
-    dispatch({ type: "SET_WORKSPACE_SELECTED_FOLDER", payload: null });
     dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null });
     navigate("/workspace");
   };

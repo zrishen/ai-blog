@@ -19,6 +19,7 @@ from src.database.models import BlogCategory, BlogPost
 from src.services.workspace.blog.blog_document_store import (
     BlogDocument,
     blog_document_path,
+    default_blog_document_path,
     read_blog_document,
     write_blog_document,
 )
@@ -44,8 +45,8 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _relative_path(slug: str) -> str:
-    return f"posts/{slug}.md"
+def _relative_path(post: BlogPost) -> str:
+    return post.file_path or default_blog_document_path(post.slug)
 
 
 async def _category_slug(db: AsyncSession, post: BlogPost) -> str | None:
@@ -101,8 +102,17 @@ async def _get_owned_post_for_update(
     ).scalar_one_or_none()
 
 
-async def _read_and_hash(user_id: int, slug: str) -> tuple[BlogDocument, str]:
-    document = await asyncio.to_thread(read_blog_document, user_id, slug)
+async def _read_and_hash(
+    user_id: int,
+    relative_path: str,
+    expected_slug: str,
+) -> tuple[BlogDocument, str]:
+    document = await asyncio.to_thread(
+        read_blog_document,
+        user_id,
+        relative_path,
+        expected_slug=expected_slug,
+    )
     return document, hashlib.sha256(document.body.encode("utf-8")).hexdigest()
 
 
@@ -125,12 +135,12 @@ async def _verify_existing(
     post: BlogPost,
     expected: BlogDocument,
 ) -> tuple[str, str]:
-    document, digest = await _read_and_hash(post.user_id, post.slug)
-    relative_path = _relative_path(post.slug)
+    relative_path = _relative_path(post)
+    document, digest = await _read_and_hash(post.user_id, relative_path, post.slug)
     if document != expected:
         raise BlogDocumentBackfillError("Verified blog document no longer matches the legacy working copy")
     if post.file_path != relative_path:
-        raise BlogDocumentBackfillError("Verified blog document has a non-canonical file path")
+        raise BlogDocumentBackfillError("Verified blog document path is inconsistent")
     if post.content_sha256 != digest:
         raise BlogDocumentBackfillError("Verified blog document SHA-256 does not match the database")
     return relative_path, digest
@@ -269,14 +279,15 @@ async def backfill_blog_post_document(
 
     try:
         expected = await _document_from_post(db, post)
-        path = await asyncio.to_thread(write_blog_document, post.user_id, expected)
-        read_back, digest = await _read_and_hash(post.user_id, post.slug)
+        relative_path = _relative_path(post)
+        path = await asyncio.to_thread(write_blog_document, post.user_id, relative_path, expected)
+        read_back, digest = await _read_and_hash(post.user_id, relative_path, post.slug)
         if read_back != expected:
             raise BlogDocumentBackfillError("Blog document read-back does not match the legacy working copy")
-        if path != blog_document_path(post.user_id, post.slug):
-            raise BlogDocumentBackfillError("Blog document was written outside its canonical path")
+        if path != blog_document_path(post.user_id, relative_path):
+            raise BlogDocumentBackfillError("Blog document was written outside its managed path")
 
-        post.file_path = _relative_path(post.slug)
+        post.file_path = relative_path
         post.content_storage_state = "verified"
         post.content_sha256 = digest
         post.file_migrated_at = _utcnow()

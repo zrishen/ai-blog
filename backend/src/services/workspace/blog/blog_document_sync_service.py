@@ -11,7 +11,6 @@ def invalidate_verified_document(post: BlogPost) -> None:
     """Clear the derived document marker before the next canonical write."""
 
     post.content_storage_state = "legacy"
-    post.file_path = None
     post.content_sha256 = None
     post.file_migrated_at = None
     post.last_storage_error = None

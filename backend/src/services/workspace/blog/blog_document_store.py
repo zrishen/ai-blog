@@ -1,8 +1,8 @@
 """Canonical filesystem storage for editable blog documents.
 
-This module deliberately accepts an owner id and a validated slug, never a
-caller-supplied filesystem path.  Higher-level blog services will be wired to
-it in a later phase.
+This module accepts only a guarded workspace-relative path.  A blog slug stays
+inside frontmatter as stable article identity; it is no longer the filesystem
+location once users organize documents into real directories.
 """
 
 from __future__ import annotations
@@ -13,7 +13,8 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from src.core.exceptions import NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import workspace_dir, workspace_path
@@ -34,6 +35,7 @@ _FRONTMATTER_FIELDS = (
 _SLUG_RE = re.compile(r"[^\W_]+(?:-[^\W_]+)*", re.UNICODE)
 _MAX_SLUG_LENGTH = 200
 _MAX_CATEGORY_SLUG_LENGTH = 100
+_MAX_RELATIVE_PATH_LENGTH = 500
 _VALID_STATUSES = {"draft", "published"}
 _CREATED_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 _CREATED_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z")
@@ -139,23 +141,65 @@ class BlogDocument:
         object.__setattr__(self, "body", self.body.replace("\r\n", "\n").replace("\r", "\n"))
 
 
-def blog_document_path(user_id: int, slug: str) -> Path:
-    """Return a guarded ``posts/<slug>.md`` path without creating anything."""
+def default_blog_document_path(slug: str) -> str:
+    """Return the initial workspace-relative location for a new article."""
 
-    slug = _validate_slug(slug)
-    return workspace_path(user_id, f"posts/{slug}.md")
+    return f"posts/{_validate_slug(slug)}.md"
 
 
-def _posts_dir(user_id: int) -> Path:
+def validate_blog_document_path(relative_path: str) -> str:
+    """Validate a managed Markdown path without accepting host-specific paths."""
+
+    if not isinstance(relative_path, str) or not relative_path or len(relative_path) > _MAX_RELATIVE_PATH_LENGTH:
+        raise ValidationFailedError("Blog document path is invalid")
+    if "\\" in relative_path:
+        raise ValidationFailedError("Blog document path is invalid")
+    path = PurePosixPath(relative_path)
+    if (
+        path.is_absolute()
+        or relative_path != path.as_posix()
+        or path.name.startswith(".")
+        or path.suffix.lower() != ".md"
+        or any(part in {"", ".", ".."} or part.startswith(".") for part in path.parts)
+    ):
+        raise ValidationFailedError("Blog document path is invalid")
+    return path.as_posix()
+
+
+def _managed_relative_path(relative_path: str) -> str:
+    """Accept the historical bare slug while callers transition to real paths."""
+
+    if (
+        isinstance(relative_path, str)
+        and "/" not in relative_path
+        and "\\" not in relative_path
+        and not relative_path.endswith(".md")
+    ):
+        return default_blog_document_path(relative_path)
+    return validate_blog_document_path(relative_path)
+
+
+def blog_document_path(
+    user_id: int,
+    relative_path: str,
+    *,
+    mode: Literal["read", "write"] = "read",
+) -> Path:
+    """Resolve one managed Markdown path through the workspace guard."""
+
+    return workspace_path(user_id, _managed_relative_path(relative_path), mode=mode)
+
+
+def _document_parent_dir(user_id: int, relative_path: str) -> Path:
     root = workspace_dir(user_id, create=True)
-    posts_dir = root / "posts"
+    directory = root / PurePosixPath(relative_path).parent
     try:
-        posts_dir.mkdir(exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise BlogDocumentStorageError("Unable to create the controlled posts directory") from exc
-    if posts_dir.is_symlink() or not posts_dir.is_dir():
-        raise OwnershipError("Blog posts directory is not a safe directory")
-    return posts_dir
+        raise BlogDocumentStorageError("Unable to create the controlled document directory") from exc
+    if directory.is_symlink() or not directory.is_dir():
+        raise OwnershipError("Blog document directory is not a safe directory")
+    return directory
 
 
 def _serialize(document: BlogDocument) -> str:
@@ -177,7 +221,7 @@ def _serialize(document: BlogDocument) -> str:
     return frontmatter + document.body
 
 
-def _parse(text: str, expected_slug: str) -> BlogDocument:
+def _parse(text: str, expected_slug: str | None = None) -> BlogDocument:
     if not text.startswith("---\n"):
         raise BlogDocumentCorruptError("Blog document frontmatter is missing")
 
@@ -223,16 +267,29 @@ def _parse(text: str, expected_slug: str) -> BlogDocument:
     except ValidationFailedError as exc:
         raise BlogDocumentCorruptError("Blog document frontmatter values are invalid") from exc
 
-    if document.slug != expected_slug or _serialize(document) != text:
+    if (expected_slug is not None and document.slug != expected_slug) or _serialize(document) != text:
         raise BlogDocumentCorruptError("Blog document does not match its controlled path")
     return document
 
 
-def read_blog_document(user_id: int, slug: str) -> BlogDocument:
-    """Read one managed document without creating an owner or ``posts`` directory."""
+def read_blog_document(
+    user_id: int,
+    relative_path: str,
+    *,
+    expected_slug: str | None = None,
+) -> BlogDocument:
+    """Read one managed document without creating an owner or parent directory."""
 
-    slug = _validate_slug(slug)
-    path = blog_document_path(user_id, slug)
+    is_legacy_slug = (
+        isinstance(relative_path, str)
+        and "/" not in relative_path
+        and "\\" not in relative_path
+        and not relative_path.endswith(".md")
+    )
+    if expected_slug is None and is_legacy_slug:
+        expected_slug = relative_path
+    relative_path = _managed_relative_path(relative_path)
+    path = blog_document_path(user_id, relative_path)
     if path.is_symlink():
         raise OwnershipError("Blog document must not be a symbolic link")
     if not path.exists():
@@ -245,7 +302,7 @@ def read_blog_document(user_id: int, slug: str) -> BlogDocument:
         raise BlogDocumentCorruptError("Blog document is not valid UTF-8") from exc
     except OSError as exc:
         raise BlogDocumentStorageError("Blog document could not be read") from exc
-    return _parse(text, slug)
+    return _parse(text, expected_slug)
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -279,14 +336,21 @@ def _atomic_write(path: Path, content: str) -> None:
             pass
 
 
-def write_blog_document(user_id: int, document: BlogDocument) -> Path:
-    """Atomically write one document to its only permitted workspace location."""
+def write_blog_document(
+    user_id: int,
+    relative_path: str | BlogDocument,
+    document: BlogDocument | None = None,
+) -> Path:
+    """Atomically write a document to its managed workspace-relative location."""
 
-    if not isinstance(document, BlogDocument):
+    if document is None and isinstance(relative_path, BlogDocument):
+        document = relative_path
+        relative_path = default_blog_document_path(document.slug)
+    if not isinstance(document, BlogDocument) or not isinstance(relative_path, str):
         raise ValidationFailedError("Blog document payload is invalid")
-    _validate_slug(document.slug)
-    _posts_dir(user_id)
-    path = workspace_path(user_id, f"posts/{document.slug}.md", mode="write")
+    relative_path = _managed_relative_path(relative_path)
+    _document_parent_dir(user_id, relative_path)
+    path = blog_document_path(user_id, relative_path, mode="write")
     if path.is_symlink():
         raise OwnershipError("Blog document must not be a symbolic link")
     _atomic_write(path, _serialize(document))

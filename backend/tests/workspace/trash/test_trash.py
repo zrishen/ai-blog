@@ -215,7 +215,6 @@ async def test_file_document_restore_requires_source_file(client: AsyncClient, d
         "src.services.workspace.trash.trash_service.get_user_upload_dir",
         lambda uid: fake_dir,
     )
-
     restore = await client.post(f"/api/v1/trash/file_document/{doc_id}/restore")
     assert restore.status_code == 409
 
@@ -534,83 +533,4 @@ async def test_empty_trash_partial_keeps_failed_item(client: AsyncClient, monkey
     assert any(
         item["type"] == "conversation" and item["id"] == conv_id
         for item in trash.json()["items"]
-    )
-
-
-# ─────────── WorkspaceFolder ───────────
-
-
-@pytest.mark.asyncio
-async def test_folder_soft_delete_restore_via_trash(client: AsyncClient):
-    """删文件夹→回收站见 folder（子 folder 不重复列）→恢复→目录回到 tree。"""
-    root_resp = await client.post(
-        "/api/v1/workspace/folders",
-        json={"name": "根目录", "parent_id": None},
-    )
-    root_id = root_resp.json()["id"]
-    child_resp = await client.post(
-        "/api/v1/workspace/folders",
-        json={"name": "子目录", "parent_id": root_id},
-    )
-    child_id = child_resp.json()["id"]
-
-    await client.delete(f"/api/v1/workspace/nodes/{root_id}")
-
-    trash = await client.get("/api/v1/trash")
-    items = trash.json()["items"]
-    assert any(i["type"] == "workspace_folder" and i["id"] == root_id for i in items)
-    assert all(not (i["type"] == "workspace_folder" and i["id"] == child_id) for i in items)
-
-    restore = await client.post(f"/api/v1/trash/workspace_folder/{root_id}/restore")
-    assert restore.status_code == 200
-
-    tree = await client.get("/api/v1/workspace/tree")
-    node_ids = {n["id"] for n in tree.json()["nodes"]}
-    assert root_id in node_ids and child_id in node_ids
-
-
-@pytest.mark.asyncio
-async def test_folder_purge_via_trash(client: AsyncClient, db_session: AsyncSession):
-    """永久删除文件夹→WorkspaceNode 行全消失。"""
-    from src.database.models import WorkspaceNode
-
-    root_resp = await client.post(
-        "/api/v1/workspace/folders",
-        json={"name": "purge-root", "parent_id": None},
-    )
-    root_id = root_resp.json()["id"]
-    await client.post(
-        "/api/v1/workspace/folders",
-        json={"name": "purge-child", "parent_id": root_id},
-    )
-    await client.delete(f"/api/v1/workspace/nodes/{root_id}")
-
-    resp = await client.delete(f"/api/v1/trash/workspace_folder/{root_id}")
-    assert resp.status_code == 200
-
-    db_session.expire_all()
-    nodes = (await db_session.execute(select(WorkspaceNode))).scalars().all()
-    assert all(n.id != root_id for n in nodes)
-
-
-@pytest.mark.asyncio
-async def test_empty_trash_includes_folder(client: AsyncClient):
-    """清空回收站覆盖 workspace_folder。"""
-    root_resp = await client.post(
-        "/api/v1/workspace/folders",
-        json={"name": "empty-root", "parent_id": None},
-    )
-    root_id = root_resp.json()["id"]
-    await client.delete(f"/api/v1/workspace/nodes/{root_id}")
-
-    resp = await client.delete("/api/v1/trash")
-    assert resp.status_code == 200
-    assert any(
-        d["type"] == "workspace_folder" and d["id"] == root_id for d in resp.json()["deleted"]
-    )
-
-    trash = await client.get("/api/v1/trash")
-    assert all(
-        not (i["type"] == "workspace_folder" and i["id"] == root_id)
-        for i in trash.json()["items"]
     )

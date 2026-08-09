@@ -866,10 +866,7 @@ async def _finalize_success(
         doc.deleted_at = None
         doc.chunk_content = f"{len(chunks)} chunks"
         job.result_document_id = doc.id
-        # 还原后统一回未分类（inbox）：清掉原工作区挂靠点，不论原先挂在哪个目录
-        from src.services.workspace.resource_service import detach_resource_if_any
-
-        await detach_resource_if_any(db, job.user_id, "file", doc.id)
+        # 文件系统位置不由虚拟归档关系管理；恢复只恢复资源本身。
 
     progress["stages"]["finalize"] = {"completed": 1, "total": 1, "unit": "transaction"}
     progress["current_stage"] = "finalize"

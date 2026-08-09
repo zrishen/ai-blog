@@ -1,4 +1,4 @@
-"""工作区组织层 schema：目录树节点 + 资源挂靠 + AI 知识源。"""
+"""Filesystem-native workspace and AI-knowledge request/response schemas."""
 
 from datetime import datetime
 from typing import Annotated, Optional
@@ -7,70 +7,40 @@ from pydantic import BaseModel, Field
 
 from src.schemas.file_processing import FileProcessingJobResponse
 
-
-# ---- 目录树 ----
-
-# 文件夹名上限对齐 database/models/workspace.py 的 workspace_nodes.name(String(300))，
-# 超长在入口直接 422，避免透传到 db.commit() 触发 StringDataRightTruncation → 500。
-NodeName = Annotated[str, Field(max_length=300)]
+EntryName = Annotated[str, Field(max_length=300)]
+WorkspacePath = Annotated[str, Field(max_length=500)]
 
 
 class FolderCreate(BaseModel):
-    name: NodeName
-    parent_id: Optional[int] = None
+    name: EntryName
+    parent_path: Optional[WorkspacePath] = None
 
 
-class NodePatch(BaseModel):
-    """就地改文件夹属性（改名）。移动走 /move 端点（含防环）。"""
-    name: Optional[NodeName] = None
+class EntryPatch(BaseModel):
+    path: WorkspacePath
+    name: EntryName
 
 
-class NodeMove(BaseModel):
-    parent_id: Optional[int] = None
-    sort_order: Optional[int] = None
+class EntryMove(BaseModel):
+    path: WorkspacePath
+    target_path: Optional[WorkspacePath] = None
 
 
-class ReorderRequest(BaseModel):
-    """同级节点重排（folder/resource 各自在其层级内排）。"""
-    parent_id: Optional[int] = None
-    ordered_ids: list[int]
+class EntryDelete(BaseModel):
+    path: WorkspacePath
 
 
-class WorkspaceNodeResponse(BaseModel):
-    id: int
-    parent_id: Optional[int] = None
-    node_type: str
+class WorkspaceEntryResponse(BaseModel):
+    path: str
+    name: str
+    kind: str
     resource_type: Optional[str] = None
     resource_id: Optional[int] = None
     blog_status: Optional[str] = None
-    name: str
-    slug: str
-    sort_order: int
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class WorkspaceTreeResponse(BaseModel):
-    nodes: list[WorkspaceNodeResponse]
-
-
-# ---- 资源挂靠 ----
-
-
-class AttachRequest(BaseModel):
-    resource_type: str
-    resource_id: int
-    parent_id: int
-    name: Optional[NodeName] = None
-
-
-class MoveResourceRequest(BaseModel):
-    new_parent_id: int
-
-
-# ---- AI 知识 ----
+    entries: list[WorkspaceEntryResponse]
 
 
 class RagJoinRequest(BaseModel):
@@ -93,7 +63,5 @@ class RagSourceResponse(BaseModel):
 
 
 class RagJoinResponse(BaseModel):
-    """加入 AI 知识的响应：RagSource（已建 pending）+ 异步索引 job（file/blog_post）。"""
-
     rag_source: RagSourceResponse
     job: Optional[FileProcessingJobResponse] = None

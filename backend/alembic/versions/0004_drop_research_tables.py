@@ -18,8 +18,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 先清理 workspace_nodes / rag_sources 中指向 research 资源的悬空挂靠行
-    op.execute("DELETE FROM workspace_nodes WHERE resource_type IN ('research_topic', 'research_claim')")
+    # 新建库的 0001 baseline 已不再包含虚拟工作区表；旧库仍需清理其研究资源挂靠。
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF to_regclass('workspace_nodes') IS NOT NULL THEN
+                DELETE FROM workspace_nodes
+                WHERE resource_type IN ('research_topic', 'research_claim');
+            END IF;
+        END $$;
+        """
+    )
     op.execute("DELETE FROM rag_sources WHERE resource_type IN ('research_topic', 'research_claim')")
 
     # 按 FK 反序 drop 11 张 research 表

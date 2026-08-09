@@ -14,7 +14,7 @@ from typing import Any, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.path_guard import attachment_stored_path
@@ -26,7 +26,6 @@ from src.database.models import (
     FileDocument as FileDocumentModel,
     FileProcessingJob,
     Message as MessageModel,
-    WorkspaceNode as WorkspaceNodeModel,
 )
 from src.schemas.trash import (
     TrashDeleteItemRef,
@@ -41,12 +40,11 @@ from src.services.workspace.file.file_processing_service import (
 from src.services.workspace.file.file_service import get_user_upload_dir
 from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 from src.services.workspace import rag_service
-from src.services.workspace.resource_service import detach_resource_if_any
 
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_TYPES = {"conversation", "file_document", "blog_post", "workspace_folder"}
+SUPPORTED_TYPES = {"conversation", "file_document", "blog_post"}
 
 
 def _now() -> datetime:
@@ -240,32 +238,6 @@ async def list_trash(db: AsyncSession, *, user_id: int) -> list[TrashItem]:
             continue
         items.append(TrashItem(type="blog_post", id=p.id, name=p.title, deleted_at=p.deleted_at))
 
-    # 工作区文件夹：只列「删除根」（软删且父级未软删），连带软删的子 folder 不重复出现
-    soft_folder_ids_stmt = select(WorkspaceNodeModel.id).where(
-        WorkspaceNodeModel.user_id == user_id,
-        WorkspaceNodeModel.node_type == "folder",
-        WorkspaceNodeModel.deleted_at.is_not(None),
-    )
-    folders = (
-        await db.execute(
-            select(WorkspaceNodeModel).where(
-                WorkspaceNodeModel.user_id == user_id,
-                WorkspaceNodeModel.node_type == "folder",
-                WorkspaceNodeModel.deleted_at.is_not(None),
-                or_(
-                    WorkspaceNodeModel.parent_id.is_(None),
-                    ~WorkspaceNodeModel.parent_id.in_(soft_folder_ids_stmt),
-                ),
-            )
-        )
-    ).scalars().all()
-    for f in folders:
-        if f.deleted_at is None:
-            continue
-        items.append(
-            TrashItem(type="workspace_folder", id=f.id, name=f.name, deleted_at=f.deleted_at)
-        )
-
     items.sort(
         key=lambda it: it.deleted_at.timestamp() if it.deleted_at else 0.0,
         reverse=True,
@@ -321,8 +293,6 @@ async def _restore_blog_post(db: AsyncSession, *, item_id: int, user_id: int) ->
     deleted_at = post.deleted_at
 
     post.deleted_at = None
-    # 还原后统一回未分类（inbox）：清掉原工作区挂靠点，不论原先挂在哪个目录
-    await detach_resource_if_any(db, user_id, "blog_post", item_id)
     await db.commit()
     await db.refresh(post)
     return TrashItem(type="blog_post", id=post.id, name=post.title, deleted_at=deleted_at)
@@ -357,24 +327,6 @@ async def _restore_file_document(db: AsyncSession, *, item_id: int, user_id: int
     return job
 
 
-async def _restore_folder(db: AsyncSession, *, item_id: int, user_id: int) -> TrashItem:
-    """恢复工作区文件夹子树（目录 + 挂靠关系），委托 node_service.restore_subtree。"""
-    from src.services.workspace.node_service import restore_subtree
-
-    node = await db.get(WorkspaceNodeModel, item_id)
-    if (
-        node is None
-        or node.user_id != user_id
-        or node.deleted_at is None
-        or node.node_type != "folder"
-    ):
-        raise _not_found_error()
-    name = node.name
-    deleted_at = node.deleted_at
-    await restore_subtree(db, user_id, node)
-    return TrashItem(type="workspace_folder", id=item_id, name=name, deleted_at=deleted_at)
-
-
 async def restore_item(
     db: AsyncSession,
     *,
@@ -388,8 +340,6 @@ async def restore_item(
         return await _restore_conversation(db, item_id=item_id, user_id=user_id)
     if item_type == "file_document":
         return await _restore_file_document(db, item_id=item_id, user_id=user_id)
-    if item_type == "workspace_folder":
-        return await _restore_folder(db, item_id=item_id, user_id=user_id)
     return await _restore_blog_post(db, item_id=item_id, user_id=user_id)
 
 
@@ -658,22 +608,6 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
             )
 
 
-async def _purge_folder(db: AsyncSession, *, item_id: int, user_id: int) -> None:
-    """永久删除工作区文件夹子树，委托 node_service.purge_subtree（底层资源不动，回未分类）。"""
-    from src.services.workspace.node_service import purge_subtree
-
-    node = await db.get(WorkspaceNodeModel, item_id)
-    if (
-        node is None
-        or node.user_id != user_id
-        or node.deleted_at is None
-        or node.node_type != "folder"
-    ):
-        raise _not_found_error()
-    await purge_subtree(db, item_id)
-    await db.commit()
-
-
 async def purge_item(
     db: AsyncSession,
     *,
@@ -687,8 +621,6 @@ async def purge_item(
         return await _purge_conversation(db, item_id=item_id, user_id=user_id)
     if item_type == "file_document":
         return await _purge_file_document(db, item_id=item_id, user_id=user_id)
-    if item_type == "workspace_folder":
-        return await _purge_folder(db, item_id=item_id, user_id=user_id)
     return await _purge_blog_post(db, item_id=item_id, user_id=user_id)
 
 
