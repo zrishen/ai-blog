@@ -1,0 +1,66 @@
+name: Deploy
+
+# 持续交付：CI("CI" workflow) 在 master 上跑绿后自动触发；但部署前在
+# environment: production 处暂停，等审批人点 Approve 才真正上线（手动最后一道闸）。
+# workflow_dispatch 保留手动触发，可指定 ref 用于回滚或首次验证。
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "部署目标（默认 origin/master；回滚填 tag 或 commit hash）"
+        default: "origin/master"
+        required: true
+
+# 部署串行，不互相打断（避免两个 deploy 同时 SSH 重建容器）
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # 自动档：仅 CI 成功且来自 master 才部署（PR 的 CI 绿不会触发生产部署）；
+    # 手动档：workflow_dispatch 直接放行
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'master')
+    # 关键：在此暂停等人审批。需先在 Settings → Environments 建 production
+    # 并勾 Required reviewers，否则不会暂停、直接部署。
+    environment: production
+    steps:
+      - name: SSH 部署到腾讯云
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          command_timeout: 30m   # docker compose build 可能耗时，默认 10s 会超时
+          envs: REF, DEPLOY_PATH
+          script: |
+            set -e
+            cd "$DEPLOY_PATH"
+            git fetch --all --prune
+            git reset --hard "$REF"
+            echo "--- 构建镜像 ---"
+            docker compose build
+            echo "--- 滚动重启（db/向量库不动）---"
+            docker compose up -d --remove-orphans
+            echo "--- 健康检查（最多等 60s）---"
+            for i in $(seq 1 12); do
+              if curl -fsS http://127.0.0.1/health >/dev/null; then
+                echo "✅ 健康检查通过"
+                break
+              fi
+              echo "  等 backend 启动... ($i/12)"
+              [ "$i" = "12" ] && exit 1
+              sleep 5
+            done
+            docker compose ps
+        env:
+          REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}

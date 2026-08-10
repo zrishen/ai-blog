@@ -66,3 +66,41 @@ jobs:
 
       - name: Pytest（单元测试 + 覆盖率）
         run: uv run pytest
+
+  # AI 代码审查（阿里 OpenCodeReview，命令 ocr）。默认关闭，避免未配 LLM key 时白跑/花钱：
+  # 仅当 PR 且仓库变量 OCR_ENABLED=true 才触发；不填 key 时 job 直接 skip。
+  # 启用：Secrets 填 OCR_LLM_URL/OCR_LLM_KEY/OCR_LLM_MODEL，Variables 把 OCR_ENABLED 设 true
+  code-review:
+    name: OCR · AI 代码审查
+    if: github.event_name == 'pull_request' && vars.OCR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # 给 PR 发行级评论
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # ocr 靠 git diff，要完整历史
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 安装 OpenCodeReview
+        run: npm install -g @alibaba-group/open-code-review
+
+      # config key 名以官方 Configuration 文档（open-codereview.ai/docs）为准，启用前核对一次
+      - name: 配置 LLM（OpenAI 兼容端点）
+        run: |
+          ocr config set llm.url "${LLM_URL}"
+          ocr config set llm.apiKey "${LLM_KEY}"
+          ocr config set llm.model "${LLM_MODEL}"
+        env:
+          LLM_URL: ${{ secrets.OCR_LLM_URL }}
+          LLM_KEY: ${{ secrets.OCR_LLM_KEY }}
+          LLM_MODEL: ${{ secrets.OCR_LLM_MODEL }}
+
+      - name: 审查 feature → base 的改动
+        run: ocr review --from "origin/${{ github.base_ref }}" --to HEAD
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
