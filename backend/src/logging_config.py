@@ -1,9 +1,13 @@
-"""后端日志系统配置：控制台 + 轮转文件分流（app.log 收 src.* 自有代码，http.log 收框架/第三方）。"""
+"""后端日志系统配置：控制台彩色文本 + 轮转文件 JSON（app.log 收 src.* 自有代码，http.log 收框架/第三方）。
+
+文件日志为 JSON 结构化（带 request_id），便于 AI / 日志工具按字段检索与关联；控制台保留彩色文本给人实时看。
+"""
 
 import logging
 import logging.handlers
 import sys
 from src.config import DATA_DIR
+from src.core.context import request_id_cv
 
 LOG_DIR = DATA_DIR / "logs"
 LOG_FILE = LOG_DIR / "app.log"
@@ -29,12 +33,12 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
-class _FileFormatter(logging.Formatter):
-    """文件日志格式化器：将消息中的换行符替换为空格，确保每行一条日志。"""
+class _RequestIdFilter(logging.Filter):
+    """把当前请求 id（contextvar）注入每条日志的 record.request_id，供格式化器输出。"""
 
-    def format(self, record: logging.LogRecord) -> str:
-        result = super().format(record)
-        return result.replace("\n", " ").replace("\r", " ")
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_cv.get() or "-"
+        return True
 
 
 class _ColoredFormatter(logging.Formatter):
@@ -71,21 +75,30 @@ class _OriginFilter(logging.Filter):
 logging.basicConfig = lambda *_, **__: None  # noqa: F841  # type: ignore[assignment]
 
 
-def setup_logging(level: str = "INFO") -> None:
-    """初始化日志系统：控制台 + 轮转文件（app.log + http.log 分流）。"""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
+def _json_formatter() -> logging.Formatter:
+    """结构化 JSON formatter：每行一个 JSON，含 timestamp/level/logger/message/request_id。"""
+    from pythonjsonlogger.json import JsonFormatter
 
-    fmt = _FileFormatter(
-        "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
+    return JsonFormatter(
+        "%(asctime)s %(levelname)s %(name)s %(message)s %(request_id)s",
+        rename_fields={"asctime": "timestamp", "levelname": "level", "name": "logger"},
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+
+def setup_logging(level: str = "INFO") -> None:
+    """初始化日志系统：控制台彩色 + 轮转文件 JSON（app.log + http.log 分流）。"""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    json_fmt = _json_formatter()
+
     console = logging.StreamHandler(sys.stdout)
     console.setFormatter(_ColoredFormatter(
-        "[%(asctime)s] [%(levelname)s] %(name)s: %(message)s",
+        "[%(asctime)s] [%(levelname)s] [%(request_id)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     ))
     console.setLevel(level)
+    console.addFilter(_RequestIdFilter())
 
     app_file_handler = logging.handlers.RotatingFileHandler(
         LOG_FILE,
@@ -93,8 +106,9 @@ def setup_logging(level: str = "INFO") -> None:
         backupCount=LOG_BACKUP_COUNT,
         encoding="utf-8",
     )
-    app_file_handler.setFormatter(fmt)
+    app_file_handler.setFormatter(json_fmt)
     app_file_handler.setLevel(logging.DEBUG)
+    app_file_handler.addFilter(_RequestIdFilter())
     app_file_handler.addFilter(_OriginFilter(allow_own=True))
 
     http_file_handler = logging.handlers.RotatingFileHandler(
@@ -103,8 +117,9 @@ def setup_logging(level: str = "INFO") -> None:
         backupCount=LOG_BACKUP_COUNT,
         encoding="utf-8",
     )
-    http_file_handler.setFormatter(fmt)
+    http_file_handler.setFormatter(json_fmt)
     http_file_handler.setLevel(logging.DEBUG)
+    http_file_handler.addFilter(_RequestIdFilter())
     http_file_handler.addFilter(_OriginFilter(allow_own=False))
 
     root = logging.getLogger()

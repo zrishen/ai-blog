@@ -6,6 +6,7 @@ from src.config import settings
 from src.database.migrations import init_db
 from src.database.session import async_session
 from src.logging_config import setup_logging
+from src.observability.sentry import init_sentry
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,9 @@ async def _ensure_super_admin(session) -> None:
 
 async def startup() -> None:
     setup_logging()
+    # 须在 setup_logging 之后：setup_logging 会 root.handlers.clear()，
+    # 早于它初始化会让 Sentry 的 LoggingHandler 被清掉。
+    init_sentry()
     await init_db()
 
     from src.services.file.file_processing_service import reconcile_jobs

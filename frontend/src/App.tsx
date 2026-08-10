@@ -1,4 +1,4 @@
-import { Component, createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, Route, Routes, matchPath, useLocation } from "react-router-dom";
 import { useChatState, useChatDispatch } from "./stores/chatStore";
 import { useAuth } from "./stores/authStore";
@@ -47,28 +47,6 @@ type PanelGroupAPI = {
 } | null;
 
 const PanelGroupCtx = createContext<PanelGroupAPI>(null);
-
-class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  constructor(props: { children: ReactNode }) {
-    super(props);
-    this.state = { error: null };
-  }
-  static getDerivedStateFromError(error: Error) {
-    return { error };
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="whitespace-pre-wrap p-10 font-mono text-destructive">
-          <h2>App Crashed</h2>
-          <p>{this.state.error.message}</p>
-          <pre>{this.state.error.stack}</pre>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 function WorkspaceRoute() {
   const dispatch = useChatDispatch();
@@ -323,8 +301,7 @@ function AuthenticatedApp() {
   if (isInitializing) return null;
 
   return (
-    <ErrorBoundary>
-      <div className="app-root">
+    <div className="app-root">
         {isMobileWorkspace ? (
           <MobileWorkspace aiContext={aiContext} />
         ) : (
@@ -378,7 +355,6 @@ function AuthenticatedApp() {
 
         {isAuthenticated && state.pluginCenterOpen && <PluginCenterDialog />}
       </div>
-    </ErrorBoundary>
   );
 }
 

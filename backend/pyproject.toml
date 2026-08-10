@@ -32,6 +32,8 @@ dependencies = [
     "langchain-anthropic>=1.4.8",
     "sentence-transformers>=2.7.0",
     "falkordb>=1.6.2",
+    "sentry-sdk[fastapi]>=2.66.1",
+    "python-json-logger>=4.1.0",
 ]
 
 [dependency-groups]

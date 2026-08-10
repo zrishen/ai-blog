@@ -93,6 +93,14 @@ class Settings(BaseSettings):
     # 同源部署留空（前端走 /api 相对路径）；跨域填逗号分隔 origin
     cors_allow_origins: str = ""
 
+    # ---- 可观测性（Sentry / 链路追踪）----
+    # 空 DSN = 禁用 Sentry；本地开发可不配。生产配置后捕获未处理异常 + 性能 trace。
+    sentry_dsn: str = ""
+    # 事务采样率 0.0~1.0；0=不上报性能追踪，生产建议 0.1~0.3。
+    sentry_traces_sample_rate: float = 0.0
+    # 部署环境标识（production/staging）；空=Sentry 默认。
+    sentry_environment: str = ""
+
     # ---- 内容目录 ----
     blog_content_dir: str = str(DATA_DIR / "content" / "blog")
     upload_dir: str = str(DATA_DIR / "content" / "uploads")

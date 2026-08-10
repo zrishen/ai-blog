@@ -14,6 +14,7 @@ from src.api.routes import router
 from src.bootstrap import startup
 from src.config import settings
 from src.core.exceptions import DomainError
+from src.core.middleware import RequestIdMiddleware
 
 http_logger = logging.getLogger("http.access")
 
@@ -56,6 +57,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# 为每个请求注入 request_id（contextvar），供日志 filter / Sentry 关联同一次请求；
+# 用纯 ASGI 而非 @app.middleware：后者基于 BaseHTTPMiddleware 会复制 context，set 不传播到下游路由。
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(router, prefix="/api/v1")
 
