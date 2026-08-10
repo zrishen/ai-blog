@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright（E2E 运行产物，不进 git）
+test-results/
+playwright-report/
+blob-report/
+/playwright/.cache

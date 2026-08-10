@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableRow } from "@/components/ui/table";
-import { AdminPage, AdminPageHeader } from "../components/AdminPage";
+import { AdminPage, AdminPageHeader } from "@/features/admin/components/AdminPage";
 
 describe("admin visual system", () => {
   it("uses themed card borders and soft shadows instead of the text color", () => {

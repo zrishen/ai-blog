@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { CodesPage } from "../components/CodesPage";
+import { CodesPage } from "@/features/admin/components/CodesPage";
 
 const fetchMock = vi.fn();
 

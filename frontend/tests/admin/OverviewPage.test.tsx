@@ -20,7 +20,7 @@ const overviewBody = {
   registration_invite_code: "invite-2026",
 };
 
-import { OverviewPage } from "../components/OverviewPage";
+import { OverviewPage } from "@/features/admin/components/OverviewPage";
 
 describe("OverviewPage", () => {
   beforeEach(() => {

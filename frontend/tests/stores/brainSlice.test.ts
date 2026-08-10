@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { ChatAction, ChatState } from "../../chatStore";
+import type { ChatAction, ChatState } from "@/stores/chatStore";
 import type { BrainStats } from "@/api/brain";
-import { brainReducer } from "../brainSlice";
+import { brainReducer } from "@/stores/slices/brainSlice";
 
 // brainReducer 只读写 brainTab/brainStats，构造只含这两个字段的局部 state 足以覆盖
 function makeState(
