@@ -4,6 +4,7 @@
 窗口为 ISO 周（周一 00:00 UTC+8 重置），累加用 PostgreSQL upsert（on_conflict_do_update）。
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -12,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.models import SubscriptionWeeklyUsage, User
+
+logger = logging.getLogger(__name__)
 
 CHINA_TZ = timezone(timedelta(hours=8))
 
@@ -81,14 +84,29 @@ async def consume_tokens(
     )
     result = await db.execute(stmt)
     await db.commit()
-    return result.scalar_one()
+    used = result.scalar_one()
+    logger.info(
+        "subscription charge user_id=%s tokens=%d weekly_used=%d period=%s limit=%d",
+        user_id, tokens, used, period, settings.subscription_weekly_token_limit,
+    )
+    return used
 
 
 async def should_use_platform_key(db: AsyncSession, user: User | None) -> bool:
     """订阅有效 + 周配额可用 → 用平台 key；否则回退 BYOK（到期/超额/无订阅）。"""
-    if user is None or not is_subscription_active(user):
+    if user is None:
         return False
-    return await is_weekly_quota_available(db, user.id)
+    if not is_subscription_active(user):
+        logger.info("platform_key fallback user_id=%s reason=subscription_expired", user.id)
+        return False
+    if not await is_weekly_quota_available(db, user.id):
+        used = await get_weekly_usage(db, user.id)
+        logger.warning(
+            "platform_key fallback user_id=%s reason=quota_exhausted used=%d limit=%d",
+            user.id, used, settings.subscription_weekly_token_limit,
+        )
+        return False
+    return True
 
 
 def compute_charge_tokens(

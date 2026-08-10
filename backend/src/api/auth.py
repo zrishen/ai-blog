@@ -101,9 +101,14 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _client_ip(request: Request) -> str:
+    """取客户端 IP，仅用于日志/限流（反代场景读到的是上游 IP）。"""
+    return request.client.host if request.client else "unknown"
+
+
 def _enforce_auth_rate_limit(request: Request, action: str) -> None:
     """per-IP 滑动窗口频率限制：防登录撞库与注册/邀请码暴力尝试，超限返 429。"""
-    ip = request.client.host if request.client else "unknown"
+    ip = _client_ip(request)
     limit = (
         settings.auth_login_rate_limit if action == "login" else settings.auth_register_rate_limit
     )
@@ -111,6 +116,7 @@ def _enforce_auth_rate_limit(request: Request, action: str) -> None:
     if not check_rate_limit(
         bucket, limit=limit, window_seconds=settings.auth_rate_limit_window_seconds
     ):
+        logger.warning("auth rate limited action=%s ip=%s", action, ip)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="操作过于频繁，请稍后再试",
@@ -161,6 +167,7 @@ async def register(
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
     _set_refresh_cookie(response, request, refresh)
+    logger.info("register ok username=%s ip=%s user_id=%s", body.username, _client_ip(request), user.id)
     return AuthResponse(access_token=access, user=_user_payload(user))
 
 
@@ -184,11 +191,13 @@ async def login(
     result = await db.execute(select(User).where(User.username == body.username))
     user = result.scalar_one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
+        logger.warning("login fail username=%s ip=%s", body.username, _client_ip(request))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
 
     access = create_access_token(user.id, user.username)
     refresh = await create_refresh_token(user.id, db)
     _set_refresh_cookie(response, request, refresh)
+    logger.info("login ok username=%s ip=%s user_id=%s", body.username, _client_ip(request), user.id)
     return AuthResponse(access_token=access, user=_user_payload(user))
 
 
@@ -213,6 +222,12 @@ async def refresh(
         reused_age = now - record.revoked_at
         if reused_age > timedelta(seconds=settings.refresh_rotation_grace_seconds):
             # 旧 token 在宽限期外被重用 → 判定 token 被窃取，强制全设备登出
+            logger.warning(
+                "refresh reuse detected user_id=%s reused_age=%.0fs grace=%ss revoke=all",
+                record.user_id,
+                reused_age.total_seconds(),
+                settings.refresh_rotation_grace_seconds,
+            )
             await revoke_all_user_refresh_tokens(record.user_id, db)
             _clear_refresh_cookie(response)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="会话已失效，请重新登录")

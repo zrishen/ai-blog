@@ -1,4 +1,5 @@
 import asyncio
+import time
 import uuid
 from pathlib import Path
 
@@ -239,6 +240,7 @@ async def vectorize_and_store(
         if progress_reporter:
             await progress_reporter(stage, completed, total, unit)
 
+    _t0 = time.time()
     logger.info(
         "KB vectorization parse started: stored_name=%s original_name=%s user_id=%s",
         stored_filename,
@@ -328,6 +330,10 @@ async def vectorize_and_store(
         stored_filename,
         collection_name,
         len(chunks),
+    )
+    logger.info(
+        "KB vectorization done: stored_name=%s user_id=%s chunks=%d duration_ms=%d",
+        stored_filename, user_id, len(chunks), int((time.time() - _t0) * 1000),
     )
 
     return chunks

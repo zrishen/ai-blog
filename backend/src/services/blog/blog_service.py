@@ -381,6 +381,7 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
         post.updated_at = _now()
         await db.commit()
         await db.refresh(post)
+        logger.info("blog unpublish user_id=%s post_id=%s", user_id, post.id)
         return post
 
     revision = await _create_revision(db, post, kind="publish")
@@ -391,6 +392,10 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
     await _prune_revisions(db, post)
     await db.commit()
     await db.refresh(post)
+    logger.info(
+        "blog publish user_id=%s post_id=%s revision_id=%s",
+        user_id, post.id, post.published_revision_id,
+    )
     return post
 
 
@@ -443,6 +448,10 @@ async def restore_revision(
     restored.category_id = revision.category_id
     await db.commit()
     await db.refresh(restored)
+    logger.info(
+        "blog revision restored user_id=%s post_id=%s revision_id=%s revision_no=%s",
+        user_id, post_id, revision_id, revision.revision_number,
+    )
     return restored
 
 
@@ -453,12 +462,17 @@ async def delete_revision(db: AsyncSession, post_id: int, revision_id: int, user
         raise ValueError("Published revision cannot be deleted")
     await db.delete(revision)
     await db.commit()
+    logger.info(
+        "blog revision deleted user_id=%s post_id=%s revision_id=%s",
+        user_id, post_id, revision_id,
+    )
 
 
 async def delete_post(db: AsyncSession, post_id: int, user_id: int) -> bool:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     post.deleted_at = _now()
     await db.commit()
+    logger.info("blog post soft-deleted user_id=%s post_id=%s", user_id, post_id)
     # 进回收站即取消进行中的索引任务，并 best-effort 清理 AI 大脑记忆（不等维护周期）
     from src.services.file.file_processing_service import cancel_jobs_for_resource
     from src.services.memory.graph_store import delete_resource_memory

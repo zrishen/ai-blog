@@ -26,4 +26,3 @@ async def init_db() -> None:
     """执行 Alembic 迁移到 head（同步命令放线程，避免阻塞事件循环）。"""
     cfg = _alembic_config()
     await asyncio.to_thread(command.upgrade, cfg, "head")
-    logger.info("Alembic upgrade to head completed")

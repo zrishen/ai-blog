@@ -1,6 +1,7 @@
 """博客封面生成服务。"""
 
 import base64
+import logging
 import mimetypes
 import uuid
 
@@ -10,6 +11,8 @@ from openai import AsyncOpenAI
 from src.config import settings
 from src.database.models import BlogPost
 from src.services.file.file_service import get_user_upload_dir
+
+logger = logging.getLogger(__name__)
 
 
 def _plain_text(value: str | None, limit: int) -> str:
@@ -98,7 +101,12 @@ async def _generate_siliconflow_cover(post: BlogPost, prompt: str) -> str:
 async def generate_cover_image(post: BlogPost) -> str:
     prompt = _build_prompt(post)
     if settings.image_generation_provider == "siliconflow":
-        return await _generate_siliconflow_cover(post, prompt)
+        stored_name = await _generate_siliconflow_cover(post, prompt)
+        logger.info(
+            "blog cover generated post_id=%s provider=siliconflow model=%s stored_name=%s",
+            post.id, settings.image_generation_model, stored_name,
+        )
+        return stored_name
 
     client = AsyncOpenAI(api_key=_image_api_key(), base_url=_image_base_url())
     try:
@@ -114,4 +122,9 @@ async def generate_cover_image(post: BlogPost) -> str:
     if not result.data or not getattr(result.data[0], "b64_json", None):
         raise ValueError("Image generation did not return base64 image data")
 
-    return _store_cover_image(post, base64.b64decode(result.data[0].b64_json), "image/png")
+    stored_name = _store_cover_image(post, base64.b64decode(result.data[0].b64_json), "image/png")
+    logger.info(
+        "blog cover generated post_id=%s provider=openai model=%s stored_name=%s",
+        post.id, settings.image_generation_model, stored_name,
+    )
+    return stored_name

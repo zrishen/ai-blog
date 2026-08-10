@@ -43,6 +43,10 @@ async def base_recall_memory(query: str) -> str:
         top_k=settings.memory_recall_top_k,
         hops=settings.memory_recall_hops,
     )
+    logger.info(
+        "memory recall user_id=%s hits=%d top_k=%d hops=%d",
+        user_id, len(hits), settings.memory_recall_top_k, settings.memory_recall_hops,
+    )
     if hits:
         try:
             await graph_store.touch_memories(user_id=user_id, hits=hits)

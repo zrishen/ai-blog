@@ -141,7 +141,7 @@ async def _keep_attachment_claim_alive(
     except asyncio.CancelledError:
         raise
     except Exception:
-        logger.exception("Failed to refresh attachment claim heartbeat")
+        logger.exception("Failed to refresh attachment claim heartbeat user_id=%s claim_token=%s", user_id, claim_token)
 
 
 async def _stop_claim_heartbeat(task: asyncio.Task[None] | None) -> None:
@@ -821,7 +821,7 @@ async def stream_chat(
                     async with async_session() as db:
                         await consume_tokens(db, user_id, charge)
                 except Exception:
-                    logger.exception("Failed to charge subscription tokens")
+                    logger.exception("Failed to charge subscription tokens user_id=%s charge=%d", user_id, charge)
             # 上下文摘要的真实 usage 单独计入周配额（对话 charge 之外，仅 use_platform_key）
             if compact_usage:
                 compact_charge = compute_charge_tokens(usage_metadata=compact_usage)
@@ -830,7 +830,7 @@ async def stream_chat(
                         async with async_session() as db:
                             await consume_tokens(db, user_id, compact_charge)
                     except Exception:
-                        logger.exception("Failed to charge compact summary tokens")
+                        logger.exception("Failed to charge compact summary tokens user_id=%s charge=%d", user_id, compact_charge)
         try:
             assistant_token_count = estimate_tokens(full_content)
             new_conv_id, saved_user_message, new_message = await save_chat_turn(
@@ -915,8 +915,9 @@ async def stream_chat(
         "attachments": response_attachments,
     })
     logger.info(
-        "<<< Chat end: preview='%s', conv=%s, msg=%s, took=%.1fs, chars=%d",
+        "<<< Chat end: preview='%s' conv=%s msg=%s user=%s took=%.1fs chars=%d rounds=%d tool_calls=%d confirmed=%s usage=%s",
         full_content[:200].replace("\n", " "),
-        new_conv_id, message_id, time.time() - chat_t0,
-        len(full_content),
+        new_conv_id, message_id, user_id, time.time() - chat_t0, len(full_content),
+        _round_id, len(tool_events_for_history), final_confirmed,
+        _collected_usage or "none",
     )

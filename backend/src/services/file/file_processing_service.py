@@ -643,12 +643,16 @@ async def _index_document_knowledge(
     stored_name = job.stored_name or ""
     if progress_reporter:
         await progress_reporter("brain_extract", 0, len(chunks), "chunk")
+    total_entities = 0
+    total_facts = 0
     for chunk_index, chunk in enumerate(chunks):
         extracted = await extractor.extract(chunk, llm)
         extracted["episodes"] = []
         for fact in extracted.get("facts", []):
             fact["source_doc_id"] = doc_id
         consolidated = await consolidator.consolidate(user_id=job.user_id, extracted=extracted)
+        total_entities += len(consolidated["entities"])
+        total_facts += len(consolidated["facts"])
         entity_ids = [entity_id for entity_id, _ in consolidated["entities"]]
         await graph_store.link_chunk_entities(
             user_id=job.user_id, stored_name=stored_name,
@@ -661,9 +665,14 @@ async def _index_document_knowledge(
         )
         if progress_reporter:
             await progress_reporter("brain_extract", chunk_index + 1, len(chunks), "chunk")
+    logger.info(
+        "document knowledge extracted user_id=%s doc_id=%s chunks=%d entities=%d facts=%d",
+        job.user_id, doc_id, len(chunks), total_entities, total_facts,
+    )
 
 
 async def _run_job(job_id: str) -> None:
+    _t0 = time.time()
     user_id = await _peek_job_user_id(job_id)
     user_sem, global_sem = _worker_concurrency_state()
     async with contextlib.AsyncExitStack() as stack:
@@ -763,6 +772,12 @@ async def _run_job(job_id: str) -> None:
                         job.target_resource_id,
                         version=str(len(chunks)),
                     )
+                logger.info(
+                    "file job done job_id=%s job_type=%s user_id=%s resource=%s/%s chunks=%d indexed=True duration_ms=%d",
+                    job.id, job.job_type, job.user_id,
+                    job.target_resource_type, job.target_resource_id,
+                    len(chunks), int((time.time() - _t0) * 1000),
+                )
                 await _finalize_success(db, job.id, token, chunks, indexed=True)
             except asyncio.CancelledError:
                 logger.warning("File processing task cancelled; stale reconciliation will recover: %s", job_id)

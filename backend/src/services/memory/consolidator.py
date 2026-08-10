@@ -166,4 +166,10 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
     )
     await memory_embeddings.index_node_refs_best_effort(refs)
 
+    new_entities = sum(1 for _, is_new in result["entities"] if is_new)
+    logger.info(
+        "memory consolidate done user_id=%s entities=%d(new=%d) facts=%d episodes=%d prefs=%d",
+        user_id, len(result["entities"]), new_entities,
+        len(result["facts"]), len(result["episodes"]), len(result["preferences"]),
+    )
     return result

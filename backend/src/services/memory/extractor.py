@@ -41,9 +41,16 @@ async def extract(text: str, llm: BaseChatModel, *, depth: str | None = None) ->
     ]
     try:
         resp = await llm.ainvoke(messages)
-        return _parse(str(resp.content))
+        parsed = _parse(str(resp.content))
+        logger.info(
+            "extract done depth=%s input_chars=%d entities=%d facts=%d episodes=%d prefs=%d",
+            depth, len(text),
+            len(parsed.get("entities", [])), len(parsed.get("facts", [])),
+            len(parsed.get("episodes", [])), len(parsed.get("preferences", [])),
+        )
+        return parsed
     except Exception:
-        logger.exception("extract LLM call failed")
+        logger.exception("extract LLM call failed depth=%s input_chars=%d", depth, len(text))
         return {"entities": [], "facts": [], "episodes": [], "preferences": []}
 
 
@@ -59,10 +66,10 @@ def _parse(content: str) -> dict:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("extract output not valid JSON, returning empty")
+        logger.warning("extract output not valid JSON, returning empty preview=%s", text[:200])
         return empty
     if not isinstance(data, dict):
-        logger.warning("extract output JSON is not an object: %s", type(data).__name__)
+        logger.warning("extract output JSON is not an object: %s preview=%s", type(data).__name__, text[:200])
         return empty
     return {
         "entities": data.get("entities", []),
