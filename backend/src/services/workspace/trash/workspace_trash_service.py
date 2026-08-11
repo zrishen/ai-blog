@@ -11,18 +11,14 @@ from pathlib import Path, PurePosixPath
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
+from src.core.exceptions import ConflictError, NotFoundError, OwnershipError
 from src.core.path_guard import workspace_dir, workspace_path
+from src.core.workspace_path import validate_workspace_relative_path
 from src.database.models import WorkspaceTrashEntry
 
 
 def _relative_path(value: str) -> str:
-    if not isinstance(value, str) or not value or "\\" in value:
-        raise ValidationFailedError("Workspace path is invalid")
-    path = PurePosixPath(value)
-    if path.is_absolute() or value != path.as_posix() or any(part in {"", ".", ".."} for part in path.parts):
-        raise ValidationFailedError("Workspace path is invalid")
-    return path.as_posix()
+    return validate_workspace_relative_path(value)
 
 
 def _trash_path(user_id: int, relative_path: str, token: str) -> tuple[str, Path]:
@@ -37,8 +33,9 @@ def _trash_path(user_id: int, relative_path: str, token: str) -> tuple[str, Path
 
 def _stored_trash_path(entry: WorkspaceTrashEntry) -> Path:
     path = PurePosixPath(entry.trashed_path)
-    if len(path.parts) < 3 or path.parts[0] != ".trash" or any(part in {"", ".", ".."} for part in path.parts):
+    if len(path.parts) < 3 or path.parts[0] != ".trash":
         raise OwnershipError("Workspace trash entry is invalid")
+    validate_workspace_relative_path("/".join(path.parts[1:]))
     root = workspace_dir(entry.user_id)
     target = root / path
     if not target.parent.resolve().is_relative_to(root.resolve()):

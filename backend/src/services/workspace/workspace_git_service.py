@@ -7,10 +7,11 @@ import re
 import subprocess
 import uuid
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import workspace_dir, workspace_path
+from src.core.workspace_path import validate_workspace_relative_path
 
 _COMMAND_TIMEOUT_SECONDS = 20
 _MAX_OUTPUT_CHARS = 40_000
@@ -31,21 +32,6 @@ class WorkspaceGitRevision:
     revision: str
     committed_at: str
     subject: str
-
-
-def validate_workspace_relative_path(value: str) -> str:
-    """Validate a public workspace path before passing it to Git after ``--``."""
-
-    if not isinstance(value, str) or not value or len(value) > 500 or "\\" in value:
-        raise ValidationFailedError("Workspace path is invalid")
-    path = PurePosixPath(value)
-    if (
-        path.is_absolute()
-        or value != path.as_posix()
-        or any(part in {"", ".", ".."} or part.startswith(".") for part in path.parts)
-    ):
-        raise ValidationFailedError("Workspace path is invalid")
-    return path.as_posix()
 
 
 def validate_workspace_revision(value: str) -> str:

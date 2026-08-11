@@ -18,6 +18,7 @@ from typing import Literal
 
 from src.core.exceptions import NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import workspace_dir, workspace_path
+from src.core.workspace_path import validate_workspace_relative_path
 from src.utils.user_dir import validate_user_directory_name
 
 _FRONTMATTER_FIELDS = (
@@ -150,20 +151,10 @@ def default_blog_document_path(slug: str) -> str:
 def validate_blog_document_path(relative_path: str) -> str:
     """Validate a managed Markdown path without accepting host-specific paths."""
 
-    if not isinstance(relative_path, str) or not relative_path or len(relative_path) > _MAX_RELATIVE_PATH_LENGTH:
+    validated = validate_workspace_relative_path(relative_path, max_length=_MAX_RELATIVE_PATH_LENGTH)
+    if PurePosixPath(validated).suffix.lower() != ".md":
         raise ValidationFailedError("Blog document path is invalid")
-    if "\\" in relative_path:
-        raise ValidationFailedError("Blog document path is invalid")
-    path = PurePosixPath(relative_path)
-    if (
-        path.is_absolute()
-        or relative_path != path.as_posix()
-        or path.name.startswith(".")
-        or path.suffix.lower() != ".md"
-        or any(part in {"", ".", ".."} or part.startswith(".") for part in path.parts)
-    ):
-        raise ValidationFailedError("Blog document path is invalid")
-    return path.as_posix()
+    return validated
 
 
 def _managed_relative_path(relative_path: str) -> str:

@@ -57,6 +57,36 @@ async def test_moving_blog_document_updates_its_real_path(db_session: AsyncSessi
 
 
 @pytest.mark.asyncio
+async def test_moving_underscore_folder_does_not_touch_sibling_posts(db_session: AsyncSession):
+    """目录名含 ``_`` 时移动不能误伤前缀相似的其他文章（回归 SQL LIKE 的 ``_`` 元字符 bug）。"""
+
+    await workspace_file_service.create_folder(db_session, TEST_USER_ID, name="a_b", parent_path=None)
+    await workspace_file_service.create_folder(db_session, TEST_USER_ID, name="axb", parent_path=None)
+
+    post_a = await create_post(db_session, {"title": "A", "slug": "alpha", "content": "a"}, TEST_USER_ID)
+    await workspace_file_service.move_entry(
+        db_session, TEST_USER_ID, path="posts/alpha.md", target_path="a_b"
+    )
+    post_b = await create_post(db_session, {"title": "B", "slug": "beta", "content": "b"}, TEST_USER_ID)
+    await workspace_file_service.move_entry(
+        db_session, TEST_USER_ID, path="posts/beta.md", target_path="axb"
+    )
+    await db_session.refresh(post_a)
+    await db_session.refresh(post_b)
+    assert post_a.file_path == "a_b/alpha.md"
+    assert post_b.file_path == "axb/beta.md"
+
+    await workspace_file_service.move_entry(
+        db_session, TEST_USER_ID, path="a_b", target_path=None, name="renamed"
+    )
+    await db_session.refresh(post_a)
+    await db_session.refresh(post_b)
+
+    assert post_a.file_path == "renamed/alpha.md"
+    assert post_b.file_path == "axb/beta.md"
+
+
+@pytest.mark.asyncio
 async def test_listing_workspace_lazily_reconciles_managed_blog_documents(db_session: AsyncSession):
     post = await create_post(
         db_session,

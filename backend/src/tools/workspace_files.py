@@ -13,6 +13,7 @@ from sqlalchemy import select
 from src.core.context import current_user_id_cv
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import require_user, workspace_dir, workspace_path
+from src.core.workspace_path import validate_workspace_relative_path
 from src.database.models import BlogPost
 from src.database.session import async_session
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
@@ -40,28 +41,11 @@ def _user_id() -> int:
 
 
 def _relative_path(value: str) -> str:
-    if not isinstance(value, str) or not value or len(value) > _MAX_PATH_LENGTH or "\\" in value:
-        raise ValidationFailedError("Workspace path is invalid")
-    path = PurePosixPath(value)
-    if (
-        path.is_absolute()
-        or value != path.as_posix()
-        or any(part in {"", ".", ".."} or part.startswith(".") for part in path.parts)
-    ):
-        raise ValidationFailedError("Workspace path is invalid")
-    return path.as_posix()
+    return validate_workspace_relative_path(value, max_length=_MAX_PATH_LENGTH)
 
 
 def _glob_pattern(value: str) -> str:
-    if not isinstance(value, str) or not value or len(value) > _MAX_PATH_LENGTH or "\\" in value:
-        raise ValidationFailedError("Workspace glob is invalid")
-    path = PurePosixPath(value)
-    if (
-        path.is_absolute()
-        or value != path.as_posix()
-        or any(part in {"", ".", ".."} or part.startswith(".") for part in path.parts)
-    ):
-        raise ValidationFailedError("Workspace glob is invalid")
+    validate_workspace_relative_path(value, max_length=_MAX_PATH_LENGTH)
     return value
 
 

@@ -7,7 +7,9 @@ from fastapi import UploadFile
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.exceptions import ValidationFailedError
 from src.core.path_guard import workspace_dir, workspace_path
+from src.core.workspace_path import validate_workspace_relative_path
 from src.utils import file_parser
 
 import logging
@@ -19,15 +21,11 @@ UPLOAD_ROOT = "uploads"
 
 def normalize_workspace_file_path(stored_path: str) -> str:
     """Return the canonical workspace-relative path for a stored upload."""
-    path = PurePosixPath(stored_path)
-    if (
-        not stored_path
-        or path.is_absolute()
-        or path.as_posix() != stored_path
-        or any(part in {"", ".", ".."} for part in path.parts)
-    ):
-        raise ValueError("Invalid stored upload path")
-    return path.as_posix() if path.parts[0] == UPLOAD_ROOT else f"{UPLOAD_ROOT}/{path.as_posix()}"
+    try:
+        validated = validate_workspace_relative_path(stored_path)
+    except ValidationFailedError as exc:
+        raise ValueError("Invalid stored upload path") from exc
+    return validated if PurePosixPath(validated).parts[0] == UPLOAD_ROOT else f"{UPLOAD_ROOT}/{validated}"
 
 
 def get_user_upload_dir(user_id: int) -> Path:

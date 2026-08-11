@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import workspace_dir, workspace_path
+from src.core.workspace_path import validate_workspace_relative_path, validate_workspace_segment
 from src.database.models import BlogPost, FileDocument
 from src.services.workspace.blog.blog_document_store import validate_blog_document_path
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
@@ -34,31 +35,11 @@ class WorkspaceEntry:
 
 
 def _relative_path(value: str) -> str:
-    if not isinstance(value, str) or not value or len(value) > _MAX_PATH_LENGTH or "\\" in value:
-        raise ValidationFailedError("Workspace path is invalid")
-    path = PurePosixPath(value)
-    if (
-        path.is_absolute()
-        or value != path.as_posix()
-        or any(part in {"", ".", ".."} or part.startswith(".") for part in path.parts)
-    ):
-        raise ValidationFailedError("Workspace path is invalid")
-    return path.as_posix()
+    return validate_workspace_relative_path(value, max_length=_MAX_PATH_LENGTH)
 
 
 def _name(value: str) -> str:
-    if (
-        not isinstance(value, str)
-        or not value
-        or len(value) > _MAX_SEGMENT_LENGTH
-        or value.strip() != value
-        or value in {".", ".."}
-        or "/" in value
-        or "\\" in value
-        or value.startswith(".")
-    ):
-        raise ValidationFailedError("Workspace entry name is invalid")
-    return value
+    return validate_workspace_segment(value, max_length=_MAX_SEGMENT_LENGTH)
 
 
 def _join(parent_path: str | None, name: str) -> str:
@@ -217,18 +198,19 @@ async def move_entry(
     if source.is_file() and source.suffix.lower() == ".md":
         validate_blog_document_path(destination_relative)
 
-    posts = list(
-        (
+    posts = [
+        post
+        for post in (
             await db.execute(
                 select(BlogPost).where(
                     BlogPost.user_id == user_id,
                     BlogPost.deleted_at.is_(None),
-                    (BlogPost.file_path == source_relative)
-                    | BlogPost.file_path.like(f"{source_relative}/%"),
+                    BlogPost.file_path.is_not(None),
                 )
             )
         ).scalars()
-    )
+        if post.file_path == source_relative or post.file_path.startswith(f"{source_relative}/")
+    ]
     documents = [
         document
         for document in (

@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.path_guard import attachment_stored_path
+from src.core.workspace_path import is_safe_workspace_segment
 from src.database.models import (
     BlogPost as BlogPostModel,
     BlogPostRevision,
@@ -62,25 +63,8 @@ def _now() -> datetime:
 
 
 def _is_safe_user_relative_name(name: str) -> bool:
-    """判断字符串是否仅是用户上传目录内的相对文件名（不含分隔符、目录穿越、外部 URL）。"""
-    if not name or not isinstance(name, str):
-        return False
-    if name in {".", ".."}:
-        return False
-    if "\x00" in name:
-        return False
-    if name.strip() != name:
-        return False
-    if name.startswith(("http://", "https://", "ftp://", "file://", "//", "data:", "blob:")):
-        return False
-    pp = PurePath(name)
-    if pp.is_absolute():
-        return False
-    if len(pp.parts) != 1:
-        return False
-    if "/" in name or "\\" in name or ".." in name:
-        return False
-    return True
+    """判断字符串是否仅是用户上传目录内的相对文件名（单段、无穿越/外部 URL）。"""
+    return is_safe_workspace_segment(name)
 
 
 def _is_external_or_empty(value: Optional[str]) -> bool:
