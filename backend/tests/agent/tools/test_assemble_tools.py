@@ -104,34 +104,34 @@ def test_web_tools_append_after_registry_tools_when_enabled():
 def test_workspace_file_provider_is_feature_gated():
     assert WorkspaceFilesProvider().provide(_ctx()) == []
     assert [tool.name for tool in WorkspaceFilesProvider().provide(_ctx(workspace_files_enabled=True))] == [
-        "workspace_read_file",
-        "workspace_write_file",
-        "workspace_edit_file",
-        "workspace_glob",
-        "workspace_grep",
-        "workspace_move_file",
-        "workspace_delete_file",
-        "workspace_git_status",
-        "workspace_git_history",
-        "workspace_git_diff",
-        "workspace_git_restore_file",
+        "read",
+        "write",
+        "edit",
+        "glob",
+        "grep",
+        "move",
+        "delete",
+        "git_status",
+        "git_history",
+        "git_diff",
+        "git_restore",
     ]
 
 
 def test_workspace_tools_append_before_web_tools_when_enabled():
     asm = assemble_tools(_ctx(workspace_files_enabled=True, web_tools_enabled=True))
     assert [tool.name for tool in asm.tools][-13:] == [
-        "workspace_read_file",
-        "workspace_write_file",
-        "workspace_edit_file",
-        "workspace_glob",
-        "workspace_grep",
-        "workspace_move_file",
-        "workspace_delete_file",
-        "workspace_git_status",
-        "workspace_git_history",
-        "workspace_git_diff",
-        "workspace_git_restore_file",
+        "read",
+        "write",
+        "edit",
+        "glob",
+        "grep",
+        "move",
+        "delete",
+        "git_status",
+        "git_history",
+        "git_diff",
+        "git_restore",
         "web_search",
         "web_fetch",
     ]

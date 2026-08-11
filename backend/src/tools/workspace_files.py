@@ -141,7 +141,7 @@ def _iter_workspace_files(user_id: int, pattern: str):
 
 @tool
 @require_user
-async def workspace_read_file(path: str, start_line: int = 1, end_line: int = 0) -> str:
+async def read(path: str, start_line: int = 1, end_line: int = 0) -> str:
     """Read a UTF-8 workspace text file. Lines are 1-based; end_line=0 reads to EOF."""
 
     relative_path = _relative_path(path)
@@ -158,7 +158,7 @@ async def workspace_read_file(path: str, start_line: int = 1, end_line: int = 0)
 
 @tool
 @require_user
-async def workspace_write_file(path: str, content: str) -> str:
+async def write(path: str, content: str) -> str:
     """Atomically replace or create a UTF-8 file inside the workspace."""
 
     relative_path = _relative_path(path)
@@ -173,7 +173,7 @@ async def workspace_write_file(path: str, content: str) -> str:
 
 @tool
 @require_user
-async def workspace_edit_file(path: str, old_text: str, new_text: str) -> str:
+async def edit(path: str, old_text: str, new_text: str) -> str:
     """Replace one exact text occurrence in a workspace file; it fails unless the match is unique."""
 
     relative_path = _relative_path(path)
@@ -194,7 +194,7 @@ async def workspace_edit_file(path: str, old_text: str, new_text: str) -> str:
 
 @tool
 @require_user
-async def workspace_glob(pattern: str = "**/*", limit: int = 100) -> str:
+async def glob(pattern: str = "**/*", limit: int = 100) -> str:
     """List workspace files matching a relative glob pattern such as notes/**/*.md."""
 
     pattern = _glob_pattern(pattern)
@@ -208,7 +208,7 @@ async def workspace_glob(pattern: str = "**/*", limit: int = 100) -> str:
 
 @tool
 @require_user
-async def workspace_grep(query: str, path_pattern: str = "**/*", limit: int = 50) -> str:
+async def grep(query: str, path_pattern: str = "**/*", limit: int = 50) -> str:
     """Find literal text in UTF-8 workspace files. This does not execute shell commands or regular expressions."""
 
     if not isinstance(query, str) or not query:
@@ -241,7 +241,7 @@ async def workspace_grep(query: str, path_pattern: str = "**/*", limit: int = 50
 
 @tool
 @require_user
-async def workspace_move_file(path: str, target_folder: str = "") -> str:
+async def move(path: str, target_folder: str = "") -> str:
     """Move a file or folder to another workspace folder and preserve managed blog paths."""
 
     relative_path = _relative_path(path)
@@ -255,7 +255,7 @@ async def workspace_move_file(path: str, target_folder: str = "") -> str:
 
 @tool
 @require_user
-async def workspace_delete_file(path: str) -> str:
+async def delete(path: str) -> str:
     """Delete a regular workspace file or an empty folder. Managed resources use their dedicated lifecycle."""
 
     relative_path = _relative_path(path)
@@ -282,7 +282,7 @@ async def workspace_delete_file(path: str) -> str:
 
 @tool
 @require_user
-async def workspace_git_status() -> str:
+async def git_status() -> str:
     """Show the current workspace Git branch, latest revision, and uncommitted paths."""
 
     status = await asyncio.to_thread(get_workspace_git_status, _user_id())
@@ -292,7 +292,7 @@ async def workspace_git_status() -> str:
 
 @tool
 @require_user
-async def workspace_git_history(limit: int = 10) -> str:
+async def git_history(limit: int = 10) -> str:
     """List recent local workspace revisions. Limit is capped at 50."""
 
     revisions = await asyncio.to_thread(list_workspace_git_revisions, _user_id(), limit=limit)
@@ -301,7 +301,7 @@ async def workspace_git_history(limit: int = 10) -> str:
 
 @tool
 @require_user
-async def workspace_git_diff(base_revision: str = "HEAD~1", target_revision: str = "HEAD") -> str:
+async def git_diff(base_revision: str = "HEAD~1", target_revision: str = "HEAD") -> str:
     """Show a local workspace diff between two safe revisions, such as HEAD~1 and HEAD."""
 
     return await asyncio.to_thread(
@@ -314,7 +314,7 @@ async def workspace_git_diff(base_revision: str = "HEAD~1", target_revision: str
 
 @tool
 @require_user
-async def workspace_git_restore_file(path: str, revision: str = "HEAD") -> str:
+async def git_restore(path: str, revision: str = "HEAD") -> str:
     """Restore one regular workspace file from a local revision, then commit that restoration."""
 
     user_id = _user_id()

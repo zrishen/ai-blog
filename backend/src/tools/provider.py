@@ -17,17 +17,17 @@ from src.tools.mcp import build_mcp_call_tool, normalize_mcp_capabilities
 from src.tools.registry import TOOL_REGISTRY
 from src.tools.web import web_fetch, web_search
 from src.tools.workspace_files import (
-    workspace_delete_file,
-    workspace_edit_file,
-    workspace_git_diff,
-    workspace_git_history,
-    workspace_git_restore_file,
-    workspace_git_status,
-    workspace_glob,
-    workspace_grep,
-    workspace_move_file,
-    workspace_read_file,
-    workspace_write_file,
+    delete,
+    edit,
+    git_diff,
+    git_history,
+    git_restore,
+    git_status,
+    glob,
+    grep,
+    move,
+    read,
+    write,
 )
 
 if TYPE_CHECKING:
@@ -107,17 +107,17 @@ class WorkspaceFilesProvider:
         if not ctx.feature_flags.workspace_files_enabled:
             return []
         return [
-            workspace_read_file,
-            workspace_write_file,
-            workspace_edit_file,
-            workspace_glob,
-            workspace_grep,
-            workspace_move_file,
-            workspace_delete_file,
-            workspace_git_status,
-            workspace_git_history,
-            workspace_git_diff,
-            workspace_git_restore_file,
+            read,
+            write,
+            edit,
+            glob,
+            grep,
+            move,
+            delete,
+            git_status,
+            git_history,
+            git_diff,
+            git_restore,
         ]
 
 
