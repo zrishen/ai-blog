@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.workspace_lock import workspace_lock
 from src.database.engine import get_db
 from src.utils.auth import get_current_user, get_optional_user
 from src.database.models import User
@@ -204,53 +205,57 @@ async def get_blog_post(
 async def create_blog_post(data: BlogPostCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     from src.services.workspace.blog.blog_service import create_post
 
-    try:
-        post = await create_post(db, data.model_dump(), user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return BlogPostResponse.model_validate(post)
+    async with workspace_lock(user.id):
+        try:
+            post = await create_post(db, data.model_dump(), user.id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return BlogPostResponse.model_validate(post)
 
 
 @router.put("/blog/posts/{post_id}", response_model=BlogPostResponse)
 async def update_blog_post(post_id: int, data: BlogPostUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     from src.services.workspace.blog.blog_service import update_post
 
-    try:
-        post = await update_post(db, post_id, data.model_dump(exclude_unset=True), user.id)
-    except ValueError as e:
-        msg = str(e)
-        if msg == "Post not found":
+    async with workspace_lock(user.id):
+        try:
+            post = await update_post(db, post_id, data.model_dump(exclude_unset=True), user.id)
+        except ValueError as e:
+            msg = str(e)
+            if msg == "Post not found":
+                raise HTTPException(status_code=404, detail="Post not found")
+            raise HTTPException(status_code=400, detail=msg)
+        if not post:
             raise HTTPException(status_code=404, detail="Post not found")
-        raise HTTPException(status_code=400, detail=msg)
-    if not post:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return BlogPostResponse.model_validate(post)
+        return BlogPostResponse.model_validate(post)
 
 
 @router.delete("/blog/posts/{post_id}")
 async def delete_blog_post(post_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     from src.services.workspace.blog.blog_service import delete_post
 
-    try:
-        deleted = await delete_post(db, post_id, user.id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Post not found")
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return {"status": "ok"}
+    async with workspace_lock(user.id):
+        try:
+            deleted = await delete_post(db, post_id, user.id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Post not found")
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Post not found")
+        return {"status": "ok"}
 
 
 @router.put("/blog/posts/{post_id}/publish", response_model=BlogPostResponse)
 async def publish_blog_post(post_id: int, data: BlogPublishRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     from src.services.workspace.blog.blog_service import publish_post
 
-    try:
-        post = await publish_post(db, post_id, data.publish, user.id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Post not found")
-    if not post:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return BlogPostResponse.model_validate(post)
+    async with workspace_lock(user.id):
+        try:
+            post = await publish_post(db, post_id, data.publish, user.id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Post not found")
+        if not post:
+            raise HTTPException(status_code=404, detail="Post not found")
+        return BlogPostResponse.model_validate(post)
 
 
 @router.get("/blog/posts/{post_id}/revisions", response_model=BlogPostRevisionListResponse)
@@ -313,12 +318,13 @@ async def restore_blog_post_revision(
 ):
     from src.services.workspace.blog.blog_service import restore_revision
 
-    try:
-        post = await restore_revision(db, post_id, revision_id, user.id)
-    except ValueError as exc:
-        detail = str(exc)
-        raise HTTPException(status_code=404, detail=detail)
-    return BlogPostResponse.model_validate(post)
+    async with workspace_lock(user.id):
+        try:
+            post = await restore_revision(db, post_id, revision_id, user.id)
+        except ValueError as exc:
+            detail = str(exc)
+            raise HTTPException(status_code=404, detail=detail)
+        return BlogPostResponse.model_validate(post)
 
 
 @router.delete("/blog/posts/{post_id}/revisions/{revision_id}")
@@ -344,20 +350,21 @@ async def generate_blog_cover(post_id: int, db: AsyncSession = Depends(get_db), 
     from src.services.workspace.blog.blog_cover_service import generate_cover_image
     from src.services.workspace.blog.blog_service import get_owned_post, update_post
 
-    post = await get_owned_post(db, post_id, user.id)
-    if not post:
-        raise HTTPException(status_code=404, detail="Post not found")
-    try:
-        cover_image = await generate_cover_image(post)
-        updated = await update_post(db, post_id, {"cover_image": cover_image}, user.id)
-    except ValueError as e:
-        msg = str(e)
-        if msg == "Post not found":
+    async with workspace_lock(user.id):
+        post = await get_owned_post(db, post_id, user.id)
+        if not post:
             raise HTTPException(status_code=404, detail="Post not found")
-        raise HTTPException(status_code=400, detail=msg)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Post not found")
-    return BlogPostResponse.model_validate(updated)
+        try:
+            cover_image = await generate_cover_image(post)
+            updated = await update_post(db, post_id, {"cover_image": cover_image}, user.id)
+        except ValueError as e:
+            msg = str(e)
+            if msg == "Post not found":
+                raise HTTPException(status_code=404, detail="Post not found")
+            raise HTTPException(status_code=400, detail=msg)
+        if not updated:
+            raise HTTPException(status_code=404, detail="Post not found")
+        return BlogPostResponse.model_validate(updated)
 
 
 @router.post("/blog/posts/{post_id}/suggest-tags")
