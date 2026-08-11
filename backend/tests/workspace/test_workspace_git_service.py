@@ -1,16 +1,16 @@
 import pytest
 
-from src.core import path_guard
+from src.config import settings
 from src.core.exceptions import ValidationFailedError
 from src.services.workspace import workspace_git_service
 
 
 @pytest.fixture
-def workspace_identity(monkeypatch):
-    monkeypatch.setattr(path_guard, "resolve_username", lambda user_id: f"git-user-{user_id}")
+def workspace_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "workspace_root", str(tmp_path / "workspace"))
 
 
-def test_workspace_git_tracks_diff_restore_and_ignores_recycle_bin(workspace_identity):
+def test_workspace_git_tracks_diff_restore_and_ignores_recycle_bin(workspace_root):
     root = workspace_git_service.ensure_workspace_repository(1)
     document = root / "notes" / "plan.md"
     document.parent.mkdir()
@@ -41,7 +41,7 @@ def test_workspace_git_tracks_diff_restore_and_ignores_recycle_bin(workspace_ide
     assert len(workspace_git_service.list_workspace_git_revisions(1, limit=10)) == 4
 
 
-def test_workspace_git_rejects_hidden_paths_and_untrusted_revisions(workspace_identity):
+def test_workspace_git_rejects_hidden_paths_and_untrusted_revisions(workspace_root):
     workspace_git_service.ensure_workspace_repository(1)
 
     with pytest.raises(ValidationFailedError):
@@ -50,7 +50,7 @@ def test_workspace_git_rejects_hidden_paths_and_untrusted_revisions(workspace_id
         workspace_git_service.get_workspace_git_diff(1, base_revision="HEAD^;invalid")
 
 
-def test_workspace_git_repositories_are_user_scoped(workspace_identity):
+def test_workspace_git_repositories_are_user_scoped(workspace_root):
     first = workspace_git_service.ensure_workspace_repository(1)
     second = workspace_git_service.ensure_workspace_repository(2)
 

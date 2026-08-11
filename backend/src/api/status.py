@@ -58,10 +58,15 @@ async def check_status(request: Request):
         overall = "degraded"
 
     try:
-        # 仅确保目录存在可写，不遍历统计（防磁盘 IO 被高频请求放大）
-        Path(settings.workspace_root).mkdir(parents=True, exist_ok=True)
+        # 仅确保规范 users 容器存在且安全，不遍历统计（防磁盘 IO 被高频请求放大）。
+        workspace_root = Path(settings.workspace_root)
+        users_root = workspace_root / "users"
+        workspace_root.mkdir(parents=True, exist_ok=True)
+        users_root.mkdir(exist_ok=True)
+        if users_root.is_symlink() or not users_root.is_dir():
+            raise OSError("workspace users container is unsafe")
     except Exception:
-        logger.warning("/status uploads check failed", exc_info=True)
+        logger.warning("/status workspace check failed", exc_info=True)
         uploads_status = "error"
         overall = "degraded"
 

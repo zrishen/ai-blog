@@ -5,7 +5,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.core import path_guard
 from src.core.exceptions import ValidationFailedError
 from src.database.models import BlogCategory, RagSource, User
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
@@ -17,7 +16,6 @@ from src.services.workspace.blog.blog_service import create_post
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "workspace"
     monkeypatch.setattr(settings, "workspace_root", str(root))
-    monkeypatch.setattr(path_guard, "resolve_username", lambda user_id: f"owner-{user_id}")
     return root
 
 
@@ -73,7 +71,7 @@ async def test_reconcile_managed_document_updates_indexes_and_marks_rag_stale(
     assert post.category_id == category.id
     assert post.blocks_json
     assert source is not None and source.index_status == "stale"
-    assert workspace.joinpath("owner-51", post.file_path).is_file()
+    assert workspace.joinpath("users", "51", post.file_path).is_file()
 
 
 @pytest.mark.asyncio

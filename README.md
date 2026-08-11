@@ -27,7 +27,7 @@
 - 文章 CRUD、草稿/发布、分类、标签、封面、摘要
 - AI 一键生成封面
 - 用户公开主页 `/u/:username` 与文章详情页 `/u/:username/posts/:slug`
-- Markdown 文件作为事实源：用户每次创建/更新文章即写入 `data/content/blog/<username>/`，DB 作为查询索引
+- Markdown 工作正文写入真实工作区 `data/workspace/users/<user_id>/posts/`；公开发布仍使用不可变 revision 快照
 - 浏览量统计、置顶、归档
 
 ### AI 对话
@@ -122,8 +122,11 @@ uv run uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir s
 或双击 `start_backend.bat`。后端运行在 http://127.0.0.1:8000，健康检查 `GET /health`。
 
 启动时会自动：
-- 执行 DB 迁移（含历史数据目录从 `user_id` 改为 `username` 命名的一次性迁移）
+- 执行 DB 迁移
+- 按需创建 `<workspace>/users/<user_id>/` 工作区根
 - 写入项目介绍文章（`ai-blog` 系统账户）
+
+> 当前为开发环境，无生产数据。存储布局变更后直接清空 `backend/data/` 重建即可，不提供迁移脚本。
 
 ### 3. 启动前端
 
@@ -141,10 +144,9 @@ pnpm dev
 ai-blog/
 ├── backend/
 │   ├── data/                       # 所有运行时数据统一在此（路径基于 backend/，不依赖 cwd）
-│   │   ├── content/
-│   │   │   ├── blog/<username>/    # 博客 Markdown 文件（按用户名分目录）
-│   │   │   └── uploads/<username>/ # 用户上传的文件（按用户名分目录）
-│   │   ├── templates/              # 系统模板（如项目介绍 md）
+│   │   ├── workspace/users/<user_id>/ # 真实用户工作区：posts/uploads/.trash/.git
+│   │   ├── content/chat_attachments/  # 独立聊天附件（按 user ID 隔离）
+│   │   ├── templates/                 # 系统模板（如项目介绍 md）
 │   │   └── logs/
 │   ├── src/
 │   │   ├── main.py                 # FastAPI 入口 + startup 钩子
@@ -183,7 +185,7 @@ ai-blog/
 │   │   ├── database/               # ORM 模型、连接、迁移
 │   │   │   ├── models.py           # 所有 SQLAlchemy 模型
 │   │   │   ├── engine.py / session.py
-│   │   │   └── migrations.py       # 自动迁移（含 user_id→username 目录迁移）
+│   │   │   └── migrations.py       # 数据库迁移入口
 │   │   ├── schemas/                # Pydantic Schema
 │   │   └── utils/                  # 工具函数（slug、user_dir 翻译等）
 │   └── tests/
@@ -268,8 +270,8 @@ pnpm test
 | `DEEP_THINKING_MODEL_NAME` | 深度思考模型 | 同上 |
 | `DATABASE_URL` | PostgreSQL 连接串 | `postgresql+asyncpg://postgres:postgres@localhost:5432/cortex` |
 | `FALKORDB_URL` | FalkorDB 连接串 | `redis://localhost:6379` |
-| `BLOG_CONTENT_DIR` | 博客文件根目录 | `data/content/blog` |
-| `UPLOAD_DIR` | 上传根目录 | `data/content/uploads` |
+| `WORKSPACE_ROOT` | 真实工作区根目录 | `data/workspace` |
+| `CHAT_ATTACHMENT_DIR` | 独立聊天附件根目录 | `data/content/chat_attachments` |
 | `JWT_SECRET` | JWT 签名密钥 | 生产环境务必修改 |
 | `REGISTRATION_INVITE_CODE` | 共享注册邀请码；留空则关闭注册 | 空 |
 | `SUPER_ADMIN_USERNAME` | 首次启动自动创建的超级管理员用户名 | 空 |
@@ -289,9 +291,9 @@ pnpm test
 ## 数据目录与命名
 
 - 所有运行时数据统一收纳在 `backend/data/`
-- 用户内容目录以 **username** 命名（`data/content/blog/<username>/`、`data/content/uploads/<username>/`），便于人工辨识
-- 业务层逻辑（DB、API、所有权判断）仍使用 `user_id`，仅在路径生成处翻译为 username
-- 用户改名暂未支持；未来若支持改名，需额外的目录迁移逻辑
+- 用户内容统一位于 `data/workspace/users/<user_id>/`；物理 owner 根只使用不可变 user ID，不受 username 大小写、Unicode 规范化或未来改名影响
+- 工作区内的 `posts/`、`uploads/`、`.trash/` 与 `.git/` 都在 owner 根下；数据库只保存工作区相对路径
+- 开发环境无生产数据，存储布局变更直接清空 `backend/data/` 重建，不维护迁移脚本
 
 ## 开发约定
 

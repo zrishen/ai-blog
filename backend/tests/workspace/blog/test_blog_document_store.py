@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 from src.config import settings
-from src.core import path_guard
 from src.core.exceptions import OwnershipError, ValidationFailedError
 from src.core.path_guard import workspace_dir
 from src.services.workspace.blog import blog_document_store
@@ -29,7 +28,6 @@ CREATED_AT = datetime(2025, 2, 3, 4, 5, 6, 123456, tzinfo=UTC)
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "workspace"
     monkeypatch.setattr(settings, "workspace_root", str(root))
-    monkeypatch.setattr(path_guard, "resolve_username", lambda user_id: f"user-{user_id}")
     return root
 
 
@@ -64,7 +62,7 @@ def test_write_round_trip_uses_deterministic_frontmatter_and_atomic_replace(work
 
     path = write_blog_document(1, document)
 
-    assert path == workspace / "user-1" / "posts" / "hello-world.md"
+    assert path == workspace / "users" / "1" / "posts" / "hello-world.md"
     assert path.read_text(encoding="utf-8") == (
         '---\n'
         'type: "blog"\n'
@@ -91,7 +89,7 @@ def test_write_round_trip_uses_deterministic_frontmatter_and_atomic_replace(work
 
 
 def test_read_missing_document_has_no_creation_side_effect(workspace):
-    user_root = workspace / "user-1"
+    user_root = workspace / "users" / "1"
 
     with pytest.raises(BlogDocumentNotFoundError):
         read_blog_document(1, "missing-post")
@@ -185,7 +183,7 @@ def test_documents_are_isolated_by_owner(workspace):
     with pytest.raises(BlogDocumentNotFoundError):
         read_blog_document(2, "private-post")
 
-    assert not (workspace / "user-2").exists()
+    assert not (workspace / "users" / "2").exists()
 
 
 def test_write_rejects_posts_directory_symlink_escape(workspace, tmp_path):

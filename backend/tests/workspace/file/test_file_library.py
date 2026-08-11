@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.models import FileDocument, FileProcessingJob
 from src.services.workspace.file import file_service
 from src.services.workspace.file.file_processing_service import _run_job
-from src.utils import user_dir
 
 
 # ---- Documents ----
@@ -52,14 +51,13 @@ async def test_upload_file_document_passes_numeric_user_id_to_vectorizer(
     assert isinstance(received_user_ids[0], int)
 
 
-def test_numeric_user_id_resolves_username_upload_directory(tmp_path, monkeypatch):
+def test_numeric_user_id_uses_immutable_workspace_root(tmp_path, monkeypatch):
     from src.config import settings
 
     workspace_root = tmp_path / "workspace"
     monkeypatch.setattr(settings, "workspace_root", str(workspace_root))
-    monkeypatch.setitem(user_dir._username_cache, 7, "named-user")
 
-    assert file_service.get_user_upload_dir(7) == workspace_root / "named-user" / "uploads"
+    assert file_service.get_user_upload_dir(7) == workspace_root / "users" / "7" / "uploads"
 
 
 @pytest.mark.asyncio

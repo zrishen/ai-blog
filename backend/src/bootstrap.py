@@ -58,9 +58,6 @@ async def startup() -> None:
         user = await ensure_system_user(session)
         await ensure_intro_post(session, build_intro_post_payload(), user.id)
         await _ensure_super_admin(session)
-        from src.utils.user_dir import warm_username_cache
-
-        await warm_username_cache(session)
 
     # FalkorDB 承载 RAG 向量；初始化空图以支持空态读取。
     from src.services.memory import graph_store

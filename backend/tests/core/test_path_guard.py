@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from src.config import settings
-from src.core import path_guard
 from src.core.context import current_user_id_cv
 from src.core.exceptions import OwnershipError
 from src.core.path_guard import (
@@ -23,7 +22,7 @@ from src.core.path_guard import (
 
 @pytest.fixture
 def roots(tmp_path, monkeypatch):
-    """把 settings 目录 + resolve_username 指到 tmp_path，隔离真实 FS。"""
+    """把 settings 目录指到 tmp_path，隔离真实 FS。"""
     upload = tmp_path / "uploads"
     attach = tmp_path / "attachments"
     workspace = tmp_path / "workspace"
@@ -32,7 +31,6 @@ def roots(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "upload_dir", str(upload))
     monkeypatch.setattr(settings, "chat_attachment_dir", str(attach))
     monkeypatch.setattr(settings, "workspace_root", str(workspace))
-    monkeypatch.setattr(path_guard, "resolve_username", lambda uid: f"u{uid}")
     return {"upload": upload, "attach": attach, "workspace": workspace}
 
 
@@ -72,7 +70,7 @@ def test_reject_mid_path_traversal(roots, rel):
 # ---- 门控 ③ symlink 逃逸 ----
 
 def test_reject_symlink_escape(roots, tmp_path):
-    user_dir = roots["upload"] / "u1"
+    user_dir = roots["upload"] / "1"
     user_dir.mkdir()
     outside = tmp_path / "outside.txt"
     outside.write_text("secret")
@@ -92,7 +90,7 @@ def test_write_parent_must_exist(roots):
 
 
 def test_write_valid_when_parent_exists(roots):
-    user_dir = roots["upload"] / "u1"
+    user_dir = roots["upload"] / "1"
     user_dir.mkdir()
     p = ensure_within(1, "a.txt", mode="write", scope=Scope.UPLOAD)
     assert p == user_dir / "a.txt"
@@ -150,7 +148,7 @@ def test_workspace_unconfigured_raises(roots, monkeypatch):
 
 
 def test_workspace_dir_read_has_no_side_effect_and_create_is_explicit(roots):
-    root = roots["workspace"] / "u1"
+    root = roots["workspace"] / "users" / "1"
 
     assert workspace_dir(1) == root
     assert not root.exists()
@@ -206,7 +204,8 @@ def test_workspace_path_rejects_symlink_escape(roots, tmp_path):
 def test_workspace_rejects_symlinked_user_root(roots):
     workspace_dir(2, create=True)
     try:
-        (roots["workspace"] / "u1").symlink_to(roots["workspace"] / "u2", target_is_directory=True)
+        users_root = roots["workspace"] / "users"
+        (users_root / "1").symlink_to(users_root / "2", target_is_directory=True)
     except OSError:
         pytest.skip("symlink needs dev mode/admin on Windows")
 
@@ -214,22 +213,36 @@ def test_workspace_rejects_symlinked_user_root(roots):
         workspace_dir(1)
 
 
-@pytest.mark.parametrize("username", ["..", "../other", "name/child", r"name\child", "C:drive", "CON", "name.", "name "])
-def test_workspace_rejects_unsafe_cached_or_legacy_username(roots, monkeypatch, username):
-    monkeypatch.setattr(path_guard, "resolve_username", lambda _user_id: username)
+def test_workspace_rejects_symlinked_users_container(roots, tmp_path):
+    workspace = roots["workspace"]
+    workspace.mkdir()
+    outside = tmp_path / "outside-users"
+    outside.mkdir()
+    try:
+        (workspace / "users").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("symlink needs dev mode/admin on Windows")
+
     with pytest.raises(OwnershipError):
         workspace_dir(1)
+
+
+def test_workspace_root_depends_only_on_immutable_user_id(roots):
+    assert workspace_dir(1) == roots["workspace"] / "users" / "1"
+    assert workspace_dir(2) == roots["workspace"] / "users" / "2"
+    with pytest.raises(OwnershipError):
+        user_root("Alice", scope=Scope.WORKSPACE)
 
 
 # ---- 属主身份语义（裁定#5：第一参数=属主，非 viewer）----
 
 def test_owner_isolation_between_users(roots):
-    (roots["upload"] / "u1").mkdir()
-    (roots["upload"] / "u1" / "secret.txt").write_text("x")
+    (roots["upload"] / "1").mkdir()
+    (roots["upload"] / "1" / "secret.txt").write_text("x")
     p = ensure_within(1, "secret.txt", scope=Scope.UPLOAD)
-    assert p == roots["upload"] / "u1" / "secret.txt"
+    assert p == roots["upload"] / "1" / "secret.txt"
     p2 = ensure_within(2, "secret.txt", scope=Scope.UPLOAD)
-    assert p2 == roots["upload"] / "u2" / "secret.txt"
+    assert p2 == roots["upload"] / "2" / "secret.txt"
 
 
 # ---- require_user（None 即拒 + wraps 透传契约）----

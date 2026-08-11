@@ -120,12 +120,7 @@ async def setup_database(_pg):
 def isolate_workspace_root(tmp_path, monkeypatch):
     """Give every test the same isolated filesystem boundary as its database."""
 
-    from src.utils.user_dir import _username_cache
-
     monkeypatch.setattr(settings, "workspace_root", str(tmp_path / "workspace"))
-    _username_cache.clear()
-    yield
-    _username_cache.clear()
 
 
 @pytest_asyncio.fixture

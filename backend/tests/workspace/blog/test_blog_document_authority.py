@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.core import path_guard
 from src.database.models import User
 from src.services.workspace.blog.blog_document_store import read_blog_document
 from src.services.workspace.blog.blog_service import create_post, publish_post, update_post
@@ -16,7 +15,6 @@ from src.services.workspace.blog.blog_service import create_post, publish_post, 
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "workspace"
     monkeypatch.setattr(settings, "workspace_root", str(root))
-    monkeypatch.setattr(path_guard, "resolve_username", lambda user_id: f"owner-{user_id}")
     return root
 
 
@@ -45,7 +43,7 @@ async def test_create_and_edit_keep_markdown_as_the_working_copy(
     document = read_blog_document(owner.id, post.slug)
     assert document.body == "Second body"
     assert document.tags == "files"
-    assert (workspace / f"owner-{owner.id}" / "posts" / f"{post.slug}.md").exists()
+    assert (workspace / "users" / str(owner.id) / "posts" / f"{post.slug}.md").exists()
 
 
 @pytest.mark.asyncio

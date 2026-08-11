@@ -7,8 +7,8 @@
    搬迁后断链会在 collection 阶段就暴露。
 
 2. ``bootstrap.startup()`` 函数体内的 lazy 模块路径全部可解析。
-   这些模块在 app 启动时才加载，且部分（memory.jobs / official_intro_service /
-   utils.user_dir）不被 api 链或域 pytest 拉入——搬迁后路径写错会致 app 启动崩
+   这些模块在 app 启动时才加载，且部分（memory.jobs / official_intro_service）
+   不被 api 链或域 pytest 拉入——搬迁后路径写错会致 app 启动崩
    而测试漏过。此参数化测显式覆盖该缺口。
 """
 
@@ -23,7 +23,6 @@ _STARTUP_LAZY_MODULES = (
     "src.services.workspace.blog.blog_service",
     "src.services.accounts.user.official_intro_service",
     "src.services.accounts.user.user_service",
-    "src.utils.user_dir",
     "src.services.memory.graph_store",
     "src.services.memory.jobs",
     "src.services.infra.embeddings.embedding_service",

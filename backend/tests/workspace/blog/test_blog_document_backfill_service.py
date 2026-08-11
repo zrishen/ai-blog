@@ -10,7 +10,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
-from src.core import path_guard
 from src.database.models import BlogCategory, BlogPost, User
 from src.services.workspace.blog import blog_document_backfill_service
 from src.services.workspace.blog.blog_document_backfill_service import (
@@ -24,7 +23,6 @@ from src.services.workspace.blog.blog_document_store import blog_document_path, 
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "workspace"
     monkeypatch.setattr(settings, "workspace_root", str(root))
-    monkeypatch.setattr(path_guard, "resolve_username", lambda user_id: f"owner-{user_id}")
     return root
 
 
@@ -67,7 +65,7 @@ async def test_backfill_exports_all_document_metadata_and_verifies_hash(
 
     result = await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
 
-    path = workspace / "owner-41" / "posts" / "mapped-post.md"
+    path = workspace / "users" / "41" / "posts" / "mapped-post.md"
     document = read_blog_document(post.user_id, post.slug)
     assert result.wrote_document
     assert path.exists()
@@ -103,7 +101,7 @@ async def test_verified_consistent_post_is_not_rewritten(
     monkeypatch.setattr(blog_document_backfill_service, "write_blog_document", must_not_write)
     second = await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
 
-    assert workspace.joinpath("owner-41", "posts", "idempotent-post.md").exists()
+    assert workspace.joinpath("users", "41", "posts", "idempotent-post.md").exists()
     assert first.content_sha256 == second.content_sha256
     assert not second.wrote_document
     assert post.file_migrated_at == migrated_at
@@ -145,7 +143,7 @@ async def test_verified_check_commit_ambiguous_success_is_rechecked_without_erro
     assert post.content_storage_state == "verified"
     assert post.last_storage_error is None
     assert read_blog_document(post.user_id, post.slug).body == "Legacy working body"
-    assert workspace.joinpath("owner-41", "posts", "ambiguous-verified-check.md").exists()
+    assert workspace.joinpath("users", "41", "posts", "ambiguous-verified-check.md").exists()
     assert commit_calls == 1
     assert rollback_calls >= 2
 
@@ -158,7 +156,7 @@ async def test_verified_check_commit_failure_marks_inconsistent_document_error(
 ):
     post = await _post_with_category(db_session, slug="inconsistent-verified-check")
     await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
-    path = workspace / "owner-41" / "posts" / "inconsistent-verified-check.md"
+    path = workspace / "users" / "41" / "posts" / "inconsistent-verified-check.md"
     real_commit = db_session.commit
     commit_calls = 0
 
@@ -205,7 +203,7 @@ async def test_error_state_is_terminal_and_does_not_overwrite_the_document(
     await db_session.refresh(post)
     assert post.content_storage_state == "error"
     assert post.last_storage_error == "previous verification failure"
-    assert not workspace.joinpath("owner-41", "posts", "terminal-error-post.md").exists()
+    assert not workspace.joinpath("users", "41", "posts", "terminal-error-post.md").exists()
 
 
 @pytest.mark.asyncio
@@ -230,7 +228,7 @@ async def test_verified_file_damage_is_marked_error_without_changing_content(
     with pytest.raises(BlogDocumentBackfillError):
         await backfill_blog_post_document(db_session, post_id=post.id, user_id=post.user_id)
 
-    assert workspace.joinpath("owner-41", "posts", f"{damage}-post.md") == path
+    assert workspace.joinpath("users", "41", "posts", f"{damage}-post.md") == path
     assert post.content == original_content
     assert post.content_storage_state == "error"
     assert post.last_storage_error
@@ -255,7 +253,7 @@ async def test_backfill_failure_is_recorded_and_does_not_block_another_post(
 
     assert result.wrote_document
     assert healthy.content_storage_state == "verified"
-    assert workspace.joinpath("owner-42", "posts", "healthy-post.md").exists()
+    assert workspace.joinpath("users", "42", "posts", "healthy-post.md").exists()
 
 
 @pytest.mark.asyncio
@@ -292,7 +290,7 @@ async def test_marker_commit_ambiguous_success_is_rechecked_as_verified(
     assert result.wrote_document
     assert post.content_storage_state == "verified"
     assert post.file_path == "posts/ambiguous-marker-post.md"
-    assert workspace.joinpath("owner-41", "posts", "ambiguous-marker-post.md").exists()
+    assert workspace.joinpath("users", "41", "posts", "ambiguous-marker-post.md").exists()
     assert commit_calls == 1
     assert rollback_calls >= 2
 
@@ -331,6 +329,6 @@ async def test_marker_commit_failure_rolls_back_then_records_error(
     assert post.content == "Legacy working body"
     assert post.content_storage_state == "error"
     assert post.last_storage_error == "database unavailable"
-    assert workspace.joinpath("owner-41", "posts", "failed-marker-post.md").exists()
+    assert workspace.joinpath("users", "41", "posts", "failed-marker-post.md").exists()
     assert commit_calls == 2
     assert rollback_calls >= 1

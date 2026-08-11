@@ -251,7 +251,7 @@ async def test_preview_path_traversal_prefix_confusion_blocked(client: AsyncClie
     )
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 攻击者目录（username 命名）；构造一个以其为前缀的"受害者"目录并放入文件
+    # 攻击者上传目录；构造一个以其为前缀的“受害者”目录并放入文件
     attacker_dir = get_user_upload_dir(user_id)
     victim_name = f"{attacker_dir.name}_victim"
     victim_dir = attacker_dir.parent / victim_name

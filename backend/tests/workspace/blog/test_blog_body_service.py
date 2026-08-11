@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from src.config import settings
-from src.core import path_guard
 from src.database.models import BlogPost
 from src.services.workspace.blog.blog_body_service import get_post_body
 from src.services.workspace.blog.blog_document_store import (
@@ -22,7 +21,6 @@ from src.services.workspace.blog.blog_document_store import (
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "workspace"
     monkeypatch.setattr(settings, "workspace_root", str(root))
-    monkeypatch.setattr(path_guard, "resolve_username", lambda user_id: f"user-{user_id}")
     return root
 
 

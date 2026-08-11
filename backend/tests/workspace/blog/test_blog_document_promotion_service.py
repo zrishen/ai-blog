@@ -10,7 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.config import settings
-from src.core import path_guard
 from src.database.models import BlogPost, RagSource, User
 from src.services.workspace.blog.blog_document_backfill_service import backfill_blog_post_document
 from src.services.workspace.blog.blog_document_promotion_service import (
@@ -23,7 +22,6 @@ from src.services.workspace.blog.blog_document_promotion_service import (
 def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "workspace"
     monkeypatch.setattr(settings, "workspace_root", str(root))
-    monkeypatch.setattr(path_guard, "resolve_username", lambda user_id: f"owner-{user_id}")
     return root
 
 
@@ -54,7 +52,7 @@ def _post(*, user_id: int, slug: str, state: str = "legacy", deleted: bool = Fal
 
 
 @pytest.mark.asyncio
-async def test_preflight_reports_invalid_and_normalized_username_blockers_and_state_completeness(
+async def test_preflight_reports_storage_state_completeness_independent_of_username(
     db_session: AsyncSession,
 ):
     await _add_user(db_session, 71, "valid-user")
@@ -76,32 +74,25 @@ async def test_preflight_reports_invalid_and_normalized_username_blockers_and_st
     assert preflight.total_active_posts == 3
     assert (preflight.legacy_posts, preflight.verified_posts, preflight.error_posts) == (1, 1, 1)
     assert not preflight.is_complete
-    assert {blocker.code for blocker in preflight.blockers} == {
-        "invalid_username",
-        "normalized_username_collision",
-    }
-    collision = next(blocker for blocker in preflight.blockers if blocker.code == "normalized_username_collision")
-    assert collision.user_ids == (73, 74)
 
 
 @pytest.mark.asyncio
-async def test_promotion_batch_stops_before_processing_an_identity_blocker(
+async def test_promotion_uses_user_id_root_even_for_legacy_unsafe_username(
     db_session: AsyncSession,
     workspace: Path,
 ):
     owner = await _add_user(db_session, 75, "unsafe/name")
-    post = _post(user_id=owner.id, slug="blocked")
+    post = _post(user_id=owner.id, slug="promoted")
     db_session.add(post)
     await db_session.commit()
 
     result = await run_blog_document_promotion_batch(_session_factory(db_session), limit=10)
     await db_session.refresh(post)
 
-    assert result.blocked
-    assert result.scanned == result.processed == 0
+    assert result.scanned == result.processed == 1
     assert result.next_id is None
-    assert post.content_storage_state == "legacy"
-    assert not (workspace / "owner-75" / "posts" / "blocked.md").exists()
+    assert post.content_storage_state == "verified"
+    assert (workspace / "users" / "75" / "posts" / "promoted.md").exists()
 
 
 @pytest.mark.asyncio
@@ -187,7 +178,6 @@ async def test_promotion_batch_is_resumable_skips_errors_and_only_stales_sha_rag
     factory = _session_factory(db_session)
     first = await run_blog_document_promotion_batch(factory, limit=2)
 
-    assert not first.blocked
     assert (first.scanned, first.processed, first.exported, first.reverified) == (2, 2, 1, 1)
     assert first.skipped_error == first.failed == 0
     assert first.next_id == verified.id
@@ -199,7 +189,7 @@ async def test_promotion_batch_is_resumable_skips_errors_and_only_stales_sha_rag
     ).scalar_one()
     assert legacy.content_storage_state == "verified"
     assert legacy_source is not None and legacy_source.index_status == "stale"
-    assert (workspace / "owner-76" / "posts" / "legacy.md").exists()
+    assert (workspace / "users" / "76" / "posts" / "legacy.md").exists()
 
     second = await run_blog_document_promotion_batch(factory, cursor=first.next_id, limit=10)
 

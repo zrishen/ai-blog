@@ -4,10 +4,10 @@
 @require_user 把 current_user_id_cv 桥接到工具层（当前仅定义，工具接入留后续）。
 
 Scope:
-- UPLOAD     upload_dir/resolve_username(属主)            现状 file_service.get_user_upload_dir
+- UPLOAD     upload_dir/<identity>（遗留 scope；现行文件库已使用 WORKSPACE/uploads）
 - ATTACHMENT chat_attachment_dir（现状兼容：stored_path 自带 <user_id>/ 前缀，root 不拼 identity；
              收敛后改 chat_attachment_dir/str(user_id) + rel_path 不含 user 段，届时退役本 scope）
-- WORKSPACE  workspace_root/resolve_username(属主)         真实工作目录默认（依赖 settings.workspace_root 配置）
+- WORKSPACE  workspace_root/users/<user_id>                不可变 user ID 工作目录
 
 属主语义：ensure_within 第一参数是【资源属主】（非 viewer）。
 公共读路径传 author username/id；chat 路径属主=current user（@require_user 从 cv 取）。
@@ -23,7 +23,7 @@ from typing import Any, Awaitable, Callable, Literal
 from src.config import settings
 from src.core.context import current_user_id_cv
 from src.core.exceptions import OwnershipError
-from src.utils.user_dir import resolve_username, validate_user_directory_name
+from src.utils.user_dir import validate_user_directory_name
 
 
 class Scope(StrEnum):
@@ -44,19 +44,29 @@ def _base_dir(scope: Scope) -> Path:
 
 
 def user_root(user_id: int | str, *, scope: Scope = Scope.WORKSPACE) -> Path:
-    """user 隔离根 <base>/<identity>（不创建目录，用户根本身不得是符号链接）。
+    """返回属主隔离根，不创建目录。
 
-    UPLOAD/WORKSPACE: identity=resolve_username(user_id)，并对缓存/DB 的值复验为跨平台安全目录段；
-    ATTACHMENT: root=chat_attachment_dir（stored_path 自带 user 段，不拼 identity，故不 resolve identity 段）。"""
+    WORKSPACE 使用不可变 ``workspace_root/users/<user_id>``；UPLOAD 是无生产消费者的
+    遗留 scope，继续只接受一个安全 identity 段；ATTACHMENT 的 stored_path 自带 user 段。
+    """
     base = _base_dir(scope)
     if scope is Scope.ATTACHMENT:
         return base
-    try:
-        identity = validate_user_directory_name(resolve_username(user_id))
-    except ValueError as exc:
-        raise OwnershipError("资源属主的目录名不安全") from exc
 
-    candidate = base / identity
+    if scope is Scope.WORKSPACE:
+        if not isinstance(user_id, int):
+            raise OwnershipError("工作目录属主必须是用户 ID")
+        users_root = base / "users"
+        if users_root.is_symlink() or (users_root.exists() and not users_root.is_dir()):
+            raise OwnershipError("工作目录容器不是安全目录")
+        candidate = users_root / str(user_id)
+    else:
+        try:
+            identity = validate_user_directory_name(str(user_id))
+        except ValueError as exc:
+            raise OwnershipError("资源属主的目录名不安全") from exc
+        candidate = base / identity
+
     if candidate.is_symlink():
         raise OwnershipError("用户根目录不能是符号链接")
     root = candidate.resolve()
@@ -75,12 +85,16 @@ def workspace_dir(user_id: int, *, create: bool = False) -> Path:
         return root
 
     base = _base_dir(Scope.WORKSPACE)
+    users_root = base / "users"
     try:
         base.mkdir(parents=True, exist_ok=True)
+        users_root.mkdir(exist_ok=True)
         root.mkdir(exist_ok=True)
     except OSError as exc:
         raise OwnershipError("工作目录无法创建") from exc
 
+    if users_root.is_symlink() or not users_root.is_dir():
+        raise OwnershipError("工作目录容器不是安全目录")
     if not root.is_dir() or root.is_symlink():
         raise OwnershipError("工作目录不是安全目录")
     return user_root(user_id, scope=Scope.WORKSPACE)
@@ -116,8 +130,7 @@ def ensure_within(
 
     gate ④ 说明：strict=True 保证父目录真实存在（调用方 write 前无需再判）；其 is_relative_to 复检为
     defense-in-depth（③ 已逻辑覆盖：target.resolve() 在 root 内 ⟹ parent.resolve() 亦在 root 内），
-    非跨调用 TOCTOU 真防护——那需 O_NOFOLLOW/fchdir，留待沙箱化。当前生产无 write 经 mode="write"
-    （attachment_stored_path 用 read、save_file 绕过 path_guard），④ 实质生效待写路径迁移。
+    非跨调用 TOCTOU 真防护——那需 O_NOFOLLOW/fchdir；现有 WORKSPACE write 调用仍依赖“工作区只由服务进程修改”的运行前提。
     """
     root = user_root(user_id, scope=scope)
     p = Path(rel_path)

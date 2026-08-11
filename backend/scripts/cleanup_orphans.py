@@ -28,52 +28,69 @@ from src.config import settings
 from src.database.models import (
     BlogPost as BlogPostModel,
     ChatAttachment as ChatAttachmentModel,
+    Conversation as ConversationModel,
     FileDocument as FileDocumentModel,
     Message as MessageModel,
 )
 from src.database.session import async_session
-from src.services.trash.trash_service import _extract_local_filename
+from src.services.workspace.file.orphan_cleanup_service import cleanup_workspace_upload_orphans
+from src.services.workspace.trash.trash_service import _extract_local_filename
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("cleanup_orphans")
 
 
-async def _collect_referenced_upload_names(db) -> set[str]:
-    """收集数据库中仍被引用的所有上传文件 stored_name（跨用户）。"""
-    referenced: set[str] = set()
-    for (stored,) in (await db.execute(select(FileDocumentModel.file_path))).all():
-        if stored:
-            referenced.add(stored)
-    for (cover,) in (await db.execute(select(BlogPostModel.cover_image))).all():
-        extracted = _extract_local_filename(cover or "")
-        if extracted:
-            referenced.add(extracted)
-    result = await db.execute(select(MessageModel.image_url, MessageModel.file_url))
-    for image_url, file_url in result.all():
+def _stored_filename(stored_path: str | None) -> str | None:
+    if not stored_path:
+        return None
+    path = Path(stored_path)
+    if path.is_absolute() or ".." in path.parts:
+        return None
+    return path.name or None
+
+
+async def _collect_referenced_upload_names(db) -> dict[int, set[str]]:
+    """按 user ID 收集数据库中仍被引用的上传文件名。"""
+
+    referenced: dict[int, set[str]] = {}
+
+    def add(user_id, filename: str | None) -> None:
+        if filename is None:
+            return
+        try:
+            owner_id = int(user_id)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(f"上传引用缺少数值 user_id: {user_id!r}") from exc
+        referenced.setdefault(owner_id, set()).add(filename)
+
+    for user_id, stored in (
+        await db.execute(select(FileDocumentModel.user_id, FileDocumentModel.file_path))
+    ).all():
+        add(user_id, _stored_filename(stored))
+    for user_id, cover in (
+        await db.execute(select(BlogPostModel.user_id, BlogPostModel.cover_image))
+    ).all():
+        add(user_id, _extract_local_filename(cover or ""))
+
+    message_rows = await db.execute(
+        select(ConversationModel.user_id, MessageModel.image_url, MessageModel.file_url).join(
+            MessageModel,
+            MessageModel.conversation_id == ConversationModel.id,
+        )
+    )
+    for user_id, image_url, file_url in message_rows.all():
         for value in (image_url, file_url):
-            extracted = _extract_local_filename(value or "")
-            if extracted:
-                referenced.add(extracted)
+            add(user_id, _extract_local_filename(value or ""))
     return referenced
 
 
 async def cleanup_upload_orphans(db, *, dry_run: bool) -> int:
     referenced = await _collect_referenced_upload_names(db)
-    upload_root = Path(settings.upload_dir)
-    if not upload_root.exists():
-        return 0
-    removed = 0
-    for path in upload_root.rglob("*"):
-        if not path.is_file() or path.name in referenced:
-            continue
-        logger.info("发现孤儿上传文件: %s", path)
-        removed += 1
-        if not dry_run:
-            try:
-                path.unlink()
-            except OSError:
-                logger.warning("删除失败: %s", path, exc_info=True)
-    return removed
+    return cleanup_workspace_upload_orphans(
+        settings.workspace_root,
+        referenced,
+        dry_run=dry_run,
+    )
 
 
 async def cleanup_chat_attachment_orphans(db, *, dry_run: bool) -> int:

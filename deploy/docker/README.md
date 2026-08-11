@@ -103,7 +103,7 @@ docker compose start backend
 
 ## 常见问题
 
-- `backend` 启动失败：先检查 `backend/.env` 是否存在、`JWT_SECRET` 与 `LLM_SETTINGS_ENCRYPTION_KEY` 是否有效，以及 `backend/data` 权限。
+- `backend` 启动失败：先检查 `backend/.env`、密钥和 `backend/data` 权限。当前为开发环境，存储布局变更后可直接清空 `backend/data/` 重建。
 - 前端显示 502：运行 `docker compose ps` 和 `docker compose logs backend`，确认后端健康检查通过。
 - AI 流式输出停顿：确认外层 CDN/代理也关闭 SSE 缓冲，读取超时应高于 600 秒。
 - 登录后刷新失效：HTTPS 环境检查 `COOKIE_SECURE=true`；跨域部署还需单独配置 CORS 与 Cookie 策略，本编排默认同源。

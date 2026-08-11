@@ -8,15 +8,13 @@ from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.database.models import BlogPost, RagSource, User
+from src.database.models import BlogPost, RagSource
 from src.services.workspace.blog.blog_document_backfill_service import backfill_blog_post_document
-from src.utils.user_dir import validate_user_directory_name
 
 logger = logging.getLogger(__name__)
 
@@ -24,34 +22,18 @@ _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 
 @dataclass(frozen=True)
-class BlogDocumentPromotionBlocker:
-    """An identity condition that makes workspace-document promotion unsafe."""
-
-    code: str
-    user_ids: tuple[int, ...]
-    usernames: tuple[str, ...]
-    detail: str
-
-
-@dataclass(frozen=True)
 class BlogDocumentPromotionPreflight:
-    """State and identity safety information needed before a promotion batch."""
+    """Blog document storage states needed before a promotion batch."""
 
     total_active_posts: int
     legacy_posts: int
     verified_posts: int
     error_posts: int
-    blockers: tuple[BlogDocumentPromotionBlocker, ...]
-
-    @property
-    def has_identity_blockers(self) -> bool:
-        return bool(self.blockers)
 
     @property
     def is_complete(self) -> bool:
         return (
-            not self.has_identity_blockers
-            and self.total_active_posts == self.verified_posts
+            self.total_active_posts == self.verified_posts
             and self.legacy_posts == 0
             and self.error_posts == 0
         )
@@ -73,43 +55,8 @@ class BlogDocumentPromotionBatchResult:
     failed_post_ids: tuple[int, ...]
     stale_marked: int
 
-    @property
-    def blocked(self) -> bool:
-        return self.preflight.has_identity_blockers
-
-
 async def preflight_blog_document_promotion(db: AsyncSession) -> BlogDocumentPromotionPreflight:
-    """Read all usernames and active post states without modifying either."""
-
-    users = list((await db.execute(select(User.id, User.username).order_by(User.id))).all())
-    blockers: list[BlogDocumentPromotionBlocker] = []
-    normalized_names: dict[str, list[tuple[int, str]]] = {}
-
-    for user_id, username in users:
-        try:
-            validate_user_directory_name(username)
-        except ValueError as exc:
-            blockers.append(
-                BlogDocumentPromotionBlocker(
-                    code="invalid_username",
-                    user_ids=(user_id,),
-                    usernames=(username,),
-                    detail=str(exc),
-                )
-            )
-        normalized_names.setdefault(unicodedata.normalize("NFC", username).casefold(), []).append((user_id, username))
-
-    for users_with_same_path in normalized_names.values():
-        if len(users_with_same_path) < 2:
-            continue
-        blockers.append(
-            BlogDocumentPromotionBlocker(
-                code="normalized_username_collision",
-                user_ids=tuple(user_id for user_id, _ in users_with_same_path),
-                usernames=tuple(username for _, username in users_with_same_path),
-                detail="Usernames resolve to the same NFC case-folded workspace directory",
-            )
-        )
+    """Read active post storage states without modifying data."""
 
     state_counts = dict(
         (
@@ -128,7 +75,6 @@ async def preflight_blog_document_promotion(db: AsyncSession) -> BlogDocumentPro
         legacy_posts=legacy_posts,
         verified_posts=verified_posts,
         error_posts=error_posts,
-        blockers=tuple(blockers),
     )
 
 
@@ -185,21 +131,6 @@ async def run_blog_document_promotion_batch(
 
     async with session_factory() as preflight_db:
         preflight = await preflight_blog_document_promotion(preflight_db)
-        if preflight.has_identity_blockers:
-            return BlogDocumentPromotionBatchResult(
-                preflight=preflight,
-                cursor=cursor,
-                next_id=cursor,
-                scanned=0,
-                processed=0,
-                exported=0,
-                reverified=0,
-                skipped_error=0,
-                failed=0,
-                failed_post_ids=(),
-                stale_marked=0,
-            )
-
         candidate_stmt = (
             select(BlogPost.id, BlogPost.user_id, BlogPost.content_storage_state)
             .where(BlogPost.deleted_at.is_(None))
