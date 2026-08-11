@@ -8,15 +8,14 @@ import uuid
 from pathlib import Path, PurePosixPath
 
 from langchain_core.tools import tool
-from sqlalchemy import select
 
 from src.core.context import current_user_id_cv
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import require_user, workspace_dir, workspace_path
 from src.core.workspace_path import validate_workspace_relative_path
-from src.database.models import BlogPost
 from src.database.session import async_session
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
+from src.services.workspace.resource_resolver import ResourceKind, resolve_workspace_resource
 from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
 from src.services.workspace.workspace_file_service import move_entry
 from src.services.workspace.workspace_git_service import (
@@ -111,6 +110,15 @@ async def _sync_managed_blog_document(user_id: int, relative_path: str) -> None:
         await reconcile_blog_document(db, user_id=user_id, relative_path=relative_path)
 
 
+async def _assert_not_managed_file_document(user_id: int, relative_path: str) -> None:
+    """受管 FileDocument 必须经专用 API 更新/删除，禁止通用文件工具覆盖。"""
+
+    async with async_session() as db:
+        resolved = await resolve_workspace_resource(db, user_id=user_id, relative_path=relative_path)
+    if resolved.kind is ResourceKind.FILE_DOCUMENT:
+        raise ConflictError("Managed file document must be updated through its dedicated API")
+
+
 def _iter_workspace_files(user_id: int, pattern: str):
     root = workspace_dir(user_id)
     if not root.is_dir():
@@ -155,6 +163,7 @@ async def workspace_write_file(path: str, content: str) -> str:
 
     relative_path = _relative_path(path)
     user_id = _user_id()
+    await _assert_not_managed_file_document(user_id, relative_path)
     await asyncio.to_thread(ensure_workspace_repository, user_id)
     await asyncio.to_thread(_write_text, user_id, relative_path, content)
     await _sync_managed_blog_document(user_id, relative_path)
@@ -171,6 +180,7 @@ async def workspace_edit_file(path: str, old_text: str, new_text: str) -> str:
     if not old_text:
         raise ValidationFailedError("old_text must not be empty")
     user_id = _user_id()
+    await _assert_not_managed_file_document(user_id, relative_path)
     await asyncio.to_thread(ensure_workspace_repository, user_id)
     text = await asyncio.to_thread(_read_text, user_id, relative_path)
     count = text.count(old_text)
@@ -246,33 +256,28 @@ async def workspace_move_file(path: str, target_folder: str = "") -> str:
 @tool
 @require_user
 async def workspace_delete_file(path: str) -> str:
-    """Delete a regular workspace file or an empty folder. Managed blog files use the existing recycle-bin lifecycle."""
+    """Delete a regular workspace file or an empty folder. Managed resources use their dedicated lifecycle."""
 
     relative_path = _relative_path(path)
     user_id = _user_id()
     await asyncio.to_thread(ensure_workspace_repository, user_id)
     async with async_session() as db:
-        post = (
-            await db.execute(
-                select(BlogPost).where(
-                    BlogPost.user_id == user_id,
-                    BlogPost.deleted_at.is_(None),
-                    BlogPost.file_path == relative_path,
-                )
-            )
-        ).scalar_one_or_none()
-        if post is not None:
+        resolved = await resolve_workspace_resource(db, user_id=user_id, relative_path=relative_path)
+        if resolved.kind is ResourceKind.BLOG_POST:
             from src.services.workspace.blog.blog_service import delete_post
 
-            await delete_post(db, post.id, user_id)
-            await asyncio.to_thread(record_workspace_change, user_id, f"Delete managed blog {relative_path}")
-            return f"Moved managed blog {relative_path} to the recycle bin"
-
-    async with async_session() as db:
-        await move_workspace_entry_to_trash(db, user_id=user_id, relative_path=relative_path)
-        await db.commit()
-    await asyncio.to_thread(record_workspace_change, user_id, f"Delete {relative_path}")
-    return f"Moved {relative_path} to the recycle bin"
+            await delete_post(db, resolved.resource_id, user_id)
+            message = f"Moved managed blog {relative_path} to the recycle bin"
+            change = f"Delete managed blog {relative_path}"
+        elif resolved.kind is ResourceKind.FILE_DOCUMENT:
+            raise ConflictError("Managed file document must be deleted through its dedicated API")
+        else:
+            await move_workspace_entry_to_trash(db, user_id=user_id, relative_path=relative_path)
+            await db.commit()
+            message = f"Moved {relative_path} to the recycle bin"
+            change = f"Delete {relative_path}"
+    await asyncio.to_thread(record_workspace_change, user_id, change)
+    return message
 
 
 @tool
@@ -314,6 +319,7 @@ async def workspace_git_restore_file(path: str, revision: str = "HEAD") -> str:
 
     user_id = _user_id()
     relative_path = _relative_path(path)
+    await _assert_not_managed_file_document(user_id, relative_path)
     restored_path = await asyncio.to_thread(
         restore_workspace_file,
         user_id,

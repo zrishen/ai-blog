@@ -17,6 +17,7 @@ from src.database.models import BlogPost, FileDocument
 from src.services.workspace.blog.blog_document_store import validate_blog_document_path
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
 from src.services.workspace.file.file_service import normalize_workspace_file_path
+from src.services.workspace.resource_resolver import ResourceKind, resolve_workspace_resource
 from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
 
 _MAX_SEGMENT_LENGTH = 300
@@ -286,26 +287,8 @@ async def delete_unmanaged_file(db: AsyncSession, user_id: int, *, path: str) ->
     if source.is_symlink() or not source.is_file():
         raise NotFoundError("Workspace file not found")
 
-    managed_post = await db.scalar(
-        select(BlogPost.id).where(
-            BlogPost.user_id == user_id,
-            BlogPost.deleted_at.is_(None),
-            BlogPost.file_path == relative_path,
-        )
-    )
-    documents = list(
-        (
-            await db.execute(
-                select(FileDocument).where(
-                    FileDocument.user_id == str(user_id),
-                    FileDocument.deleted_at.is_(None),
-                )
-            )
-        ).scalars()
-    )
-    if managed_post is not None or any(
-        normalize_workspace_file_path(document.file_path) == relative_path for document in documents
-    ):
+    resolved = await resolve_workspace_resource(db, user_id=user_id, relative_path=relative_path)
+    if resolved.kind is not ResourceKind.UNMANAGED:
         raise ConflictError("Managed workspace resources must use their dedicated delete action")
 
     await move_workspace_entry_to_trash(
