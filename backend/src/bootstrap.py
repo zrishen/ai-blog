@@ -54,6 +54,14 @@ async def startup() -> None:
     from src.services.accounts.user.user_service import ensure_system_user
 
     await reconcile_jobs()
+
+    from src.services.workspace.workspace_reconcile_service import reconcile_all_workspaces
+
+    try:
+        await reconcile_all_workspaces()
+    except Exception:
+        logger.exception("workspace reconcile on startup failed")
+
     async with async_session() as session:
         user = await ensure_system_user(session)
         await ensure_intro_post(session, build_intro_post_payload(), user.id)

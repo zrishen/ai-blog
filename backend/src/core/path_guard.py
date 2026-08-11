@@ -100,6 +100,17 @@ def workspace_dir(user_id: int, *, create: bool = False) -> Path:
     return user_root(user_id, scope=Scope.WORKSPACE)
 
 
+def workspace_users_root() -> Path:
+    """所有用户工作目录的容器（workspace_root/users），不创建。
+
+    需遍历全部用户的地方（如 reconcile 兜底）用；含 symlink/非目录安全校验。
+    """
+    users_root = _base_dir(Scope.WORKSPACE) / "users"
+    if users_root.is_symlink() or (users_root.exists() and not users_root.is_dir()):
+        raise OwnershipError("工作目录容器不是安全目录")
+    return users_root
+
+
 def workspace_path(
     user_id: int,
     relative_path: str | Path,
