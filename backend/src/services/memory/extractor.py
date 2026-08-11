@@ -66,10 +66,10 @@ def _parse(content: str) -> dict:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("extract output not valid JSON, returning empty preview=%s", text[:200])
+        logger.warning("extract output not valid JSON chars=%d", len(text))
         return empty
     if not isinstance(data, dict):
-        logger.warning("extract output JSON is not an object: %s preview=%s", type(data).__name__, text[:200])
+        logger.warning("extract output JSON is not an object type=%s", type(data).__name__)
         return empty
     return {
         "entities": data.get("entities", []),

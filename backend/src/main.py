@@ -68,23 +68,26 @@ app.include_router(router, prefix="/api/v1")
 async def _log_http_request(request: Request, call_next):
     """Write application-level HTTP access records independently of Uvicorn."""
     started_at = perf_counter()
+    client_ip = request.client.host if request.client else "unknown"
     try:
         response = await call_next(request)
     except Exception:
         http_logger.exception(
-            "%s %s failed after %.3fs",
+            "%s %s ip=%s failed after %.3fs",
             request.method,
             request.url.path,
+            client_ip,
             perf_counter() - started_at,
         )
         raise
 
     if request.url.path != "/health":
         http_logger.info(
-            "%s %s %s %.3fs",
+            "%s %s %s ip=%s %.3fs",
             request.method,
             request.url.path,
             response.status_code,
+            client_ip,
             perf_counter() - started_at,
         )
     return response

@@ -7,6 +7,7 @@ per-IP 限流防前端死循环刷爆日志文件。
 
 import logging
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
@@ -21,12 +22,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["client-errors"])
 
 
+def _safe_client_path(url: str | None) -> str:
+    """只保留路径，避免 query/fragment 中的 token、搜索词等进入日志。"""
+    if not url:
+        return "-"
+    return urlsplit(url).path or "/"
+
+
 class ClientErrorReport(BaseModel):
     message: str = Field(..., max_length=2000)
     stack: str | None = Field(default=None, max_length=8000)
     url: str | None = Field(default=None, max_length=1000)
     source: str = Field(default="window", max_length=50)  # window / unhandledrejection / error_boundary / logger
-    user_agent: str | None = Field(default=None, max_length=500)
 
 
 def _enforce_client_error_rate_limit(request: Request) -> None:
@@ -53,8 +60,10 @@ async def report_client_error(
     _enforce_client_error_rate_limit(request)
     ip = request.client.host if request.client else "unknown"
     user_id = user.id if user else None
+    user_agent = request.headers.get("user-agent", "-")
     logger.error(
-        "client_error source=%s user_id=%s ip=%s url=%s message=%.500s stack=%.1000s ua=%s",
-        body.source, user_id, ip, body.url, body.message, body.stack or "", body.user_agent,
+        "client_error source=%s user_id=%s ip=%s path=%s message=%.500s stack=%.1000s ua=%.500s",
+        body.source, user_id, ip, _safe_client_path(body.url),
+        body.message, body.stack or "", user_agent,
     )
     return {"status": "ok"}

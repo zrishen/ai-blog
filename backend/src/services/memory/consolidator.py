@@ -99,16 +99,19 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
     result = {"entities": [], "facts": [], "episodes": [], "preferences": []}
 
     name_to_id: dict[str, str] = {}
-    for ent in extracted.get("entities", []):
+    for index, ent in enumerate(extracted.get("entities", [])):
         try:
             eid, is_new = await consolidate_entity(user_id=user_id, **ent)
         except (TypeError, KeyError, ValueError) as e:
-            logger.warning("跳过格式异常的 entity 项 %r: %s", ent, e)
+            logger.warning(
+                "memory consolidate skipped invalid entity user_id=%s index=%d error_type=%s",
+                user_id, index, type(e).__name__,
+            )
             continue
         result["entities"].append((eid, is_new))
         name_to_id[ent["name"]] = eid
 
-    for fact in extracted.get("facts", []):
+    for index, fact in enumerate(extracted.get("facts", [])):
         try:
             sid = fact.get("subject_id") or name_to_id.get(fact.get("subject_name", ""))
             if not sid:
@@ -121,15 +124,21 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
                 source_doc_id=fact.get("source_doc_id"),
             )
         except (TypeError, KeyError, ValueError) as e:
-            logger.warning("跳过格式异常的 fact 项 %r: %s", fact, e)
+            logger.warning(
+                "memory consolidate skipped invalid fact user_id=%s index=%d error_type=%s",
+                user_id, index, type(e).__name__,
+            )
             continue
         result["facts"].append(fid)
 
-    for ep in extracted.get("episodes", []):
+    for index, ep in enumerate(extracted.get("episodes", [])):
         try:
             eid = await graph_store.add_episode(user_id=user_id, **ep)
         except (TypeError, KeyError, ValueError) as e:
-            logger.warning("跳过格式异常的 episode 项 %r: %s", ep, e)
+            logger.warning(
+                "memory consolidate skipped invalid episode user_id=%s index=%d error_type=%s",
+                user_id, index, type(e).__name__,
+            )
             continue
         result["episodes"].append(eid)
         participants = [name_to_id[n] for n in ep.get("participants", []) if n in name_to_id]

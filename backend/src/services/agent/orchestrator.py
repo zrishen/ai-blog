@@ -141,7 +141,7 @@ async def _keep_attachment_claim_alive(
     except asyncio.CancelledError:
         raise
     except Exception:
-        logger.exception("Failed to refresh attachment claim heartbeat user_id=%s claim_token=%s", user_id, claim_token)
+        logger.exception("Failed to refresh attachment claim heartbeat user_id=%s", user_id)
 
 
 async def _stop_claim_heartbeat(task: asyncio.Task[None] | None) -> None:
@@ -468,8 +468,7 @@ async def stream_chat(
     else:
         model_kwargs = _chat_model_kwargs(thinking_mode, user_llm_settings)
     logger.info(
-        ">>> Chat start: preview='%s', conv=%s, user=%s, msg=%d, mode=%s, model=%s, max_tokens=%s, tools=%d, api_msgs=%d, mcp=%d",
-        user_message[:100].replace("\n", " "),
+        ">>> Chat start: conv=%s user=%s msg_chars=%d mode=%s model=%s max_tokens=%s tools=%d api_msgs=%d mcp=%d",
         conversation_id, user_id, len(user_message), thinking_mode,
         model_kwargs.get("model"), model_kwargs.get("max_tokens"),
         len(agent_tools), len(api_messages), len(mcp_plugins),
@@ -479,7 +478,6 @@ async def stream_chat(
     full_content = ""
     final_confirmed = False
     reasoning_debug_parts: list[str] = []
-    _reasoning_logged_up_to = 0
     tool_events_for_history: list[dict[str, Any]] = []
     loop_steps_for_history: list[str] = []
     # 通用流式 infra：idx → 工具名（name 路由）/ idx → 累积 args（partial JSON）/ idx → projector 实例。
@@ -707,14 +705,6 @@ async def stream_chat(
                         if usage:
                             _collected_usage = usage
                         round_text = _extract_text_content(ai_msg.content)
-                        # 工具调用前记录本轮 reasoning（与前端 timeline 一致：reasoning → 工具）
-                        if len(reasoning_debug_parts) > _reasoning_logged_up_to:
-                            round_reasoning = "".join(reasoning_debug_parts[_reasoning_logged_up_to:])
-                            _reasoning_logged_up_to = len(reasoning_debug_parts)
-                            logger.info(
-                                "[THINKING] round %d reasoning: len=%d preview=%s",
-                                _round_id, len(round_reasoning), round_reasoning[:200],
-                            )
                         classification = "loop" if ai_msg.tool_calls else "final"
                         round_payload = {
                             "round_id": _round_id,
@@ -915,8 +905,7 @@ async def stream_chat(
         "attachments": response_attachments,
     })
     logger.info(
-        "<<< Chat end: preview='%s' conv=%s msg=%s user=%s took=%.1fs chars=%d rounds=%d tool_calls=%d confirmed=%s usage=%s",
-        full_content[:200].replace("\n", " "),
+        "<<< Chat end: conv=%s msg=%s user=%s took=%.1fs chars=%d rounds=%d tool_calls=%d confirmed=%s usage=%s",
         new_conv_id, message_id, user_id, time.time() - chat_t0, len(full_content),
         _round_id, len(tool_events_for_history), final_confirmed,
         _collected_usage or "none",

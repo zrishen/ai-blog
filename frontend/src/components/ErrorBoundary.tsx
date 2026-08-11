@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
     Sentry.captureException(error, {
       contexts: { react: { componentStack: info.componentStack } },
     });
-    // 并行上报后端 app.log（Sentry 无 DSN 时 no-op，两者互不影响）。logError 内部已吞异常，不会回触发本方法。
+    // 同时上报后端 app.log；logError 内部吞掉网络异常，不会回触发本方法。
     logError(error, {
       source: "error_boundary",
       componentStack: info.componentStack ?? undefined,

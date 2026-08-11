@@ -23,9 +23,7 @@ async def _call_llm(client: AsyncOpenAI, prompt: str) -> str:
             messages=[{"role": "user", "content": prompt}],
             max_tokens=500,
         )
-    raw = resp.choices[0].message.content or ""
-    logger.info("suggest_tags raw response: %r", raw[:200])
-    return raw
+    return resp.choices[0].message.content or ""
 
 
 def _parse_tags(raw: str) -> list[str]:

@@ -12,8 +12,8 @@ from src.core.context import request_id_cv
 LOG_DIR = DATA_DIR / "logs"
 LOG_FILE = LOG_DIR / "app.log"
 ACCESS_LOG_FILE = LOG_DIR / "access.log"
-LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
-LOG_BACKUP_COUNT = 5
+LOG_MAX_BYTES = 20 * 1024 * 1024  # 20 MB
+LOG_BACKUP_COUNT = 10
 
 # 我们自己代码的 logger 前缀：进 app.log，不进 access.log
 _OWN_CODE_PREFIX = "src."

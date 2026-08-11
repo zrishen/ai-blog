@@ -38,11 +38,6 @@ def _get_openai_client() -> AsyncOpenAI:
         api_key = settings.embedding_api_key or settings.openai_api_key
         if not api_key:
             raise ValueError("EMBEDDING_API_KEY or OPENAI_API_KEY is required for embeddings")
-        logger.info(
-            "Initializing embedding client: model=%s base_url=%s",
-            settings.embedding_model,
-            settings.embedding_base_url,
-        )
         _openai_client = AsyncOpenAI(api_key=api_key, base_url=settings.embedding_base_url)
     return _openai_client
 
