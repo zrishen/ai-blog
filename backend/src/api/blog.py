@@ -174,6 +174,8 @@ async def get_blog_post(
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_optional_user),
 ):
+    from src.core.exceptions import NotFoundError, ValidationFailedError
+    from src.services.workspace.blog.blog_body_service import get_post_body
     from src.services.workspace.blog.blog_service import get_post, get_published_post_by_id, increment_view_count
 
     post = await get_post(db, post_id)
@@ -189,7 +191,13 @@ async def get_blog_post(
         await db.refresh(post)
     else:
         post.view_count += 1
-    return BlogPostResponse.model_validate(post)
+    resp = BlogPostResponse.model_validate(post)
+    if is_owner:
+        try:
+            resp.content = await get_post_body(post)
+        except (NotFoundError, ValidationFailedError, OSError):
+            pass
+    return resp
 
 
 @router.post("/blog/posts", response_model=BlogPostResponse, status_code=201)

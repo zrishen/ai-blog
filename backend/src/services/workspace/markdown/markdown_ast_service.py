@@ -1,9 +1,10 @@
 """Markdown 正文 AST 解析服务：把正文解析成块结构缓存到 DB（blocks_json），供 AI 章节定位（大纲提取/读单节）省 token。
 
-事实源是 blog_posts.content（DB），blocks_json 是派生缓存，可随时从 content 重建。
+blocks_json 是 Markdown 正文的派生 AST 缓存；运行期 body 经 reconcile_blog_document 派生自 workspace md（真相），可从 md 重建。
 """
 
 import logging
+import re
 from typing import Optional
 
 from markdown_it import MarkdownIt
@@ -12,6 +13,19 @@ logger = logging.getLogger(__name__)
 
 # commonmark 模式:标准 markdown 语法,代码块内的 # 不会被误判为标题
 _md = MarkdownIt("commonmark")
+
+# 内联图片：markdown ![](url) 与 HTML <img src="url">（AI 生成内容常含后者）
+_INLINE_IMAGE_RE = re.compile(r"!\[.*?\]\(([^)\s]+)(?:\s+\".*?\")?\)")
+_HTML_IMG_SRC_RE = re.compile(r"<img\s[^>]*\bsrc=[\"']([^\"']+)[\"']", re.IGNORECASE)
+
+
+def extract_inline_image_urls(text: str) -> list[str]:
+    """提取 markdown 内联图片与 HTML <img> 的 URL（保持出现顺序，含重复）。"""
+    if not text:
+        return []
+    urls = _INLINE_IMAGE_RE.findall(text)
+    urls.extend(_HTML_IMG_SRC_RE.findall(text))
+    return urls
 
 
 def parse_to_blocks(body: str) -> list[dict]:

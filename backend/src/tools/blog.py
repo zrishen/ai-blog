@@ -136,6 +136,9 @@ async def blog_write_post(
         )
         if updated is None:
             return f"文章更新失败: id={post_id}"
+        from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
+
+        await sync_blog_document(db, updated)
         if status.strip() == "published":
             from src.services.workspace.blog.blog_service import publish_post
 
@@ -144,10 +147,6 @@ async def blog_write_post(
             from src.services.workspace.blog.blog_service import publish_post
 
             updated = await publish_post(db, updated.id, False, user_id)
-        else:
-            from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
-
-            await sync_blog_document(db, updated)
         if updated is None:
             return f"文章更新失败: id={post_id}"
         return (

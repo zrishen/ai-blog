@@ -81,6 +81,20 @@ async def _collect_referenced_upload_names(db) -> dict[int, set[str]]:
     for user_id, image_url, file_url in message_rows.all():
         for value in (image_url, file_url):
             add(user_id, _extract_local_filename(value or ""))
+
+    from src.services.workspace.blog.blog_body_service import collect_blog_body_image_refs
+
+    blog_user_ids = {
+        uid
+        for (uid,) in (
+            await db.execute(
+                select(BlogPostModel.user_id).where(BlogPostModel.deleted_at.is_(None))
+            )
+        ).all()
+    }
+    for uid in blog_user_ids:
+        for stored in await collect_blog_body_image_refs(db, uid):
+            add(uid, stored)
     return referenced
 
 

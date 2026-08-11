@@ -25,7 +25,7 @@ AI 写作 + 知识库 RAG；前后端分离 + LangGraph。
 后端 `backend/src/`：api(薄) / services(厚、按域聚合)。域：blog/chat/conversation/public_chat/memory(图谱+向量)/file/markdown/trash/subscription/workspace/user/admin/llm/embeddings/plugins。项目特定约定——
 - `prompts.py` 是 prompt 唯一源，别散落到别处
 - chat 是拆分聚合的大模块，流式入口 `services/chat/orchestrator.stream_chat`
-- 博客正文以 DB 为事实源（`blog_posts.content` + `blocks_json` AST 缓存），改正文直接改 DB
+- 博客正文以 workspace 的 .md 文件为唯一事实源（user-scoped，agent 经文件工具 read/write/edit 直接操作；`blog_body_service.get_post_body(post)` 是运行期规范读法）。`blog_posts.content` 是可重建的搜索/兼容镜像——由 `reconcile_blog_document`(md→content) 与 `sync_blog_document`(content→md) 双向同步保持忠实，`blocks_json` 是派生 AST 缓存。强语义路径（编辑器正文 `get_blog_post` owner 分支、图片引用判断的删除/隐藏链路：孤儿清理/回收站 purge/软删隐藏）读 md 真相；缓存路径（作者列表搜索 `list_posts`、作者本人图片授权 `_find_owner_post_referencing_image`）保留读 content 镜像并依赖 reconcile 忠实；公开发布以不可变 `BlogPostRevision.content` 为权威，不动。改正文经博客工具/API（写 content→sync 出 md）或直接改 md（→reconcile 回写 content）两条入口；workspace 文件工具（write/edit/git restore）写时持 per-user workspace_lock 串行
 - 路由前缀 `/api/v1`；PostgreSQL(asyncpg) + FalkorDB(记忆图谱+向量)
 
 前端 `frontend/src/`：`features/<域>/` 自包含；`api/client.ts` 统一请求（双 token：access 内存 + refresh HttpOnly cookie，401 单飞刷新）；业务沉 hook；chatStore 拆 7 slice，改 reducer 注意 LOGOUT 跨域重置（范式 `features/blog/hooks/`）。
@@ -36,4 +36,4 @@ AI 写作 + 知识库 RAG；前后端分离 + LangGraph。
 
 验证：前端 `npm run lint && npm run build && npm run test`，后端 `uv run pytest`（自动覆盖率、不设硬阈值）；按改动跑域测试即可。
 
-注释：注释简洁，必要情况下才写；注释只需要说明使用方法和作用即可
+注释：注释简洁，不写原因注释，只需要说明作用。大部分情况下不写注释

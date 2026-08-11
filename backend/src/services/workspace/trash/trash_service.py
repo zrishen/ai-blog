@@ -149,6 +149,22 @@ async def _count_other_blog_cover_refs(
     )
 
 
+async def _count_other_blog_body_refs(
+    db: AsyncSession,
+    stored_name: str,
+    *,
+    exclude_post_id: int | None,
+    user_id: int,
+) -> int:
+    """统计当前用户其他博客正文 md 内联引用同一 stored 文件名的命中数。"""
+    from src.services.workspace.blog.blog_body_service import collect_blog_body_image_refs
+
+    refs = await collect_blog_body_image_refs(
+        db, user_id, exclude_post_id=exclude_post_id
+    )
+    return 1 if stored_name in refs else 0
+
+
 async def _count_message_refs_for_filename(
     db: AsyncSession,
     stored_name: str,
@@ -415,6 +431,15 @@ async def _purge_uploaded_file_if_exclusive(
         user_id=user_id,
     )
     if msg_refs > 0:
+        return False
+
+    body_refs = await _count_other_blog_body_refs(
+        db,
+        stored_name,
+        exclude_post_id=exclude_post_id,
+        user_id=user_id,
+    )
+    if body_refs > 0:
         return False
 
     upload_path = get_uploaded_file_path(user_id, stored_name)

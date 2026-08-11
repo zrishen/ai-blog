@@ -249,7 +249,15 @@ async def is_hidden_soft_deleted_file(
             BlogPost.cover_image.in_(references),
         ).limit(1)
     )
-    return blog_ref.first() is None
+    if blog_ref.first() is not None:
+        return False
+
+    from src.services.workspace.blog.blog_body_service import collect_blog_body_image_refs
+
+    body_refs = await collect_blog_body_image_refs(db, user_id)
+    if filename in body_refs or legacy_name in body_refs:
+        return False
+    return True
 
 
 async def vectorize_and_store(
