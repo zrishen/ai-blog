@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 from src.core.context import current_user_id_cv
 from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, ValidationFailedError
 from src.core.path_guard import require_user, workspace_dir, workspace_path
+from src.core.workspace_lock import workspace_lock
 from src.core.workspace_path import validate_workspace_relative_path
 from src.database.session import async_session
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
@@ -163,11 +164,12 @@ async def write(path: str, content: str) -> str:
 
     relative_path = _relative_path(path)
     user_id = _user_id()
-    await _assert_not_managed_file_document(user_id, relative_path)
-    await asyncio.to_thread(ensure_workspace_repository, user_id)
-    await asyncio.to_thread(_write_text, user_id, relative_path, content)
-    await _sync_managed_blog_document(user_id, relative_path)
-    await asyncio.to_thread(record_workspace_change, user_id, f"Write {relative_path}")
+    async with workspace_lock(user_id):
+        await _assert_not_managed_file_document(user_id, relative_path)
+        await asyncio.to_thread(ensure_workspace_repository, user_id)
+        await asyncio.to_thread(_write_text, user_id, relative_path, content)
+        await _sync_managed_blog_document(user_id, relative_path)
+        await asyncio.to_thread(record_workspace_change, user_id, f"Write {relative_path}")
     return f"Wrote {relative_path}"
 
 
@@ -180,15 +182,16 @@ async def edit(path: str, old_text: str, new_text: str) -> str:
     if not old_text:
         raise ValidationFailedError("old_text must not be empty")
     user_id = _user_id()
-    await _assert_not_managed_file_document(user_id, relative_path)
-    await asyncio.to_thread(ensure_workspace_repository, user_id)
-    text = await asyncio.to_thread(_read_text, user_id, relative_path)
-    count = text.count(old_text)
-    if count != 1:
-        return f"Edit not applied: expected one exact match in {relative_path}, found {count}"
-    await asyncio.to_thread(_write_text, user_id, relative_path, text.replace(old_text, new_text, 1))
-    await _sync_managed_blog_document(user_id, relative_path)
-    await asyncio.to_thread(record_workspace_change, user_id, f"Edit {relative_path}")
+    async with workspace_lock(user_id):
+        await _assert_not_managed_file_document(user_id, relative_path)
+        await asyncio.to_thread(ensure_workspace_repository, user_id)
+        text = await asyncio.to_thread(_read_text, user_id, relative_path)
+        count = text.count(old_text)
+        if count != 1:
+            return f"Edit not applied: expected one exact match in {relative_path}, found {count}"
+        await asyncio.to_thread(_write_text, user_id, relative_path, text.replace(old_text, new_text, 1))
+        await _sync_managed_blog_document(user_id, relative_path)
+        await asyncio.to_thread(record_workspace_change, user_id, f"Edit {relative_path}")
     return f"Edited {relative_path}"
 
 
@@ -246,10 +249,12 @@ async def move(path: str, target_folder: str = "") -> str:
 
     relative_path = _relative_path(path)
     target_path = _relative_path(target_folder) if target_folder else None
-    await asyncio.to_thread(ensure_workspace_repository, _user_id())
-    async with async_session() as db:
-        entry = await move_entry(db, _user_id(), path=relative_path, target_path=target_path)
-    await asyncio.to_thread(record_workspace_change, _user_id(), f"Move {relative_path} to {entry.path}")
+    user_id = _user_id()
+    async with workspace_lock(user_id):
+        await asyncio.to_thread(ensure_workspace_repository, user_id)
+        async with async_session() as db:
+            entry = await move_entry(db, user_id, path=relative_path, target_path=target_path)
+        await asyncio.to_thread(record_workspace_change, user_id, f"Move {relative_path} to {entry.path}")
     return f"Moved {relative_path} to {entry.path}"
 
 
@@ -260,23 +265,24 @@ async def delete(path: str) -> str:
 
     relative_path = _relative_path(path)
     user_id = _user_id()
-    await asyncio.to_thread(ensure_workspace_repository, user_id)
-    async with async_session() as db:
-        resolved = await resolve_workspace_resource(db, user_id=user_id, relative_path=relative_path)
-        if resolved.kind is ResourceKind.BLOG_POST:
-            from src.services.workspace.blog.blog_service import delete_post
+    async with workspace_lock(user_id):
+        await asyncio.to_thread(ensure_workspace_repository, user_id)
+        async with async_session() as db:
+            resolved = await resolve_workspace_resource(db, user_id=user_id, relative_path=relative_path)
+            if resolved.kind is ResourceKind.BLOG_POST:
+                from src.services.workspace.blog.blog_service import delete_post
 
-            await delete_post(db, resolved.resource_id, user_id)
-            message = f"Moved managed blog {relative_path} to the recycle bin"
-            change = f"Delete managed blog {relative_path}"
-        elif resolved.kind is ResourceKind.FILE_DOCUMENT:
-            raise ConflictError("Managed file document must be deleted through its dedicated API")
-        else:
-            await move_workspace_entry_to_trash(db, user_id=user_id, relative_path=relative_path)
-            await db.commit()
-            message = f"Moved {relative_path} to the recycle bin"
-            change = f"Delete {relative_path}"
-    await asyncio.to_thread(record_workspace_change, user_id, change)
+                await delete_post(db, resolved.resource_id, user_id)
+                message = f"Moved managed blog {relative_path} to the recycle bin"
+                change = f"Delete managed blog {relative_path}"
+            elif resolved.kind is ResourceKind.FILE_DOCUMENT:
+                raise ConflictError("Managed file document must be deleted through its dedicated API")
+            else:
+                await move_workspace_entry_to_trash(db, user_id=user_id, relative_path=relative_path)
+                await db.commit()
+                message = f"Moved {relative_path} to the recycle bin"
+                change = f"Delete {relative_path}"
+        await asyncio.to_thread(record_workspace_change, user_id, change)
     return message
 
 
@@ -316,16 +322,17 @@ async def git(
         if not path:
             raise ValidationFailedError("git restore requires a path")
         relative_path = _relative_path(path)
-        await _assert_not_managed_file_document(user_id, relative_path)
-        restored_path = await asyncio.to_thread(
-            restore_workspace_file,
-            user_id,
-            relative_path=relative_path,
-            revision=revision or "HEAD",
-        )
-        await _sync_managed_blog_document(user_id, restored_path)
-        await asyncio.to_thread(
-            record_workspace_change, user_id, f"Restore {restored_path} from {revision or 'HEAD'}"
-        )
+        async with workspace_lock(user_id):
+            await _assert_not_managed_file_document(user_id, relative_path)
+            restored_path = await asyncio.to_thread(
+                restore_workspace_file,
+                user_id,
+                relative_path=relative_path,
+                revision=revision or "HEAD",
+            )
+            await _sync_managed_blog_document(user_id, restored_path)
+            await asyncio.to_thread(
+                record_workspace_change, user_id, f"Restore {restored_path} from {revision or 'HEAD'}"
+            )
         return f"Restored {restored_path} from {revision or 'HEAD'}"
     raise ValidationFailedError("Unknown git action")
