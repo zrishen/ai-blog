@@ -19,10 +19,7 @@ from src.tools.web import web_fetch, web_search
 from src.tools.workspace_files import (
     delete,
     edit,
-    git_diff,
-    git_history,
-    git_restore,
-    git_status,
+    git,
     glob,
     grep,
     move,
@@ -114,10 +111,7 @@ class WorkspaceFilesProvider:
             grep,
             move,
             delete,
-            git_status,
-            git_history,
-            git_diff,
-            git_restore,
+            git,
         ]
 
 

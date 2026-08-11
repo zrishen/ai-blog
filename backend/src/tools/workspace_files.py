@@ -282,50 +282,50 @@ async def delete(path: str) -> str:
 
 @tool
 @require_user
-async def git_status() -> str:
-    """Show the current workspace Git branch, latest revision, and uncommitted paths."""
-
-    status = await asyncio.to_thread(get_workspace_git_status, _user_id())
-    changed = "\n".join(status.changed_paths) if status.changed_paths else "clean"
-    return f"branch: {status.branch}\nHEAD: {status.head}\nchanges:\n{changed}"
-
-
-@tool
-@require_user
-async def git_history(limit: int = 10) -> str:
-    """List recent local workspace revisions. Limit is capped at 50."""
-
-    revisions = await asyncio.to_thread(list_workspace_git_revisions, _user_id(), limit=limit)
-    return "\n".join(f"{item.revision} {item.committed_at} {item.subject}" for item in revisions)
-
-
-@tool
-@require_user
-async def git_diff(base_revision: str = "HEAD~1", target_revision: str = "HEAD") -> str:
-    """Show a local workspace diff between two safe revisions, such as HEAD~1 and HEAD."""
-
-    return await asyncio.to_thread(
-        get_workspace_git_diff,
-        _user_id(),
-        base_revision=base_revision,
-        target_revision=target_revision,
-    )
-
-
-@tool
-@require_user
-async def git_restore(path: str, revision: str = "HEAD") -> str:
-    """Restore one regular workspace file from a local revision, then commit that restoration."""
+async def git(
+    action: str,
+    path: str = "",
+    revision: str = "",
+    base_revision: str = "",
+    target_revision: str = "",
+    limit: int = 10,
+) -> str:
+    """Workspace git operations. action selects the subcommand:
+    - "status": show branch, HEAD revision, and uncommitted paths.
+    - "history": list recent revisions; limit default 10.
+    - "diff": show diff between base_revision (default "HEAD~1") and target_revision (default "HEAD").
+    - "restore": restore one regular file at path from revision (default "HEAD"), then commit.
+    """
 
     user_id = _user_id()
-    relative_path = _relative_path(path)
-    await _assert_not_managed_file_document(user_id, relative_path)
-    restored_path = await asyncio.to_thread(
-        restore_workspace_file,
-        user_id,
-        relative_path=relative_path,
-        revision=revision,
-    )
-    await _sync_managed_blog_document(user_id, restored_path)
-    await asyncio.to_thread(record_workspace_change, user_id, f"Restore {restored_path} from {revision}")
-    return f"Restored {restored_path} from {revision}"
+    if action == "status":
+        status = await asyncio.to_thread(get_workspace_git_status, user_id)
+        changed = "\n".join(status.changed_paths) if status.changed_paths else "clean"
+        return f"branch: {status.branch}\nHEAD: {status.head}\nchanges:\n{changed}"
+    if action == "history":
+        revisions = await asyncio.to_thread(list_workspace_git_revisions, user_id, limit=limit)
+        return "\n".join(f"{item.revision} {item.committed_at} {item.subject}" for item in revisions)
+    if action == "diff":
+        return await asyncio.to_thread(
+            get_workspace_git_diff,
+            user_id,
+            base_revision=base_revision or "HEAD~1",
+            target_revision=target_revision or "HEAD",
+        )
+    if action == "restore":
+        if not path:
+            raise ValidationFailedError("git restore requires a path")
+        relative_path = _relative_path(path)
+        await _assert_not_managed_file_document(user_id, relative_path)
+        restored_path = await asyncio.to_thread(
+            restore_workspace_file,
+            user_id,
+            relative_path=relative_path,
+            revision=revision or "HEAD",
+        )
+        await _sync_managed_blog_document(user_id, restored_path)
+        await asyncio.to_thread(
+            record_workspace_change, user_id, f"Restore {restored_path} from {revision or 'HEAD'}"
+        )
+        return f"Restored {restored_path} from {revision or 'HEAD'}"
+    raise ValidationFailedError("Unknown git action")
