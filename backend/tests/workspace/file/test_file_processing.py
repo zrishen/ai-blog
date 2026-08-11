@@ -476,7 +476,7 @@ async def test_upload_failure_cleans_document_chunks_and_file(
     )
     job_id = response.json()["id"]
     job = await db_session.get(FileProcessingJob, job_id)
-    upload_path = file_service.get_user_upload_dir(job.user_id) / job.stored_name
+    upload_path = file_service.get_uploaded_file_path(job.user_id, job.stored_name)
     assert upload_path.exists()
 
     cleanup_calls: list[tuple[str, str]] = []
@@ -540,6 +540,7 @@ async def test_active_restore_blocks_purge_and_empty_trash_is_partial(
     db_session: AsyncSession,
 ):
     source = file_service.get_user_upload_dir(1) / f"restore-{uuid.uuid4().hex}.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
     source.write_bytes(b"%PDF-1.4 restore")
     doc = FileDocument(
         collection_name="user_1_file_test",
@@ -574,6 +575,7 @@ async def test_purge_file_document_removes_ai_knowledge(client: AsyncClient, db_
     from src.services.workspace import rag_service
 
     source = file_service.get_user_upload_dir(1) / f"purge-rag-{uuid.uuid4().hex}.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
     source.write_bytes(b"%PDF-1.4 purge")
     doc = FileDocument(
         collection_name="user_1_file_test",
@@ -607,6 +609,7 @@ async def test_reindex_cleans_old_memory_before_rebuild(
     from src.services.workspace import rag_service
 
     source = file_service.get_user_upload_dir(1) / f"reindex-{uuid.uuid4().hex}.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
     source.write_bytes(b"%PDF-1.4 reindex")
     doc = FileDocument(
         collection_name="user_1_file_test",

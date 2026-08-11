@@ -20,6 +20,7 @@ from src.database.models import (
     User,
 )
 from src.services.workspace.file.file_processing_service import _run_job
+from src.services.workspace.file.file_service import get_uploaded_file_path
 
 
 async def _upload_document(client: AsyncClient, db_session: AsyncSession, name: str) -> int:
@@ -198,7 +199,7 @@ async def test_file_document_soft_delete_then_list(client: AsyncClient, db_sessi
 
 
 @pytest.mark.asyncio
-async def test_file_document_restore_requires_source_file(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+async def test_file_document_restore_requires_source_file(client: AsyncClient, db_session: AsyncSession):
     """软删后回收站可见；恢复时若源文件已丢失则返回 409。"""
     doc_id = await _upload_document(client, db_session, "restore.pdf")
 
@@ -207,14 +208,9 @@ async def test_file_document_restore_requires_source_file(client: AsyncClient, d
     trash = await client.get("/api/v1/trash")
     assert any(i["type"] == "file_document" and i["id"] == doc_id for i in trash.json()["items"])
 
-    # 让 trash_service 看到的源上传目录为不存在文件的临时目录，触发 ORIGINAL_FILE_MISSING
-    import pathlib
-
-    fake_dir = pathlib.Path(client._base_url.host or "") if False else pathlib.Path("nonexistent-restore-dir")
-    monkeypatch.setattr(
-        "src.services.workspace.trash.trash_service.get_user_upload_dir",
-        lambda uid: fake_dir,
-    )
+    # 删除真实上传文件，触发 _restore_file_document 的 ORIGINAL_FILE_MISSING(409)
+    doc = await db_session.get(FileDocument, doc_id)
+    get_uploaded_file_path(1, doc.file_path).unlink(missing_ok=True)
     restore = await client.post(f"/api/v1/trash/file_document/{doc_id}/restore")
     assert restore.status_code == 409
 
@@ -436,16 +432,14 @@ async def test_file_purge_unlink_failure_still_deletes_record(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch,
-    tmp_path,
 ):
     """倒序后：DB 先硬删并提交成功，本地文件 unlink 失败仅留孤儿文件，记录不再保留。"""
     doc_id = await _upload_document(client, db_session, "purge-unlink.pdf")
     await client.delete(f"/api/v1/files/documents/{doc_id}")
     doc = await db_session.get(FileDocument, doc_id)
-    source = tmp_path / doc.file_path
-    source.write_bytes(b"%PDF-1.4 content")
+    source = get_uploaded_file_path(1, doc.file_path)  # tmp_path/workspace/users/1/uploads/xxx.pdf
+    assert source.exists()  # _upload_document 已写入
 
-    monkeypatch.setattr("src.services.workspace.trash.trash_service.get_user_upload_dir", lambda user_id: tmp_path)
     original_unlink = Path.unlink
 
     def fail_unlink(path: Path, *args, **kwargs):
