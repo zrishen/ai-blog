@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     blog_content_dir: str = str(DATA_DIR / "content" / "blog")
     upload_dir: str = str(DATA_DIR / "content" / "uploads")
     chat_attachment_dir: str = str(DATA_DIR / "content" / "chat_attachments")
-    # Phase 2 真实工作目录：<workspace_root>/<username>/。内容文件的唯一 owner 根。
+    # 真实工作目录：<workspace_root>/users/<user_id>/。user ID 是不可变 owner 根。
     workspace_root: str = str(DATA_DIR / "workspace")
     workspace_files_enabled: bool = True
     skill_prompt_max_chars: int = 12_000
