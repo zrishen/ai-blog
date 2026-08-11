@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { logError } from "@/utils/logger";
 
 import { deleteBlogPost, listBlogPosts } from "@/api/blog";
 import { deleteFileDocument } from "@/api/files";
@@ -46,7 +47,7 @@ export function DeleteResourceDialog({
       dispatch({ type: "INCREMENT_TRASH_REVISION" });
       onClose();
     } catch (error) {
-      console.error("[workspace] 删除失败:", error);
+      logError(error, { source: "workspace.delete" });
     } finally {
       setBusy(false);
     }

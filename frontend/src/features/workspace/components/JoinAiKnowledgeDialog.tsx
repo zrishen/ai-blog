@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { logError } from "@/utils/logger";
 import { FileStack, FileText } from "lucide-react";
 import { listBlogPosts } from "@/api/blog";
 import { listFileDocuments } from "@/api/files";
@@ -83,7 +84,7 @@ export function JoinAiKnowledgeDialog({
     for (const key of selected) {
       const [type, idStr] = key.split(":");
       void joinToAiKnowledge(type, Number(idStr)).catch((e) => {
-        console.error("[workspace] 加入 AI 知识失败:", e);
+        logError(e, { source: "ai_knowledge.join" });
       });
     }
     setSelected(new Set());

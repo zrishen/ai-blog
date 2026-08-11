@@ -137,6 +137,7 @@ class Settings(BaseSettings):
     auth_register_rate_limit: int = 5
     # /status 健康检查限流（未认证，防高频请求放大 DB/磁盘/图库探测负载）
     status_rate_limit: int = 30
+    client_error_rate_limit: int = 20  # 每 IP 每分钟前端错误上报上限
 
     # ---- 公共聊天 ----
     public_chat_max_input_chars: int = 2000

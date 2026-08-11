@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
+import { logError } from "@/utils/logger";
 import { useNavigate } from "react-router-dom";
 import { useChat } from "../../../stores/chatStore";
 import type { BlogPost } from "../../../stores/chatStore";
@@ -55,7 +56,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
       dispatch({ type: "SET_BLOG_POSTS", payload: data.posts });
       return data.posts;
     } catch (e) {
-      console.error("Failed to load site posts:", e);
+      logError(e, { source: "blog.load_site_posts" });
       dispatch({ type: "SET_BLOG_POSTS", payload: [] });
       return [];
     }

@@ -1,4 +1,4 @@
-"""后端日志系统配置：控制台彩色文本 + 轮转文件 JSON（app.log 收 src.* 自有代码，http.log 收框架/第三方）。
+"""后端日志系统配置：控制台彩色文本 + 轮转文件 JSON（app.log 收 src.* 自有代码，access.log 收框架/第三方）。
 
 文件日志为 JSON 结构化（带 request_id），便于 AI / 日志工具按字段检索与关联；控制台保留彩色文本给人实时看。
 """
@@ -11,11 +11,11 @@ from src.core.context import request_id_cv
 
 LOG_DIR = DATA_DIR / "logs"
 LOG_FILE = LOG_DIR / "app.log"
-HTTP_LOG_FILE = LOG_DIR / "http.log"
+ACCESS_LOG_FILE = LOG_DIR / "access.log"
 LOG_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 LOG_BACKUP_COUNT = 5
 
-# 我们自己代码的 logger 前缀：进 app.log，不进 http.log
+# 我们自己代码的 logger 前缀：进 app.log，不进 access.log
 _OWN_CODE_PREFIX = "src."
 
 # 控制台颜色（仅 tty 时启用）
@@ -58,7 +58,7 @@ def _is_own_code_record(record: logging.LogRecord) -> bool:
 
 
 class _OriginFilter(logging.Filter):
-    """按代码归属路由日志：allow_own=True 放行 src.*（→ app.log），False 放行其余（→ http.log）。"""
+    """按代码归属路由日志：allow_own=True 放行 src.*（→ app.log），False 放行其余（→ access.log）。"""
 
     def __init__(self, *, allow_own: bool) -> None:
         super().__init__()
@@ -87,7 +87,7 @@ def _json_formatter() -> logging.Formatter:
 
 
 def setup_logging(level: str = "INFO") -> None:
-    """初始化日志系统：控制台彩色 + 轮转文件 JSON（app.log + http.log 分流）。"""
+    """初始化日志系统：控制台彩色 + 轮转文件 JSON（app.log + access.log 分流）。"""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     json_fmt = _json_formatter()
@@ -112,7 +112,7 @@ def setup_logging(level: str = "INFO") -> None:
     app_file_handler.addFilter(_OriginFilter(allow_own=True))
 
     http_file_handler = logging.handlers.RotatingFileHandler(
-        HTTP_LOG_FILE,
+        ACCESS_LOG_FILE,
         maxBytes=LOG_MAX_BYTES,
         backupCount=LOG_BACKUP_COUNT,
         encoding="utf-8",
@@ -151,6 +151,6 @@ def setup_logging(level: str = "INFO") -> None:
     logging.getLogger(__name__).info(
         "日志系统已初始化 → %s + %s (level=%s)",
         LOG_FILE,
-        HTTP_LOG_FILE,
+        ACCESS_LOG_FILE,
         level,
     )

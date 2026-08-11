@@ -6,6 +6,7 @@ from src.api.chat import router as chat_router
 from src.api.chat_attachments import router as chat_attachments_router
 from src.api.conversations import router as conversations_router
 from src.api.plugins import router as plugins_router
+from src.api.client_errors import router as client_errors_router
 from src.api.status import router as status_router
 from src.api.files import router as files_router
 from src.api.blog import router as blog_router
@@ -26,6 +27,7 @@ from src.api.brain import router as brain_router
 router = APIRouter()
 
 router.include_router(status_router)
+router.include_router(client_errors_router)
 
 router.include_router(auth_router)
 router.include_router(settings_router)

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { logWarn } from "@/utils/logger";
 import { useAuth } from "../../../stores/authStore";
 import { isDisplayableMessage, useChat } from "../../../stores/chatStore";
 import type { AISidebarConversationKey, Message, Reference } from "../../../stores/chatStore";
@@ -152,7 +153,7 @@ export function AISidebarChat({
         dispatch({ type: "UPDATE_BLOG_POST", payload: fullPost });
         return true;
       } catch (e) {
-        console.warn("Failed to refresh target post after blog tool, falling back to list:", e);
+        logWarn("refresh target post after blog tool failed, fallback to list", { error: e });
       }
     }
     try {
@@ -160,7 +161,7 @@ export function AISidebarChat({
       dispatch({ type: "SET_BLOG_POSTS", payload: data.posts });
       return true;
     } catch (e) {
-      console.warn("Failed to refresh posts after blog tool:", e);
+      logWarn("refresh posts after blog tool failed", { error: e });
       return false;
     }
   }, [dispatch, siteUsername, user]);
@@ -224,7 +225,7 @@ export function AISidebarChat({
       const enqueueUi = (fn: () => Promise<void> | void) => {
         uiChain = uiChain.then(fn).catch((err) => {
           if (err && err.name !== "AbortError") {
-            console.warn("UI queue step failed:", err);
+            logWarn("UI queue step failed", { error: err });
           }
         });
       };

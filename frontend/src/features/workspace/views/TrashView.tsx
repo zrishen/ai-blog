@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { logError } from "@/utils/logger";
 import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
@@ -58,7 +59,7 @@ export function TrashView() {
           dispatch({ type: "INCREMENT_FILE_RESTORE_REVISIONS" });
         }
       } catch (e) {
-        console.error("[workspace] 恢复失败:", e);
+        logError(e, { source: "trash.restore" });
         await reload(); // 失败回滚：重新拉取真实列表
       } finally {
         setBusyKey(null);
@@ -76,7 +77,7 @@ export function TrashView() {
         await purgeTrashItem(it.type, it.id);
         await reload();
       } catch (e) {
-        console.error("[workspace] 永久删除失败:", e);
+        logError(e, { source: "trash.purge" });
       } finally {
         setBusyKey(null);
       }
@@ -91,7 +92,7 @@ export function TrashView() {
       await emptyTrash();
       await reload();
     } catch (e) {
-      console.error("[workspace] 清空失败:", e);
+      logError(e, { source: "trash.empty" });
     } finally {
       setEmptying(false);
     }

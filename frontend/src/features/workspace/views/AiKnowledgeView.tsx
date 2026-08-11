@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { logError } from "@/utils/logger";
 import { AlertCircle, Network, Plus, RefreshCw, Sparkles, X } from "lucide-react";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
@@ -99,7 +100,7 @@ export function AiKnowledgeView({
         await leaveAiKnowledge(it.resource_type, it.resource_id);
         await reload();
       } catch (e) {
-        console.error("[workspace] 移出 AI 知识失败:", e);
+        logError(e, { source: "ai_knowledge.leave" });
       } finally {
         setRemovingKey(null);
       }
