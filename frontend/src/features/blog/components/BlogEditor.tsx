@@ -160,7 +160,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
         title: title.trim() || post.title,
         content: getContent(),
         tags: tags.trim() || undefined,
-        cover_image: coverImage || null,
+        cover_image: coverImage || undefined,
       },
     });
     dispatch({ type: "SET_BLOG_CURRENT_POST_ID", payload: post.id });
@@ -492,8 +492,8 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
     longPressTimerRef.current = setTimeout(() => {
       const editorEl = getEditorElement();
       const sel = window.getSelection();
-      if (!isSelectionInsideEditor(sel, editorEl)) return;
-      const selection = sel?.toString().trim() || "";
+      if (!sel || !isSelectionInsideEditor(sel, editorEl)) return;
+      const selection = sel.toString().trim() || "";
       if (selection.length >= 5) {
         const range = sel.getRangeAt(0);
         const rect = range.getBoundingClientRect();
@@ -940,7 +940,10 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
                       size="sm"
                       variant="outline"
                       disabled={revisionBusy}
-                      onClick={() => requestRestore(revisionHistory.selected)}
+                      onClick={() => {
+                        const selected = revisionHistory.selected;
+                        if (selected) void requestRestore(selected);
+                      }}
                     >恢复</Button>
                     <Button
                       size="sm"
@@ -949,8 +952,10 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
                       disabled={revisionBusy || revisionHistory.selected.is_published}
                       title={revisionHistory.selected.is_published ? "公开版本受保护，不能删除" : "删除此历史版本"}
                       onClick={() => {
+                        const selected = revisionHistory.selected;
+                        if (!selected) return;
                         setRevisionBusy(true);
-                        void autosave.enqueue(() => revisionHistory.remove(revisionHistory.selected.id))
+                        void autosave.enqueue(() => revisionHistory.remove(selected.id))
                           .then(() => setSelectedRevisionId(null))
                           .catch(() => setError("删除历史版本失败"))
                           .finally(() => setRevisionBusy(false));

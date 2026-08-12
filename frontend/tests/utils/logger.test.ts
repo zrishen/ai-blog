@@ -19,7 +19,7 @@ describe("logger", () => {
   });
 
   it("logError 上报后端并打印 console", async () => {
-    const { logError } = await import("../../src/lib/logger");
+    const { logError } = await import("../../src/api/logger");
     logError(new Error("boom"), { source: "test" });
     expect(console.error).toHaveBeenCalled();
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
@@ -29,7 +29,7 @@ describe("logger", () => {
   });
 
   it("同 message+source 在 10s 去重窗口内只发一次", async () => {
-    const { logError } = await import("../../src/lib/logger");
+    const { logError } = await import("../../src/api/logger");
     logError(new Error("dup"), { source: "t" });
     logError(new Error("dup"), { source: "t" });
     await vi.advanceTimersByTimeAsync(2000);
@@ -37,7 +37,7 @@ describe("logger", () => {
   });
 
   it("不同 message 突破全局速率上限后丢弃", async () => {
-    const { logError } = await import("../../src/lib/logger");
+    const { logError } = await import("../../src/api/logger");
     for (let i = 0; i < 30; i++) {
       logError(new Error(`e${i}`), { source: "t" });
     }
@@ -45,7 +45,7 @@ describe("logger", () => {
   });
 
   it("logWarn 不上报后端（避免噪音）", async () => {
-    const { logWarn } = await import("../../src/lib/logger");
+    const { logWarn } = await import("../../src/api/logger");
     logWarn("小心", { k: 1 });
     expect(console.warn).toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();

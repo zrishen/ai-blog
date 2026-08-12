@@ -489,8 +489,9 @@ function groupToolPairsForProcesses(toolPairs: ToolPair[], processCount: number)
     const groupMap = new Map<number, ToolPair[]>();
     for (const pair of toolPairs) {
       const idx = pairRoundId(pair) ?? 0;
-      if (!groupMap.has(idx)) groupMap.set(idx, []);
-      groupMap.get(idx).push(pair);
+      const list = groupMap.get(idx);
+      if (list) list.push(pair);
+      else groupMap.set(idx, [pair]);
     }
     return Array.from(groupMap.entries())
       .sort(([a], [b]) => a - b)
@@ -504,8 +505,9 @@ function groupToolPairsForProcesses(toolPairs: ToolPair[], processCount: number)
     const groupMap = new Map<number, ToolPair[]>();
     for (const pair of toolPairs) {
       const idx = pair.start?.loopStepIndex ?? pair.end?.loopStepIndex ?? 0;
-      if (!groupMap.has(idx)) groupMap.set(idx, []);
-      groupMap.get(idx).push(pair);
+      const list = groupMap.get(idx);
+      if (list) list.push(pair);
+      else groupMap.set(idx, [pair]);
     }
     return Array.from(groupMap.entries())
       .sort(([a], [b]) => a - b)

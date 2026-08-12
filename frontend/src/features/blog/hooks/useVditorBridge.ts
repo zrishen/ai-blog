@@ -264,7 +264,7 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
   }, [patchStreaming, existingPost?.content, getEditorElement]);
 
   useEffect(() => {
-    if (!patchStreaming) return;
+    if (!patchStreaming || !existingPost) return;
     const timer = window.setTimeout(() => {
       dispatch({
         type: "CLEAR_BLOG_PATCH_STREAMING",

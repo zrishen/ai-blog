@@ -9,7 +9,7 @@ import { AuthProvider } from "./stores/authStore";
 import App from "./App";
 import { FileProcessingProvider } from "./features/workspace/providers/FileProcessingProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { logError } from "./lib/logger";
+import { logError } from "./api/logger";
 
 // 全局错误捕获：脚本异常 + 未 catch 的 Promise，上报后端 app.log（经 logger 节流）。
 // 放 Sentry.init 之前注册，保证最先拿到 error；Sentry 无 DSN 时 no-op，不冲突。
@@ -31,18 +31,21 @@ if (sentryDsn) {
   Sentry.init({ dsn: sentryDsn });
 }
 
-createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <BrowserRouter>
-        <AuthProvider>
-          <ChatProvider>
-            <FileProcessingProvider>
-              <App />
-            </FileProcessingProvider>
-          </ChatProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </ErrorBoundary>
-  </StrictMode>,
-);
+const rootEl = document.getElementById("root");
+if (rootEl) {
+  createRoot(rootEl).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <AuthProvider>
+            <ChatProvider>
+              <FileProcessingProvider>
+                <App />
+              </FileProcessingProvider>
+            </ChatProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}

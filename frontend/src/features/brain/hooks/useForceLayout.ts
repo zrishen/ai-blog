@@ -47,11 +47,13 @@ export function useForceLayout(
       // 排斥力（库仑）+ 中心引力
       for (const a of rawNodes) {
         const pa = pos.get(a.id);
+        if (!pa) continue;
         let fx = 0;
         let fy = 0;
         for (const b of rawNodes) {
           if (a.id === b.id) continue;
           const pb = pos.get(b.id);
+          if (!pb) continue;
           const dx = pa.x - pb.x;
           const dy = pa.y - pb.y;
           const dist = Math.hypot(dx, dy) || 0.01;
@@ -83,6 +85,7 @@ export function useForceLayout(
       // 应用位移（受温度限制）+ 软边界
       for (const n of rawNodes) {
         const p = pos.get(n.id);
+        if (!p) continue;
         const disp = Math.hypot(p.vx, p.vy) || 0.01;
         p.x += (p.vx / disp) * Math.min(disp, temperature);
         p.y += (p.vy / disp) * Math.min(disp, temperature);
@@ -93,7 +96,7 @@ export function useForceLayout(
     }
 
     const placed = rawNodes.map((n) => {
-      const p = pos.get(n.id);
+      const p = pos.get(n.id) ?? { x: 0, y: 0 };
       return { ...n, position: { x: p.x, y: p.y } };
     });
     return { nodes: placed, edges: rawEdges };

@@ -10,7 +10,7 @@ import { BlogEditor } from "./BlogEditor";
 
 import type { BlogPost } from "../../../stores/chatStore";
 
-import { logError } from "@/lib/logger";
+import { logError } from "@/api/logger";
 import { listSitePosts } from "@/api/blog";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -81,7 +81,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
   const visiblePosts = useMemo(() => {
     let posts = state.blogPosts.filter((post) => post.status === "published");
     if (state.blogSelectedTag) {
-      posts = posts.filter((post) => splitBlogTags(post.tags).includes(state.blogSelectedTag));
+      posts = posts.filter((post) => splitBlogTags(post.tags ?? "").includes(state.blogSelectedTag ?? ""));
     }
     return posts;
   }, [state.blogPosts, state.blogSelectedTag]);

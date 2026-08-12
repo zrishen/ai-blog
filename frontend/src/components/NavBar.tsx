@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { LLMSettingsDialog } from "@/components/settings/LLMSettingsDialog";
-import { SubscriptionPanel } from "@/features/subscription/SubscriptionPanel";
+import { SubscriptionPanel } from "@/features/subscription";
 import { ProjectMark } from "@/components/ProjectMark";
 import { cn } from "@/lib/utils";
 import { navItemVariants } from "@/lib/visualVariants";

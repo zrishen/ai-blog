@@ -684,7 +684,7 @@ export function installCodeLanguageMenu(editor: Vditor) {
 
   // hover/focus 只用于:把鼠标所在块设为 active(便于点 trigger 开菜单)。
   // 高亮与语言标签不再随 hover 显隐——它们对所有块常驻。
-  const handleEditorPointerOver = (event: MouseEvent | FocusEvent) => {
+  const handleEditorPointerOver = (event: Event) => {
     const codeBlock = getCodeBlockFromTarget(event.target);
     if (codeBlock) {
       activeCodeBlock = codeBlock;

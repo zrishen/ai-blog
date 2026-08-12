@@ -4,8 +4,8 @@ import { useAuth } from "@/stores/authStore";
 
 import type { AuthUser } from "@/stores/authStore";
 
-import { parseJson } from "@/api/client";
-import { isAuthUser } from "@/lib/isAuthUser";
+import { login as loginRequest, register as registerRequest } from "@/api/auth";
+import { errorMessage } from "@/lib/errors";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,33 +30,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setError("");
     setLoading(true);
 
-    const endpoint = mode === "login" ? "/api/v1/auth/login" : "/api/v1/auth/register";
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          mode === "register" ? { username, password, invite_code: inviteCode } : { username, password },
-        ),
-        credentials: "include",
-      });
-      const data = await parseJson<{
-        access_token?: string;
-        user?: AuthUser;
-        detail?: unknown;
-      }>(res);
-      if (!res.ok) {
-        setError(typeof data.detail === "string" ? data.detail : "请求失败");
-        return;
-      }
-      if (typeof data.access_token !== "string" || !isAuthUser(data.user)) {
-        setError("登录响应格式异常");
-        return;
-      }
-      login(data.access_token, data.user);
-      onSuccess?.(data.user);
-    } catch {
-      setError("网络错误，请检查后端是否运行");
+      const auth = mode === "login"
+        ? await loginRequest(username, password)
+        : await registerRequest(username, password, inviteCode);
+      login(auth.access_token, auth.user);
+      onSuccess?.(auth.user);
+    } catch (err) {
+      setError(errorMessage(err, "网络错误，请检查后端是否运行"));
     } finally {
       setLoading(false);
     }

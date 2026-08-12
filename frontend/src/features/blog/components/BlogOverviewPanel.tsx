@@ -70,7 +70,7 @@ export function BlogOverviewPanel() {
         >
           {hasHtml ? (
             <LeftbarHtmlFrame
-              html={state.leftbarHtml}
+              html={state.leftbarHtml ?? ""}
               theme={state.theme}
               onHeightChange={setFrameHeight}
             />

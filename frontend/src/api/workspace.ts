@@ -35,13 +35,19 @@ export async function getWorkspaceTree(): Promise<WorkspaceEntry[]> {
   return data?.entries ?? [];
 }
 
+async function unwrapOrThrow<T>(res: Response, fallback: string): Promise<T> {
+  const data = await unwrap<T>(res, fallback);
+  if (data === null) throw new Error(fallback);
+  return data;
+}
+
 export async function createFolder(name: string, parentPath: string | null = null): Promise<WorkspaceEntry> {
   const res = await apiFetch(`${API_BASE}/workspace/folders`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, parent_path: parentPath }),
   });
-  return (await unwrap<WorkspaceEntry>(res, "创建文件夹失败"));
+  return unwrapOrThrow<WorkspaceEntry>(res, "创建文件夹失败");
 }
 
 export async function renameEntry(path: string, name: string): Promise<WorkspaceEntry> {
@@ -50,7 +56,7 @@ export async function renameEntry(path: string, name: string): Promise<Workspace
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, name }),
   });
-  return (await unwrap<WorkspaceEntry>(res, "重命名失败"));
+  return unwrapOrThrow<WorkspaceEntry>(res, "重命名失败");
 }
 
 export async function moveEntry(path: string, targetPath: string | null): Promise<WorkspaceEntry> {
@@ -59,7 +65,7 @@ export async function moveEntry(path: string, targetPath: string | null): Promis
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, target_path: targetPath }),
   });
-  return (await unwrap<WorkspaceEntry>(res, "移动失败"));
+  return unwrapOrThrow<WorkspaceEntry>(res, "移动失败");
 }
 
 export async function deleteFolder(path: string): Promise<void> {
@@ -94,7 +100,7 @@ export async function joinAiKnowledge(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resource_type: resourceType, resource_id: resourceId }),
   });
-  return (await unwrap<AiKnowledgeJoinResult>(res, "加入 AI 知识失败"));
+  return unwrapOrThrow<AiKnowledgeJoinResult>(res, "加入 AI 知识失败");
 }
 
 export async function leaveAiKnowledge(resourceType: string, resourceId: number): Promise<void> {
