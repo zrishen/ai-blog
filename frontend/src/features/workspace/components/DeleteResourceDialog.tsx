@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useChat } from "../../../stores/chatStore";
 
-import { logError } from "@/utils/logger";
+import { logError } from "@/lib/logger";
 import { deleteBlogPost, listBlogPosts } from "@/api/blog";
 import { deleteFileDocument } from "@/api/files";
 import { Button } from "@/components/ui/button";

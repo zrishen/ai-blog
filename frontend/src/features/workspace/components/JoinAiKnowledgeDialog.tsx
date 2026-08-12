@@ -3,7 +3,7 @@ import { FileStack, FileText } from "lucide-react";
 
 import type { RagSource } from "@/api/workspace";
 
-import { logError } from "@/utils/logger";
+import { logError } from "@/lib/logger";
 import { listBlogPosts } from "@/api/blog";
 import { listFileDocuments } from "@/api/files";
 import { Button } from "@/components/ui/button";

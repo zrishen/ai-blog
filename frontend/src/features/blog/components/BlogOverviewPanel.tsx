@@ -8,7 +8,7 @@ import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { Surface } from "@/components/ui/surface";
-import { LeftbarHtmlFrame } from "@/components/LeftbarHtmlFrame";
+import { LeftbarHtmlFrame } from "./LeftbarHtmlFrame";
 import { cn } from "@/lib/utils";
 
 // 博客主页左栏：DIY 卡片（AI 生成 HTML，iframe 沙箱渲染）+ 标签云（可开关）。

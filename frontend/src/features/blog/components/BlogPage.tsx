@@ -10,7 +10,7 @@ import { BlogEditor } from "./BlogEditor";
 
 import type { BlogPost } from "../../../stores/chatStore";
 
-import { logError } from "@/utils/logger";
+import { logError } from "@/lib/logger";
 import { listSitePosts } from "@/api/blog";
 import { EmptyState } from "@/components/ui/empty-state";
 

@@ -25,7 +25,7 @@ import { listSitePosts, getBlogPost } from "@/api/blog";
 import { getMessages } from "@/api/conversations";
 import { sendChat, sendSharedLandingChat, sendSharedUserChat } from "@/api/chat";
 import { errorMessage } from "@/lib/errors";
-import { logWarn } from "@/utils/logger";
+import { logWarn } from "@/lib/logger";
 
 function makeServerKey(conversationId: number): AISidebarConversationKey {
   return `server:${conversationId}`;

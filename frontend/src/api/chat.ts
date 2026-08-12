@@ -1,4 +1,4 @@
-import { logWarn } from "@/utils/logger";
+import { logWarn } from "@/lib/logger";
 
 import {
   _BLOGDELTA_MARKER,

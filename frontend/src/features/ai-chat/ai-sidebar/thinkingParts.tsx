@@ -9,7 +9,7 @@ import type { ThinkingEntry, ToolPair } from "./thinkingFlow";
 
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { MermaidBlock } from "@/components/MermaidBlock";
-import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
+import { extractCodeLanguage, extractCodeText } from "@/lib/mermaidCode";
 
 
 

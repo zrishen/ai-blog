@@ -4,7 +4,7 @@ import { createElement, type ReactNode } from "react";
 import {
   extractCodeLanguage,
   extractCodeText,
-} from "@/utils/mermaidCode";
+} from "@/lib/mermaidCode";
 
 // 构造 react-markdown 渲染 <pre> 时传给 code 组件的 children 形态：
 // 一个带 className="language-xxx" 的 <code> 元素。

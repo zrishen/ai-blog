@@ -20,7 +20,7 @@ import { deleteBlogPost, publishBlogPost } from "@/api/blog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MermaidBlock } from "@/components/MermaidBlock";
-import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
+import { extractCodeLanguage, extractCodeText } from "@/lib/mermaidCode";
 import { formatDateLong } from "@/lib/datetime";
 
 // 代码语言 class → 展示名(与编辑器语言选项保持一致)

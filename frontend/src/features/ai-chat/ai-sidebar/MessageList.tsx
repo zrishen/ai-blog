@@ -22,7 +22,7 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MermaidBlock } from "@/components/MermaidBlock";
-import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
+import { extractCodeLanguage, extractCodeText } from "@/lib/mermaidCode";
 
 interface MessageGroup {
   role: Message["role"];
