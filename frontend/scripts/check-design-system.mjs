@@ -10,7 +10,7 @@ const componentContracts = [
   ["src/features/blog/components/BlogPostCard.tsx", "surfaceVariants"],
   ["src/components/auth/LoginForm.tsx", "TabsTrigger"],
   ["src/components/auth/LoginForm.tsx", "Alert"],
-  ["src/components/NavBar.tsx", "Select"],
+  ["src/components/settings/LLMSettingsDialog.tsx", "Select"],
   ["src/features/plugins/PluginCenterDialog.tsx", "DialogContent"],
   ["src/features/admin/components/PluginsPage.tsx", "Textarea"],
   ["src/features/subscription/SubscriptionPanel.tsx", "Alert"],
