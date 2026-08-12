@@ -228,7 +228,7 @@ export function AISidebarChat({
       let uiChain: Promise<void> = Promise.resolve();
       const enqueueUi = (fn: () => Promise<void> | void) => {
         uiChain = uiChain.then(fn).catch((err) => {
-          if (err && err.name !== "AbortError") {
+          if (err instanceof Error && err.name !== "AbortError") {
             logWarn("UI queue step failed", { error: err });
           }
         });

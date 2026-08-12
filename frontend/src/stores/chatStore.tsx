@@ -295,8 +295,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleAuthLogout = () => {
       dispatch({ type: "LOGOUT" });
-      // 显式清除工作区视图持久化，不依赖 LOGOUT→effect 写回的时序
+      // 显式清除跨用户持久化，不依赖 LOGOUT→effect 写回的时序
       try { localStorage.removeItem("ws_view"); } catch { /* ignore unavailable storage */ }
+      try { localStorage.removeItem("workspace:collapsed-paths"); } catch { /* ignore unavailable storage */ }
     };
     window.addEventListener("auth:logout", handleAuthLogout);
     return () => window.removeEventListener("auth:logout", handleAuthLogout);

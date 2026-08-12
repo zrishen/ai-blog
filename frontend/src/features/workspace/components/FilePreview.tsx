@@ -93,7 +93,7 @@ function FilePreviewHTML({ filename }: { filename: string }) {
         setLoading(false);
       })
       .catch((e) => {
-        if (e.name !== "AbortError") {
+        if (e instanceof Error && e.name !== "AbortError") {
           setError(e.message);
           setLoading(false);
         }

@@ -392,8 +392,11 @@ export async function sendChat(
                 typeof data.result === "string" ? data.result : "",
                 typeof data.blog_meta === "object" && data.blog_meta !== null ? data.blog_meta as BlogToolMeta : undefined,
                 Array.isArray(data.references)
-                  ? data.references.filter((r): r is StreamReference =>
-                    r != null && typeof r === "object" && (r.type === "rag" || r.type === "memory" || r.type === "mcp"))
+                  ? data.references.filter((r): r is StreamReference => {
+                    if (r == null || typeof r !== "object") return false;
+                    const type = (r as { type?: unknown }).type;
+                    return type === "rag" || type === "memory" || type === "mcp";
+                  })
                   : undefined,
                 meta,
               );

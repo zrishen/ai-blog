@@ -93,11 +93,12 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
           return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
         },
         format: (files, responseText) => {
-          const response = JSON.parse(responseText) as {
-            download_url?: string;
-            original_name?: string;
-            stored_name?: string;
-          };
+          let response: { download_url?: string; original_name?: string; stored_name?: string };
+          try {
+            response = JSON.parse(responseText) as { download_url?: string; original_name?: string; stored_name?: string };
+          } catch {
+            response = {};
+          }
           const username = authUser?.username;
           const filename = response.original_name || files[0]?.name || response.stored_name || "image";
           const imageUrl = username && response.stored_name

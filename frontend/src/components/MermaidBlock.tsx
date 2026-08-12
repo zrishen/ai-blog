@@ -15,6 +15,10 @@ let mermaidPromise: Promise<MermaidApi> | null = null;
 function loadMermaid(): Promise<MermaidApi> {
   if (!mermaidPromise) {
     mermaidPromise = import("mermaid").then((m) => m.default);
+    // 首次加载失败（弱网/中断）不永久缓存 rejected promise，允许后续重试
+    mermaidPromise.catch(() => {
+      mermaidPromise = null;
+    });
   }
   return mermaidPromise;
 }

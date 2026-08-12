@@ -120,7 +120,7 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
     const normalizeText = (value: string) => value.trim().replace(/\s+/g, " ");
     const normalizedTitle = normalizeText(postTitle);
     if (!normalizedTitle) return postContent;
-    return postContent.replace(/^\s*#(?!#)\s+(.+?)\s*#?\s*(?:\r?\n|$)/, (match, headingText) => {
+    return postContent.replace(/^\s*#(?!#)\s+(.+?)\s*#?\s*(?:\r?\n|$)/, (match, headingText: string) => {
       const normalizedHeading = normalizeText(headingText);
       return normalizedHeading === normalizedTitle ? "" : match;
     });
