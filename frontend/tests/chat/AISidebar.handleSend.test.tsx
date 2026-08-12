@@ -58,7 +58,7 @@ vi.mock("../../src/features/ai-chat/ai-sidebar/ConversationListView", () => ({
 vi.mock("../../src/features/ai-chat/ai-sidebar/MessageList", () => ({
   MessageList: () => <div>消息列表</div>,
 }));
-vi.mock("../../src/features/auth/LoginDialog", () => ({
+vi.mock("../../src/components/auth/LoginDialog", () => ({
   LoginDialog: ({ open }: { open: boolean }) => open ? <div>登录弹窗</div> : null,
 }));
 // 同步化 patch delta player：push 立即 append、finish 立即 resolve，避免 rAF 时序让 blog 写入链测试 flaky

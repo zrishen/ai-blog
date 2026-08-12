@@ -10,7 +10,7 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
-import { LoginDialog } from "../auth/LoginDialog";
+import { LoginDialog } from "@/components/auth/LoginDialog";
 import { useAuth, type AuthUser } from "../../stores/authStore";
 import "./LandingPage.css";
 

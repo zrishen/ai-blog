@@ -1,6 +1,6 @@
 import { LoginForm } from "./LoginForm";
 
-import type { AuthUser } from "../../stores/authStore";
+import type { AuthUser } from "@/stores/authStore";
 
 import {
   Dialog,

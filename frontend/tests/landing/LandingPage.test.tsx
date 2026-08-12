@@ -15,7 +15,7 @@ vi.mock("../../src/stores/authStore", () => ({
   useAuth: () => authState,
 }));
 
-vi.mock("../../src/features/auth/LoginDialog", () => ({
+vi.mock("../../src/components/auth/LoginDialog", () => ({
   LoginDialog: ({
     open,
     onSuccess,

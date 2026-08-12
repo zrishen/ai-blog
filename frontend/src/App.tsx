@@ -18,7 +18,7 @@ import { PluginCenterDialog } from "./features/plugins/PluginCenterDialog";
 import { VisualRegressionRoute } from "./components/VisualRegressionRoute";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import "./App.css";
-import { LoginDialog } from "./features/auth";
+import { LoginDialog } from "./components/auth/LoginDialog";
 import { cn } from "./lib/utils";
 import { navItemVariants } from "./lib/visualVariants";
 

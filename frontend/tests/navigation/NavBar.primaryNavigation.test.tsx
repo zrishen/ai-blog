@@ -15,7 +15,7 @@ vi.mock("../../src/api/auth", () => ({
   updateLLMSettings: vi.fn(),
 }));
 
-vi.mock("../../src/features/auth/LoginDialog", () => ({
+vi.mock("../../src/components/auth/LoginDialog", () => ({
   LoginDialog: ({ open, onSuccess }: { open: boolean; onSuccess?: (user: { username: string }) => void }) => (
     open ? (
       <div role="dialog">

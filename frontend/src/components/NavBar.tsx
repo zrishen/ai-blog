@@ -44,7 +44,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LoginDialog } from "@/features/auth";
+import { LoginDialog } from "@/components/auth/LoginDialog";
 import { SubscriptionPanel } from "@/features/subscription/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
 import { getLLMSettings, updateLLMSettings } from "@/api/auth";

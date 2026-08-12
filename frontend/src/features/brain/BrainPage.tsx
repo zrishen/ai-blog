@@ -26,7 +26,7 @@ import { formatMonthDayTime } from "@/lib/datetime";
 import { errorMessage } from "@/lib/errors";
 import { useAuth } from "@/stores/authStore";
 import { useChat } from "@/stores/chatStore";
-import { LoginDialog } from "@/features/auth";
+import { LoginDialog } from "@/components/auth/LoginDialog";
 import {
   correctBrainFact,
   deleteBrainMemory,

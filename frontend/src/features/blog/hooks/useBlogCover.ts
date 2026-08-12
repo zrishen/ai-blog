@@ -5,7 +5,7 @@ import { useAuth } from "../../../stores/authStore";
 import { generateExcerpt } from "../utils/blogExcerpt";
 
 import type { ChangeEvent } from "react";
-import type { BlogPost } from "../types";
+import type { BlogPost } from "@/types/blog";
 
 import { uploadFile } from "@/api/chat";
 import { createBlogPost, generateBlogCover, suggestBlogTags } from "@/api/blog";

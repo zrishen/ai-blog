@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 
 import { AuthProvider } from "../../src/stores/authStore";
 import { getAccessToken, setAccessToken } from "../../src/api/client";
-import { LoginForm } from "../../src/features/auth/LoginForm";
+import { LoginForm } from "../../src/components/auth/LoginForm";
 
 let fetchMock: ReturnType<typeof vi.fn>;
 

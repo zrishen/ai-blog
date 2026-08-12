@@ -48,7 +48,7 @@ vi.mock("../../src/features/ai-chat/ai-sidebar/ConversationListView", () => ({
 vi.mock("../../src/features/ai-chat/ai-sidebar/MessageList", () => ({
   MessageList: () => <div>消息列表</div>,
 }));
-vi.mock("../../src/features/auth/LoginDialog", () => ({ LoginDialog: () => null }));
+vi.mock("../../src/components/auth/LoginDialog", () => ({ LoginDialog: () => null }));
 
 let latestChat: ReturnType<typeof useChat> | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

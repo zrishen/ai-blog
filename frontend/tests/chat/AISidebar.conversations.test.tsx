@@ -42,7 +42,7 @@ vi.mock("../../src/api/blog", () => ({
 // 会话管理聚焦 list 视图交互；chat 内容（MessageList/ChatInputBar）简化 mock
 vi.mock("../../src/features/ai-chat/ai-sidebar/MessageList", () => ({ MessageList: () => <div>消息列表</div> }));
 vi.mock("../../src/features/ai-chat/ai-sidebar/ChatInputBar", () => ({ ChatInputBar: () => <div>输入栏</div> }));
-vi.mock("../../src/features/auth/LoginDialog", () => ({ LoginDialog: () => null }));
+vi.mock("../../src/components/auth/LoginDialog", () => ({ LoginDialog: () => null }));
 
 let latestChat: ReturnType<typeof useChat> | null = null;
 let latestAuthUser: { id: number; username: string } | null = null;

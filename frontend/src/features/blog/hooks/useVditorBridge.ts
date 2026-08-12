@@ -14,7 +14,7 @@ import {
   installTableCellMenu,
 } from "../utils/vditorMenus";
 
-import type { BlogPost } from "../types";
+import type { BlogPost } from "@/types/blog";
 
 // Vditor 桥子领域：Vditor 实例生命周期（mount-only）+ content↔setValue 同步（含防回环）+
 // 主题/高度约束 + AI 修改 patch 注入链 + 超时。从 BlogEditor 抽出，行为不变。

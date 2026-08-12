@@ -1,8 +1,8 @@
 import { useState } from "react";
 
-import { useAuth } from "../../stores/authStore";
+import { useAuth } from "@/stores/authStore";
 
-import type { AuthUser } from "../../stores/authStore";
+import type { AuthUser } from "@/stores/authStore";
 
 import { parseJson } from "@/api/client";
 import { isAuthUser } from "@/lib/isAuthUser";

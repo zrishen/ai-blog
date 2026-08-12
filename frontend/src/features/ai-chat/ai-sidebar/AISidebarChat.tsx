@@ -4,7 +4,7 @@ import { Sparkles, AlertCircle } from "lucide-react";
 
 import { useAuth } from "../../../stores/authStore";
 import { isDisplayableMessage, useChat } from "../../../stores/chatStore";
-import { LoginDialog } from "../../auth/LoginDialog";
+import { LoginDialog } from "@/components/auth/LoginDialog";
 import { useChatAttachments } from "../hooks/useChatAttachments";
 
 import { ChatInputBar } from "./ChatInputBar";
