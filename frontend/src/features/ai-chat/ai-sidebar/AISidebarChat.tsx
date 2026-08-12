@@ -25,7 +25,7 @@ import { listSitePosts, getBlogPost } from "@/api/blog";
 import { getMessages } from "@/api/conversations";
 import { sendChat, sendSharedLandingChat, sendSharedUserChat } from "@/api/chat";
 import { errorMessage } from "@/lib/errors";
-import { logWarn } from "@/lib/logger";
+import { logWarn } from "@/api/logger";
 
 function makeServerKey(conversationId: number): AISidebarConversationKey {
   return `server:${conversationId}`;
@@ -61,7 +61,6 @@ export interface AISidebarChatProps {
 }
 
 // chat 子组件：消费运行时 Context + 自取 store；持有 chat 全部 state/ref/handler/effect。
-// 从 AISidebar 抽出，行为不变；runChatStream/handleSend deps 数组逐字复制。
 export function AISidebarChat({
   isPrivate,
   contextText,

@@ -24,6 +24,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MermaidBlock } from "@/components/MermaidBlock";
 import { extractCodeLanguage, extractCodeText } from "@/lib/mermaidCode";
 
+// Markdown 渲染的 prose 公共样式：td/th/code/pre/blockquote 一致段，避免两处各自维护漂移
+const MARKDOWN_BASE_CLASS = "prose max-w-none break-words text-reading text-foreground [&_*]:text-foreground";
+const MARKDOWN_PRESET_CLASS =
+  "prose-td:text-body prose-th:text-body prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-reading prose-blockquote:text-foreground dark:prose-invert";
+
 interface MessageGroup {
   role: Message["role"];
   messages: Message[];
@@ -566,7 +571,7 @@ function ProcessText({ content }: { content: string }) {
   const masked = maskStreamingMarkdown(content);
   if (!masked) return null;
   return (
-    <div className="prose max-w-none break-words px-1.5 text-reading leading-relaxed text-foreground [&_*]:text-foreground prose-p:my-0.5 prose-p:text-reading prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-reading prose-td:text-body prose-th:text-body prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-1 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-1 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-reading prose-blockquote:text-foreground dark:prose-invert">
+    <div className={`${MARKDOWN_BASE_CLASS} px-1.5 leading-relaxed prose-p:my-0.5 prose-p:text-reading prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 prose-li:text-reading prose-pre:my-1 prose-blockquote:my-1 ${MARKDOWN_PRESET_CLASS}`}>
       <Markdown remarkPlugins={[remarkGfm]} components={messageMermaidComponents}>{masked}</Markdown>
     </div>
   );
@@ -718,7 +723,7 @@ function MessageBody({
   if (messageContent) {
     return (
       <div
-        className={`prose max-w-none break-words text-reading text-foreground [&_*]:text-foreground prose-p:my-1 prose-p:text-reading prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-reading prose-td:text-body prose-th:text-body prose-code:rounded-control prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-foreground prose-code:before:content-none prose-code:after:content-none prose-pre:my-2 prose-pre:rounded-xl prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:my-2 prose-blockquote:border-l-primary prose-blockquote:bg-transparent prose-blockquote:py-0.5 prose-blockquote:text-reading prose-blockquote:text-foreground dark:prose-invert ${isAssistant
+        className={`${MARKDOWN_BASE_CLASS} prose-p:my-1 prose-p:text-reading prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-reading prose-pre:my-2 prose-blockquote:my-2 ${MARKDOWN_PRESET_CLASS} ${isAssistant
           ? "prose-p:leading-7 prose-li:leading-7 prose-strong:font-black"
           : "prose-p:my-0 prose-ul:my-0 prose-ol:my-0"
           }`}

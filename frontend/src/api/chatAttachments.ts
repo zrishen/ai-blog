@@ -77,7 +77,6 @@ function sendAttachmentUpload(
         }
         if (fresh) {
           setAccessToken(fresh);
-          window.dispatchEvent(new Event("auth:token-refreshed"));
           sendAttachmentUpload(file, draftKey, attachmentId, onProgress, signal, false).then(resolve, reject);
           return;
         }

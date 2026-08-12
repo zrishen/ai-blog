@@ -51,6 +51,7 @@ function refreshOnce(): Promise<string | null> {
 async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
   const isAuthEndpoint = url.startsWith(`${API_BASE}/auth/`);
   const headers = new Headers(options?.headers);
+  const wasAuthed = accessToken !== null;
   if (accessToken) {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
@@ -61,13 +62,17 @@ async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
     const fresh = await refreshOnce();
     if (fresh) {
       setAccessToken(fresh);
-      window.dispatchEvent(new Event("auth:token-refreshed"));
       headers.set("Authorization", `Bearer ${fresh}`);
       res = await fetch(url, { ...options, headers, credentials: "include" });
     }
     if (!fresh || res.status === 401) {
       triggerLogout();
     }
+  }
+  // 会话纪元守卫：请求发起时已认证、返回时已登出且响应成功，则响应属于上一个用户，丢弃（防跨用户残留）。
+  // 401/错误响应不拦截——登出本就由本请求触发（refresh 失败），错误信息应由 assertOk 抛出。
+  if (wasAuthed && accessToken === null && res.ok) {
+    throw new Error("会话已变更");
   }
   return res;
 }

@@ -1,4 +1,4 @@
-import { logWarn } from "@/lib/logger";
+import { logWarn } from "./logger";
 
 import {
   _BLOGDELTA_MARKER,
@@ -17,6 +17,7 @@ import {
   _stripProtocolMarkers,
   _TOOL_MARKER,
   _TOOLPREP_MARKER,
+  type ProtocolMarkerName,
 } from "./chatProtocol";
 import { API_BASE, apiFetch, assertOk } from "./client";
 
@@ -151,33 +152,169 @@ function isValidDoneMetadata(p: Record<string, unknown>): boolean {
   return typeof p.conversation_id === "number" && typeof p.message_id === "number";
 }
 
+// 协议帧处理器：统一"找 marker → 解析完整 JSON → 校验 → 回调 → 截断重扫"骨架。
+// 返回 "pending" 表示帧未完整（等更多数据），否则为截断后的剩余缓冲。
+type FrameResult = "pending" | { rest: string };
+
+interface ProtocolFrame {
+  name: ProtocolMarkerName;
+  marker: string;
+  handle: (afterMarker: string, emit: SendChatCallbacks) => FrameResult;
+}
+
+function parseFrameJson(afterMarker: string): { payload: Record<string, unknown> | null; endIndex: number } | null {
+  const jsonResult = _findCompleteJson(afterMarker, 0);
+  if (!jsonResult) return null;
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
+  } catch { /* ignore malformed JSON */ }
+  return { payload, endIndex: jsonResult.endIndex };
+}
+
+const PROTOCOL_FRAMES: ProtocolFrame[] = [
+  {
+    name: "ROUNDDELTA",
+    marker: _ROUNDDELTA_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.round_id === "number" && typeof p.delta === "string") {
+        emit.onRoundDelta?.(p as unknown as StreamRoundDelta);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "ROUNDEND",
+    marker: _ROUNDEND_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (
+        p
+        && typeof p.round_id === "number"
+        && (p.classification === "loop" || p.classification === "final" || p.classification === "discard")
+        && typeof p.text === "string"
+      ) {
+        emit.onRoundEnd?.(p as unknown as StreamRoundEnd);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "STREAMERROR",
+    marker: _STREAMERROR_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.message === "string") emit.onStreamError?.(p as unknown as StreamError);
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "BLOGSTART",
+    marker: _BLOGSTART_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.post_id === "number" && typeof p.stream_id === "string") {
+        emit.onBlogStart?.(p as unknown as BlogStreamStart);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "BLOGDELTA",
+    marker: _BLOGDELTA_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.post_id === "number" && typeof p.stream_id === "string" && typeof p.content_delta === "string") {
+        emit.onBlogDelta?.(p as unknown as BlogStreamDelta);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "PATCHSTART",
+    marker: _PATCHSTART_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.post_id === "number" && typeof p.stream_id === "string" && typeof p.target_text === "string") {
+        emit.onPatchStart?.(p as unknown as BlogPatchStart);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "PATCHDELTA",
+    marker: _PATCHDELTA_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.post_id === "number" && typeof p.stream_id === "string" && typeof p.replacement_delta === "string") {
+        emit.onPatchDelta?.(p as unknown as BlogPatchDelta);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "TOOLPREP",
+    marker: _TOOLPREP_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.tool_name === "string" && typeof p.stream_id === "string") {
+        emit.onToolPrep?.(p as unknown as ToolPrepEvent);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "REASONING",
+    marker: _REASONING_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.reasoning_delta === "string" && p.reasoning_delta && emit.onReasoning) {
+        emit.onReasoning(p.reasoning_delta);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+  {
+    name: "LOOPSTEP",
+    marker: _LOOPSTEP_MARKER,
+    handle: (after, emit) => {
+      const parsed = parseFrameJson(after);
+      if (!parsed) return "pending";
+      const p = parsed.payload;
+      if (p && typeof p.text === "string" && p.text && emit.onLoopStep) {
+        emit.onLoopStep(p.text);
+      }
+      return { rest: after.substring(parsed.endIndex) };
+    },
+  },
+];
+
 export async function sendChat(
   content: string,
   conversationId: number | null,
   options: SendChatOptions,
 ) {
-  const {
-    attachments,
-    thinkingMode,
-    context,
-    signal,
-    callbacks: {
-      onChunk,
-      onDone,
-      onToolPrep,
-      onToolCall,
-      onToolResult,
-      onBlogStart,
-      onBlogDelta,
-      onReasoning,
-      onLoopStep,
-      onRoundDelta,
-      onRoundEnd,
-      onStreamError,
-      onPatchStart,
-      onPatchDelta,
-    },
-  } = options;
+  const { attachments, thinkingMode, context, signal, callbacks } = options;
+  const { onChunk, onRoundDelta, onRoundEnd, onStreamError } = callbacks;
   const emitChunk = onRoundDelta || onRoundEnd || onStreamError ? undefined : onChunk;
   const res = await apiFetch(`${API_BASE}/chat/stream`, {
     method: "POST",
@@ -212,328 +349,112 @@ export async function sendChat(
 
       const nextMarker = _findNextProtocolMarker(accumulated);
 
-      const rdIdx = nextMarker?.name === "ROUNDDELTA" ? nextMarker.index : -1;
-      if (rdIdx !== -1) {
-        const afterMarker = accumulated.substring(rdIdx + _ROUNDDELTA_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (!jsonResult) continue;
-        try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-          if (typeof payload.round_id === "number" && typeof payload.delta === "string") {
-            onRoundDelta?.(payload as unknown as StreamRoundDelta);
+      if (nextMarker) {
+        // DONE 帧的前导文本由 DONE 分支自行处理（合法元数据走 onDone），其余帧统一在此 flush
+        if (nextMarker.name !== "DONE" && nextMarker.index > 0) emitChunk?.(accumulated.substring(0, nextMarker.index));
+        const frame = PROTOCOL_FRAMES.find((f) => f.name === nextMarker.name);
+        if (frame) {
+          const result = frame.handle(accumulated.substring(nextMarker.index + frame.marker.length), callbacks);
+          if (result !== "pending") {
+            accumulated = result.rest;
+            processed = false;
           }
-        } catch { /* ignore malformed JSON */ }
-        accumulated = afterMarker.substring(jsonResult.endIndex);
-        processed = false;
-        continue;
-      }
-
-      const reIdx = nextMarker?.name === "ROUNDEND" ? nextMarker.index : -1;
-      if (reIdx !== -1) {
-        const afterMarker = accumulated.substring(reIdx + _ROUNDEND_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (!jsonResult) continue;
-        try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-          if (
-            typeof payload.round_id === "number"
-            && (payload.classification === "loop" || payload.classification === "final" || payload.classification === "discard")
-            && typeof payload.text === "string"
-          ) {
-            onRoundEnd?.(payload as unknown as StreamRoundEnd);
-          }
-        } catch { /* ignore malformed JSON */ }
-        accumulated = afterMarker.substring(jsonResult.endIndex);
-        processed = false;
-        continue;
-      }
-
-      const seIdx = nextMarker?.name === "STREAMERROR" ? nextMarker.index : -1;
-      if (seIdx !== -1) {
-        const afterMarker = accumulated.substring(seIdx + _STREAMERROR_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (!jsonResult) continue;
-        try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-          if (typeof payload.message === "string") onStreamError?.(payload as unknown as StreamError);
-        } catch { /* ignore malformed JSON */ }
-        accumulated = afterMarker.substring(jsonResult.endIndex);
-        processed = false;
-        continue;
-      }
-
-      const bsIdx = nextMarker?.name === "BLOGSTART" ? nextMarker.index : -1;
-      if (bsIdx !== -1) {
-        if (bsIdx > 0) emitChunk?.(accumulated.substring(0, bsIdx));
-        const afterMarker = accumulated.substring(bsIdx + _BLOGSTART_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (!jsonResult) continue;
-        try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-          if (typeof payload.post_id === "number" && typeof payload.stream_id === "string") {
-            onBlogStart?.(payload as unknown as BlogStreamStart);
-          }
-        } catch { /* ignore parse errors */ }
-        accumulated = afterMarker.substring(jsonResult.endIndex);
-        processed = false;
-        continue;
-      }
-
-      const bdIdx = nextMarker?.name === "BLOGDELTA" ? nextMarker.index : -1;
-      if (bdIdx !== -1) {
-        if (bdIdx > 0) {
-          emitChunk?.(accumulated.substring(0, bdIdx));
+          continue;
         }
-        const afterMarker = accumulated.substring(bdIdx + _BLOGDELTA_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (jsonResult) {
+        if (nextMarker.name === "TOOLDONE") {
+          const afterMarker = accumulated.substring(nextMarker.index + _TOOL_MARKER.length);
+          const braceIdx = afterMarker.indexOf("{");
+          if (braceIdx === -1) {
+            accumulated = _TOOL_MARKER + afterMarker;
+            continue;
+          }
+          const fullJson = _findCompleteJson(afterMarker, braceIdx);
+          if (!fullJson) {
+            accumulated = _TOOL_MARKER + afterMarker;
+            continue;
+          }
+          const jsonText = afterMarker.substring(braceIdx, fullJson.endIndex);
           try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-            if (
-              typeof payload.post_id === "number"
-              && typeof payload.stream_id === "string"
-              && typeof payload.content_delta === "string"
-            ) {
-              onBlogDelta?.(payload as unknown as BlogStreamDelta);
-            }
-          } catch { /* ignore parse errors */ }
-          accumulated = afterMarker.substring(jsonResult.endIndex);
-        } else {
-          accumulated = _BLOGDELTA_MARKER + afterMarker;
-          continue;
-        }
-        processed = false;
-        continue;
-      }
-
-      const psIdx = nextMarker?.name === "PATCHSTART" ? nextMarker.index : -1;
-      if (psIdx !== -1) {
-        if (psIdx > 0) {
-          emitChunk?.(accumulated.substring(0, psIdx));
-        }
-        const afterMarker = accumulated.substring(psIdx + _PATCHSTART_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (jsonResult) {
-          try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-            if (
-              typeof payload.post_id === "number"
-              && typeof payload.stream_id === "string"
-              && typeof payload.target_text === "string"
-            ) {
-              onPatchStart?.(payload as unknown as BlogPatchStart);
-            }
-          } catch { /* ignore parse errors */ }
-          accumulated = afterMarker.substring(jsonResult.endIndex);
-        } else {
-          accumulated = _PATCHSTART_MARKER + afterMarker;
-          continue;
-        }
-        processed = false;
-        continue;
-      }
-
-      const pdIdx = nextMarker?.name === "PATCHDELTA" ? nextMarker.index : -1;
-      if (pdIdx !== -1) {
-        if (pdIdx > 0) {
-          emitChunk?.(accumulated.substring(0, pdIdx));
-        }
-        const afterMarker = accumulated.substring(pdIdx + _PATCHDELTA_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (jsonResult) {
-          try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-            if (
-              typeof payload.post_id === "number"
-              && typeof payload.stream_id === "string"
-              && typeof payload.replacement_delta === "string"
-            ) {
-              onPatchDelta?.(payload as unknown as BlogPatchDelta);
-            }
-          } catch { /* ignore parse errors */ }
-          accumulated = afterMarker.substring(jsonResult.endIndex);
-        } else {
-          accumulated = _PATCHDELTA_MARKER + afterMarker;
-          continue;
-        }
-        processed = false;
-        continue;
-      }
-
-      // TOOLPREP — 工具参数开始流式生成，提前提示
-      const tpIdx = nextMarker?.name === "TOOLPREP" ? nextMarker.index : -1;
-      if (tpIdx !== -1) {
-        if (tpIdx > 0) emitChunk?.(accumulated.substring(0, tpIdx));
-        const afterMarker = accumulated.substring(tpIdx + _TOOLPREP_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (!jsonResult) continue;
-        try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-          if (typeof payload.tool_name === "string" && typeof payload.stream_id === "string") {
-            onToolPrep?.(payload as unknown as ToolPrepEvent);
-          }
-        } catch { /* ignore parse errors */ }
-        accumulated = afterMarker.substring(jsonResult.endIndex);
-        processed = false;
-        continue;
-      }
-
-      const toolIdx = nextMarker?.name === "TOOLDONE" ? nextMarker.index : -1;
-      if (toolIdx !== -1) {
-        if (toolIdx > 0) {
-          emitChunk?.(accumulated.substring(0, toolIdx));
-        }
-
-        const afterMarker = accumulated.substring(toolIdx + 10);
-        const braceIdx = afterMarker.indexOf("{");
-        if (braceIdx === -1) {
-          // JSON payload hasn't arrived yet — keep the marker + whatever follows
-          accumulated = _TOOL_MARKER + afterMarker;
-          continue;
-        }
-
-        const fullJson = _findCompleteJson(afterMarker, braceIdx);
-        if (!fullJson) {
-          accumulated = _TOOL_MARKER + afterMarker;
-          continue;
-        }
-
-        const jsonText = afterMarker.substring(braceIdx, fullJson.endIndex);
-        try {
-          const data = JSON.parse(jsonText) as Record<string, unknown>;
-          const meta: StreamToolMeta | undefined = (data.call_id !== undefined || data.round_id !== undefined || data.loop_step_index !== undefined || data.stream_id !== undefined)
-            ? {
-                call_id: typeof data.call_id === "string" ? data.call_id : undefined,
-                round_id: typeof data.round_id === "number" ? data.round_id : undefined,
-                loop_step_index: typeof data.loop_step_index === "number" ? data.loop_step_index : undefined,
-                stream_id: typeof data.stream_id === "string" ? data.stream_id : undefined,
-              }
-            : undefined;
-          if (data.status === "start" && typeof data.tool_name === "string" && data.tool_name) {
-            onToolCall?.(data.tool_name, meta);
-          } else if (data.status === "end" && typeof data.tool_name === "string" && data.tool_name && data.result !== undefined) {
-            onToolResult?.(
-              data.tool_name,
-              typeof data.result === "string" ? data.result : "",
-              typeof data.blog_meta === "object" && data.blog_meta !== null ? data.blog_meta as BlogToolMeta : undefined,
-              Array.isArray(data.references)
-                ? data.references.filter((r): r is StreamReference =>
-                  r != null && typeof r === "object" && (r.type === "rag" || r.type === "memory" || r.type === "mcp"))
-                : undefined,
-              meta,
-            );
-          }
-        } catch (err) { logWarn("chat stream: malformed frame skipped", { error: err }); }
-
-        const afterJson = afterMarker.substring(fullJson.endIndex);
-        if (afterJson.startsWith("\n")) {
-          accumulated = afterJson.substring(1);
-        } else {
-          accumulated = afterJson;
-        }
-        processed = false;
-        continue;
-      }
-
-      const rsIdx = nextMarker?.name === "REASONING" ? nextMarker.index : -1;
-      if (rsIdx !== -1) {
-        if (rsIdx > 0) {
-          emitChunk?.(accumulated.substring(0, rsIdx));
-        }
-        const afterMarker = accumulated.substring(rsIdx + _REASONING_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (jsonResult) {
-          try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-            if (typeof payload.reasoning_delta === "string" && payload.reasoning_delta && onReasoning) {
-              onReasoning(payload.reasoning_delta);
+            const data = JSON.parse(jsonText) as Record<string, unknown>;
+            const meta: StreamToolMeta | undefined = (data.call_id !== undefined || data.round_id !== undefined || data.loop_step_index !== undefined || data.stream_id !== undefined)
+              ? {
+                  call_id: typeof data.call_id === "string" ? data.call_id : undefined,
+                  round_id: typeof data.round_id === "number" ? data.round_id : undefined,
+                  loop_step_index: typeof data.loop_step_index === "number" ? data.loop_step_index : undefined,
+                  stream_id: typeof data.stream_id === "string" ? data.stream_id : undefined,
+                }
+              : undefined;
+            if (data.status === "start" && typeof data.tool_name === "string" && data.tool_name) {
+              callbacks.onToolCall?.(data.tool_name, meta);
+            } else if (data.status === "end" && typeof data.tool_name === "string" && data.tool_name && data.result !== undefined) {
+              callbacks.onToolResult?.(
+                data.tool_name,
+                typeof data.result === "string" ? data.result : "",
+                typeof data.blog_meta === "object" && data.blog_meta !== null ? data.blog_meta as BlogToolMeta : undefined,
+                Array.isArray(data.references)
+                  ? data.references.filter((r): r is StreamReference =>
+                    r != null && typeof r === "object" && (r.type === "rag" || r.type === "memory" || r.type === "mcp"))
+                  : undefined,
+                meta,
+              );
             }
           } catch (err) { logWarn("chat stream: malformed frame skipped", { error: err }); }
-          accumulated = afterMarker.substring(jsonResult.endIndex);
-        } else {
-          accumulated = _REASONING_MARKER + afterMarker;
-          continue;
-        }
-        processed = false;
-        continue;
-      }
-
-      const lsIdx = nextMarker?.name === "LOOPSTEP" ? nextMarker.index : -1;
-      if (lsIdx !== -1) {
-        if (lsIdx > 0) {
-          emitChunk?.(accumulated.substring(0, lsIdx));
-        }
-        const afterMarker = accumulated.substring(lsIdx + _LOOPSTEP_MARKER.length);
-        const jsonResult = _findCompleteJson(afterMarker, 0);
-        if (jsonResult) {
-          try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-            if (typeof payload.text === "string" && payload.text && onLoopStep) {
-              onLoopStep(payload.text);
-            }
-          } catch (err) { logWarn("chat stream: malformed frame skipped", { error: err }); }
-          accumulated = afterMarker.substring(jsonResult.endIndex);
-        } else {
-          accumulated = _LOOPSTEP_MARKER + afterMarker;
-          continue;
-        }
-        processed = false;
-        continue;
-      }
-
-      const doneIdx = nextMarker?.name === "DONE" ? nextMarker.index : -1;
-      if (doneIdx !== -1) {
-        // Emit text before DONE if it's not pure JSON
-        const textBefore = accumulated.substring(0, doneIdx).trim();
-        let parsedBefore = false;
-        if (textBefore) {
-          if (textBefore.startsWith("{")) {
-            try {
-              const parsed = JSON.parse(textBefore) as Record<string, unknown>;
-              if (isValidDoneMetadata(parsed)) {
-                onDone?.(parsed as unknown as { conversation_id: number; message_id: number; user_message_id?: number; attachments?: ChatAttachment[] });
-                parsedBefore = true;
-              } else {
-                logWarn("chat stream: DONE frame failed validation", { parsed });
-                emitChunk?.(textBefore);
-              }
-            } catch (err) {
-              logWarn("chat stream: malformed DONE frame before-marker", { error: err });
-              emitChunk?.(textBefore);
-            }
-          } else {
-            emitChunk?.(textBefore);
-          }
-        }
-
-        const afterDone = accumulated.substring(doneIdx + _DONE_MARKER.length).trimStart();
-        if (parsedBefore) {
-          accumulated = afterDone;
+          const afterJson = afterMarker.substring(fullJson.endIndex);
+          accumulated = afterJson.startsWith("\n") ? afterJson.substring(1) : afterJson;
           processed = false;
           continue;
         }
-        if (!afterDone.startsWith("{")) {
-          accumulated = _DONE_MARKER + afterDone;
-          continue;
-        }
-        const jsonResult = _findCompleteJson(afterDone, 0);
-        if (!jsonResult) {
-          accumulated = _DONE_MARKER + afterDone;
-          continue;
-        }
-        try {
-          const parsed = JSON.parse(afterDone.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
-          if (isValidDoneMetadata(parsed)) {
-            onDone?.(parsed as unknown as { conversation_id: number; message_id: number; user_message_id?: number; attachments?: ChatAttachment[] });
-          } else {
-            logWarn("chat stream: DONE frame failed validation", { parsed });
+        if (nextMarker.name === "DONE") {
+          const textBefore = accumulated.substring(0, nextMarker.index).trim();
+          let parsedBefore = false;
+          if (textBefore) {
+            if (textBefore.startsWith("{")) {
+              try {
+                const parsed = JSON.parse(textBefore) as Record<string, unknown>;
+                if (isValidDoneMetadata(parsed)) {
+                  callbacks.onDone?.(parsed as unknown as { conversation_id: number; message_id: number; user_message_id?: number; attachments?: ChatAttachment[] });
+                  parsedBefore = true;
+                } else {
+                  logWarn("chat stream: DONE frame failed validation", { parsed });
+                  emitChunk?.(textBefore);
+                }
+              } catch (err) {
+                logWarn("chat stream: malformed DONE frame before-marker", { error: err });
+                emitChunk?.(textBefore);
+              }
+            } else {
+              emitChunk?.(textBefore);
+            }
           }
-        } catch (err) {
-          logWarn("chat stream: malformed DONE frame after-marker", { error: err });
+          const afterDone = accumulated.substring(nextMarker.index + _DONE_MARKER.length).trimStart();
+          if (parsedBefore) {
+            accumulated = afterDone;
+            processed = false;
+            continue;
+          }
+          if (!afterDone.startsWith("{")) {
+            accumulated = _DONE_MARKER + afterDone;
+            continue;
+          }
+          const jsonResult = _findCompleteJson(afterDone, 0);
+          if (!jsonResult) {
+            accumulated = _DONE_MARKER + afterDone;
+            continue;
+          }
+          try {
+            const parsed = JSON.parse(afterDone.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
+            if (isValidDoneMetadata(parsed)) {
+              callbacks.onDone?.(parsed as unknown as { conversation_id: number; message_id: number; user_message_id?: number; attachments?: ChatAttachment[] });
+            } else {
+              logWarn("chat stream: DONE frame failed validation", { parsed });
+            }
+          } catch (err) {
+            logWarn("chat stream: malformed DONE frame after-marker", { error: err });
+          }
+          accumulated = afterDone.substring(jsonResult.endIndex);
+          processed = false;
+          continue;
         }
-        accumulated = afterDone.substring(jsonResult.endIndex);
-        processed = false;
-        continue;
       }
 
       // No complete control frame — but check for incomplete TOOLDONE at the end
@@ -541,7 +462,7 @@ export async function sendChat(
         (_TOOL_MARKER.length > 1 && accumulated.endsWith(_TOOL_MARKER.substring(0, _TOOL_MARKER.length - 1)));
       if (stillWaiting) continue;
 
-      // Only flush as plain text when there are no protocol control bytes.
+      // 无协议控制字节 → 经 onChunk 输出纯文本；仅当无 round/error 回调时启用裸文本通道
       if (accumulated && !accumulated.includes("\x00") && !accumulated.includes("�")) {
         emitChunk?.(accumulated);
         accumulated = "";
@@ -553,7 +474,7 @@ export async function sendChat(
     }
   }
 
-  // Drain any remaining plain text without leaking internal protocol frames.
+  // 缓冲残留无未解析协议帧 → 经 onChunk 输出纯文本
   if (accumulated && !_hasUnresolvedProtocolMarker(accumulated)) {
     const cleaned = _stripProtocolMarkers(accumulated);
     if (cleaned) emitChunk?.(cleaned);

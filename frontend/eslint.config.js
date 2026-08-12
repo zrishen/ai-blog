@@ -49,6 +49,17 @@ export default defineConfig([
       'import-x/order': ['warn', importOrder[1]],
       'import-x/no-duplicates': 'warn',
       'import-x/no-cycle': ['warn', { maxDepth: 4 }],
+      'import-x/no-restricted-paths': [
+        'error',
+        {
+          zones: [
+            { target: './src/api', from: './src/features' },
+            { target: './src/api', from: './src/components' },
+            { target: './src/stores', from: './src/features' },
+            { target: './src/stores', from: './src/components' },
+          ],
+        },
+      ],
       '@typescript-eslint/no-unsafe-member-access': 'warn',
       '@typescript-eslint/no-unsafe-return': 'warn',
       '@typescript-eslint/no-unsafe-assignment': 'warn',

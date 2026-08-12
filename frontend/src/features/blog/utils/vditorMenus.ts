@@ -692,12 +692,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
     }
   };
 
-  const handleTriggerClick = (event: MouseEvent) => {
-    // trigger 自身的点击在 createUIForBlock 里绑定;此函数保留给可能的代理点击
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
   const handleMenuClick = (event: MouseEvent) => {
     const option = event.target instanceof HTMLElement
       ? event.target.closest<HTMLButtonElement>(".blog-editor-code-language-option")
@@ -809,9 +803,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
   menu.addEventListener("click", handleMenuClick);
   searchInput?.addEventListener("input", handleSearchInput);
   searchInput?.addEventListener("keydown", handleSearchKeydown);
-  // editorElement 上的代理 click(兜底,正常逻辑由各 trigger 自身处理)
-  editorElement.addEventListener("click", handleTriggerClick);
-
   return () => {
     editorElement.removeEventListener("pointerover", handleEditorPointerOver);
     editorElement.removeEventListener("focusin", handleEditorPointerOver);
@@ -823,7 +814,6 @@ export function installCodeLanguageMenu(editor: Vditor) {
     menu.removeEventListener("click", handleMenuClick);
     searchInput?.removeEventListener("input", handleSearchInput);
     searchInput?.removeEventListener("keydown", handleSearchKeydown);
-    editorElement.removeEventListener("click", handleTriggerClick);
     mutationObserver.disconnect();
     for (const block of Array.from(codeBlockUIs.keys())) unmountBlock(block);
     menu.remove();
