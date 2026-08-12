@@ -71,6 +71,10 @@ function sendAttachmentUpload(
       signal.removeEventListener("abort", abort);
       if (xhr.status === 401 && allowRefresh) {
         const fresh = await refreshOnce();
+        if (signal.aborted) {
+          reject(new DOMException("附件上传已取消", "AbortError"));
+          return;
+        }
         if (fresh) {
           setAccessToken(fresh);
           window.dispatchEvent(new Event("auth:token-refreshed"));

@@ -2,7 +2,7 @@ import { useChat } from "../../../stores/chatStore";
 
 import { SubPageHeader, WorkspaceView } from "./shared";
 
-import { FilePreview } from "@/components/FilePreview";
+import { FilePreview } from "../components/FilePreview";
 
 /** 工作区内联文件预览：复用文件库的 FilePreview，顶部加返回（清 fileSelectedFile）。 */
 export function FilePreviewView({ onBack }: { onBack: () => void }) {

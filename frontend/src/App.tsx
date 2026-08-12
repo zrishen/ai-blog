@@ -14,7 +14,7 @@ import { LandingPage } from "./features/landing";
 import { WorkspacePage } from "./features/workspace";
 import { BrainPage } from "./features/brain";
 import { OverviewPage, UsersPage, CodesPage, UsagePage, PluginsPage } from "./features/admin";
-import { PluginCenterDialog } from "./components/plugins/PluginCenterDialog";
+import { PluginCenterDialog } from "./features/plugins/PluginCenterDialog";
 import { VisualRegressionRoute } from "./components/VisualRegressionRoute";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import "./App.css";

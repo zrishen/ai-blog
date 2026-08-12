@@ -5,15 +5,15 @@ const componentContracts = [
   ["src/components/NavBar.tsx", "navItemVariants"],
   ["src/features/admin/components/AdminNav.tsx", "navItemVariants"],
   ["src/features/ai-chat/ai-sidebar/ConversationListView.tsx", "surfaceVariants"],
-  ["src/components/subscription/SubscriptionPanel.tsx", "surfaceVariants"],
+  ["src/features/subscription/SubscriptionPanel.tsx", "surfaceVariants"],
   ["src/features/blog/components/BlogOverviewPanel.tsx", "WorkspacePanel"],
   ["src/features/blog/components/BlogPostCard.tsx", "surfaceVariants"],
   ["src/features/auth/LoginForm.tsx", "TabsTrigger"],
   ["src/features/auth/LoginForm.tsx", "Alert"],
   ["src/components/NavBar.tsx", "Select"],
-  ["src/components/plugins/PluginCenterDialog.tsx", "DialogContent"],
+  ["src/features/plugins/PluginCenterDialog.tsx", "DialogContent"],
   ["src/features/admin/components/PluginsPage.tsx", "Textarea"],
-  ["src/components/subscription/SubscriptionPanel.tsx", "Alert"],
+  ["src/features/subscription/SubscriptionPanel.tsx", "Alert"],
   ["src/features/blog/components/BlogPostView.tsx", "variant=\"destructive\""],
 ];
 

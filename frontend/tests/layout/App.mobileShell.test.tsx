@@ -75,7 +75,7 @@ vi.mock("../../src/features/landing/LandingPage", () => ({
 vi.mock("../../src/features/workspace/WorkspacePage", () => ({
   WorkspacePage: () => <div>工作区主内容</div>,
 }));
-vi.mock("../../src/components/plugins/PluginCenterDialog", () => ({
+vi.mock("../../src/features/plugins/PluginCenterDialog", () => ({
   PluginCenterDialog: () => <div>Plugins</div>,
 }));
 vi.mock("../../src/features/admin/components/OverviewPage", () => ({

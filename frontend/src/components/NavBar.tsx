@@ -45,7 +45,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LoginDialog } from "@/features/auth";
-import { SubscriptionPanel } from "@/components/subscription/SubscriptionPanel";
+import { SubscriptionPanel } from "@/features/subscription/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
 import { getLLMSettings, updateLLMSettings } from "@/api/auth";
 import { updateSidebarSettings } from "@/api/blog";

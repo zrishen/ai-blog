@@ -13,6 +13,9 @@ import type { FileDocument } from "@/api/files";
 import { logError } from "@/utils/logger";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
+
+// 乐观/失败行的最小形状：真实 RagSource 到达前仅展示资源标识与状态
+type RagSourceLike = Pick<RagSource, "resource_type" | "resource_id" | "index_status">;
 import { leaveAiKnowledge, listAiKnowledge } from "@/api/workspace";
 import { listBlogPosts } from "@/api/blog";
 import { listFileDocuments } from "@/api/files";
@@ -65,7 +68,7 @@ export function AiKnowledgeView({
   }, [reload, state.aiKnowledgeRevision]);
 
   // RagSource 不含 name,按 resource_type 在文件/文章列表里反查真实名称
-  const nameOf = (it: RagSource): string => {
+  const nameOf = (it: RagSourceLike): string => {
     if (it.resource_type === "file") {
       const d = docs.find((x) => x.id === it.resource_id);
       return d ? d.original_name : `文件 #${it.resource_id}`;
@@ -78,7 +81,7 @@ export function AiKnowledgeView({
   };
 
   // 点击打开：文章→内联编辑，文件→内联预览（反查 file_path），研究类不可打开
-  const openResource = async (it: RagSource) => {
+  const openResource = async (it: RagSourceLike) => {
     if (it.resource_type === "blog_post" && it.resource_id != null) {
       onOpenBlog(it.resource_id);
     } else if (it.resource_type === "file" && it.resource_id != null) {
@@ -97,7 +100,7 @@ export function AiKnowledgeView({
   };
 
   const handleRemove = useCallback(
-    async (it: RagSource) => {
+    async (it: RagSourceLike) => {
       const key = `${it.resource_type}:${it.resource_id}`;
       setRemovingKey(key);
       try {
@@ -114,20 +117,20 @@ export function AiKnowledgeView({
 
   const realRag = rag;
   const realKeys = new Set((realRag ?? []).map((r) => `${r.resource_type}:${r.resource_id}`));
-  const optimisticItems: RagSource[] = optimisticKeys
+  const optimisticItems: RagSourceLike[] = optimisticKeys
     .filter((k) => !realKeys.has(k))
     .map((k) => {
       const [t, idStr] = k.split(":");
-      return { resource_type: t, resource_id: Number(idStr), index_status: "pending" } as RagSource;
+      return { resource_type: t, resource_id: Number(idStr), index_status: "pending" };
     });
   // 加入失败项（资源未入库）：同样以行展示，附「重试」入口；真实行存在时状态由真实行接管
-  const failedItems: RagSource[] = Object.keys(indexErrors)
+  const failedItems: RagSourceLike[] = Object.keys(indexErrors)
     .filter((k) => !realKeys.has(k))
     .map((k) => {
       const [t, idStr] = k.split(":");
-      return { resource_type: t, resource_id: Number(idStr), index_status: "failed" } as RagSource;
+      return { resource_type: t, resource_id: Number(idStr), index_status: "failed" };
     });
-  const items: RagSource[] | null = realRag === null ? null : [...failedItems, ...optimisticItems, ...realRag];
+  const items: (RagSourceLike | RagSource)[] | null = realRag === null ? null : [...failedItems, ...optimisticItems, ...realRag];
   const ragList = realRag ?? [];
 
   return (
