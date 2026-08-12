@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Users,
   Crown,
@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getAdminOverview } from "@/api/admin";
 import type { AdminOverview } from "@/api/admin";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { AdminPage, AdminPageHeader } from "./AdminPage";
 
 function formatM(n: number): string {
@@ -77,43 +78,10 @@ function SkeletonCard() {
 }
 
 export function OverviewPage() {
-  // 初次即 loading，避免在 effect 内同步 setState 触发 react-hooks/set-state-in-effect。
-  const [data, setData] = useState<AdminOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [retryKey, setRetryKey] = useState(0);
-
-  // 拉取：在 effect 内定义 async 函数并调用，使 set-state-in-effect 能识别 await 边界
-  //（所有 setState 都在 await getAdminOverview() 之后的异步续段中）。
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      try {
-        const overview = await getAdminOverview();
-        if (!cancelled) {
-          setData(overview);
-          setError(null);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "读取概览失败");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [retryKey]);
-
-  // 重试：在事件回调里翻转 loading/error 与 retryKey（事件回调可自由 setState），触发 effect 重跑。
-  const handleRetry = () => {
-    setLoading(true);
-    setError(null);
-    setRetryKey((k) => k + 1);
-  };
+  const { data, loading, error, retry: handleRetry } = useAsyncResource<AdminOverview>(
+    () => getAdminOverview(),
+    [],
+  );
 
   return (
     <AdminPage>

@@ -11,4 +11,4 @@ export type {
   Message,
   Reference,
   ToolEvent,
-} from "./types";
+} from "@/types/chat";

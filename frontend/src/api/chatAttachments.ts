@@ -7,7 +7,7 @@ import {
   setAccessToken,
 } from "./client";
 
-import type { ChatAttachment } from "../features/ai-chat/types";
+import type { ChatAttachment } from "@/types/chat";
 
 export interface ChatAttachmentUploadRequest {
   promise: Promise<ChatAttachment>;

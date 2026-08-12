@@ -6,8 +6,9 @@ import {
   type ChatAttachmentUploadRequest,
 } from "../../../api/chatAttachments";
 import { useChat } from "../../../stores/chatStore";
+import { errorMessage } from "@/lib/errors";
 
-import type { AISidebarConversationKey, DraftAttachment } from "../types";
+import type { AISidebarConversationKey, DraftAttachment } from "@/types/chat";
 
 const MAX_CONCURRENT_UPLOADS = 3;
 
@@ -17,11 +18,6 @@ function makeId(): string {
 
 function isImageFile(file: File): boolean {
   return file.type.startsWith("image/");
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message;
-  return "附件上传失败，请重试";
 }
 
 export function useChatAttachments(key: AISidebarConversationKey | null, enabled: boolean) {
@@ -122,7 +118,7 @@ export function useChatAttachments(key: AISidebarConversationKey | null, enabled
           if (!cancelledRef.current.has(draft.localId)) {
             updateDraft(job.key, draft.localId, {
               status: "failed",
-              error: errorMessage(error),
+              error: errorMessage(error, "附件上传失败，请重试"),
             });
           }
         })

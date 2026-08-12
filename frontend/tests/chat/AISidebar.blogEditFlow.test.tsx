@@ -210,6 +210,6 @@ describe("AISidebar 博客 AI 修改编排", () => {
     await waitFor(() => expect(latestChat!.state.blogPatchStreamingByPostId[42]).toBeUndefined());
     expect(api.getBlogPost).not.toHaveBeenCalled();
     expect(latestChat!.state.aiSidebarStreamingByKey["temp:blog-edit"]).toBe(false);
-    expect(latestChat!.state.aiSidebarErrorsByKey["temp:blog-edit"]).toBe("无法获取回复，请稍后重试");
+    expect(latestChat!.state.aiSidebarErrorsByKey["temp:blog-edit"]).toBe("网络失败");
   });
 });

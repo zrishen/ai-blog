@@ -24,6 +24,7 @@ import type { RunState } from "../AISidebar";
 import { listSitePosts, getBlogPost } from "@/api/blog";
 import { getMessages } from "@/api/conversations";
 import { sendChat, sendSharedLandingChat, sendSharedUserChat } from "@/api/chat";
+import { errorMessage } from "@/lib/errors";
 import { logWarn } from "@/utils/logger";
 
 function makeServerKey(conversationId: number): AISidebarConversationKey {
@@ -348,6 +349,7 @@ export function AISidebarChat({
             },
             onStreamError: ({ message }) => {
               runState.streamError = message;
+              controller.abort();
               enqueueUi(() => {
                 dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "error", message } } });
               });
@@ -520,11 +522,11 @@ export function AISidebarChat({
         dispatch({ type: "CLEAR_BLOG_STREAMING", payload: activeBlogStream });
       }
       if (!persistenceConfirmed) attachments.restoreUploaded(attachmentLocalIds, activeKey);
-      if (err instanceof Error && err.name === "AbortError") {
+      if (err instanceof Error && err.name === "AbortError" && !runState.streamError) {
         dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "discard" } } });
         if (!runState.streamFinalized) updateAssistant({ content: "已停止" });
       } else {
-        const message = runState.streamError ?? "无法获取回复，请稍后重试";
+        const message = runState.streamError ?? errorMessage(err, "无法获取回复，请稍后重试");
         dispatch({ type: "SET_AI_SIDEBAR_ERROR_FOR_KEY", payload: { key: activeKey, error: message } });
         if (!runState.streamError) {
           dispatch({ type: "APPLY_AI_STREAM_EVENT_FOR_KEY", payload: { key: activeKey, id: assistantId, event: { type: "error", message } } });

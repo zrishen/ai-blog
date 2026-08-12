@@ -208,10 +208,11 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
+const THEMES: readonly Theme[] = ["light", "dark"];
 function readSavedTheme(): Theme {
   try {
     const v = localStorage.getItem("theme");
-    return (v as Theme) || "light";
+    return v && THEMES.includes(v as Theme) ? (v as Theme) : "light";
   } catch {
     return "light";
   }
@@ -323,7 +324,8 @@ export function useChatDispatch(): React.Dispatch<ChatAction> {
 }
 
 export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
-  const current = localStorage.getItem("theme") as Theme || "light";
+  const stored = localStorage.getItem("theme");
+  const current: Theme = stored && THEMES.includes(stored as Theme) ? (stored as Theme) : "light";
   const next: Theme = current === "dark" ? "light" : "dark";
   dispatch({ type: "SET_THEME", payload: next });
 }

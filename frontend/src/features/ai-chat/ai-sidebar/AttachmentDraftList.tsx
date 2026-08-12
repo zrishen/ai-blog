@@ -1,6 +1,6 @@
 import { AlertCircle, FileText, Image as ImageIcon, RotateCcw, X } from "lucide-react";
 
-import type { DraftAttachment } from "../types";
+import type { DraftAttachment } from "@/types/chat";
 
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";

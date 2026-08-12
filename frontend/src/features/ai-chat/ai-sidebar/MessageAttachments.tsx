@@ -3,7 +3,7 @@ import { Download, FileText, Image as ImageIcon } from "lucide-react";
 
 import { getChatAttachmentBlob } from "../../../api/chatAttachments";
 
-import type { ChatAttachment } from "../types";
+import type { ChatAttachment } from "@/types/chat";
 
 import { Spinner } from "@/components/ui/spinner";
 

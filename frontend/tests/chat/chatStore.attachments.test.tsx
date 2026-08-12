@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 
-import type { DraftAttachment } from "../../src/features/ai-chat/types";
+import type { DraftAttachment } from "@/types/chat";
 
 const TEMP_KEY = "temp:attachments" as const;
 

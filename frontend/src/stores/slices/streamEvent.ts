@@ -1,4 +1,4 @@
-import type { Message, AIStreamEvent } from "../../features/ai-chat/types";
+import type { Message, AIStreamEvent } from "@/types/chat";
 
 // 流式事件应用到消息上的共享 helper（conversation 与 ai-sidebar 切片共用）。
 export function applyStreamEvent(message: Message, event: AIStreamEvent): Message {

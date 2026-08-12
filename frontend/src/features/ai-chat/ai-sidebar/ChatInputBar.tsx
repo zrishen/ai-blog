@@ -9,7 +9,7 @@ import {
 
 import { AttachmentDraftList } from "./AttachmentDraftList";
 
-import type { DraftAttachment } from "../types";
+import type { DraftAttachment } from "@/types/chat";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";

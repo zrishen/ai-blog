@@ -19,6 +19,8 @@ import { FileProcessingProgress, type FileProcessingProgressValue } from "./File
 
 const STORAGE_KEY = "file_processing_upload_v1";
 const POLL_MS = 1000;
+const MAX_BACKOFF_MS = 30_000;
+const MAX_FAILURE_ATTEMPTS = 30;
 
 type UploadPhase = "network" | "server";
 
@@ -149,12 +151,14 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   const timersRef = useRef(new Map<string, number>());
   const pollingRef = useRef(new Set<string>());
   const completedRef = useRef(new Set<string>());
+  const failureRef = useRef(new Map<string, number>());
 
   const clearPoll = useCallback((key: string) => {
     const timer = timersRef.current.get(key);
     if (timer != null) window.clearTimeout(timer);
     timersRef.current.delete(key);
     pollingRef.current.delete(key);
+    failureRef.current.delete(key);
   }, []);
 
   const onSucceeded = useCallback((key: string, kind: "upload" | "restore" | "index") => {
@@ -195,6 +199,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
       const tick = async () => {
         try {
           const latest = await getFileProcessingJob(jobId);
+          failureRef.current.delete(key);
           if (kind === "upload") {
             setUploadTask((current) => {
               if (!current || (current.job && current.job.id !== jobId)) return current;
@@ -265,7 +270,23 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
           }
           timersRef.current.set(key, window.setTimeout(tick, POLL_MS));
         } catch {
-          timersRef.current.set(key, window.setTimeout(tick, POLL_MS));
+          const failures = (failureRef.current.get(key) ?? 0) + 1;
+          if (failures > MAX_FAILURE_ATTEMPTS) {
+            clearPoll(key);
+            if (kind === "upload") {
+              const active = activeRef.current;
+              if (active && active.jobId === jobId) active.resolveTerminal(null);
+            } else if (kind === "index" && indexKey) {
+              consumeIndexSuccess(indexKey, jobId);
+              dispatch({ type: "INCREMENT_AI_KNOWLEDGE_REVISION" });
+            } else if (kind === "restore") {
+              dispatch({ type: "INCREMENT_FILE_RESTORE_REVISIONS" });
+            }
+            return;
+          }
+          failureRef.current.set(key, failures);
+          const backoff = Math.min(POLL_MS * 2 ** Math.min(failures, 5), MAX_BACKOFF_MS);
+          timersRef.current.set(key, window.setTimeout(tick, backoff));
         }
       };
 
@@ -382,6 +403,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     timersRef.current.clear();
     pollingRef.current.clear();
     completedRef.current.clear();
+    failureRef.current.clear();
     // 登出时同步清理当前用户的本地任务状态
     setUploadTask(null);
     setRestoreJobs({});
@@ -398,6 +420,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     for (const timer of timersRef.current.values()) window.clearTimeout(timer);
     timersRef.current.clear();
     pollingRef.current.clear();
+    failureRef.current.clear();
   }, []);
 
   const startUpload = useCallback((file: File, categoryId?: number) => new Promise<FileProcessingJob | null>((resolve) => {

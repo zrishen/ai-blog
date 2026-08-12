@@ -1,9 +1,9 @@
-import { isDisplayableMessage } from "../../features/ai-chat/types";
+import { isDisplayableMessage } from "@/types/chat";
 
 import { applyStreamEvent } from "./streamEvent";
 
 import type { ChatState, ChatAction } from "../chatStore";
-import type { ChatAttachment, Message, ToolEvent } from "../../features/ai-chat/types";
+import type { ChatAttachment, Message, ToolEvent } from "@/types/chat";
 import type { ThinkingMode } from "../../api/chat";
 
 

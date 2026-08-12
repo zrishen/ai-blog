@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ChatInputBar } from "../../src/features/ai-chat/ai-sidebar/ChatInputBar";
 
-import type { DraftAttachment } from "../../src/features/ai-chat/types";
+import type { DraftAttachment } from "@/types/chat";
 
 function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInputBar>> = {}) {
   const props: React.ComponentProps<typeof ChatInputBar> = {

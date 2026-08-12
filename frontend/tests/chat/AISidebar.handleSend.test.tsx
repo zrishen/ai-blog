@@ -8,7 +8,7 @@ import { AuthProvider, useAuth } from "../../src/stores/authStore";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 import { AISidebar } from "../../src/features/ai-chat/AISidebar";
 
-import type { ChatAttachment } from "../../src/features/ai-chat/types";
+import type { ChatAttachment } from "@/types/chat";
 
 // 复用范式 A：vi.hoisted 把 api/client 全部做成 vi.fn，mock 掉会引入副作用的子组件
 const api = vi.hoisted(() => ({
