@@ -7,11 +7,7 @@ import { SubPageHeader, WorkspaceView } from "./shared";
 import type { WorkspaceEntry } from "@/api/workspace";
 
 import { EmptyState } from "@/components/ui/empty-state";
-
-function parentPath(path: string): string | null {
-  const separator = path.lastIndexOf("/");
-  return separator < 0 ? null : path.slice(0, separator);
-}
+import { parentPath } from "@/lib/path";
 
 function entryIcon(entry: WorkspaceEntry) {
   return entry.kind === "folder" ? (

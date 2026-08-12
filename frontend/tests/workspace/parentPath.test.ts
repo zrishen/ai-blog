@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parentPath } from "../../src/features/workspace/useWorkspaceActions";
+import { parentPath } from "../../src/lib/path";
 
 describe("parentPath", () => {
   it("顶层路径返回 null", () => {

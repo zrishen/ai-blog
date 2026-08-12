@@ -1,8 +1,8 @@
 import {
   API_BASE,
   apiFetch,
+  assertOk,
   getAccessToken,
-  readErrorDetail,
   refreshOnce,
   setAccessToken,
 } from "./client";
@@ -126,7 +126,7 @@ export async function deleteChatAttachment(attachmentId: string): Promise<void> 
   const res = await apiFetch(`${API_BASE}/chat/attachments/${encodeURIComponent(attachmentId)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "附件删除失败"));
+  await assertOk(res, "附件删除失败");
 }
 
 export async function getChatAttachmentBlob(attachmentId: string, signal?: AbortSignal): Promise<Blob> {
@@ -134,6 +134,6 @@ export async function getChatAttachmentBlob(attachmentId: string, signal?: Abort
     `${API_BASE}/chat/attachments/${encodeURIComponent(attachmentId)}/content`,
     { signal },
   );
-  if (!res.ok) throw new Error(await readErrorDetail(res, "附件读取失败"));
+  await assertOk(res, "附件读取失败");
   return res.blob();
 }

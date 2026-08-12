@@ -639,9 +639,6 @@ export async function uploadFile(file: File): Promise<{ stored_name: string; ori
     method: "POST",
     body: formData,
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Upload failed: ${err}`);
-  }
+  await assertOk(res, "Upload failed");
   return parseJson<{ stored_name: string; original_name: string; download_url: string }>(res);
 }

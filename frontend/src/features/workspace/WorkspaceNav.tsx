@@ -63,6 +63,7 @@ import { Input } from "@/components/ui/input";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { cn } from "@/lib/utils";
 import { errorMessage } from "@/lib/errors";
+import { parentPath } from "@/lib/path";
 import { useFileProcessing } from "./providers/FileProcessingProvider";
 
 
@@ -79,11 +80,6 @@ const TYPE_VIEWS: ViewItem[] = [
   { key: "ai_knowledge", label: "AI 知识", icon: Sparkles },
   { key: "trash", label: "回收站", icon: Trash2 },
 ];
-
-function parentPath(path: string): string | null {
-  const index = path.lastIndexOf("/");
-  return index < 0 ? null : path.slice(0, index);
-}
 
 function entryIcon(entry: WorkspaceEntry) {
   if (entry.kind === "folder") return <Folder className="h-4 w-4 flex-shrink-0 text-primary" />;
