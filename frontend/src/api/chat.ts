@@ -194,7 +194,7 @@ export async function sendChat(
     }),
     signal,
   });
-  if (!res.ok) throw new Error("Chat request failed");
+  await assertOk(res, "Chat request failed");
 
   if (!res.body) throw new Error("Response body is null");
   const reader = res.body.getReader();

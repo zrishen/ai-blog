@@ -398,7 +398,7 @@ describe("sendChat SSE 解析", () => {
           onDone: () => {},
         },
       }),
-    ).rejects.toThrow("Chat request failed");
+    ).rejects.toThrow("err");
   });
 });
 
