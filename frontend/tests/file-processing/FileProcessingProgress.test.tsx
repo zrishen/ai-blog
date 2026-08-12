@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { FileProcessingProgress } from "../../src/lib/providers/FileProcessingProgress";
+import { FileProcessingProgress } from "../../src/features/workspace/providers/FileProcessingProgress";
 
 import type { FileProcessingJob } from "../../src/api/files";
 

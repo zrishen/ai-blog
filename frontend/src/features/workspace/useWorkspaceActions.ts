@@ -18,7 +18,7 @@ import {
   renameEntry,
   type WorkspaceEntry,
 } from "@/api/workspace";
-import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
+import { useFileProcessing } from "./providers/FileProcessingProvider";
 import { errorMessage } from "@/lib/errors";
 
 

@@ -7,6 +7,7 @@ import {
 } from "@/api/admin";
 import type { AdminUserItem } from "@/api/admin";
 import { formatDateTime } from "@/lib/datetime";
+import { errorMessage } from "@/lib/errors";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +90,7 @@ export function UsersPage() {
         setError(null);
       } catch (e) {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "加载用户列表失败");
+        setError(errorMessage(e, "加载用户列表失败"));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -138,7 +139,7 @@ export function UsersPage() {
       handleCloseExtend();
       setReloadNonce((n) => n + 1);
     } catch (e) {
-      setExtendError(e instanceof Error ? e.message : "延期订阅失败");
+      setExtendError(errorMessage(e, "延期订阅失败"));
     } finally {
       setExtending(false);
     }
@@ -155,7 +156,7 @@ export function UsersPage() {
       setSuccess(`已${u.is_admin ? "撤销" : "授予"} ${u.username} 管理员身份`);
       setReloadNonce((n) => n + 1);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "设置管理员失败");
+      setError(errorMessage(e, "设置管理员失败"));
     } finally {
       setAdminToggling(null);
     }

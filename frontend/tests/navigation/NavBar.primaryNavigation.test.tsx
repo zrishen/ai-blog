@@ -25,7 +25,7 @@ vi.mock("../../src/features/auth/LoginDialog", () => ({
 }));
 
 import { NavBar } from "../../src/components/NavBar";
-import { FileProcessingProvider } from "../../src/lib/providers/FileProcessingProvider";
+import { FileProcessingProvider } from "../../src/features/workspace/providers/FileProcessingProvider";
 import { AuthProvider } from "../../src/stores/authStore";
 import { ChatProvider } from "../../src/stores/chatStore";
 

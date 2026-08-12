@@ -28,7 +28,7 @@ vi.mock("../../src/api/subscription", () => ({
 
 import { AuthProvider } from "../../src/stores/authStore";
 import { ChatProvider } from "../../src/stores/chatStore";
-import { FileProcessingProvider } from "../../src/lib/providers/FileProcessingProvider";
+import { FileProcessingProvider } from "../../src/features/workspace/providers/FileProcessingProvider";
 import { NavBar } from "../../src/components/NavBar";
 
 function renderNav() {

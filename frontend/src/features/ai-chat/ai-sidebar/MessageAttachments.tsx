@@ -52,13 +52,17 @@ function PrivateAttachmentImage({ attachment }: { attachment: ChatAttachment }) 
 }
 
 async function downloadAttachment(attachment: ChatAttachment) {
-  const blob = await getChatAttachmentBlob(attachment.id);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = attachment.original_name;
-  link.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  try {
+    const blob = await getChatAttachmentBlob(attachment.id);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = attachment.original_name;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  } catch {
+    window.alert("下载失败，请重试");
+  }
 }
 
 export function MessageAttachments({ attachments }: { attachments?: ChatAttachment[] }) {

@@ -2,7 +2,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
 import { setAccessToken } from "../api/client";
-import { clearAllDraftRecovery } from "../features/blog/utils/draftStorage";
+import { clearStorageByPrefix } from "../lib/clearStorageByPrefix";
 
 export interface AuthUser {
   id: number;
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const onLogout = () => {
       setAccessToken(null);
-      clearAllDraftRecovery();
+      clearStorageByPrefix("draft_blog_");
       setState(UNAUTHENTICATED);
     };
     window.addEventListener("auth:logout", onLogout);
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // 通知后端吊销 refresh token 记录并清除 cookie；即便请求失败也立即清前端登录态。
     void fetch("/api/v1/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     setAccessToken(null);
-    clearAllDraftRecovery();
+    clearStorageByPrefix("draft_blog_");
     setState(UNAUTHENTICATED);
   };
 

@@ -9,6 +9,7 @@ import type { BlogPost } from "../types";
 
 import { uploadFile } from "@/api/chat";
 import { createBlogPost, generateBlogCover, suggestBlogTags } from "@/api/blog";
+import { errorMessage } from "@/lib/errors";
 
 // 封面标签子领域：封面上传/AI 生成 + 标签 AI 生成。
 // coverImage/tags 是核心表单字段（发布/自动保存等多处用），仍由主组件持有；
@@ -68,7 +69,7 @@ export function useBlogCover({ existingPost, title, getContent, onError, onCover
         payload: state.blogPosts.map((p) => (p.id === existingPost.id ? { ...p, ...updated } : p)),
       });
     } catch (err) {
-      const detail = err instanceof Error ? err.message : "";
+      const detail = errorMessage(err, "");
       onError(detail ? `AI 生成封面失败：${detail}` : "AI 生成封面失败，请检查图片模型配置后重试");
     } finally {
       setGeneratingCover(false);
@@ -104,8 +105,7 @@ export function useBlogCover({ existingPost, title, getContent, onError, onCover
         onError("未能生成有效标签，请手动输入");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "AI 生成标签失败";
-      onError(msg);
+      onError(errorMessage(err, "AI 生成标签失败"));
     } finally {
       setTagGenerating(false);
     }

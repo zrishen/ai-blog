@@ -62,7 +62,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { cn } from "@/lib/utils";
-import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
+import { errorMessage } from "@/lib/errors";
+import { useFileProcessing } from "./providers/FileProcessingProvider";
 
 
 interface ViewItem {
@@ -139,7 +140,7 @@ export function WorkspaceNav() {
       dispatch({ type: "SET_WORKSPACE_TREE", payload: tree });
       setError(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "加载工作区失败");
+      setError(errorMessage(reason, "加载工作区失败"));
     }
   }, [dispatch]);
 
@@ -238,7 +239,7 @@ export function WorkspaceNav() {
       await reload();
       selectFolder(entry.path);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "新建文件夹失败");
+      setError(errorMessage(reason, "新建文件夹失败"));
     }
   };
 
@@ -254,7 +255,7 @@ export function WorkspaceNav() {
       await renameEntry(entry.path, name);
       await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "重命名失败");
+      setError(errorMessage(reason, "重命名失败"));
     }
   };
 
@@ -265,7 +266,7 @@ export function WorkspaceNav() {
       setMoveTarget(null);
       await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "移动失败");
+      setError(errorMessage(reason, "移动失败"));
     }
   };
 
@@ -280,7 +281,7 @@ export function WorkspaceNav() {
       });
       await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "移动失败");
+      setError(errorMessage(reason, "移动失败"));
     }
   };
 
@@ -294,7 +295,7 @@ export function WorkspaceNav() {
       setDeleteFolderTarget(null);
       await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "删除文件夹失败");
+      setError(errorMessage(reason, "删除文件夹失败"));
     }
   };
 
@@ -308,7 +309,7 @@ export function WorkspaceNav() {
       setDeleteFileTarget(null);
       await reload();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "删除文件失败");
+      setError(errorMessage(reason, "删除文件失败"));
     }
   };
 
@@ -318,7 +319,7 @@ export function WorkspaceNav() {
       await joinAiKnowledge(entry.resource_type, entry.resource_id);
       dispatch({ type: "INCREMENT_AI_KNOWLEDGE_REVISION" });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "加入 AI 知识失败");
+      setError(errorMessage(reason, "加入 AI 知识失败"));
     }
   };
 

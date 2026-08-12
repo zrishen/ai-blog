@@ -13,6 +13,7 @@ import type {
   PluginTransport,
 } from "@/api/plugins";
 import { Spinner } from "@/components/ui/spinner";
+import { errorMessage } from "@/lib/errors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,10 +65,6 @@ const EMPTY_MCP_GUIDE: McpGuideForm = {
   args: "",
   envVars: "",
 };
-
-function errorMessage(cause: unknown, fallback: string): string {
-  return cause instanceof Error ? cause.message : fallback;
-}
 
 function parseLines(value: string): string[] {
   return value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);

@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatMonthDayTime } from "@/lib/datetime";
+import { errorMessage } from "@/lib/errors";
 import { useAuth } from "@/stores/authStore";
 import { useChat } from "@/stores/chatStore";
 import { LoginDialog } from "@/features/auth";
@@ -131,7 +132,7 @@ export function BrainPage() {
       }
       setManagementAction(null);
     } catch (cause) {
-      setMutationError(cause instanceof Error ? cause.message : "删除记忆失败");
+      setMutationError(errorMessage(cause, "删除记忆失败"));
     } finally {
       setMutationPending(false);
     }
@@ -145,7 +146,7 @@ export function BrainPage() {
       setEntityFacts((current) => [...current.filter((item) => item.fact_id !== fact.fact_id), corrected]);
       setManagementAction(null);
     } catch (cause) {
-      setMutationError(cause instanceof Error ? cause.message : "纠正事实失败");
+      setMutationError(errorMessage(cause, "纠正事实失败"));
     } finally {
       setMutationPending(false);
     }
@@ -159,7 +160,7 @@ export function BrainPage() {
       setPreferences((current) => [...current.filter((item) => item.pref_id !== preference.pref_id), updated]);
       setManagementAction(null);
     } catch (cause) {
-      setMutationError(cause instanceof Error ? cause.message : "更新偏好失败");
+      setMutationError(errorMessage(cause, "更新偏好失败"));
     } finally {
       setMutationPending(false);
     }

@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/datetime";
 import { surfaceVariants } from "@/lib/visualVariants";
+import { errorMessage } from "@/lib/errors";
 
 // 周额度展示用 M 单位（÷1e6 保留 1 位）。
 const fmtM = (n: number): string => (n / 1e6).toFixed(1);
@@ -55,7 +56,7 @@ export function SubscriptionPanel() {
         text: `兑换成功，订阅有效期至 ${formatDateTime(s.expires_at)}`,
       });
     } catch (e) {
-      setMsg({ kind: "err", text: e instanceof Error ? e.message : "兑换失败" });
+      setMsg({ kind: "err", text: errorMessage(e, "兑换失败") });
     } finally {
       setSubmitting(false);
     }

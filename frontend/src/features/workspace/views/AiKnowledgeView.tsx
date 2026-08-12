@@ -19,8 +19,8 @@ import { listFileDocuments } from "@/api/files";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FileProcessingProgress } from "@/lib/providers/FileProcessingProgress";
-import { jobStage, useFileProcessing } from "@/lib/providers/FileProcessingProvider";
+import { FileProcessingProgress } from "../providers/FileProcessingProgress";
+import { jobStage, useFileProcessing } from "../providers/FileProcessingProvider";
 import { cn } from "@/lib/utils";
 
 // 状态徽标已精简：索引中显示进度条，失败显示红字「失败」，其余状态不标记。

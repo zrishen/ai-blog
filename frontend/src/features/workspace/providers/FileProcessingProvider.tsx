@@ -9,11 +9,12 @@ import {
   listFileProcessingJobsByRequestId,
   uploadToFileLibrary,
   type FileProcessingJob,
-} from "../../api/files";
-import { restoreTrashItem, type TrashItem } from "../../api/trash";
-import { joinAiKnowledge } from "../../api/workspace";
-import { useAuth } from "../../stores/authStore";
-import { useChatDispatch } from "../../stores/chatStore";
+} from "@/api/files";
+import { restoreTrashItem, type TrashItem } from "@/api/trash";
+import { joinAiKnowledge } from "@/api/workspace";
+import { useAuth } from "@/stores/authStore";
+import { useChatDispatch } from "@/stores/chatStore";
+import { errorMessage } from "@/lib/errors";
 
 import { FileProcessingProgress, type FileProcessingProgressValue } from "./FileProcessingProgress";
 
@@ -502,7 +503,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
         else if (recovered?.status === "failed" || recovered?.status === "cancelled") resolveTerminal(null);
       } else {
         sessionStorage.removeItem(STORAGE_KEY);
-        const message = error instanceof Error ? error.message : "文件库上传失败";
+        const message = errorMessage(error, "文件库上传失败");
         setUploadTask((current) => current?.requestId === requestId
           ? { ...current, status: "failed", stage: "上传失败", error: message }
           : current);
@@ -569,7 +570,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
       // 失败记录到行内，由 AiKnowledgeView 展示「加入失败 + 重试」
       setIndexErrors((current) => ({
         ...current,
-        [optimisticKey]: e instanceof Error ? e.message : "加入 AI 知识失败",
+        [optimisticKey]: errorMessage(e, "加入 AI 知识失败"),
       }));
       throw e;
     }

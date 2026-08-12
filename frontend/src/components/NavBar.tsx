@@ -50,6 +50,7 @@ import { ProjectMark } from "@/components/ProjectMark";
 import { getLLMSettings, updateLLMSettings } from "@/api/auth";
 import { updateSidebarSettings } from "@/api/blog";
 import { cn } from "@/lib/utils";
+import { errorMessage } from "@/lib/errors";
 import { navItemVariants } from "@/lib/visualVariants";
 import { useWorkspacePrimaryNavigation } from "@/components/useWorkspacePrimaryNavigation";
 
@@ -147,7 +148,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       setLlmModel(data.model ?? "");
       dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: !!data.supports_thinking });
     } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : "读取设置失败");
+      setSettingsError(errorMessage(err, "读取设置失败"));
     } finally {
       setSettingsLoading(false);
     }
@@ -177,7 +178,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: !!data.supports_thinking });
       setSettingsSaved(true);
     } catch (err) {
-      setSettingsError(err instanceof Error ? err.message : "保存设置失败");
+      setSettingsError(errorMessage(err, "保存设置失败"));
     } finally {
       setSettingsSaving(false);
     }

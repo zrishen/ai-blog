@@ -18,7 +18,7 @@ vi.mock("../../src/api/auth", () => ({
 
 import { AuthProvider } from "../../src/stores/authStore";
 import { ChatProvider } from "../../src/stores/chatStore";
-import { FileProcessingProvider } from "../../src/lib/providers/FileProcessingProvider";
+import { FileProcessingProvider } from "../../src/features/workspace/providers/FileProcessingProvider";
 import { NavBar } from "../../src/components/NavBar";
 
 async function renderNav(authed = true) {

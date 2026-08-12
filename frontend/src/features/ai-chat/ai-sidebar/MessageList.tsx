@@ -157,11 +157,7 @@ function MessageListComponent({
                   const isAssistant = msg.role === "assistant";
                   const messageContent = msg.content;
 
-                  const streamMessage = msg as Message & {
-                    streamingRound?: string;
-                    streamFinalized?: boolean;
-                    streamError?: string;
-                  };
+                  const streamMessage = msg;
                   const meaningfulReasoning = !!msg.reasoningContent && msg.reasoningContent.trim().length > 3;
                   const meaningfulThinkingContent = !!msg.thinkingContent && msg.thinkingContent.trim().length > 3;
                   const hasToolEvents = !!(msg.toolEvents && msg.toolEvents.length > 0);

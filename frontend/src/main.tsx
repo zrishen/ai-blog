@@ -7,7 +7,7 @@ import "./index.css";
 import { ChatProvider } from "./stores/chatStore";
 import { AuthProvider } from "./stores/authStore";
 import App from "./App";
-import { FileProcessingProvider } from "./lib/providers/FileProcessingProvider";
+import { FileProcessingProvider } from "./features/workspace/providers/FileProcessingProvider";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { logError } from "./utils/logger";
 

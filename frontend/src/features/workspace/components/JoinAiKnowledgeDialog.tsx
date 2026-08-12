@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
+import { useFileProcessing } from "../providers/FileProcessingProvider";
 
 interface Candidate {
   key: string; // "file:123" / "blog_post:456"

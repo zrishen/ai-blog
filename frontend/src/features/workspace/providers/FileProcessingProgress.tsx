@@ -1,4 +1,4 @@
-import type { FileProcessingJob, FileProcessingStage } from "../../api/files";
+import type { FileProcessingJob, FileProcessingStage } from "@/api/files";
 
 export interface FileProcessingProgressValue {
   percent: number | null;

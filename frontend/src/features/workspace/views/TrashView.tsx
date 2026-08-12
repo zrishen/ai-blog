@@ -16,7 +16,7 @@ import { formatDate } from "./utils";
 import { logError } from "@/utils/logger";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
-import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
+import { useFileProcessing } from "../providers/FileProcessingProvider";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 

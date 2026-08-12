@@ -7,6 +7,7 @@ import {
 } from "@/api/admin";
 import type { AdminCodeItem } from "@/api/admin";
 import { formatDateTime as formatBjDateTime } from "@/lib/datetime";
+import { errorMessage } from "@/lib/errors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,10 +44,6 @@ function clampNumber(n: number, min: number, max: number): number {
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   return formatBjDateTime(iso);
-}
-
-function errorMessage(e: unknown, fallback: string): string {
-  return e instanceof Error ? e.message : fallback;
 }
 
 /**

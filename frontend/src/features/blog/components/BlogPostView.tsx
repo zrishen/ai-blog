@@ -263,6 +263,11 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
     }
   }, []);
 
+  // 卸载时清掉未触发的长按计时器，避免 setState 到已卸载组件
+  useEffect(() => () => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+  }, []);
+
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   const handleCopySelection = useCallback(() => {

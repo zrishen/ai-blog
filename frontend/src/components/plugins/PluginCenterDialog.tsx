@@ -4,6 +4,7 @@ import { Blocks, Wrench } from "lucide-react";
 import type { PluginSummary } from "@/api/plugins";
 
 import { listPlugins, setPluginEnabled } from "@/api/plugins";
+import { errorMessage } from "@/lib/errors";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,7 @@ export function PluginCenterDialog() {
         if (!cancelled) setPlugins(items);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : "读取插件失败");
+        if (!cancelled) setError(errorMessage(cause, "读取插件失败"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -57,7 +58,7 @@ export function PluginCenterDialog() {
       setPlugins((items) => items.map((item) => (
         item.id === plugin.id ? { ...item, is_enabled: previousEnabled } : item
       )));
-      setError(cause instanceof Error ? cause.message : "更新插件失败");
+      setError(errorMessage(cause, "更新插件失败"));
     } finally {
       updatingIdsRef.current.delete(plugin.id);
     }

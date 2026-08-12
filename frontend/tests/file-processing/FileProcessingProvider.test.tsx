@@ -39,7 +39,7 @@ vi.mock("../../src/stores/chatStore", () => ({
 }));
 
 import { FileUploadNetworkError } from "../../src/api/files";
-import { FileProcessingProvider, useFileProcessing } from "../../src/lib/providers/FileProcessingProvider";
+import { FileProcessingProvider, useFileProcessing } from "../../src/features/workspace/providers/FileProcessingProvider";
 
 import type { FileProcessingJob } from "../../src/api/files";
 
