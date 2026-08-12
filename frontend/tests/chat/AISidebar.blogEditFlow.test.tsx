@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
 vi.mock("../../src/api/client", () => ({
   getAccessToken: api.getAccessToken,
   setAccessToken: api.setAccessToken,
+  parseJson: (res: Response) => res.json(),
 }));
 vi.mock("../../src/api/chat", () => ({
   sendChat: api.sendChat,
@@ -123,7 +124,7 @@ describe("AISidebar 博客 AI 修改编排", () => {
     // AuthProvider 挂载用 cookie 调 /auth/refresh 恢复登录态；模拟已登录 alice
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       typeof url === "string" && url.includes("/auth/refresh")
-        ? new Response(JSON.stringify({ access_token: "access-test", user: { id: 7, username: "alice" } }), {
+        ? new Response(JSON.stringify({ access_token: "access-test", user: { id: 7, username: "alice", is_admin: false, is_super_admin: false } }), {
             status: 200, headers: { "Content-Type": "application/json" },
           })
         : new Response("{}", { status: 200 }),

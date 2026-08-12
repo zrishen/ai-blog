@@ -9,6 +9,7 @@ import "@testing-library/jest-dom/vitest";
 vi.mock("../../src/api/client", () => ({
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn(() => null),
+  parseJson: (res: Response) => res.json(),
 }));
 
 vi.mock("../../src/api/auth", () => ({
@@ -46,7 +47,7 @@ describe("NavBar 回收站入口", () => {
     // AuthProvider 挂载用 cookie 调 /auth/refresh 恢复登录态；模拟已登录 alice
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       typeof url === "string" && url.includes("/auth/refresh")
-        ? new Response(JSON.stringify({ access_token: "a", user: { id: 1, username: "alice" } }), {
+        ? new Response(JSON.stringify({ access_token: "a", user: { id: 1, username: "alice", is_admin: false, is_super_admin: false } }), {
             status: 200, headers: { "Content-Type": "application/json" },
           })
         : new Response("{}", { status: 200 }),

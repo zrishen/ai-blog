@@ -151,6 +151,7 @@ const api = vi.hoisted(() => ({
 vi.mock("../../src/api/client", () => ({
   getAccessToken: api.getAccessToken,
   setAccessToken: api.setAccessToken,
+  parseJson: (res: Response) => res.json(),
 }));
 
 vi.mock("../../src/api/blog", () => ({

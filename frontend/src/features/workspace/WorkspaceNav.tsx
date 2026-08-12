@@ -330,11 +330,15 @@ export function WorkspaceNav() {
     const targetPath = uploadTargetRef.current;
     uploadTargetRef.current = null;
     for (const file of files) {
-      const job = await startUpload(file);
-      if (!job?.result_document_id || !targetPath) continue;
-      const documents = await listFileDocuments();
-      const document = documents.documents.find((item) => item.id === job.result_document_id);
-      if (document) await moveEntry(document.file_path, targetPath);
+      try {
+        const job = await startUpload(file);
+        if (!job?.result_document_id || !targetPath) continue;
+        const documents = await listFileDocuments();
+        const document = documents.documents.find((item) => item.id === job.result_document_id);
+        if (document) await moveEntry(document.file_path, targetPath);
+      } catch (reason) {
+        setError(errorMessage(reason, "文件处理失败"));
+      }
     }
     await reload();
   };

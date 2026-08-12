@@ -4,6 +4,8 @@ import { useAuth } from "../../stores/authStore";
 
 import type { AuthUser } from "../../stores/authStore";
 
+import { parseJson } from "@/api/client";
+import { isAuthUser } from "@/lib/isAuthUser";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,9 +40,17 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         ),
         credentials: "include",
       });
-      const data = await res.json();
+      const data = await parseJson<{
+        access_token?: string;
+        user?: AuthUser;
+        detail?: unknown;
+      }>(res);
       if (!res.ok) {
-        setError(data.detail || "请求失败");
+        setError(typeof data.detail === "string" ? data.detail : "请求失败");
+        return;
+      }
+      if (typeof data.access_token !== "string" || !isAuthUser(data.user)) {
+        setError("登录响应格式异常");
         return;
       }
       login(data.access_token, data.user);

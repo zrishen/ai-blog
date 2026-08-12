@@ -61,7 +61,7 @@ describe("AI 侧栏思考模式偏好", () => {
     saveAISidebarThinkingMode(7, "fast");
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       typeof url === "string" && url.includes("/auth/refresh")
-        ? new Response(JSON.stringify({ access_token: "a", user: { id: 7, username: "alice" } }), {
+        ? new Response(JSON.stringify({ access_token: "a", user: { id: 7, username: "alice", is_admin: false, is_super_admin: false } }), {
             status: 200, headers: { "Content-Type": "application/json" },
           })
         : new Response(JSON.stringify({ conversations: [] }), {
@@ -89,7 +89,7 @@ describe("AI 侧栏思考模式偏好", () => {
     localStorage.setItem("auth_user", JSON.stringify({ id: 7, username: "alice" }));
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       typeof url === "string" && url.includes("/auth/refresh")
-        ? new Response(JSON.stringify({ access_token: "a", user: { id: 7, username: "alice" } }), {
+        ? new Response(JSON.stringify({ access_token: "a", user: { id: 7, username: "alice", is_admin: false, is_super_admin: false } }), {
             status: 200, headers: { "Content-Type": "application/json" },
           })
         : new Response(JSON.stringify({ conversations: [] }), {

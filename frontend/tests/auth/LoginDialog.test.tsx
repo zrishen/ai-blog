@@ -30,7 +30,7 @@ function mockLoginSuccess() {
   fetchMock.mockImplementation(async (url: string) =>
     typeof url === "string" && url.includes("/auth/refresh")
       ? new Response("{}", { status: 401 })
-      : new Response(JSON.stringify({ access_token: "t", user: { id: 1, username: "alice" } }), {
+      : new Response(JSON.stringify({ access_token: "t", user: { id: 1, username: "alice", is_admin: false, is_super_admin: false } }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -78,7 +78,7 @@ describe("LoginDialog", () => {
     await submitLogin(user);
 
     await waitFor(() => {
-      expect(onSuccess).toHaveBeenCalledWith({ id: 1, username: "alice" });
+      expect(onSuccess).toHaveBeenCalledWith({ id: 1, username: "alice", is_admin: false, is_super_admin: false });
     });
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });

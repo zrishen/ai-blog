@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 vi.mock("../../src/api/client", () => ({
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn(() => null),
+  parseJson: (res: Response) => res.json(),
 }));
 
 vi.mock("../../src/api/auth", () => ({
@@ -49,7 +50,7 @@ describe("NavBar subscription entry", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn(async (url: string) =>
       typeof url === "string" && url.includes("/auth/refresh")
-        ? new Response(JSON.stringify({ access_token: "token", user: { id: 1, username: "alice" } }), {
+        ? new Response(JSON.stringify({ access_token: "token", user: { id: 1, username: "alice", is_admin: false, is_super_admin: false } }), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           })

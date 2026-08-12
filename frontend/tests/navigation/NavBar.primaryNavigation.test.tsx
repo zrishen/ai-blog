@@ -7,6 +7,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 vi.mock("../../src/api/client", () => ({
   setAccessToken: vi.fn(),
   getAccessToken: vi.fn(() => null),
+  parseJson: (res: Response) => res.json(),
 }));
 
 vi.mock("../../src/api/auth", () => ({

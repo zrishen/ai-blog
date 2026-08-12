@@ -1,15 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
-import { setAccessToken } from "../api/client";
+import { parseJson, setAccessToken } from "../api/client";
 import { clearStorageByPrefix } from "../lib/clearStorageByPrefix";
+import { isAuthUser } from "../lib/isAuthUser";
 
-export interface AuthUser {
-  id: number;
-  username: string;
-  is_admin: boolean;
-  is_super_admin: boolean;
-}
+import type { AuthUser } from "../types/auth";
+
+export type { AuthUser } from "../types/auth";
 
 interface AuthState {
   user: AuthUser | null;
@@ -44,8 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const resp = await fetch("/api/v1/auth/refresh", { method: "POST", credentials: "include", signal: controller.signal });
         if (resp.ok) {
-          const data = (await resp.json()) as { access_token?: string; user?: AuthUser };
-          if (data.access_token && data.user && !cancelled) {
+          const data = await parseJson<{ access_token?: string; user?: unknown }>(resp);
+          if (isAuthUser(data.user) && typeof data.access_token === "string" && !cancelled) {
             setAccessToken(data.access_token);
             setState({ user: data.user, isAuthenticated: true, isInitializing: false });
             return;

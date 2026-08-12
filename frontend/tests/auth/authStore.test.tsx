@@ -61,7 +61,7 @@ describe("authStore", () => {
 
   it("通过 refresh cookie 恢复会话", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
-      refreshResponse(200, { access_token: "restored", user: { id: 1, username: "bob" } }),
+      refreshResponse(200, { access_token: "restored", user: { id: 1, username: "bob", is_admin: false, is_super_admin: false } }),
     ));
     const { result } = renderHook(() => useAuth(), { wrapper });
     await waitFor(() => expect(result.current.isAuthenticated).toBe(true));

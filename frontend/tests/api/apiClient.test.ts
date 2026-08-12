@@ -425,7 +425,7 @@ describe("apiFetch 401 处理", () => {
     // 原请求 401 → refresh 200 → 原请求重试 200
     fetchMock.mockResolvedValueOnce(new Response("{}", { status: 401 }));
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ access_token: "new", user: { id: 1, username: "a" } }), {
+      new Response(JSON.stringify({ access_token: "new", user: { id: 1, username: "a", is_admin: false, is_super_admin: false } }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       }),

@@ -43,7 +43,7 @@ async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>, inviteCod
 }
 
 function loginResponse() {
-  return new Response(JSON.stringify({ access_token: "tok", user: { id: 7, username: "alice" } }), {
+  return new Response(JSON.stringify({ access_token: "tok", user: { id: 7, username: "alice", is_admin: false, is_super_admin: false } }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -64,7 +64,7 @@ describe("LoginForm", () => {
     await fillAndSubmit(user);
 
     await waitFor(() => {
-      expect(onSuccess).toHaveBeenCalledWith({ id: 7, username: "alice" });
+      expect(onSuccess).toHaveBeenCalledWith({ id: 7, username: "alice", is_admin: false, is_super_admin: false });
     });
     await waitFor(() => expect(getAccessToken()).toBe("tok"));
   });

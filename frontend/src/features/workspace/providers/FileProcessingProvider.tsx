@@ -275,6 +275,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
           if (failures > MAX_FAILURE_ATTEMPTS) {
             clearPoll(key);
             if (kind === "upload") {
+              sessionStorage.removeItem(STORAGE_KEY);
+              setUploadTask((current) => current ? { ...current, status: "failed", error: "网络中断，上传状态未知，请重新选择文件" } : current);
               const active = activeRef.current;
               if (active && active.jobId === jobId) active.resolveTerminal(null);
             } else if (kind === "index" && indexKey) {
