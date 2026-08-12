@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch, readErrorDetail } from "./client";
+import { API_BASE, apiFetch, assertOk, parseJson, readErrorDetail } from "./client";
 
 // 对接后端 /api/v1/admin/*（全部 require_admin，403 由调用方处理）。
 // 端点清单见 backend/src/api/admin*.py。
@@ -29,14 +29,14 @@ export interface AdminUserWeeklyUsage {
 
 export async function getAdminOverview(): Promise<AdminOverview> {
   const res = await apiFetch(`${API_BASE}/admin/usage/overview`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "读取概览失败"));
-  return res.json();
+  await assertOk(res, "读取概览失败");
+  return parseJson<AdminOverview>(res);
 }
 
 export async function getAdminUserUsage(userId: number): Promise<AdminUserWeeklyUsage> {
   const res = await apiFetch(`${API_BASE}/admin/usage/user/${userId}`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "读取用户用量失败"));
-  return res.json();
+  await assertOk(res, "读取用户用量失败");
+  return parseJson<AdminUserWeeklyUsage>(res);
 }
 
 export interface AdminUserItem {
@@ -66,8 +66,8 @@ export async function listAdminUsers(params?: {
   if (params?.limit != null) q.set("limit", String(params.limit));
   const query = q.toString();
   const res = await apiFetch(`${API_BASE}/admin/users${query ? "?" + query : ""}`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "读取用户列表失败"));
-  return res.json();
+  await assertOk(res, "读取用户列表失败");
+  return parseJson<AdminListUsersResponse>(res);
 }
 
 export async function grantAdminSubscription(
@@ -79,8 +79,8 @@ export async function grantAdminSubscription(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ days }),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "延期订阅失败"));
-  return res.json();
+  await assertOk(res, "延期订阅失败");
+  return parseJson<{ subscription_expires_at: string }>(res);
 }
 
 export async function setAdminUser(userId: number, isAdmin: boolean): Promise<AdminUserItem> {
@@ -89,8 +89,8 @@ export async function setAdminUser(userId: number, isAdmin: boolean): Promise<Ad
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ is_admin: isAdmin }),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "设置管理员失败"));
-  return res.json();
+  await assertOk(res, "设置管理员失败");
+  return parseJson<AdminUserItem>(res);
 }
 
 export interface AdminCodeItem {
@@ -119,8 +119,8 @@ export async function generateAdminCodes(data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "生成兑换码失败"));
-  return res.json();
+  await assertOk(res, "生成兑换码失败");
+  return parseJson<{ codes: string[] }>(res);
 }
 
 export async function listAdminCodes(params?: {
@@ -134,8 +134,8 @@ export async function listAdminCodes(params?: {
   if (params?.limit != null) q.set("limit", String(params.limit));
   const query = q.toString();
   const res = await apiFetch(`${API_BASE}/admin/codes/${query ? "?" + query : ""}`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "读取兑换码列表失败"));
-  return res.json();
+  await assertOk(res, "读取兑换码列表失败");
+  return parseJson<AdminListCodesResponse>(res);
 }
 
 export async function revokeAdminCode(codeId: number): Promise<void> {

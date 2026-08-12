@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch } from "./client";
+import { API_BASE, apiFetch, assertOk, parseJson } from "./client";
 
 export interface BlogPostData {
   id: number;
@@ -53,8 +53,8 @@ export interface SiteUserData {
 
 export async function getSiteUser(username: string): Promise<SiteUserData> {
   const res = await apiFetch(`${API_BASE}/public/users/${encodeURIComponent(username)}`);
-  if (!res.ok) throw new Error("Failed to fetch site user");
-  return res.json();
+  await assertOk(res, "Failed to fetch site user");
+  return parseJson<SiteUserData>(res);
 }
 
 export async function listSitePosts(username: string, params?: {
@@ -72,14 +72,14 @@ export async function listSitePosts(username: string, params?: {
   if (params?.per_page) q.set("per_page", String(params.per_page));
   const query = q.toString();
   const res = await apiFetch(`${API_BASE}/public/users/${encodeURIComponent(username)}/posts${query ? "?" + query : ""}`);
-  if (!res.ok) throw new Error("Failed to fetch site posts");
-  return res.json();
+  await assertOk(res, "Failed to fetch site posts");
+  return parseJson<BlogListResponse>(res);
 }
 
 export async function getSitePost(username: string, slug: string): Promise<BlogPostData> {
   const res = await apiFetch(`${API_BASE}/public/users/${encodeURIComponent(username)}/posts/${encodeURIComponent(slug)}`);
-  if (!res.ok) throw new Error("Failed to fetch site post");
-  return res.json();
+  await assertOk(res, "Failed to fetch site post");
+  return parseJson<BlogPostData>(res);
 }
 
 export async function listBlogPosts(params?: {
@@ -95,14 +95,14 @@ export async function listBlogPosts(params?: {
   if (params?.per_page) q.set("per_page", String(params.per_page));
   const query = q.toString();
   const res = await apiFetch(`${API_BASE}/blog/posts${query ? "?" + query : ""}`);
-  if (!res.ok) throw new Error("Failed to fetch blog posts");
-  return res.json();
+  await assertOk(res, "Failed to fetch blog posts");
+  return parseJson<BlogListResponse>(res);
 }
 
 export async function getBlogPost(id: number): Promise<BlogPostData> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${id}`);
-  if (!res.ok) throw new Error("Failed to fetch blog post");
-  return res.json();
+  await assertOk(res, "Failed to fetch blog post");
+  return parseJson<BlogPostData>(res);
 }
 
 export async function createBlogPost(data: {
@@ -119,11 +119,8 @@ export async function createBlogPost(data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to create blog post: ${err}`);
-  }
-  return res.json();
+  await assertOk(res, "Failed to create blog post");
+  return parseJson<BlogPostData>(res);
 }
 
 export async function updateBlogPost(id: number, data: {
@@ -139,16 +136,13 @@ export async function updateBlogPost(id: number, data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to update blog post: ${err}`);
-  }
-  return res.json();
+  await assertOk(res, "Failed to update blog post");
+  return parseJson<BlogPostData>(res);
 }
 
 export async function deleteBlogPost(id: number): Promise<void> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete blog post");
+  await assertOk(res, "Failed to delete blog post");
 }
 
 export async function publishBlogPost(id: number, publish: boolean): Promise<BlogPostData> {
@@ -157,45 +151,42 @@ export async function publishBlogPost(id: number, publish: boolean): Promise<Blo
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ publish }),
   });
-  if (!res.ok) throw new Error("Failed to publish/unpublish blog post");
-  return res.json();
+  await assertOk(res, "Failed to publish/unpublish blog post");
+  return parseJson<BlogPostData>(res);
 }
 
 export async function listBlogRevisions(id: number): Promise<BlogRevisionSummary[]> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${id}/revisions`);
-  if (!res.ok) throw new Error("Failed to fetch blog revisions");
-  const data = await res.json() as { revisions: BlogRevisionSummary[] };
+  await assertOk(res, "Failed to fetch blog revisions");
+  const data = await parseJson<{ revisions: BlogRevisionSummary[] }>(res);
   return data.revisions;
 }
 
 export async function getBlogRevision(postId: number, revisionId: number): Promise<BlogRevision> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions/${revisionId}`);
-  if (!res.ok) throw new Error("Failed to fetch blog revision");
-  return res.json();
+  await assertOk(res, "Failed to fetch blog revision");
+  return parseJson<BlogRevision>(res);
 }
 
 export async function commitBlogRevision(postId: number): Promise<BlogRevision> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions`, { method: "POST" });
-  if (!res.ok) throw new Error("Failed to create blog revision");
-  return res.json();
+  await assertOk(res, "Failed to create blog revision");
+  return parseJson<BlogRevision>(res);
 }
 
 export async function restoreBlogRevision(postId: number, revisionId: number): Promise<BlogPostData> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions/${revisionId}/restore`, {
     method: "POST",
   });
-  if (!res.ok) throw new Error("Failed to restore blog revision");
-  return res.json();
+  await assertOk(res, "Failed to restore blog revision");
+  return parseJson<BlogPostData>(res);
 }
 
 export async function deleteBlogRevision(postId: number, revisionId: number): Promise<void> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${postId}/revisions/${revisionId}`, {
     method: "DELETE",
   });
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || "Failed to delete blog revision");
-  }
+  await assertOk(res, "Failed to delete blog revision");
 }
 
 export async function updateSidebarSettings(showTags: boolean): Promise<void> {
@@ -204,24 +195,15 @@ export async function updateSidebarSettings(showTags: boolean): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ show_tags: showTags }),
   });
-  if (!res.ok) throw new Error("Failed to update sidebar settings");
+  await assertOk(res, "Failed to update sidebar settings");
 }
 
 export async function generateBlogCover(id: number): Promise<BlogPostData> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${id}/generate-cover`, {
     method: "POST",
   });
-  if (!res.ok) {
-    let detail = await res.text();
-    try {
-      const parsed = JSON.parse(detail);
-      if (parsed && typeof parsed.detail === "string") detail = parsed.detail;
-    } catch {
-      // 非 JSON 响应，保留原始文本
-    }
-    throw new Error(detail || `Failed to generate blog cover (HTTP ${res.status})`);
-  }
-  return res.json();
+  await assertOk(res, `Failed to generate blog cover`);
+  return parseJson<BlogPostData>(res);
 }
 
 export async function suggestBlogTags(id: number): Promise<string[]> {
@@ -232,11 +214,8 @@ export async function suggestBlogTags(id: number): Promise<string[]> {
       method: "POST",
       signal: controller.signal,
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || "标签生成失败");
-    }
-    const data = await res.json();
+    await assertOk(res, "标签生成失败");
+    const data = await parseJson<{ tags: string[] }>(res);
     return data.tags;
   } finally {
     clearTimeout(timeout);

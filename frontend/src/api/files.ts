@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch, readErrorDetail, getAccessToken, setAccessToken, refreshOnce } from "./client";
+import { API_BASE, apiFetch, assertOk, parseJson, getAccessToken, setAccessToken, refreshOnce } from "./client";
 
 // 预览 base URL（不带凭证）。docx/xlsx 经 apiFetch 自动携带 Authorization header，凭证不入 URL。
 export function getPreviewBaseUrl(filename: string): string {
@@ -9,8 +9,8 @@ export function getPreviewBaseUrl(filename: string): string {
 // 即便该 URL 进入日志/历史，泄露的也仅是"只能预览该文件"的弱令牌，而非全局 access JWT。
 export async function getPreviewToken(filename: string): Promise<string> {
   const res = await apiFetch(`${API_BASE}/preview/token?filename=${encodeURIComponent(filename)}`);
-  if (!res.ok) throw new Error("获取预览令牌失败");
-  const data = (await res.json()) as { token?: string };
+  await assertOk(res, "获取预览令牌失败");
+  const data = await parseJson<{ token?: string }>(res);
   if (!data.token) throw new Error("获取预览令牌失败");
   return data.token;
 }
@@ -170,8 +170,8 @@ function sendUpload(
 
 export async function getFileProcessingJob(id: string): Promise<FileProcessingJob> {
   const res = await apiFetch(`${API_BASE}/files/processing-jobs/${id}`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "文件处理任务查询失败"));
-  return res.json();
+  await assertOk(res, "文件处理任务查询失败");
+  return parseJson<FileProcessingJob>(res);
 }
 
 function normalizeJobs(value: FileProcessingJob[] | { jobs: FileProcessingJob[] }): FileProcessingJob[] {
@@ -180,21 +180,21 @@ function normalizeJobs(value: FileProcessingJob[] | { jobs: FileProcessingJob[] 
 
 export async function listActiveFileProcessingJobs(): Promise<FileProcessingJob[]> {
   const res = await apiFetch(`${API_BASE}/files/processing-jobs?active_only=true`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "活动文件处理任务查询失败"));
-  return normalizeJobs(await res.json());
+  await assertOk(res, "活动文件处理任务查询失败");
+  return normalizeJobs(await parseJson<FileProcessingJob[] | { jobs: FileProcessingJob[] }>(res));
 }
 
 export async function listFileProcessingJobsByRequestId(clientRequestId: string): Promise<FileProcessingJob[]> {
   const query = new URLSearchParams({ client_request_id: clientRequestId });
   const res = await apiFetch(`${API_BASE}/files/processing-jobs?${query}`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "文件处理任务重新关联失败"));
-  return normalizeJobs(await res.json());
+  await assertOk(res, "文件处理任务重新关联失败");
+  return normalizeJobs(await parseJson<FileProcessingJob[] | { jobs: FileProcessingJob[] }>(res));
 }
 
 export async function listFileDocuments(): Promise<FileDocumentsResponse> {
   const res = await apiFetch(`${API_BASE}/files/documents`);
-  if (!res.ok) throw new Error("Failed to fetch file library documents");
-  return res.json();
+  await assertOk(res, "Failed to fetch file library documents");
+  return parseJson<FileDocumentsResponse>(res);
 }
 
 export async function updateFileDocument(docId: number, originalName: string): Promise<void> {
@@ -203,13 +203,10 @@ export async function updateFileDocument(docId: number, originalName: string): P
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ original_name: originalName }),
   });
-  if (!res.ok) throw new Error("Failed to update file document");
+  await assertOk(res, "Failed to update file document");
 }
 
 export async function deleteFileDocument(docId: number): Promise<void> {
   const res = await apiFetch(`${API_BASE}/files/documents/${docId}`, { method: "DELETE" });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Failed to delete file library document: ${err}`);
-  }
+  await assertOk(res, "Failed to delete file library document");
 }

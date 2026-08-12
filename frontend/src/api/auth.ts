@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch, readErrorDetail } from "./client";
+import { API_BASE, apiFetch, assertOk, parseJson } from "./client";
 
 export type LLMProtocol = "openai" | "anthropic";
 
@@ -19,8 +19,8 @@ export interface LLMSettingsUpdate {
 
 export async function getLLMSettings(): Promise<LLMSettings> {
   const res = await apiFetch(`${API_BASE}/settings/llm`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "Failed to fetch LLM settings"));
-  return res.json();
+  await assertOk(res, "Failed to fetch LLM settings");
+  return parseJson<LLMSettings>(res);
 }
 
 export async function updateLLMSettings(data: LLMSettingsUpdate): Promise<LLMSettings> {
@@ -29,6 +29,6 @@ export async function updateLLMSettings(data: LLMSettingsUpdate): Promise<LLMSet
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "Failed to update LLM settings"));
-  return res.json();
+  await assertOk(res, "Failed to update LLM settings");
+  return parseJson<LLMSettings>(res);
 }

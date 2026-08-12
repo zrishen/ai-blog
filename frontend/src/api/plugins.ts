@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch, readErrorDetail } from "./client";
+import { API_BASE, apiFetch, assertOk, parseJson, readErrorDetail } from "./client";
 
 export type PluginPermissionLevel = "read" | "write";
 export type PluginTransport = "stdio" | "streamable-http";
@@ -48,8 +48,8 @@ export interface AdminPluginDraft {
 
 export async function listPlugins(): Promise<PluginSummary[]> {
   const res = await apiFetch(`${API_BASE}/plugins`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "读取插件列表失败"));
-  const data = await res.json() as { plugins: PluginSummary[] };
+  await assertOk(res, "读取插件列表失败");
+  const data = await parseJson<{ plugins: PluginSummary[] }>(res);
   return data.plugins;
 }
 
@@ -59,14 +59,14 @@ export async function setPluginEnabled(pluginId: number, isEnabled: boolean): Pr
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ is_enabled: isEnabled }),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "更新插件状态失败"));
-  return res.json();
+  await assertOk(res, "更新插件状态失败");
+  return parseJson<PluginSummary>(res);
 }
 
 export async function listAdminPlugins(): Promise<AdminPlugin[]> {
   const res = await apiFetch(`${API_BASE}/admin/plugins`);
-  if (!res.ok) throw new Error(await readErrorDetail(res, "读取平台插件失败"));
-  const data = await res.json() as { plugins: AdminPlugin[] };
+  await assertOk(res, "读取平台插件失败");
+  const data = await parseJson<{ plugins: AdminPlugin[] }>(res);
   return data.plugins;
 }
 
@@ -76,8 +76,8 @@ export async function createAdminPlugin(data: AdminPluginDraft): Promise<AdminPl
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "创建插件失败"));
-  return res.json();
+  await assertOk(res, "创建插件失败");
+  return parseJson<AdminPlugin>(res);
 }
 
 export async function updateAdminPlugin(
@@ -89,8 +89,8 @@ export async function updateAdminPlugin(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "更新插件失败"));
-  return res.json();
+  await assertOk(res, "更新插件失败");
+  return parseJson<AdminPlugin>(res);
 }
 
 export async function setAdminPluginPublished(pluginId: number, isPublished: boolean): Promise<AdminPlugin> {
@@ -99,8 +99,8 @@ export async function setAdminPluginPublished(pluginId: number, isPublished: boo
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ is_published: isPublished }),
   });
-  if (!res.ok) throw new Error(await readErrorDetail(res, "更新插件发布状态失败"));
-  return res.json();
+  await assertOk(res, "更新插件发布状态失败");
+  return parseJson<AdminPlugin>(res);
 }
 
 export async function deleteAdminPlugin(pluginId: number): Promise<void> {

@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch, readErrorDetail } from "./client";
+import { API_BASE, apiFetch, parseJson, readErrorDetail } from "./client";
 
 import type { FileProcessingJob } from "./files";
 
@@ -23,16 +23,16 @@ export interface RagSource {
   updated_at: string;
 }
 
-async function unwrap(res: Response, fallback: string) {
+async function unwrap<T>(res: Response, fallback: string): Promise<T | null> {
   if (!res.ok) throw new Error(await readErrorDetail(res, fallback));
   if (res.status === 204) return null;
-  return res.json();
+  return parseJson<T>(res);
 }
 
 export async function getWorkspaceTree(): Promise<WorkspaceEntry[]> {
   const res = await apiFetch(`${API_BASE}/workspace/tree`);
-  const data = await unwrap(res, "加载工作目录失败");
-  return (data?.entries ?? []) as WorkspaceEntry[];
+  const data = await unwrap<{ entries: WorkspaceEntry[] }>(res, "加载工作目录失败");
+  return data?.entries ?? [];
 }
 
 export async function createFolder(name: string, parentPath: string | null = null): Promise<WorkspaceEntry> {
@@ -41,7 +41,7 @@ export async function createFolder(name: string, parentPath: string | null = nul
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name, parent_path: parentPath }),
   });
-  return (await unwrap(res, "创建文件夹失败")) as WorkspaceEntry;
+  return (await unwrap<WorkspaceEntry>(res, "创建文件夹失败"));
 }
 
 export async function renameEntry(path: string, name: string): Promise<WorkspaceEntry> {
@@ -50,7 +50,7 @@ export async function renameEntry(path: string, name: string): Promise<Workspace
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, name }),
   });
-  return (await unwrap(res, "重命名失败")) as WorkspaceEntry;
+  return (await unwrap<WorkspaceEntry>(res, "重命名失败"));
 }
 
 export async function moveEntry(path: string, targetPath: string | null): Promise<WorkspaceEntry> {
@@ -59,7 +59,7 @@ export async function moveEntry(path: string, targetPath: string | null): Promis
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, target_path: targetPath }),
   });
-  return (await unwrap(res, "移动失败")) as WorkspaceEntry;
+  return (await unwrap<WorkspaceEntry>(res, "移动失败"));
 }
 
 export async function deleteFolder(path: string): Promise<void> {
@@ -94,7 +94,7 @@ export async function joinAiKnowledge(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resource_type: resourceType, resource_id: resourceId }),
   });
-  return (await unwrap(res, "加入 AI 知识失败")) as AiKnowledgeJoinResult;
+  return (await unwrap<AiKnowledgeJoinResult>(res, "加入 AI 知识失败"));
 }
 
 export async function leaveAiKnowledge(resourceType: string, resourceId: number): Promise<void> {
@@ -104,5 +104,5 @@ export async function leaveAiKnowledge(resourceType: string, resourceId: number)
 
 export async function listAiKnowledge(): Promise<RagSource[]> {
   const res = await apiFetch(`${API_BASE}/workspace/ai-knowledge`);
-  return ((await unwrap(res, "加载 AI 知识失败")) ?? []) as RagSource[];
+  return (await unwrap<RagSource[]>(res, "加载 AI 知识失败")) ?? [];
 }

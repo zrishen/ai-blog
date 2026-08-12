@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch } from "./client";
+import { API_BASE, apiFetch, assertOk, parseJson } from "./client";
 
 import type { FileProcessingJob } from "./files";
 
@@ -32,8 +32,8 @@ export interface TrashPurgeResponse {
 
 export async function listTrash(): Promise<TrashListResponse> {
   const res = await apiFetch(`${API_BASE}/trash`);
-  if (!res.ok) throw new Error("Failed to fetch trash items");
-  return res.json();
+  await assertOk(res, "Failed to fetch trash items");
+  return parseJson<TrashListResponse>(res);
 }
 
 export async function restoreTrashItem(
@@ -41,17 +41,17 @@ export async function restoreTrashItem(
   id: number,
 ): Promise<void | FileProcessingJob> {
   const res = await apiFetch(`${API_BASE}/trash/${type}/${id}/restore`, { method: "POST" });
-  if (!res.ok) throw new Error("Failed to restore trash item");
-  if (res.status === 202 || type === "file_document") return res.json();
+  await assertOk(res, "Failed to restore trash item");
+  if (res.status === 202 || type === "file_document") return parseJson<FileProcessingJob>(res);
 }
 
 export async function purgeTrashItem(type: TrashItemType, id: number): Promise<void> {
   const res = await apiFetch(`${API_BASE}/trash/${type}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to purge trash item");
+  await assertOk(res, "Failed to purge trash item");
 }
 
 export async function emptyTrash(): Promise<TrashPurgeResponse> {
   const res = await apiFetch(`${API_BASE}/trash`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to empty trash");
-  return res.json();
+  await assertOk(res, "Failed to empty trash");
+  return parseJson<TrashPurgeResponse>(res);
 }

@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch } from "./client";
+import { API_BASE, apiFetch, assertOk, parseJson } from "./client";
 
 export interface BrainStats {
   enabled: boolean;
@@ -83,46 +83,46 @@ export interface BrainPreferenceUpdate {
 
 export async function getBrainStats(): Promise<BrainStats> {
   const res = await apiFetch(`${API_BASE}/brain/stats`);
-  if (!res.ok) throw new Error("加载大脑统计失败");
-  return res.json();
+  await assertOk(res, "加载大脑统计失败");
+  return parseJson<BrainStats>(res);
 }
 
 export async function getBrainGraph(limit = 80): Promise<BrainGraph> {
   const res = await apiFetch(`${API_BASE}/brain/graph?limit=${limit}`);
-  if (!res.ok) throw new Error("加载知识图谱失败");
-  return res.json();
+  await assertOk(res, "加载知识图谱失败");
+  return parseJson<BrainGraph>(res);
 }
 
 export async function listBrainEntities(limit = 200, offset = 0): Promise<BrainEntity[]> {
   const res = await apiFetch(`${API_BASE}/brain/entities?limit=${limit}&offset=${offset}`);
-  if (!res.ok) throw new Error("加载实体失败");
-  return res.json();
+  await assertOk(res, "加载实体失败");
+  return parseJson<BrainEntity[]>(res);
 }
 
 export async function listBrainEpisodes(limit = 100, offset = 0): Promise<BrainEpisode[]> {
   const res = await apiFetch(`${API_BASE}/brain/episodes?limit=${limit}&offset=${offset}`);
-  if (!res.ok) throw new Error("加载记忆失败");
-  return res.json();
+  await assertOk(res, "加载记忆失败");
+  return parseJson<BrainEpisode[]>(res);
 }
 
 export async function listBrainPreferences(): Promise<BrainPreference[]> {
   const res = await apiFetch(`${API_BASE}/brain/preferences`);
-  if (!res.ok) throw new Error("加载偏好失败");
-  return res.json();
+  await assertOk(res, "加载偏好失败");
+  return parseJson<BrainPreference[]>(res);
 }
 
 export async function listBrainFacts(entityId?: string, limit = 200): Promise<BrainFact[]> {
   const qs = entityId ? `&entity_id=${encodeURIComponent(entityId)}` : "";
   const res = await apiFetch(`${API_BASE}/brain/facts?limit=${limit}${qs}`);
-  if (!res.ok) throw new Error("加载事实失败");
-  return res.json();
+  await assertOk(res, "加载事实失败");
+  return parseJson<BrainFact[]>(res);
 }
 
 export async function deleteBrainMemory(memoryType: BrainMemoryType, memoryId: string): Promise<void> {
   const res = await apiFetch(`${API_BASE}/brain/memories/${memoryType}/${encodeURIComponent(memoryId)}`, {
     method: "DELETE",
   });
-  if (!res.ok) throw new Error("删除记忆失败");
+  await assertOk(res, "删除记忆失败");
 }
 
 export async function correctBrainFact(
@@ -134,8 +134,8 @@ export async function correctBrainFact(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("纠正事实失败");
-  return res.json();
+  await assertOk(res, "纠正事实失败");
+  return parseJson<BrainFact>(res);
 }
 
 export async function updateBrainPreference(
@@ -147,6 +147,6 @@ export async function updateBrainPreference(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("更新偏好失败");
-  return res.json();
+  await assertOk(res, "更新偏好失败");
+  return parseJson<BrainPreference>(res);
 }
