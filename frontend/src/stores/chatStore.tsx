@@ -1,29 +1,33 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useReducer, useEffect } from "react";
-import type { BrainStats } from "@/api/brain";
-import type { WorkspaceEntry } from "@/api/workspace";
-import type { ThinkingMode } from "@/api/chat";
-import type {
-  AISidebarConversationKey,
-  AISidebarHistoryState,
-  AIStreamEvent,
-  ChatAttachment,
-  Conversation,
-  DraftAttachment,
-  Message,
-  Reference,
-  ToolEvent,
-} from "../features/ai-chat/types";
-import { isDisplayableMessage } from "../features/ai-chat/types";
-import type { BlogPost, BlogView } from "../features/blog/types";
-import type { FileDocument } from "@/api/files";
-import type { BrainTab, Page, Theme, WorkspaceView } from "./types";
+
 import { blogReducer } from "./slices/blogSlice";
+import { aiContextReducer } from "./slices/aiContextSlice";
 import { uiReducer } from "./slices/uiSlice";
 import { revisionReducer } from "./slices/revisionSlice";
 import { aiSidebarReducer } from "./slices/aiSidebarSlice";
 import { workspaceReducer } from "./slices/workspaceSlice";
 import { brainReducer } from "./slices/brainSlice";
+
+import type { BrainTab, Page, Theme, WorkspaceView } from "./types";
+import type { FileDocument } from "@/api/files";
+import type { BlogPost, BlogView } from "@/types/blog";
+import type {
+  AISidebarConversationKey,
+  AISidebarHistoryState,
+  AIStreamEvent,
+  Conversation,
+  DraftAttachment,
+  Message,
+  MessageUpdatePatch,
+  Reference,
+  ThinkingMode,
+  ToolEvent,
+} from "@/types/chat";
+import type { WorkspaceEntry } from "@/api/workspace";
+import type { BrainStats } from "@/api/brain";
+
+import { isDisplayableMessage } from "@/types/chat";
 
 export interface BlogStreamingState {
   runId: string;
@@ -104,7 +108,7 @@ type ChatAction =
   | { type: "SET_AI_SIDEBAR_SELECTED_KEY"; payload: AISidebarConversationKey | null }
   | { type: "SET_AI_SIDEBAR_MSGS_FOR_KEY"; payload: { key: AISidebarConversationKey; messages: Message[] } }
   | { type: "ADD_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; message: Message } }
-  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; content?: string; conversation_id?: number; attachments?: ChatAttachment[]; thinkingContent?: string; streamingRound?: string; streamFinalized?: boolean; streamError?: string; toolEvents?: ToolEvent[]; reasoningContent?: string; loopSteps?: string[]; thinkingMode?: ThinkingMode; thinkingDurationMs?: number } }
+  | { type: "UPDATE_AI_SIDEBAR_MSG_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number } & MessageUpdatePatch }
   | { type: "RECONCILE_AI_SIDEBAR_MESSAGE_IDS"; payload: { key: AISidebarConversationKey; optimisticUserId: number; userMessageId: number; optimisticAssistantId: number; assistantMessageId: number } }
   | { type: "APPLY_AI_STREAM_EVENT_FOR_KEY"; payload: { key: AISidebarConversationKey; id: number; event: AIStreamEvent } }
   | { type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY"; payload: { key: AISidebarConversationKey; streaming: boolean } }
@@ -154,6 +158,7 @@ type ChatAction =
 
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   state = blogReducer(state, action);
+  state = aiContextReducer(state, action);
   state = uiReducer(state, action);
   state = revisionReducer(state, action);
   state = aiSidebarReducer(state, action);
@@ -164,6 +169,9 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "LOGOUT":
       return {
         ...state,
+        currentPage: getInitialPage(),
+        pluginCenterOpen: false,
+        aiSidebarOpen: true,
         aiSidebarConversationId: null,
         aiSidebarSelectedKey: null,
         aiSidebarMessagesByKey: {},
@@ -173,6 +181,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         aiSidebarHistoryByKey: {},
         aiSidebarAttachmentsByKey: {},
         aiSidebarThinkingMode: "balanced",
+        llmSupportsThinking: true,
         blogPosts: [],
         blogCurrentView: "list",
         blogCurrentPostId: null,
@@ -186,6 +195,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         fileSelectedFile: null,
         workspaceTree: [],
         workspaceSelectedView: "overview",
+        workspaceSelectedFolderPath: null,
         workspaceEditingBlogId: null,
         brainTab: "graph",
         brainStats: null,
@@ -198,7 +208,16 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   }
 }
 
-const savedTheme = (localStorage.getItem("theme") as Theme) || "light";
+function readSavedTheme(): Theme {
+  try {
+    const v = localStorage.getItem("theme");
+    return (v as Theme) || "light";
+  } catch {
+    return "light";
+  }
+}
+
+const savedTheme = readSavedTheme();
 
 function getInitialPage(): Page {
   const path = window.location.pathname;
@@ -266,14 +285,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", state.theme);
-    localStorage.setItem("theme", state.theme);
+    try { localStorage.setItem("theme", state.theme); } catch { /* ignore unavailable storage */ }
   }, [state.theme]);
 
   useEffect(() => {
-    localStorage.setItem("ws_view", state.workspaceSelectedView);
+    try { localStorage.setItem("ws_view", state.workspaceSelectedView); } catch { /* ignore unavailable storage */ }
   }, [state.workspaceSelectedView]);
   useEffect(() => {
-    const handleAuthLogout = () => dispatch({ type: "LOGOUT" });
+    const handleAuthLogout = () => {
+      dispatch({ type: "LOGOUT" });
+      // 显式清除工作区视图持久化，不依赖 LOGOUT→effect 写回的时序
+      try { localStorage.removeItem("ws_view"); } catch { /* ignore unavailable storage */ }
+    };
     window.addEventListener("auth:logout", handleAuthLogout);
     return () => window.removeEventListener("auth:logout", handleAuthLogout);
   }, []);

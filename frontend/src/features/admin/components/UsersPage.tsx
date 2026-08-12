@@ -76,7 +76,7 @@ export function UsersPage() {
   // 拉取用户列表：await 前不 setState，避免 effect 内同步 setState。
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         const res = await listAdminUsers({
           search: search ? search : undefined,

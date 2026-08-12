@@ -6,11 +6,14 @@ import {
   Trash2,
   AlertCircle,
 } from "lucide-react";
+
+import { formatDate } from "./messageHelpers";
+
+import type { AISidebarConversationKey } from "../../../stores/chatStore";
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
-import type { AISidebarConversationKey } from "../../../stores/chatStore";
-import { formatDate } from "./messageHelpers";
 
 export interface ConversationListItem {
   key: AISidebarConversationKey;

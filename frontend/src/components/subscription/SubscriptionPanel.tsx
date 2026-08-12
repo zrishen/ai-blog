@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { getSubscriptionStatus, redeemSubscriptionCode } from "@/api/subscription";
+
 import type { SubscriptionStatus } from "@/api/subscription";
+
+import { getSubscriptionStatus, redeemSubscriptionCode } from "@/api/subscription";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";

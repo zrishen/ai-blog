@@ -1,8 +1,11 @@
 import { Loader2, Pencil, Trash2 } from "lucide-react";
+
+import { entityTypeColor } from "./utils/brainStyle";
+
+import type { BrainFact, BrainGraphNode } from "@/api/brain";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { entityTypeColor } from "./utils/brainStyle";
-import type { BrainFact, BrainGraphNode } from "@/api/brain";
 
 function factStatus(fact: BrainFact): { label: string; tone: "success" | "warning" } {
   return fact.valid_to
@@ -70,8 +73,8 @@ export function EntityDetailPanel({
             return (
               <div key={f.fact_id} className="rounded-panel border border-border/60 bg-card/60 p-3">
                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                  <Badge variant="outline" className="rounded-full text-[10px]">{f.predicate}</Badge>
-                  <Badge variant={st.tone} className="rounded-full text-[10px]">{st.label}</Badge>
+                  <Badge variant="outline" className="rounded-full text-caption">{f.predicate}</Badge>
+                  <Badge variant={st.tone} className="rounded-full text-caption">{st.label}</Badge>
                   {from && <span className="text-caption text-muted-foreground">起 {from}</span>}
                 </div>
                 <p className="text-fine leading-relaxed text-foreground">{f.object_text}</p>

@@ -6,6 +6,13 @@ import {
   Scale,
   Sparkles,
 } from "lucide-react";
+
+import { useChat } from "../../../stores/chatStore";
+
+import { thinkingModeLabels } from "./constants";
+
+import type { ThinkingMode } from "../../../api/chat";
+
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -15,9 +22,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useChat } from "../../../stores/chatStore";
-import { thinkingModeLabels } from "./constants";
-import type { ThinkingMode } from "../../../api/chat";
+
 
 interface AISidebarHeaderProps {
   isPrivate: boolean;

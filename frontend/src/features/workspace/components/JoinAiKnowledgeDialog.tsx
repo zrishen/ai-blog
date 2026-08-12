@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { logError } from "@/utils/logger";
 import { FileStack, FileText } from "lucide-react";
+
+import type { RagSource } from "@/api/workspace";
+
+import { logError } from "@/utils/logger";
 import { listBlogPosts } from "@/api/blog";
 import { listFileDocuments } from "@/api/files";
-import type { RagSource } from "@/api/workspace";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

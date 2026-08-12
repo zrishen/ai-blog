@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Vditor from "vditor";
+
 import { useChat } from "../../../stores/chatStore";
 import { useAuth } from "../../../stores/authStore";
 import { getAccessToken } from "../../../api/client";
-import type { BlogPost } from "../types";
 import { expandBlankLines } from "../utils/markdownBlankLines";
 import { applyBackspaceShortcut, applyEnterShortcuts, applyUnorderedListShortcut } from "../utils/vditorShortcuts";
 import {
@@ -13,6 +13,8 @@ import {
   installControlledTableMenu,
   installTableCellMenu,
 } from "../utils/vditorMenus";
+
+import type { BlogPost } from "../types";
 
 // Vditor 桥子领域：Vditor 实例生命周期（mount-only）+ content↔setValue 同步（含防回环）+
 // 主题/高度约束 + AI 修改 patch 注入链 + 超时。从 BlogEditor 抽出，行为不变。
@@ -169,7 +171,7 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
 
   // 用 MutationObserver 强制约束 Vditor 高度，覆盖 JS 内联样式
   useEffect(() => {
-    const el = document.querySelector(`.blog-editor-body .vditor`) as HTMLElement | null;
+    const el = document.querySelector<HTMLElement>(`.blog-editor-body .vditor`);
     if (!el) return;
     const parent = el.parentElement;
     if (!parent) return;
@@ -203,7 +205,7 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
   }, [state.theme]);
 
   const getEditorElement = useCallback((): HTMLElement | null => {
-    const vditorElement = vditorRef.current?.vditor?.element as HTMLElement | undefined;
+    const vditorElement = vditorRef.current?.vditor?.element;
     const internalEditor = vditorRef.current?.vditor?.wysiwyg?.element as HTMLElement | undefined;
     const container = document.getElementById(containerId);
     return (
@@ -266,7 +268,7 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
     const timer = window.setTimeout(() => {
       dispatch({
         type: "CLEAR_BLOG_PATCH_STREAMING",
-        payload: { postId: existingPost!.id, runId: patchStreaming.runId },
+        payload: { postId: existingPost.id, runId: patchStreaming.runId },
       });
       setError("AI 修改超时，请重试");
     }, 30000);

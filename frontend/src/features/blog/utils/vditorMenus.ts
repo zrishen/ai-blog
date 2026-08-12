@@ -1,4 +1,5 @@
 import Vditor from "vditor";
+
 import { expandBlankLines, preserveBlankLines } from "./markdownBlankLines";
 
 type VditorOptions = NonNullable<ConstructorParameters<typeof Vditor>[1]>;
@@ -147,7 +148,7 @@ export function installControlledEditModeMenu(editor: Vditor) {
     const currentMd = editor.getValue();
     const wysiwygReset = (editor as unknown as {
       vditor?: { wysiwyg?: { element?: HTMLElement | null } };
-    }).vditor?.wysiwyg?.element?.querySelector(".vditor-reset") as HTMLElement | null;
+    }).vditor?.wysiwyg?.element?.querySelector<HTMLElement>(".vditor-reset");
     const preservedMd = currentMode === "wysiwyg"
       ? preserveBlankLines(wysiwygReset, currentMd)
       : currentMd;
@@ -324,7 +325,7 @@ const CODE_LANGUAGE_OPTIONS = [
 ];
 
 export function installCodeLanguageMenu(editor: Vditor) {
-  const editorRoot = editor.vditor.element as HTMLElement | undefined;
+  const editorRoot = editor.vditor.element;
   const editorElement =
     editorRoot?.querySelector<HTMLElement>(".vditor-wysiwyg")
     ?? editor.vditor.wysiwyg?.element as HTMLElement | undefined;
@@ -586,7 +587,7 @@ export function installCodeLanguageMenu(editor: Vditor) {
   };
 
   const createUIForBlock = (codeBlock: HTMLElement) => {
-    if (codeBlockUIs.has(codeBlock)) return codeBlockUIs.get(codeBlock)!;
+    if (codeBlockUIs.has(codeBlock)) return codeBlockUIs.get(codeBlock);
 
     const trigger = document.createElement("button");
     trigger.type = "button";
@@ -726,7 +727,7 @@ export function installCodeLanguageMenu(editor: Vditor) {
     // 点击编辑器正文/代码块/页面其他位置一律收起菜单,避免只能再点一次按钮才消失
     if (target && menu.contains(target)) return;
     for (const ui of codeBlockUIs.values()) {
-      if (ui.trigger.contains(target as Node)) return;
+      if (ui.trigger.contains(target)) return;
     }
     closeMenu();
   };

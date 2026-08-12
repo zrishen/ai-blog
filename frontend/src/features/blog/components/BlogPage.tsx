@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { logError } from "@/utils/logger";
 import { useNavigate } from "react-router-dom";
+import { PenLine } from "lucide-react";
+
 import { useChat } from "../../../stores/chatStore";
-import type { BlogPost } from "../../../stores/chatStore";
-import { listSitePosts } from "@/api/blog";
+import { splitBlogTags } from "../utils/blogTags";
+
 import { BlogPostCard } from "./BlogPostCard";
 import { BlogEditor } from "./BlogEditor";
-import { splitBlogTags } from "../utils/blogTags";
-import { PenLine } from "lucide-react";
+
+import type { BlogPost } from "../../../stores/chatStore";
+
+import { logError } from "@/utils/logger";
+import { listSitePosts } from "@/api/blog";
 import { EmptyState } from "@/components/ui/empty-state";
 
 interface BlogPageProps {
@@ -71,13 +75,13 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
   }, [username, isOwner, state.blogCurrentView, dispatch]);
 
   useEffect(() => {
-    loadPosts();
+    void loadPosts().catch(() => {});
   }, [loadPosts, state.trashRevision]);
 
   const visiblePosts = useMemo(() => {
     let posts = state.blogPosts.filter((post) => post.status === "published");
     if (state.blogSelectedTag) {
-      posts = posts.filter((post) => splitBlogTags(post.tags).includes(state.blogSelectedTag!));
+      posts = posts.filter((post) => splitBlogTags(post.tags).includes(state.blogSelectedTag));
     }
     return posts;
   }, [state.blogPosts, state.blogSelectedTag]);

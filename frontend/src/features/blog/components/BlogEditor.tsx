@@ -1,13 +1,22 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ArrowLeft, Save, Tags, FolderOpen, Archive, AlertCircle, Eye, Image as ImageIcon, Upload, Wand2, X, Copy, Sparkles } from "lucide-react";
+
 import { useChat } from "../../../stores/chatStore";
-import { publishBlogPost } from "@/api/blog";
+import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
+import { DEFAULT_COVERS } from "../utils/blogEditorTypes";
+import { expandBlankLines } from "../utils/markdownBlankLines";
+import { useBlogCover } from "../hooks/useBlogCover";
+import { useAutosave } from "../hooks/useAutosave";
+
 import type { BlogPostData, BlogRevision, BlogRevisionSummary } from "@/api/blog";
+
+import { publishBlogPost } from "@/api/blog";
 import "vditor/dist/index.css";
 import "vditor/dist/js/i18n/zh_CN";
 import "./BlogEditor.css";
-import { ArrowLeft, Save, Tags, FolderOpen, Archive, AlertCircle, Eye, Image as ImageIcon, Upload, Wand2, X, Copy, Sparkles } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,13 +26,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
 import { isSafeInternalPath } from "@/lib/routing";
-import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
-import { DEFAULT_COVERS } from "../utils/blogEditorTypes";
-import { expandBlankLines } from "../utils/markdownBlankLines";
-import { useBlogCover } from "../hooks/useBlogCover";
-import { useAutosave } from "../hooks/useAutosave";
+
 import { useRevisionHistory } from "../hooks/useRevisionHistory";
 import { useVditorBridge } from "../hooks/useVditorBridge";
+
 import { BlogPostView } from "./BlogPostView";
 
 const REVISION_KIND_LABELS = {
@@ -489,7 +495,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
       if (!isSelectionInsideEditor(sel, editorEl)) return;
       const selection = sel?.toString().trim() || "";
       if (selection.length >= 5) {
-        const range = sel!.getRangeAt(0);
+        const range = sel.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         const sectionIndex = getSectionIndexFromSelection(editorEl);
         setContextMenu({ x: rect.left + rect.width / 2, y: rect.top + 50, selectedText: selection, sectionIndex });
@@ -934,7 +940,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
                       size="sm"
                       variant="outline"
                       disabled={revisionBusy}
-                      onClick={() => requestRestore(revisionHistory.selected!)}
+                      onClick={() => requestRestore(revisionHistory.selected)}
                     >恢复</Button>
                     <Button
                       size="sm"
@@ -944,7 +950,7 @@ export function BlogEditor({ onBack }: { onBack?: () => void } = {}) {
                       title={revisionHistory.selected.is_published ? "公开版本受保护，不能删除" : "删除此历史版本"}
                       onClick={() => {
                         setRevisionBusy(true);
-                        void autosave.enqueue(() => revisionHistory.remove(revisionHistory.selected!.id))
+                        void autosave.enqueue(() => revisionHistory.remove(revisionHistory.selected.id))
                           .then(() => setSelectedRevisionId(null))
                           .catch(() => setError("删除历史版本失败"))
                           .finally(() => setRevisionBusy(false));

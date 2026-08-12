@@ -1,15 +1,12 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { logWarn } from "@/utils/logger";
-import { useAuth } from "../../../stores/authStore";
-import { isDisplayableMessage, useChat } from "../../../stores/chatStore";
-import type { AISidebarConversationKey, Message, Reference } from "../../../stores/chatStore";
-import { sendChat, sendSharedLandingChat, sendSharedUserChat } from "@/api/chat";
-import { getMessages } from "@/api/conversations";
-import { listSitePosts, getBlogPost } from "@/api/blog";
-import type { BlogToolMeta, StreamReference } from "@/api/chat";
 import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, AlertCircle } from "lucide-react";
+
+import { useAuth } from "../../../stores/authStore";
+import { isDisplayableMessage, useChat } from "../../../stores/chatStore";
 import { LoginDialog } from "../../auth/LoginDialog";
+import { useChatAttachments } from "../hooks/useChatAttachments";
+
 import { ChatInputBar } from "./ChatInputBar";
 import { MessageList } from "./MessageList";
 import { createPatchDeltaPlayer, type PatchDeltaPlayer } from "./patchDeltaPlayer";
@@ -18,9 +15,16 @@ import {
   saveAISidebarSession,
   type AISidebarProps,
 } from "./constants";
-import { useChatAttachments } from "../hooks/useChatAttachments";
 import { useAISidebarRuntime } from "./AISidebarRuntimeContext";
+
+import type { BlogToolMeta, StreamReference } from "@/api/chat";
+import type { AISidebarConversationKey, Message, Reference } from "../../../stores/chatStore";
 import type { RunState } from "../AISidebar";
+
+import { listSitePosts, getBlogPost } from "@/api/blog";
+import { getMessages } from "@/api/conversations";
+import { sendChat, sendSharedLandingChat, sendSharedUserChat } from "@/api/chat";
+import { logWarn } from "@/utils/logger";
 
 function makeServerKey(conversationId: number): AISidebarConversationKey {
   return `server:${conversationId}`;

@@ -1,5 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
+
 import {
   FileUploadNetworkError,
   getFileProcessingJob,
@@ -12,8 +14,8 @@ import { restoreTrashItem, type TrashItem } from "../../api/trash";
 import { joinAiKnowledge } from "../../api/workspace";
 import { useAuth } from "../../stores/authStore";
 import { useChatDispatch } from "../../stores/chatStore";
+
 import { FileProcessingProgress, type FileProcessingProgressValue } from "./FileProcessingProgress";
-import { X } from "lucide-react";
 
 const STORAGE_KEY = "file_processing_upload_v1";
 const POLL_MS = 1000;

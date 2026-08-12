@@ -1,11 +1,14 @@
-import type { BlogPost } from "../../../stores/chatStore";
-import { useChat } from "../../../stores/chatStore";
 import { motion } from "motion/react";
+import { User, Eye, Calendar, Tags } from "lucide-react";
+
+import { useChat } from "../../../stores/chatStore";
+import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
+
+import type { BlogPost } from "../../../stores/chatStore";
+
 import { Badge } from "@/components/ui/badge";
 import { surfaceVariants } from "@/lib/visualVariants";
 import { cn } from "@/lib/utils";
-import { User, Eye, Calendar, Tags } from "lucide-react";
-import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 import { formatMonthDay } from "@/lib/datetime";
 
 interface Props {

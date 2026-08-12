@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
 import type { AISidebarConversationKey } from "../../../stores/chatStore";
 
 // 滚动子领域：消息列表 viewport 贴底判定 + 滚到底部（含 rAF 双帧等渲染）。

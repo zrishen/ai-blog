@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useAuth } from "../../stores/authStore";
-import { useChat } from "../../stores/chatStore";
-import type { AISidebarConversationKey, Conversation, ToolEvent } from "../../stores/chatStore";
-import { fetchConversations } from "@/api/conversations";
 import { MessageSquare } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { WorkspacePanel } from "@/components/ui/workspace-panel";
+
+import { useChat } from "../../stores/chatStore";
+import { useAuth } from "../../stores/authStore";
+
 import { AISidebarHeader } from "./ai-sidebar/AISidebarHeader";
 import {
   loadAISidebarSession,
@@ -17,6 +15,12 @@ import { useAISidebarScroll } from "./hooks/useAISidebarScroll";
 import { AISidebarRuntimeContext, type AISidebarRuntime } from "./ai-sidebar/AISidebarRuntimeContext";
 import { AISidebarList } from "./ai-sidebar/AISidebarList";
 import { AISidebarChat } from "./ai-sidebar/AISidebarChat";
+
+import type { AISidebarConversationKey, Conversation, ToolEvent } from "../../stores/chatStore";
+
+import { fetchConversations } from "@/api/conversations";
+import { Button } from "@/components/ui/button";
+import { WorkspacePanel } from "@/components/ui/workspace-panel";
 
 const SHARED_CONVERSATION_KEY: AISidebarConversationKey = "temp:shared";
 

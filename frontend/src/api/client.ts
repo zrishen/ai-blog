@@ -21,14 +21,21 @@ function triggerLogout(): void {
 // 单飞 refresh：并发多个请求同时 401 时只发一次 /auth/refresh，复用同一 promise，避免雪崩。
 let refreshPromise: Promise<string | null> | null = null;
 
+// refresh 超时：端点 hang 住时避免单飞 promise 永不 settle、所有排队 401 请求随之挂起
+const REFRESH_TIMEOUT_MS = 10_000;
+
 async function doRefresh(): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
   try {
-    const resp = await fetch(REFRESH_ENDPOINT, { method: "POST", credentials: "include" });
+    const resp = await fetch(REFRESH_ENDPOINT, { method: "POST", credentials: "include", signal: controller.signal });
     if (!resp.ok) return null;
     const data = (await resp.json()) as { access_token?: string };
     return data.access_token ?? null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -69,11 +76,21 @@ async function readErrorDetail(res: Response, fallback: string): Promise<string>
   const text = await res.text();
   if (!text) return fallback;
   try {
-    const data = JSON.parse(text);
+    const data = JSON.parse(text) as { detail?: unknown };
     return typeof data.detail === "string" ? data.detail : fallback;
   } catch {
     return text;
   }
+}
+
+// res.json() 收口为 Promise<T>，调用点局部化 cast
+export async function parseJson<T>(res: Response): Promise<T> {
+  return (await res.json()) as T;
+}
+
+// 收敛各端点 `if (!res.ok) throw new Error(await readErrorDetail(res, ...))` 样板
+export async function assertOk(res: Response, fallback: string): Promise<void> {
+  if (!res.ok) throw new Error(await readErrorDetail(res, fallback));
 }
 
 export { API_BASE, apiFetch, readErrorDetail, refreshOnce };

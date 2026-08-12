@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useChat } from "../../../stores/chatStore";
 import { ChevronRight } from "lucide-react";
-import { WorkspacePanel } from "@/components/ui/workspace-panel";
+
+import { useChat } from "../../../stores/chatStore";
 import { extractHeadings, type TocItem } from "../utils/blogToc";
+
+import { WorkspacePanel } from "@/components/ui/workspace-panel";
+
 
 function getParentSlug(headings: TocItem[], slug: string): string {
   for (let i = 0; i < headings.length; i++) {
@@ -114,7 +117,7 @@ function BlogTocEdit({ title }: { title?: string }) {
 
     const extract = () => {
       if (cancelled) return;
-      const el = document.querySelector(".blog-editor-body .vditor-wysiwyg") as Element | null;
+      const el = document.querySelector(".blog-editor-body .vditor-wysiwyg");
       if (!el || el.querySelectorAll("h2, h3, h4").length === 0) return false;
 
       const hs: TocItem[] = [];
@@ -133,7 +136,7 @@ function BlogTocEdit({ title }: { title?: string }) {
 
     const tryExtract = () => {
       if (extract()) {
-        const el = document.querySelector(".blog-editor-body .vditor-wysiwyg") as Element | null;
+        const el = document.querySelector(".blog-editor-body .vditor-wysiwyg");
         if (el && !cancelled) {
           observer = new MutationObserver(() => extract());
           observer.observe(el, { childList: true, subtree: true, characterData: true });

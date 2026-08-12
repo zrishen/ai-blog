@@ -1,3 +1,7 @@
+import { LoginForm } from "./LoginForm";
+
+import type { AuthUser } from "../../stores/authStore";
+
 import {
   Dialog,
   DialogContent,
@@ -5,8 +9,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { LoginForm } from "./LoginForm";
-import type { AuthUser } from "../../stores/authStore";
 
 interface LoginDialogProps {
   open: boolean;

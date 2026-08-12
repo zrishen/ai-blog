@@ -10,14 +10,17 @@ import {
   AlertCircle,
   ArrowDown,
 } from "lucide-react";
+
+import { collectMessageReferences } from "./messageHelpers";
+import { maskStreamingMarkdown } from "./streamingMarkdown";
+import { MessageAttachments } from "./MessageAttachments";
+
+import type { Message } from "../../../stores/chatStore";
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import type { Message } from "../../../stores/chatStore";
-import { collectMessageReferences } from "./messageHelpers";
-import { maskStreamingMarkdown } from "./streamingMarkdown";
-import { MessageAttachments } from "./MessageAttachments";
 import { MermaidBlock } from "@/components/MermaidBlock";
 import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
 
@@ -491,7 +494,7 @@ function groupToolPairsForProcesses(toolPairs: ToolPair[], processCount: number)
     for (const pair of toolPairs) {
       const idx = pairRoundId(pair) ?? 0;
       if (!groupMap.has(idx)) groupMap.set(idx, []);
-      groupMap.get(idx)!.push(pair);
+      groupMap.get(idx).push(pair);
     }
     return Array.from(groupMap.entries())
       .sort(([a], [b]) => a - b)
@@ -506,7 +509,7 @@ function groupToolPairsForProcesses(toolPairs: ToolPair[], processCount: number)
     for (const pair of toolPairs) {
       const idx = pair.start?.loopStepIndex ?? pair.end?.loopStepIndex ?? 0;
       if (!groupMap.has(idx)) groupMap.set(idx, []);
-      groupMap.get(idx)!.push(pair);
+      groupMap.get(idx).push(pair);
     }
     return Array.from(groupMap.entries())
       .sort(([a], [b]) => a - b)

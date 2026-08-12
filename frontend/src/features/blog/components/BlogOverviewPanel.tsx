@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { useLocation, matchPath } from "react-router-dom";
 import { Sparkles, Tags } from "lucide-react";
+
 import { useChat } from "../../../stores/chatStore";
 import { useAuth } from "../../../stores/authStore";
+import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
+
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { Surface } from "@/components/ui/surface";
 import { LeftbarHtmlFrame } from "@/components/LeftbarHtmlFrame";
-import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 import { cn } from "@/lib/utils";
 
 // 博客主页左栏：DIY 卡片（AI 生成 HTML，iframe 沙箱渲染）+ 标签云（可开关）。
@@ -68,7 +70,7 @@ export function BlogOverviewPanel() {
         >
           {hasHtml ? (
             <LeftbarHtmlFrame
-              html={state.leftbarHtml as string}
+              html={state.leftbarHtml}
               theme={state.theme}
               onHeightChange={setFrameHeight}
             />

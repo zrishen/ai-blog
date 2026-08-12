@@ -1,9 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
+
 import { useAuth } from "../../../stores/authStore";
 import { useChat } from "../../../stores/chatStore";
-import type { AISidebarConversationKey } from "../../../stores/chatStore";
-import { deleteConversation } from "@/api/conversations";
+
 import { ConversationListView, type ConversationListItem } from "./ConversationListView";
+import { useAISidebarRuntime } from "./AISidebarRuntimeContext";
+import { saveAISidebarSession } from "./constants";
+
+import type { AISidebarConversationKey } from "../../../stores/chatStore";
+
+import { deleteConversation } from "@/api/conversations";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +19,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { useAISidebarRuntime } from "./AISidebarRuntimeContext";
-import { saveAISidebarSession } from "./constants";
+
 
 const SHARED_CONVERSATION_KEY: AISidebarConversationKey = "temp:shared";
 

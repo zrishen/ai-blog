@@ -60,7 +60,9 @@ interface ErrorContext {
 
 /** 记录错误：dev 同时走 console，所有环境均上报后端 app.log；Sentry 的全局捕获由 SDK 自己负责。 */
 export function logError(error: unknown, context: ErrorContext = {}): void {
-  const err = error instanceof Error ? error : new Error(String(error));
+  const err = error instanceof Error
+    ? error
+    : new Error(typeof error === "string" ? error : JSON.stringify(error));
   if (!isProd) {
     console.error("[client]", err, context); // dev 即时看；仍继续上报本地后端以验证链路
   }

@@ -1,7 +1,5 @@
 ﻿import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useChat, toggleTheme } from "../stores/chatStore";
-import { useAuth } from "../stores/authStore";
 import { motion } from "motion/react";
 import {
   Sun,
@@ -19,6 +17,12 @@ import {
   Shield,
   CreditCard,
 } from "lucide-react";
+
+import { useChat, toggleTheme } from "../stores/chatStore";
+import { useAuth } from "../stores/authStore";
+
+import type { LLMProtocol, LLMSettingsUpdate } from "@/api/auth";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -45,7 +49,6 @@ import { SubscriptionPanel } from "@/components/subscription/SubscriptionPanel";
 import { ProjectMark } from "@/components/ProjectMark";
 import { getLLMSettings, updateLLMSettings } from "@/api/auth";
 import { updateSidebarSettings } from "@/api/blog";
-import type { LLMProtocol, LLMSettingsUpdate } from "@/api/auth";
 import { cn } from "@/lib/utils";
 import { navItemVariants } from "@/lib/visualVariants";
 import { useWorkspacePrimaryNavigation } from "@/components/useWorkspacePrimaryNavigation";
@@ -349,7 +352,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
         <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-border px-5 py-4">
-            <DialogTitle className="text-[18px]">设置</DialogTitle>
+            <DialogTitle className="text-body-lg">设置</DialogTitle>
             <DialogDescription className="text-meta">
               管理应用配置。当前可配置后端 LLM 调用使用的 API。
             </DialogDescription>
@@ -458,8 +461,8 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
                   );
                   if (!name) return null;
                   return capable
-                    ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">支持思考</span>
-                    : <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">可能不支持深度思考</span>;
+                    ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-caption font-medium text-primary">支持思考</span>
+                    : <span className="rounded-full bg-muted px-1.5 py-0.5 text-caption font-medium text-muted-foreground">可能不支持深度思考</span>;
                 })()}
               </span>
               <Input
@@ -502,7 +505,7 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
       <Dialog open={subscriptionDialogOpen} onOpenChange={setSubscriptionDialogOpen}>
         <DialogContent className="max-w-[calc(100%-2rem)] gap-0 overflow-hidden p-0 sm:max-w-[480px]">
           <DialogHeader className="border-b border-border/60 px-6 py-5">
-            <DialogTitle className="text-[18px]">订阅</DialogTitle>
+            <DialogTitle className="text-body-lg">订阅</DialogTitle>
             <DialogDescription className="text-meta">
               查看订阅权益、本周用量，或使用兑换码激活订阅。
             </DialogDescription>

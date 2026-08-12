@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 
-// MermaidBlock 通过 useChat 读主题；mock 掉避免依赖 Context provider
-vi.mock("@/stores/chatStore", () => ({
-  useChat: () => ({ state: { theme: "light" }, dispatch: vi.fn() }),
-}));
-
 const mermaidRender = vi.fn();
 vi.mock("mermaid", () => ({
   default: { initialize: vi.fn(), render: mermaidRender },

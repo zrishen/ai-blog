@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { logError } from "@/utils/logger";
 import { MessageSquare, RotateCcw, Trash2 } from "lucide-react";
-import { BlogIcon } from "@/components/icons";
-import { getFileIcon } from "@/components/fileIcons";
+
 import {
   emptyTrash,
   listTrash,
@@ -11,11 +9,17 @@ import {
   type TrashItem,
 } from "../../../api/trash";
 import { useChat } from "../../../stores/chatStore";
+
+import { LoadingState, SectionCard, WorkspaceView } from "./shared";
+import { formatDate } from "./utils";
+
+import { logError } from "@/utils/logger";
+import { BlogIcon } from "@/components/icons";
+import { getFileIcon } from "@/components/fileIcons";
 import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { LoadingState, SectionCard, WorkspaceView } from "./shared";
-import { formatDate } from "./utils";
+
 
 export function TrashView() {
   const { state, dispatch } = useChat();
@@ -31,14 +35,14 @@ export function TrashView() {
   }, []);
 
   useEffect(() => {
-    reload();
+    void reload().catch(() => {});
   }, [reload]);
 
   // 文件还原是异步 job（重建向量）：job 完成/失败时 Provider 会 dispatch revision，
   // 据此自动 reload。不在点击还原时立即 reload——那会把 job 未完成的项又拉回列表。
   useEffect(() => {
     if (state.trashRevision === 0) return;
-    reload();
+    void reload().catch(() => {});
   }, [state.trashRevision, reload]);
 
   const handleRestore = useCallback(

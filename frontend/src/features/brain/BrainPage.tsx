@@ -1,5 +1,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Boxes, BrainCircuit, Clock, Heart, Pencil, RefreshCw, Trash2, type LucideIcon } from "lucide-react";
+
+import { BrainManagementDialog, type BrainManagementAction } from "./BrainManagementDialog";
+import { BrainGraphView } from "./BrainGraphView";
+import { EntityDetailPanel } from "./EntityDetailPanel";
+import { entityTypeColor, kindLabel } from "./utils/brainStyle";
+
+import type {
+  BrainEntity,
+  BrainEpisode,
+  BrainFact,
+  BrainGraph,
+  BrainGraphNode,
+  BrainMemoryType,
+  BrainPreference,
+} from "@/api/brain";
+
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,19 +36,6 @@ import {
   listBrainPreferences,
   updateBrainPreference,
 } from "@/api/brain";
-import type {
-  BrainEntity,
-  BrainEpisode,
-  BrainFact,
-  BrainGraph,
-  BrainGraphNode,
-  BrainMemoryType,
-  BrainPreference,
-} from "@/api/brain";
-import { BrainManagementDialog, type BrainManagementAction } from "./BrainManagementDialog";
-import { BrainGraphView } from "./BrainGraphView";
-import { EntityDetailPanel } from "./EntityDetailPanel";
-import { entityTypeColor, kindLabel } from "./utils/brainStyle";
 
 type BrainSection = "stats" | "graph" | "entities" | "episodes" | "preferences";
 
@@ -62,7 +65,7 @@ export function BrainPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     let cancelled = false;
-    (async () => {
+    void (async () => {
       // 五个接口独立结算：成功各自 set，失败记入 sectionErrors——避免任一失败拖垮整页
       const [statsR, graphR, entsR, epsR, prefsR] = await Promise.allSettled([
         getBrainStats(),
@@ -323,14 +326,14 @@ function EntitiesGrid({ entities }: { entities: BrainEntity[] }) {
               />
               <div className="line-clamp-2 text-body font-black text-foreground">{e.name}</div>
             </div>
-            <Badge variant="secondary" className="shrink-0 rounded-full text-[10px]">
+            <Badge variant="secondary" className="shrink-0 rounded-full text-caption">
               {Math.round(e.confidence * 100)}%
             </Badge>
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {e.entity_type && <Badge variant="outline" className="rounded-full text-[10px]">{e.entity_type}</Badge>}
+            {e.entity_type && <Badge variant="outline" className="rounded-full text-caption">{e.entity_type}</Badge>}
             {e.aliases.slice(0, 2).map((a) => (
-              <Badge key={a} variant="outline" className="rounded-full text-[10px]">{a}</Badge>
+              <Badge key={a} variant="outline" className="rounded-full text-caption">{a}</Badge>
             ))}
           </div>
           {e.description && (
@@ -359,7 +362,7 @@ function EpisodesTimeline({
           <span className="absolute left-0 top-3 h-3.5 w-3.5 rounded-full border-2 border-primary/40 bg-background" />
           <div className="rounded-panel border border-border/60 bg-card/60 p-4">
             <div className="mb-1.5 flex flex-wrap items-center gap-2">
-              <Badge variant="default" className="rounded-full text-[10px]">{kindLabel(ep.kind)}</Badge>
+              <Badge variant="default" className="rounded-full text-caption">{kindLabel(ep.kind)}</Badge>
               {ep.occurred_at && (
                 <span className="text-caption text-muted-foreground">
                   {ep.occurred_at.slice(0, 16).replace("T", " ")}
@@ -370,7 +373,7 @@ function EpisodesTimeline({
             {ep.participants.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {ep.participants.slice(0, 4).map((p) => (
-                  <Badge key={p} variant="outline" className="rounded-full text-[10px]">{p}</Badge>
+                  <Badge key={p} variant="outline" className="rounded-full text-caption">{p}</Badge>
                 ))}
               </div>
             )}
@@ -407,7 +410,7 @@ function PreferencesGrid({
         <div key={p.pref_id} className="rounded-panel border border-border/60 bg-card/60 p-4">
           <div className="flex items-start justify-between gap-2">
             <div className="text-caption font-bold uppercase tracking-[0.1em] text-muted-foreground">{p.key}</div>
-            <Badge variant="secondary" className="shrink-0 rounded-full text-[10px]">
+            <Badge variant="secondary" className="shrink-0 rounded-full text-caption">
               {Math.round(p.confidence * 100)}%
             </Badge>
           </div>

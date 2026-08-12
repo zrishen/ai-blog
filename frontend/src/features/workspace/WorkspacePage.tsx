@@ -1,14 +1,16 @@
 import { useCallback, useState } from "react";
 
 import { useChat } from "../../stores/chatStore";
-import { getBlogPost } from "@/api/blog";
 import { BlogEditor } from "../blog";
+
 import { FilePreviewView } from "./views/FilePreviewView";
 import { OverviewView } from "./views/OverviewView";
 import { BlogPostsView } from "./views/BlogPostsView";
 import { AiKnowledgeView } from "./views/AiKnowledgeView";
 import { TrashView } from "./views/TrashView";
 import { FolderView } from "./views/FolderView";
+
+import { getBlogPost } from "@/api/blog";
 
 export function WorkspacePage() {
   const { state, dispatch } = useChat();

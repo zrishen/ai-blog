@@ -1,5 +1,7 @@
-import { createContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, Route, Routes, matchPath, useLocation } from "react-router-dom";
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
+
 import { useChatState, useChatDispatch } from "./stores/chatStore";
 import { useAuth } from "./stores/authStore";
 import { NavBar } from "./components/NavBar";
@@ -15,7 +17,6 @@ import { OverviewPage, UsersPage, CodesPage, UsagePage, PluginsPage } from "./fe
 import { PluginCenterDialog } from "./components/plugins/PluginCenterDialog";
 import { VisualRegressionRoute } from "./components/VisualRegressionRoute";
 import { useMediaQuery } from "./hooks/useMediaQuery";
-import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useGroupCallbackRef } from "react-resizable-panels";
 import "./App.css";
 import { LoginDialog } from "./features/auth";
 import { cn } from "./lib/utils";
@@ -28,8 +29,8 @@ function loadPanelLayout() {
   try {
     const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
     if (raw) {
-      const { leftSize, aiOpenSize } = JSON.parse(raw);
-      return { leftSize: leftSize ?? 20, aiOpenSize: aiOpenSize ?? 20 };
+      const parsed = JSON.parse(raw) as { leftSize?: number; aiOpenSize?: number };
+      return { leftSize: parsed.leftSize ?? 20, aiOpenSize: parsed.aiOpenSize ?? 20 };
     }
   } catch {
     /* ignore malformed layout JSON */
@@ -40,13 +41,6 @@ function loadPanelLayout() {
 function savePanelLayout(leftSize: number, aiOpenSize: number) {
   localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({ leftSize, aiOpenSize }));
 }
-
-type PanelGroupAPI = {
-  getLayout: () => Record<string, number>;
-  setLayout: (sizes: Record<string, number>) => void;
-} | null;
-
-const PanelGroupCtx = createContext<PanelGroupAPI>(null);
 
 function WorkspaceRoute() {
   const dispatch = useChatDispatch();
@@ -293,7 +287,14 @@ function AuthenticatedApp() {
     groupApi.setLayout({ left: leftSize, main: 100 - leftSize - aiPanelSize, ai: aiPanelSize });
   }, [groupApi, isMobileWorkspace, state.aiSidebarOpen]);
 
-  const panelGroupValue = groupApi ?? null;
+  // 登出清除面板布局：与 ws_view 一致的跨账号清理模式
+  useEffect(() => {
+    const clear = () => {
+      try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch { /* ignore unavailable storage */ }
+    };
+    window.addEventListener("auth:logout", clear);
+    return () => window.removeEventListener("auth:logout", clear);
+  }, []);
 
   // 刷新页面后 access token（仅存内存）丢失，AuthProvider 正用 HttpOnly cookie 换新 token（isInitializing 期间）。
   // 此时暂不渲染，避免 LeftSidebar / MainContent 等子组件的 effect 在 token 就绪前发请求触发批量 401，
@@ -307,7 +308,6 @@ function AuthenticatedApp() {
         ) : (
           <>
             <NavBar />
-            <PanelGroupCtx.Provider value={panelGroupValue}>
             <PanelGroup
               orientation="horizontal"
               className="app-body"
@@ -349,7 +349,6 @@ function AuthenticatedApp() {
                 <AISidebar {...aiContext} />
               </Panel>
               </PanelGroup>
-            </PanelGroupCtx.Provider>
           </>
         )}
 

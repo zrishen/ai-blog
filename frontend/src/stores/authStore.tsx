@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
+
 import { setAccessToken } from "../api/client";
 import { clearAllDraftRecovery } from "../features/blog/utils/draftStorage";
 
@@ -36,9 +37,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     // 启动恢复：access token 在内存（刷新页面即丢失），用 HttpOnly cookie 里的 refresh token 换新 access。
-    (async () => {
+    void (async () => {
+      // 首屏 refresh 加超时：端点 hang 住时避免 isInitializing 永久为 true、应用白屏
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10_000);
       try {
-        const resp = await fetch("/api/v1/auth/refresh", { method: "POST", credentials: "include" });
+        const resp = await fetch("/api/v1/auth/refresh", { method: "POST", credentials: "include", signal: controller.signal });
         if (resp.ok) {
           const data = (await resp.json()) as { access_token?: string; user?: AuthUser };
           if (data.access_token && data.user && !cancelled) {
@@ -49,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch {
         /* 未登录或网络异常都回落到未认证态 */
+      } finally {
+        clearTimeout(timer);
       }
       if (!cancelled) setState({ ...UNAUTHENTICATED, isInitializing: false });
     })();

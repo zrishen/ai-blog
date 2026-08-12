@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { isSafeInternalPath } from "@/lib/routing";
 import { BrainCircuit, Home, LayoutDashboard, type LucideIcon } from "lucide-react";
+
+import { isSafeInternalPath } from "@/lib/routing";
 import { useChatDispatch } from "@/stores/chatStore";
 import { useAuth, type AuthUser } from "@/stores/authStore";
 

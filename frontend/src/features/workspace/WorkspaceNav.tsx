@@ -14,7 +14,13 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+
+import { useChat } from "../../stores/chatStore";
+
+import { DeleteResourceDialog, type DeleteResourceTarget } from "./components/DeleteResourceDialog";
+
 import type { LucideIcon } from "lucide-react";
+import type { WorkspaceView } from "../../stores/types";
 
 import { getBlogPost } from "@/api/blog";
 import { listFileDocuments } from "@/api/files";
@@ -57,9 +63,7 @@ import { Input } from "@/components/ui/input";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { cn } from "@/lib/utils";
 import { useFileProcessing } from "@/lib/providers/FileProcessingProvider";
-import { useChat } from "../../stores/chatStore";
-import type { WorkspaceView } from "../../stores/types";
-import { DeleteResourceDialog, type DeleteResourceTarget } from "./components/DeleteResourceDialog";
+
 
 interface ViewItem {
   key: WorkspaceView;

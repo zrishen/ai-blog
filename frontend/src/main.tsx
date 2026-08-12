@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import * as Sentry from "@sentry/react";
+
 import "./index.css";
 import { ChatProvider } from "./stores/chatStore";
 import { AuthProvider } from "./stores/authStore";
@@ -30,7 +31,7 @@ if (sentryDsn) {
   Sentry.init({ dsn: sentryDsn });
 }
 
-createRoot(document.getElementById("root")!).render(
+createRoot(document.getElementById("root")).render(
   <StrictMode>
     <ErrorBoundary>
       <BrowserRouter>

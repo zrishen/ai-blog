@@ -1,4 +1,3 @@
-import type { ChatAttachment } from "../features/ai-chat/types";
 import {
   API_BASE,
   apiFetch,
@@ -7,6 +6,8 @@ import {
   refreshOnce,
   setAccessToken,
 } from "./client";
+
+import type { ChatAttachment } from "../features/ai-chat/types";
 
 export interface ChatAttachmentUploadRequest {
   promise: Promise<ChatAttachment>;

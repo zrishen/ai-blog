@@ -1,5 +1,7 @@
-import type { ComponentType, ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
+
+import type { ComponentType, ReactNode } from "react";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";

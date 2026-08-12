@@ -1,13 +1,15 @@
 import { useEffect, useState, type ComponentType } from "react";
 import { CheckCircle2, Database, FileText, Sparkles } from "lucide-react";
+
+import { LoadingState, WorkspaceView } from "./shared";
+import { formatDate } from "./utils";
+
 import { BlogIcon, PublishedIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
 import { listBlogPosts } from "@/api/blog";
 import { listFileDocuments } from "@/api/files";
 import { listAiKnowledge } from "@/api/workspace";
 import { Badge } from "@/components/ui/badge";
-import { LoadingState, WorkspaceView } from "./shared";
-import { formatDate } from "./utils";
 
 interface RecentItem {
   id: number;
@@ -30,7 +32,7 @@ export function OverviewView({
 
   useEffect(() => {
     let alive = true;
-    (async () => {
+    void (async () => {
       try {
         const [drafts, published, files, ai] = await Promise.all([
           listBlogPosts({ status: "draft" }),

@@ -2,11 +2,14 @@ import { useMemo } from "react";
 import { Background, Controls, MiniMap, ReactFlow, type Edge, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { BrainCircuit } from "lucide-react";
-import { EmptyState } from "@/components/ui/empty-state";
+
 import { BrainEntityNode } from "./nodes/BrainEntityNode";
 import { useForceLayout } from "./hooks/useForceLayout";
 import { edgeTone } from "./utils/brainStyle";
+
 import type { BrainGraph, BrainGraphNode } from "@/api/brain";
+
+import { EmptyState } from "@/components/ui/empty-state";
 
 const nodeTypes = { brainEntity: BrainEntityNode };
 

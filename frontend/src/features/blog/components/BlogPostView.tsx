@@ -1,20 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { cn } from "../../../lib/utils";
-import { useChat } from "../../../stores/chatStore";
-import { deleteBlogPost, publishBlogPost } from "@/api/blog";
-import type { BlogPostData } from "@/api/blog";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { motion } from "motion/react";
 import { ArrowLeft, Pencil, Trash2, Globe, EyeOff, Calendar, Eye, Tags, AlertCircle, FileText, Copy, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+
+import { useChat } from "../../../stores/chatStore";
+import { cn } from "../../../lib/utils";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
 import { expandBlankLines } from "../utils/markdownBlankLines";
+
+import type { BlogPostData } from "@/api/blog";
+
+import { deleteBlogPost, publishBlogPost } from "@/api/blog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { MermaidBlock } from "@/components/MermaidBlock";
 import { extractCodeLanguage, extractCodeText } from "@/utils/mermaidCode";
 import { formatDateLong } from "@/lib/datetime";
@@ -321,7 +324,7 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
           onTouchEnd={handleTouchEnd}
         >
           {isStreaming && (
-            <span className="absolute -left-1 -top-1 z-10 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            <span className="absolute -left-1 -top-1 z-10 rounded bg-primary/20 px-1.5 py-0.5 text-caption font-medium text-primary">
               AI 编辑中
             </span>
           )}

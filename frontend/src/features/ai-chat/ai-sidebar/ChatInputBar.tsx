@@ -6,10 +6,13 @@ import {
   Square,
   Paperclip,
 } from "lucide-react";
+
+import { AttachmentDraftList } from "./AttachmentDraftList";
+
+import type { DraftAttachment } from "../types";
+
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { DraftAttachment } from "../types";
-import { AttachmentDraftList } from "./AttachmentDraftList";
 import {
   DropdownMenu,
   DropdownMenuContent,

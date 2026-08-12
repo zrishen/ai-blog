@@ -47,6 +47,7 @@ const rawNativeControlAllowlist = new Set([
   // 文件选择器没有可见视觉表面，保留原生隐藏 input。
   "src/features/ai-chat/ai-sidebar/ChatInputBar.tsx",
   "src/features/blog/components/BlogEditor.tsx",
+  "src/features/blog/components/BlogToolbar.tsx",
   "src/features/workspace/WorkspaceNav.tsx",
 ]);
 
@@ -136,6 +137,12 @@ for (const sourcePath of sourceFiles) {
     if (rawRadius) {
       errors.push(`${sourceRelativePath} contains ${rawRadius[0]}; use a named radius token instead.`);
     }
+  }
+
+  // 禁任意像素字号 text-[NNpx]：必须用命名字号 token（text-caption/fine/meta/body/body-lg/reading）
+  const hardFontSize = content.match(/text-\[\d+px\]/);
+  if (hardFontSize) {
+    errors.push(`${sourceRelativePath} contains ${hardFontSize[0]}; use a named font-size token (text-caption/fine/meta/body/body-lg/reading).`);
   }
 
   if (!colorPaletteAllowlist.has(sourceRelativePath)) {

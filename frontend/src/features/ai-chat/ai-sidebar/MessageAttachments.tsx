@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Download, FileText, Image as ImageIcon } from "lucide-react";
-import { Spinner } from "@/components/ui/spinner";
+
 import { getChatAttachmentBlob } from "../../../api/chatAttachments";
+
 import type { ChatAttachment } from "../types";
+
+import { Spinner } from "@/components/ui/spinner";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

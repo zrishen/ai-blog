@@ -1,5 +1,26 @@
-import type { ChatAttachment } from "../features/ai-chat/types";
-import { API_BASE, apiFetch } from "./client";
+import { logWarn } from "@/utils/logger";
+
+import {
+  _BLOGDELTA_MARKER,
+  _BLOGSTART_MARKER,
+  _DONE_MARKER,
+  _findCompleteJson,
+  _findNextProtocolMarker,
+  _hasUnresolvedProtocolMarker,
+  _LOOPSTEP_MARKER,
+  _PATCHDELTA_MARKER,
+  _PATCHSTART_MARKER,
+  _REASONING_MARKER,
+  _ROUNDDELTA_MARKER,
+  _ROUNDEND_MARKER,
+  _STREAMERROR_MARKER,
+  _stripProtocolMarkers,
+  _TOOL_MARKER,
+  _TOOLPREP_MARKER,
+} from "./chatProtocol";
+import { API_BASE, apiFetch, assertOk, parseJson } from "./client";
+
+import type { ChatAttachment, ThinkingMode } from "@/types/chat";
 
 export interface BlogToolMeta {
   operation?: string;
@@ -9,151 +30,9 @@ export interface BlogToolMeta {
   [key: string]: unknown;
 }
 
-const _TOOL_MARKER = "\x00TOOLDONE\x00";
-const _DONE_MARKER = "\x00DONE\x00";
-const _BLOGSTART_MARKER = "\x00BLOGSTART\x00";
-const _BLOGDELTA_MARKER = "\x00BLOGDELTA\x00";
-const _REASONING_MARKER = "\x00REASONING\x00";
-const _LOOPSTEP_MARKER = "\x00LOOPSTEP\x00";
-const _ROUNDDELTA_MARKER = "\x00ROUNDDELTA\x00";
-const _ROUNDEND_MARKER = "\x00ROUNDEND\x00";
-const _STREAMERROR_MARKER = "\x00STREAMERROR\x00";
-const _PATCHSTART_MARKER = "\x00PATCHSTART\x00";
-const _PATCHDELTA_MARKER = "\x00PATCHDELTA\x00";
-const _TOOLPREP_MARKER = "\x00TOOLPREP\x00";
-const _PROTOCOL_MARKERS = [
-  ["REASONING", _REASONING_MARKER],
-  ["TOOLDONE", _TOOL_MARKER],
-  ["TOOLPREP", _TOOLPREP_MARKER],
-  ["BLOGSTART", _BLOGSTART_MARKER],
-  ["BLOGDELTA", _BLOGDELTA_MARKER],
-  ["PATCHSTART", _PATCHSTART_MARKER],
-  ["PATCHDELTA", _PATCHDELTA_MARKER],
-  ["LOOPSTEP", _LOOPSTEP_MARKER],
-  ["ROUNDDELTA", _ROUNDDELTA_MARKER],
-  ["ROUNDEND", _ROUNDEND_MARKER],
-  ["STREAMERROR", _STREAMERROR_MARKER],
-  ["DONE", _DONE_MARKER],
-] as const;
-const _PROTOCOL_MARKER_NAMES = _PROTOCOL_MARKERS.map(([name]) => name);
 
-type ProtocolMarkerName = typeof _PROTOCOL_MARKERS[number][0];
-
-function _findNextProtocolMarker(text: string): { name: ProtocolMarkerName; index: number } | null {
-  let next: { name: ProtocolMarkerName; index: number } | null = null;
-  for (const [name, marker] of _PROTOCOL_MARKERS) {
-    const index = text.indexOf(marker);
-    if (index !== -1 && (!next || index < next.index)) next = { name, index };
-  }
-  return next;
-}
-
-function _findCompleteJson(str: string, start: number): { endIndex: number } | null {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = start; i < str.length; i++) {
-    const ch = str[i];
-
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-
-    if (ch === "\\") {
-      escaped = true;
-      continue;
-    }
-
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-
-    if (inString) continue;
-
-    if (ch === "{") {
-      depth++;
-    } else if (ch === "}") {
-      depth--;
-      if (depth === 0) {
-        return { endIndex: i + 1 };
-      }
-    }
-  }
-
-  return null;
-}
-
-function _stripProtocolMarkers(text: string): string {
-  const normalized = text.replace(/[\0�]/g, "");
-  let output = "";
-  let index = 0;
-
-  while (index < normalized.length) {
-    const marker = _PROTOCOL_MARKER_NAMES.find((name) => normalized.startsWith(name, index));
-    if (!marker) {
-      output += normalized[index];
-      index += 1;
-      continue;
-    }
-
-    let payloadStart = index + marker.length;
-    while (payloadStart < normalized.length && /\s/.test(normalized[payloadStart])) {
-      payloadStart += 1;
-    }
-
-    if (payloadStart < normalized.length && normalized[payloadStart] === "{") {
-      const jsonResult = _findCompleteJson(normalized, payloadStart);
-      if (!jsonResult) break;
-      index = jsonResult.endIndex;
-      continue;
-    }
-
-    output += normalized[index];
-    index += 1;
-  }
-
-  return output;
-}
-
-function _hasUnresolvedProtocolMarker(text: string): boolean {
-  const normalized = text.replace(/[\0�]/g, "");
-  let searchIndex = 0;
-  let hasCompleteMarker = false;
-
-  while (searchIndex < normalized.length) {
-    let markerIndex = -1;
-    let marker = "";
-    for (const name of _PROTOCOL_MARKER_NAMES) {
-      const index = normalized.indexOf(name, searchIndex);
-      if (index !== -1 && (markerIndex === -1 || index < markerIndex)) {
-        markerIndex = index;
-        marker = name;
-      }
-    }
-    if (markerIndex === -1) break;
-
-    let payloadStart = markerIndex + marker.length;
-    while (payloadStart < normalized.length && /\s/.test(normalized[payloadStart])) {
-      payloadStart += 1;
-    }
-    if (payloadStart >= normalized.length) return true;
-    if (normalized[payloadStart] === "{") {
-      const jsonResult = _findCompleteJson(normalized, payloadStart);
-      if (!jsonResult) return true;
-      hasCompleteMarker = true;
-      searchIndex = jsonResult.endIndex;
-      continue;
-    }
-    searchIndex = markerIndex + 1;
-  }
-
-  return /[\0�]/.test(text) && !hasCompleteMarker;
-}
-
-export type ThinkingMode = "fast" | "balanced" | "smart";
+// ThinkingMode 真源在 @/types/chat，此处 re-export 保留历史调用方
+export type { ThinkingMode } from "@/types/chat";
 
 export interface StreamReference {
   type: "rag" | "memory" | "mcp";
@@ -252,6 +131,29 @@ export interface SendChatOptions {
   callbacks: SendChatCallbacks;
 }
 
+// 流式读取空闲超时：后端静默卡住（不关连接也不发数据）时主动终止，避免 UI 永久停在 streaming 态
+const STREAM_IDLE_TIMEOUT_MS = 120_000;
+
+// 带空闲超时的 reader.read()：私有 sendChat 与共享/公共 readPlainStream 共用
+async function readWithIdleTimeout(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  const idleTimeout = new Promise<never>((_, reject) => {
+    idleTimer = setTimeout(() => {
+      void reader.cancel().catch(() => {});
+      reject(new Error("回复超时，请稍后重试"));
+    }, STREAM_IDLE_TIMEOUT_MS);
+  });
+  idleTimeout.catch(() => {});
+  return Promise.race([reader.read(), idleTimeout]).finally(() => {
+    if (idleTimer) clearTimeout(idleTimer);
+  });
+}
+
+// DONE 帧字段校验：会话持久化的两个 id 必须是数字，校验失败丢弃并告警
+function isValidDoneMetadata(p: Record<string, unknown>): boolean {
+  return typeof p.conversation_id === "number" && typeof p.message_id === "number";
+}
+
 export async function sendChat(
   content: string,
   conversationId: number | null,
@@ -292,7 +194,7 @@ export async function sendChat(
     }),
     signal,
   });
-  if (!res.ok) throw new Error("Chat request failed");
+  await assertOk(res, "Chat request failed");
 
   if (!res.body) throw new Error("Response body is null");
   const reader = res.body.getReader();
@@ -300,7 +202,7 @@ export async function sendChat(
   let accumulated = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readWithIdleTimeout(reader);
     if (done) break;
 
     accumulated += decoder.decode(value, { stream: true });
@@ -319,9 +221,9 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (!jsonResult) continue;
         try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
           if (typeof payload.round_id === "number" && typeof payload.delta === "string") {
-            onRoundDelta?.(payload as StreamRoundDelta);
+            onRoundDelta?.(payload as unknown as StreamRoundDelta);
           }
         } catch { /* ignore malformed JSON */ }
         accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -335,13 +237,13 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (!jsonResult) continue;
         try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
           if (
             typeof payload.round_id === "number"
             && (payload.classification === "loop" || payload.classification === "final" || payload.classification === "discard")
             && typeof payload.text === "string"
           ) {
-            onRoundEnd?.(payload as StreamRoundEnd);
+            onRoundEnd?.(payload as unknown as StreamRoundEnd);
           }
         } catch { /* ignore malformed JSON */ }
         accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -355,8 +257,8 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (!jsonResult) continue;
         try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-          if (typeof payload.message === "string") onStreamError?.(payload as StreamError);
+          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
+          if (typeof payload.message === "string") onStreamError?.(payload as unknown as StreamError);
         } catch { /* ignore malformed JSON */ }
         accumulated = afterMarker.substring(jsonResult.endIndex);
         processed = false;
@@ -370,9 +272,9 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (!jsonResult) continue;
         try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
           if (typeof payload.post_id === "number" && typeof payload.stream_id === "string") {
-            onBlogStart?.(payload as BlogStreamStart);
+            onBlogStart?.(payload as unknown as BlogStreamStart);
           }
         } catch { /* ignore parse errors */ }
         accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -389,13 +291,13 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (jsonResult) {
           try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
             if (
               typeof payload.post_id === "number"
               && typeof payload.stream_id === "string"
               && typeof payload.content_delta === "string"
             ) {
-              onBlogDelta?.(payload as BlogStreamDelta);
+              onBlogDelta?.(payload as unknown as BlogStreamDelta);
             }
           } catch { /* ignore parse errors */ }
           accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -416,13 +318,13 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (jsonResult) {
           try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
             if (
               typeof payload.post_id === "number"
               && typeof payload.stream_id === "string"
               && typeof payload.target_text === "string"
             ) {
-              onPatchStart?.(payload as BlogPatchStart);
+              onPatchStart?.(payload as unknown as BlogPatchStart);
             }
           } catch { /* ignore parse errors */ }
           accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -443,13 +345,13 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (jsonResult) {
           try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
             if (
               typeof payload.post_id === "number"
               && typeof payload.stream_id === "string"
               && typeof payload.replacement_delta === "string"
             ) {
-              onPatchDelta?.(payload as BlogPatchDelta);
+              onPatchDelta?.(payload as unknown as BlogPatchDelta);
             }
           } catch { /* ignore parse errors */ }
           accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -469,9 +371,9 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (!jsonResult) continue;
         try {
-          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
+          const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
           if (typeof payload.tool_name === "string" && typeof payload.stream_id === "string") {
-            onToolPrep?.(payload as ToolPrepEvent);
+            onToolPrep?.(payload as unknown as ToolPrepEvent);
           }
         } catch { /* ignore parse errors */ }
         accumulated = afterMarker.substring(jsonResult.endIndex);
@@ -501,7 +403,7 @@ export async function sendChat(
 
         const jsonText = afterMarker.substring(braceIdx, fullJson.endIndex);
         try {
-          const data = JSON.parse(jsonText);
+          const data = JSON.parse(jsonText) as Record<string, unknown>;
           const meta: StreamToolMeta | undefined = (data.call_id !== undefined || data.round_id !== undefined || data.loop_step_index !== undefined || data.stream_id !== undefined)
             ? {
                 call_id: typeof data.call_id === "string" ? data.call_id : undefined,
@@ -510,12 +412,21 @@ export async function sendChat(
                 stream_id: typeof data.stream_id === "string" ? data.stream_id : undefined,
               }
             : undefined;
-          if (data.status === "start" && data.tool_name) {
+          if (data.status === "start" && typeof data.tool_name === "string" && data.tool_name) {
             onToolCall?.(data.tool_name, meta);
-          } else if (data.status === "end" && data.tool_name && data.result !== undefined) {
-            onToolResult?.(data.tool_name, data.result, data.blog_meta, data.references, meta);
+          } else if (data.status === "end" && typeof data.tool_name === "string" && data.tool_name && data.result !== undefined) {
+            onToolResult?.(
+              data.tool_name,
+              typeof data.result === "string" ? data.result : "",
+              typeof data.blog_meta === "object" && data.blog_meta !== null ? data.blog_meta as BlogToolMeta : undefined,
+              Array.isArray(data.references)
+                ? data.references.filter((r): r is StreamReference =>
+                  r != null && typeof r === "object" && (r.type === "rag" || r.type === "memory" || r.type === "mcp"))
+                : undefined,
+              meta,
+            );
           }
-        } catch { /* malformed JSON — skip */ }
+        } catch (err) { logWarn("chat stream: malformed frame skipped", { error: err }); }
 
         const afterJson = afterMarker.substring(fullJson.endIndex);
         if (afterJson.startsWith("\n")) {
@@ -536,11 +447,11 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (jsonResult) {
           try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-            if (payload.reasoning_delta && onReasoning) {
+            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
+            if (typeof payload.reasoning_delta === "string" && payload.reasoning_delta && onReasoning) {
               onReasoning(payload.reasoning_delta);
             }
-          } catch { /* ignore parse errors */ }
+          } catch (err) { logWarn("chat stream: malformed frame skipped", { error: err }); }
           accumulated = afterMarker.substring(jsonResult.endIndex);
         } else {
           accumulated = _REASONING_MARKER + afterMarker;
@@ -559,11 +470,11 @@ export async function sendChat(
         const jsonResult = _findCompleteJson(afterMarker, 0);
         if (jsonResult) {
           try {
-            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex));
-            if (payload.text && onLoopStep) {
+            const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
+            if (typeof payload.text === "string" && payload.text && onLoopStep) {
               onLoopStep(payload.text);
             }
-          } catch { /* ignore parse errors */ }
+          } catch (err) { logWarn("chat stream: malformed frame skipped", { error: err }); }
           accumulated = afterMarker.substring(jsonResult.endIndex);
         } else {
           accumulated = _LOOPSTEP_MARKER + afterMarker;
@@ -581,9 +492,16 @@ export async function sendChat(
         if (textBefore) {
           if (textBefore.startsWith("{")) {
             try {
-              onDone?.(JSON.parse(textBefore));
-              parsedBefore = true;
-            } catch {
+              const parsed = JSON.parse(textBefore) as Record<string, unknown>;
+              if (isValidDoneMetadata(parsed)) {
+                onDone?.(parsed as unknown as { conversation_id: number; message_id: number; user_message_id?: number; attachments?: ChatAttachment[] });
+                parsedBefore = true;
+              } else {
+                logWarn("chat stream: DONE frame failed validation", { parsed });
+                emitChunk?.(textBefore);
+              }
+            } catch (err) {
+              logWarn("chat stream: malformed DONE frame before-marker", { error: err });
               emitChunk?.(textBefore);
             }
           } else {
@@ -607,9 +525,14 @@ export async function sendChat(
           continue;
         }
         try {
-          onDone?.(JSON.parse(afterDone.substring(0, jsonResult.endIndex)));
-        } catch {
-          /* malformed DONE metadata — consume the frame without applying it */
+          const parsed = JSON.parse(afterDone.substring(0, jsonResult.endIndex)) as Record<string, unknown>;
+          if (isValidDoneMetadata(parsed)) {
+            onDone?.(parsed as unknown as { conversation_id: number; message_id: number; user_message_id?: number; attachments?: ChatAttachment[] });
+          } else {
+            logWarn("chat stream: DONE frame failed validation", { parsed });
+          }
+        } catch (err) {
+          logWarn("chat stream: malformed DONE frame after-marker", { error: err });
         }
         accumulated = afterDone.substring(jsonResult.endIndex);
         processed = false;
@@ -640,17 +563,35 @@ export async function sendChat(
   }
 }
 
+// 从缓冲区提取完整 STREAMERROR 帧的 message；帧未完整返回 null
+function _extractStreamError(text: string): string | null {
+  const idx = text.indexOf(_STREAMERROR_MARKER);
+  if (idx === -1) return null;
+  const afterMarker = text.substring(idx + _STREAMERROR_MARKER.length);
+  const jsonResult = _findCompleteJson(afterMarker, 0);
+  if (!jsonResult) return null;
+  try {
+    const payload = JSON.parse(afterMarker.substring(0, jsonResult.endIndex)) as { message?: unknown };
+    return typeof payload.message === "string" ? payload.message : "无法获取回复，请稍后重试";
+  } catch {
+    return "无法获取回复，请稍后重试";
+  }
+}
+
 async function readPlainStream(res: Response, onChunk: (chunk: string) => void) {
-  if (!res.ok) throw new Error("Chat request failed");
+  await assertOk(res, "Chat request failed");
   if (!res.body) throw new Error("Response body is null");
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let pending = "";
 
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readWithIdleTimeout(reader);
     if (done) break;
     pending += decoder.decode(value, { stream: true });
+    // STREAMERROR 帧在共享/公共流里也要冒泡成异常，否则被 strip 成纯文本丢弃、错误不可见
+    const streamErr = _extractStreamError(pending);
+    if (streamErr !== null) throw new Error(streamErr);
     if (_hasUnresolvedProtocolMarker(pending)) continue;
     const cleaned = _stripProtocolMarkers(pending);
     if (cleaned) onChunk(cleaned);
@@ -658,6 +599,8 @@ async function readPlainStream(res: Response, onChunk: (chunk: string) => void) 
   }
 
   if (pending) {
+    const streamErr = _extractStreamError(pending);
+    if (streamErr !== null) throw new Error(streamErr);
     const cleaned = _stripProtocolMarkers(pending);
     if (cleaned) onChunk(cleaned);
   }
@@ -700,5 +643,5 @@ export async function uploadFile(file: File): Promise<{ stored_name: string; ori
     const err = await res.text();
     throw new Error(`Upload failed: ${err}`);
   }
-  return res.json();
+  return parseJson<{ stored_name: string; original_name: string; download_url: string }>(res);
 }

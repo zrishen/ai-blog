@@ -1,5 +1,8 @@
 import { Loader2 } from "lucide-react";
+
 import type { FormEvent } from "react";
+import type { BrainFact, BrainMemoryType, BrainPreference } from "@/api/brain";
+
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { BrainFact, BrainMemoryType, BrainPreference } from "@/api/brain";
 
 export type BrainManagementAction =
   | { kind: "correct-fact"; fact: BrainFact }
@@ -39,7 +41,8 @@ export function BrainManagementDialog({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!action) return;
-    const value = String(new FormData(event.currentTarget).get("value") ?? "").trim();
+    const raw = new FormData(event.currentTarget).get("value");
+    const value = (typeof raw === "string" ? raw : "").trim();
     if (action.kind === "correct-fact") {
       await onCorrectFact(action.fact, value);
     } else if (action.kind === "update-preference") {

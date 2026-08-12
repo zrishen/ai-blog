@@ -1,9 +1,12 @@
 import { ChevronRight, FileText, Folder } from "lucide-react";
 
-import type { WorkspaceEntry } from "@/api/workspace";
-import { EmptyState } from "@/components/ui/empty-state";
 import { useChat } from "../../../stores/chatStore";
+
 import { SubPageHeader, WorkspaceView } from "./shared";
+
+import type { WorkspaceEntry } from "@/api/workspace";
+
+import { EmptyState } from "@/components/ui/empty-state";
 
 function parentPath(path: string): string | null {
   const separator = path.lastIndexOf("/");

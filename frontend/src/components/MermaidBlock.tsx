@@ -1,8 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { useChat } from "../stores/chatStore";
 
 interface MermaidBlockProps {
   code: string;
+}
+
+// 主题直接读 document data-theme（chatStore effect 写入），避开组件直耦合全局 store
+function readIsDark(): boolean {
+  return document.documentElement.dataset.theme === "dark";
 }
 
 // mermaid 是大包，动态 import 懒加载（首次遇到 mermaid 块才加载），避免增大首屏 bundle
@@ -52,14 +56,20 @@ function cleanupMermaidDom(id: string) {
  * - 语法错误（流式未写完也常见）降级为源码展示，写完后自动重渲染
  */
 export function MermaidBlock({ code }: MermaidBlockProps) {
-  const { state } = useChat();
-  const isDark = state.theme === "dark";
+  const [isDark, setIsDark] = useState(readIsDark);
   const reactId = useId();
   // mermaid render 需要合法 DOM id（useId 含冒号等非法字符）
   const renderId = `mmd-${reactId.replace(/[^a-zA-Z0-9]/g, "")}`;
   const [svg, setSvg] = useState<string | null>(null);
   const [errored, setErrored] = useState(false);
   const seqRef = useRef(0);
+
+  // 监听主题切换：data-theme 变化时重渲染图表（替代直接订阅 store）
+  useEffect(() => {
+    const observer = new MutationObserver(() => setIsDark(readIsDark()));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     // 兜底去掉可能混入的围栏（react-markdown 正常只传源码文本）
@@ -88,8 +98,10 @@ export function MermaidBlock({ code }: MermaidBlockProps) {
         setErrored(false);
       } catch {
         if (seqRef.current !== seq) return;
-        cleanupMermaidDom(renderId);
         setErrored(true);
+      } finally {
+        // mermaid.render 无论成败都在 document 注入临时容器，统一清理防 DOM 泄漏
+        cleanupMermaidDom(renderId);
       }
     }, 120);
 

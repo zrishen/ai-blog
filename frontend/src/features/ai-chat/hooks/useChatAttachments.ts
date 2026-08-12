@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+
 import {
   deleteChatAttachment,
   uploadChatAttachment,
   type ChatAttachmentUploadRequest,
 } from "../../../api/chatAttachments";
 import { useChat } from "../../../stores/chatStore";
+
 import type { AISidebarConversationKey, DraftAttachment } from "../types";
 
 const MAX_CONCURRENT_UPLOADS = 3;

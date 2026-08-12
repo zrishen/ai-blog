@@ -1,7 +1,9 @@
 import { Boxes, Clock, Heart, Network, type LucideIcon } from "lucide-react";
+
+import type { BrainTab } from "@/stores/types";
+
 import { useChat } from "@/stores/chatStore";
 import { useAuth } from "@/stores/authStore";
-import type { BrainTab } from "@/stores/types";
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 import { cn } from "@/lib/utils";
 

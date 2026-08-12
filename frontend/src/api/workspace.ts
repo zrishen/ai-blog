@@ -1,4 +1,5 @@
 import { API_BASE, apiFetch, readErrorDetail } from "./client";
+
 import type { FileProcessingJob } from "./files";
 
 export interface WorkspaceEntry {

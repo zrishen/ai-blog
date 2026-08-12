@@ -1,8 +1,11 @@
+import { isDisplayableMessage } from "../../features/ai-chat/types";
+
+import { applyStreamEvent } from "./streamEvent";
+
 import type { ChatState, ChatAction } from "../chatStore";
 import type { ChatAttachment, Message, ToolEvent } from "../../features/ai-chat/types";
-import { isDisplayableMessage } from "../../features/ai-chat/types";
 import type { ThinkingMode } from "../../api/chat";
-import { applyStreamEvent } from "./streamEvent";
+
 
 function updateMessageWithPayload(
   message: Message,

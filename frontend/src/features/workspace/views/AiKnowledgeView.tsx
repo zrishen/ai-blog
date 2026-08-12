@@ -1,22 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
-import { logError } from "@/utils/logger";
 import { AlertCircle, Network, Plus, RefreshCw, Sparkles, X } from "lucide-react";
+
+import { JoinAiKnowledgeDialog } from "../components/JoinAiKnowledgeDialog";
+import { useChat } from "../../../stores/chatStore";
+
+import { LoadingState, SectionCard, WorkspaceView } from "./shared";
+
+import type { RagSource } from "@/api/workspace";
+import type { BlogPostData } from "@/api/blog";
+import type { FileDocument } from "@/api/files";
+
+import { logError } from "@/utils/logger";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
 import { leaveAiKnowledge, listAiKnowledge } from "@/api/workspace";
-import type { RagSource } from "@/api/workspace";
 import { listBlogPosts } from "@/api/blog";
-import type { BlogPostData } from "@/api/blog";
 import { listFileDocuments } from "@/api/files";
-import type { FileDocument } from "@/api/files";
-import { JoinAiKnowledgeDialog } from "../components/JoinAiKnowledgeDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
-import { LoadingState, SectionCard, WorkspaceView } from "./shared";
 import { FileProcessingProgress } from "@/lib/providers/FileProcessingProgress";
 import { jobStage, useFileProcessing } from "@/lib/providers/FileProcessingProvider";
-import { useChat } from "../../../stores/chatStore";
 import { cn } from "@/lib/utils";
 
 // 状态徽标已精简：索引中显示进度条，失败显示红字「失败」，其余状态不标记。
@@ -57,7 +61,7 @@ export function AiKnowledgeView({
   }, [consumeOptimistic]);
 
   useEffect(() => {
-    reload();
+    void reload().catch(() => {});
   }, [reload, state.aiKnowledgeRevision]);
 
   // RagSource 不含 name,按 resource_type 在文件/文章列表里反查真实名称
