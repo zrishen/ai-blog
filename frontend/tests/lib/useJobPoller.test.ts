@@ -10,7 +10,7 @@ vi.mock("../../src/api/files", async (importOriginal) => {
   return { ...actual, getFileProcessingJob: (...args: unknown[]) => mocks.getJob(...args) };
 });
 
-import { useJobPoller } from "../../src/features/workspace/file-processing/useJobPoller";
+import { useJobPoller } from "../../src/lib/providers/useJobPoller";
 
 import type { FileProcessingJob } from "../../src/api/files";
 

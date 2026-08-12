@@ -6,7 +6,7 @@ export interface TocItem {
 
 const HEADING_RE = /^(#{2,4})\s+(.+)$/gm;
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^\w一-鿿]+/g, "-")

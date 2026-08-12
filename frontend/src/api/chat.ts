@@ -194,7 +194,7 @@ export async function sendChat(
     }),
     signal,
   });
-  await assertOk(res, "Chat request failed");
+  if (!res.ok) throw new Error("Chat request failed");
 
   if (!res.body) throw new Error("Response body is null");
   const reader = res.body.getReader();
@@ -564,7 +564,7 @@ export async function sendChat(
 }
 
 // 从缓冲区提取完整 STREAMERROR 帧的 message；帧未完整返回 null
-function _extractStreamError(text: string): string | null {
+export function _extractStreamError(text: string): string | null {
   const idx = text.indexOf(_STREAMERROR_MARKER);
   if (idx === -1) return null;
   const afterMarker = text.substring(idx + _STREAMERROR_MARKER.length);

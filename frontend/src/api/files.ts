@@ -1,4 +1,4 @@
-import { API_BASE, apiFetch, readErrorDetail, getAccessToken, setAccessToken } from "./client";
+import { API_BASE, apiFetch, readErrorDetail, getAccessToken, setAccessToken, refreshOnce } from "./client";
 
 // 预览 base URL（不带凭证）。docx/xlsx 经 apiFetch 自动携带 Authorization header，凭证不入 URL。
 export function getPreviewBaseUrl(filename: string): string {
@@ -96,11 +96,28 @@ export function uploadToFileLibrary(
   clientRequestId: string,
   onProgress?: (progress: FileUploadProgress) => void,
 ): FileUploadRequest {
+  let activeXhr: XMLHttpRequest | null = null;
+  const promise = sendUpload(file, clientRequestId, onProgress, true, (xhr) => { activeXhr = xhr; });
+  return {
+    promise,
+    cancel: () => activeXhr?.abort(),
+  };
+}
+
+// allowRefresh：首次 401 尝试 refreshOnce 后重发一次，重发不再刷新（防循环），对齐 chatAttachments 范式
+function sendUpload(
+  file: File,
+  clientRequestId: string,
+  onProgress: ((p: FileUploadProgress) => void) | undefined,
+  allowRefresh: boolean,
+  registerXhr: (xhr: XMLHttpRequest) => void,
+): Promise<FileProcessingJob> {
   const xhr = new XMLHttpRequest();
+  registerXhr(xhr);
   const formData = new FormData();
   formData.append("file", file);
 
-  const promise = new Promise<FileProcessingJob>((resolve, reject) => {
+  return new Promise<FileProcessingJob>((resolve, reject) => {
     xhr.open("POST", `${API_BASE}/files/documents`);
     xhr.withCredentials = true;
     const token = getAccessToken();
@@ -120,12 +137,21 @@ export function uploadToFileLibrary(
     xhr.upload.onload = () => onProgress?.({ percent: 25, stage: "文件已发送，等待服务器确认" });
     xhr.onerror = () => reject(new FileUploadNetworkError("文件上传网络连接中断"));
     xhr.onabort = () => reject(new DOMException("文件上传已取消", "AbortError"));
-    xhr.onload = () => {
-      if (xhr.status === 401) handleUnauthorized();
+    xhr.onload = async () => {
+      if (xhr.status === 401 && allowRefresh) {
+        const fresh = await refreshOnce();
+        if (fresh) {
+          setAccessToken(fresh);
+          sendUpload(file, clientRequestId, onProgress, false, registerXhr).then(resolve, reject);
+          return;
+        }
+        handleUnauthorized();
+      }
       if (xhr.status < 200 || xhr.status >= 300) {
         let detail = xhr.responseText || "文件库上传失败";
         try {
-          detail = JSON.parse(xhr.responseText)?.detail || detail;
+          const parsed = JSON.parse(xhr.responseText) as { detail?: unknown };
+          if (typeof parsed.detail === "string") detail = parsed.detail;
         } catch {
           // 保留原始响应文本
         }
@@ -140,8 +166,6 @@ export function uploadToFileLibrary(
     };
     xhr.send(formData);
   });
-
-  return { promise, cancel: () => xhr.abort() };
 }
 
 export async function getFileProcessingJob(id: string): Promise<FileProcessingJob> {
