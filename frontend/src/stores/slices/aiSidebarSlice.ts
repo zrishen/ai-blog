@@ -4,7 +4,7 @@ import { applyStreamEvent } from "./streamEvent";
 
 import type { ChatState, ChatAction } from "../chatStore";
 import type { ChatAttachment, Message, ToolEvent } from "@/types/chat";
-import type { ThinkingMode } from "../../api/chat";
+import type { ThinkingMode } from "@/types/chat";
 
 
 function updateMessageWithPayload(

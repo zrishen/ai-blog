@@ -40,6 +40,18 @@ export interface ChatAttachment {
   preview_url?: string;
 }
 
+export function isChatAttachment(value: unknown): value is ChatAttachment {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.id === "string"
+    && (item.kind === "image" || item.kind === "file")
+    && typeof item.original_name === "string"
+    && typeof item.mime_type === "string"
+    && typeof item.size_bytes === "number"
+    && (item.status === "pending" || item.status === "claimed" || item.status === "attached")
+    && typeof item.download_url === "string";
+}
+
 export type DraftAttachmentStatus = "queued" | "uploading" | "uploaded" | "sending" | "failed";
 
 export interface DraftAttachment {
@@ -96,8 +108,12 @@ export type MessageUpdatePatch = Partial<
 
 export function isDisplayableMessage(message: unknown): message is Message {
   if (!message || typeof message !== "object") return false;
-  const role = (message as { role?: unknown }).role;
-  return role === "user" || role === "assistant";
+  const value = message as Record<string, unknown>;
+  return (value.role === "user" || value.role === "assistant")
+    && typeof value.id === "number"
+    && typeof value.content === "string"
+    && typeof value.conversation_id === "number"
+    && typeof value.created_at === "string";
 }
 
 export interface Conversation {

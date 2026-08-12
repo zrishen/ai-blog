@@ -189,15 +189,6 @@ export async function deleteBlogRevision(postId: number, revisionId: number): Pr
   await assertOk(res, "Failed to delete blog revision");
 }
 
-export async function updateSidebarSettings(showTags: boolean): Promise<void> {
-  const res = await apiFetch(`${API_BASE}/settings/sidebar`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ show_tags: showTags }),
-  });
-  await assertOk(res, "Failed to update sidebar settings");
-}
-
 export async function generateBlogCover(id: number): Promise<BlogPostData> {
   const res = await apiFetch(`${API_BASE}/blog/posts/${id}/generate-cover`, {
     method: "POST",

@@ -1,4 +1,4 @@
-import type { ThinkingMode } from "../../../api/chat";
+import type { ThinkingMode } from "@/types/chat";
 
 export type AISidebarMode = "pending" | "shared" | "private";
 

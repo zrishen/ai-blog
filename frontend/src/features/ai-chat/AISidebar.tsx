@@ -57,6 +57,19 @@ export function AISidebar({ mode, contextText = "", siteUsername, postSlug, page
   const currentScope = mode === "pending" ? "pending" : isPrivate && userId ? `private:${userId}` : mode;
   const selectedKey = mode === "shared" ? SHARED_CONVERSATION_KEY : isPrivate ? state.aiSidebarSelectedKey : null;
 
+  // 登出/切共享/卸载时中止所有在途私有流，防旧用户消息写回 LOGOUT 后的 store
+  useEffect(() => {
+    if (isPrivate) return;
+    for (const controller of abortControllersRef.current.values()) controller.abort();
+    abortControllersRef.current.clear();
+    runRefs.current.clear();
+  }, [isPrivate]);
+  useEffect(() => () => {
+    for (const controller of abortControllersRef.current.values()) controller.abort();
+    abortControllersRef.current.clear();
+    runRefs.current.clear();
+  }, []);
+
   const handleThinkingModeChange = useAISidebarThinkingMode(userId);
 
   useEffect(() => {

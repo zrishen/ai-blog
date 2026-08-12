@@ -7,7 +7,7 @@ import { generateExcerpt } from "../utils/blogExcerpt";
 import type { ChangeEvent } from "react";
 import type { BlogPost } from "@/types/blog";
 
-import { uploadFile } from "@/api/chat";
+import { uploadFile } from "@/api/files";
 import { createBlogPost, generateBlogCover, suggestBlogTags } from "@/api/blog";
 import { errorMessage } from "@/lib/errors";
 

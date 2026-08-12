@@ -7,7 +7,7 @@ import {
   setAccessToken,
 } from "./client";
 
-import type { ChatAttachment } from "@/types/chat";
+import { isChatAttachment, type ChatAttachment } from "@/types/chat";
 
 export interface ChatAttachmentUploadRequest {
   promise: Promise<ChatAttachment>;
@@ -90,7 +90,12 @@ function sendAttachmentUpload(
       }
       try {
         onProgress?.(100);
-        resolve(JSON.parse(xhr.responseText) as ChatAttachment);
+        const parsed: unknown = JSON.parse(xhr.responseText);
+        if (!isChatAttachment(parsed)) {
+          reject(new Error("附件已上传，但服务器响应无法解析"));
+          return;
+        }
+        resolve(parsed);
       } catch (error) {
         reject(new Error("附件已上传，但服务器响应无法解析", { cause: error }));
       }

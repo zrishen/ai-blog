@@ -32,3 +32,12 @@ export async function updateLLMSettings(data: LLMSettingsUpdate): Promise<LLMSet
   await assertOk(res, "Failed to update LLM settings");
   return parseJson<LLMSettings>(res);
 }
+
+export async function updateSidebarSettings(showTags: boolean): Promise<void> {
+  const res = await apiFetch(`${API_BASE}/settings/sidebar`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ show_tags: showTags }),
+  });
+  await assertOk(res, "Failed to update sidebar settings");
+}

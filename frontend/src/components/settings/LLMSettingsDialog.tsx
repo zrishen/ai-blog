@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 import { useChat } from "@/stores/chatStore";
-import { getLLMSettings, updateLLMSettings, type LLMProtocol, type LLMSettingsUpdate } from "@/api/auth";
-import { updateSidebarSettings } from "@/api/blog";
+import { getLLMSettings, updateLLMSettings, updateSidebarSettings, type LLMProtocol, type LLMSettingsUpdate } from "@/api/auth";
 import { errorMessage } from "@/lib/errors";
 
 import { Alert } from "@/components/ui/alert";

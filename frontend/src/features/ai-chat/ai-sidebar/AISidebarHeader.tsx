@@ -11,7 +11,7 @@ import { useChat } from "../../../stores/chatStore";
 
 import { thinkingModeLabels } from "./constants";
 
-import type { ThinkingMode } from "../../../api/chat";
+import type { ThinkingMode } from "@/types/chat";
 
 import { Button } from "@/components/ui/button";
 import {

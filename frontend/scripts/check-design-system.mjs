@@ -47,7 +47,6 @@ const rawNativeControlAllowlist = new Set([
   // 文件选择器没有可见视觉表面，保留原生隐藏 input。
   "src/features/ai-chat/ai-sidebar/ChatInputBar.tsx",
   "src/features/blog/components/BlogEditor.tsx",
-  "src/features/blog/components/BlogToolbar.tsx",
   "src/features/workspace/WorkspaceNav.tsx",
 ]);
 

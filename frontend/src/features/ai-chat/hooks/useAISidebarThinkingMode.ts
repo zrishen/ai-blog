@@ -7,7 +7,7 @@ import {
   saveAISidebarThinkingMode,
 } from "../ai-sidebar/constants";
 
-import type { ThinkingMode } from "../../../api/chat";
+import type { ThinkingMode } from "@/types/chat";
 
 // thinking mode 子领域：挂载时按用户恢复持久化值，切换时落盘 + 同步 store。
 // 从 AISidebar 抽出，行为不变。

@@ -153,6 +153,8 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   const pollingRef = useRef(new Set<string>());
   const completedRef = useRef(new Set<string>());
   const failureRef = useRef(new Map<string, number>());
+  // 镜像 isAuthenticated：登出/卸载后在途 tick 恢复时据此停排，防无限轮询与跨用户残留
+  const pollingEnabledRef = useRef(true);
 
   const clearPoll = useCallback((key: string) => {
     const timer = timersRef.current.get(key);
@@ -200,6 +202,10 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
       const tick = async () => {
         try {
           const latest = await getFileProcessingJob(jobId);
+          if (!pollingEnabledRef.current) {
+            clearPoll(key);
+            return;
+          }
           failureRef.current.delete(key);
           if (kind === "upload") {
             setUploadTask((current) => {
@@ -271,6 +277,10 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
           }
           timersRef.current.set(key, window.setTimeout(tick, POLL_MS));
         } catch {
+          if (!pollingEnabledRef.current) {
+            clearPoll(key);
+            return;
+          }
           const failures = (failureRef.current.get(key) ?? 0) + 1;
           if (failures > MAX_FAILURE_ATTEMPTS) {
             clearPoll(key);
@@ -396,6 +406,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
   }, [attachUploadJob, isAuthenticated, pollJob, reconnectRequest]);
 
   useEffect(() => {
+    pollingEnabledRef.current = isAuthenticated;
     if (isAuthenticated) return;
     queueRef.current = [];
     activeRef.current = null;
@@ -424,6 +435,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     timersRef.current.clear();
     pollingRef.current.clear();
     failureRef.current.clear();
+    pollingEnabledRef.current = false;
   }, []);
 
   const startUpload = useCallback((file: File, categoryId?: number) => new Promise<FileProcessingJob | null>((resolve) => {

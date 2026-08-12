@@ -18,7 +18,7 @@ import {
   _TOOL_MARKER,
   _TOOLPREP_MARKER,
 } from "./chatProtocol";
-import { API_BASE, apiFetch, assertOk, parseJson } from "./client";
+import { API_BASE, apiFetch, assertOk } from "./client";
 
 import type { ChatAttachment, ThinkingMode } from "@/types/chat";
 
@@ -30,9 +30,6 @@ export interface BlogToolMeta {
   [key: string]: unknown;
 }
 
-
-// ThinkingMode 真源在 @/types/chat，此处 re-export 保留历史调用方
-export type { ThinkingMode } from "@/types/chat";
 
 export interface StreamReference {
   type: "rag" | "memory" | "mcp";
@@ -630,15 +627,4 @@ export async function sendSharedUserChat(
     signal,
   });
   await readPlainStream(res, onChunk);
-}
-
-export async function uploadFile(file: File): Promise<{ stored_name: string; original_name: string; download_url: string }> {
-  const formData = new FormData();
-  formData.append("file", file);
-  const res = await apiFetch(`${API_BASE}/upload`, {
-    method: "POST",
-    body: formData,
-  });
-  await assertOk(res, "Upload failed");
-  return parseJson<{ stored_name: string; original_name: string; download_url: string }>(res);
 }

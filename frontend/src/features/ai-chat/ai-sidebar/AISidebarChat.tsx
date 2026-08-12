@@ -612,7 +612,7 @@ export function AISidebarChat({
   }, [handleSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void handleSend();
     }

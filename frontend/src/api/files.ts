@@ -1,5 +1,17 @@
 import { API_BASE, apiFetch, assertOk, parseJson, getAccessToken, setAccessToken, refreshOnce } from "./client";
 
+// 通用文件上传（博客封面等用）；返回服务端存储名与访问 URL。
+export async function uploadFile(file: File): Promise<{ stored_name: string; original_name: string; download_url: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await apiFetch(`${API_BASE}/upload`, {
+    method: "POST",
+    body: formData,
+  });
+  await assertOk(res, "Upload failed");
+  return parseJson<{ stored_name: string; original_name: string; download_url: string }>(res);
+}
+
 // 预览 base URL（不带凭证）。docx/xlsx 经 apiFetch 自动携带 Authorization header，凭证不入 URL。
 export function getPreviewBaseUrl(filename: string): string {
   return `${API_BASE}/preview/${encodeURIComponent(filename)}`;
@@ -77,6 +89,17 @@ export interface FileUploadProgress {
 export interface FileUploadRequest {
   promise: Promise<FileProcessingJob>;
   cancel: () => void;
+}
+
+function isFileProcessingJob(value: unknown): value is FileProcessingJob {
+  if (!value || typeof value !== "object") return false;
+  const job = value as Record<string, unknown>;
+  return typeof job.id === "string"
+    && (job.job_type === "upload" || job.job_type === "restore" || job.job_type === "index")
+    && (job.status === "staging" || job.status === "queued" || job.status === "running"
+      || job.status === "succeeded" || job.status === "failed" || job.status === "cancelled")
+    && typeof job.progress_percent === "number"
+    && typeof job.original_name === "string";
 }
 
 export class FileUploadNetworkError extends Error {
@@ -159,7 +182,12 @@ function sendUpload(
         return;
       }
       try {
-        resolve(JSON.parse(xhr.responseText) as FileProcessingJob);
+        const parsed: unknown = JSON.parse(xhr.responseText);
+        if (!isFileProcessingJob(parsed)) {
+          reject(new FileUploadNetworkError("文件已发送，但服务器响应无法解析"));
+          return;
+        }
+        resolve(parsed);
       } catch (error) {
         reject(new FileUploadNetworkError("文件已发送，但服务器响应丢失", { cause: error }));
       }
