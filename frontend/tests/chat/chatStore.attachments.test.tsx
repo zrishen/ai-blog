@@ -1,6 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
+
 import type { DraftAttachment } from "../../src/features/ai-chat/types";
 
 const TEMP_KEY = "temp:attachments" as const;

@@ -1,5 +1,6 @@
 import { fireEvent, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import "@testing-library/jest-dom/vitest";
 import { MobileDrawer } from "../../src/components/MobileDrawer";
 

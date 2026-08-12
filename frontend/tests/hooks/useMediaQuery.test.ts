@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
+
 import { useMediaQuery } from "../../src/hooks/useMediaQuery";
 
 type MediaListener = (event: MediaQueryListEvent) => void;

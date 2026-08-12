@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableRow } from "@/components/ui/table";
 import { AdminPage, AdminPageHeader } from "@/features/admin/components/AdminPage";

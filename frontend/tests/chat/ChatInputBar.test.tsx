@@ -1,7 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+
 import { ChatInputBar } from "../../src/features/ai-chat/ai-sidebar/ChatInputBar";
+
 import type { DraftAttachment } from "../../src/features/ai-chat/types";
 
 function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInputBar>> = {}) {

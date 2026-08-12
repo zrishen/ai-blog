@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { getBlogTagStyle, splitBlogTags } from "../../src/features/blog/utils/blogTags";
 
 describe("splitBlogTags", () => {

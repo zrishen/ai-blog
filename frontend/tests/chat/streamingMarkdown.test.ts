@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { maskStreamingMarkdown } from "../../src/features/ai-chat/ai-sidebar/streamingMarkdown";
 
 describe("maskStreamingMarkdown", () => {

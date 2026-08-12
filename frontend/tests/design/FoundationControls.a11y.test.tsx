@@ -1,6 +1,7 @@
 import { render } from "@testing-library/react";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
+
 import { Alert, AlertDescription, AlertTitle } from "../../src/components/ui/alert";
 import { Button } from "../../src/components/ui/button";
 import { Input } from "../../src/components/ui/input";

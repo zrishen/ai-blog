@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { waitFor } from "@testing-library/react";
-import type Vditor from "vditor";
+
 import { installCodeLanguageMenu } from "../../src/features/blog/utils/vditorMenus";
+
+import type Vditor from "vditor";
 
 // jsdom 下 getBoundingClientRect 默认全 0,且 vitest 关闭了 CSS(css:false),
 // 这里用一个统一 mock 模拟「滚动位置」:代码块顶部随 scrollY 上移,trigger/menu 这类

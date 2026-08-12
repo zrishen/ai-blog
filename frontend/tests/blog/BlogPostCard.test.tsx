@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { act, render, screen } from "@testing-library/react";
+
 import { BlogPostCard } from "../../src/features/blog/components/BlogPostCard";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
+
 import type { BlogPost } from "../../src/stores/chatStore";
 
 const basePost: BlogPost = {

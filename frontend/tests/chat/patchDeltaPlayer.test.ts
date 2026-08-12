@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+
 import { createPatchDeltaPlayer } from "../../src/features/ai-chat/ai-sidebar/patchDeltaPlayer";
 
 function createFrameHarness() {

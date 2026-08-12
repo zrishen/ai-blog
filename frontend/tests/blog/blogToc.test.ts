@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import { extractHeadings } from "../../src/features/blog/utils/blogToc";
 
 describe("extractHeadings", () => {

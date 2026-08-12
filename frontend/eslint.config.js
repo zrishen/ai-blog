@@ -24,16 +24,6 @@ const importOrder = [
   },
 ]
 
-const noRestrictedPaths = [
-  'error',
-  {
-    basePath: import.meta.dirname,
-    zones: [
-      // stores/api 不得反向依赖 features（store→feature 是反向耦合）
-      { target: 'src/features', from: ['src/stores', 'src/api'] },
-    ],
-  },
-]
 
 export default defineConfig([
   globalIgnores(['dist']),

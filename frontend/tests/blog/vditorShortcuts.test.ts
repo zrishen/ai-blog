@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+
 import { applyBackspaceShortcut, applyEnterShortcuts, applyUnorderedListShortcut } from "../../src/features/blog/utils/vditorShortcuts";
 
 const ZWSP = "​";

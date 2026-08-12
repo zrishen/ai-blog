@@ -2,7 +2,7 @@ import { useState } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FileProcessingJob } from "../../src/api/files";
+
 
 const mocks = vi.hoisted(() => ({
   getJob: vi.fn(),
@@ -40,6 +40,8 @@ vi.mock("../../src/stores/chatStore", () => ({
 
 import { FileUploadNetworkError } from "../../src/api/files";
 import { FileProcessingProvider, useFileProcessing } from "../../src/lib/providers/FileProcessingProvider";
+
+import type { FileProcessingJob } from "../../src/api/files";
 
 function makeJob(overrides: Partial<FileProcessingJob> = {}): FileProcessingJob {
   return {

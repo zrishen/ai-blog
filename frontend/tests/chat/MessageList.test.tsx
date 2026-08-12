@@ -1,7 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+
 import { MessageList } from "../../src/features/ai-chat/ai-sidebar/MessageList";
+
 import type { Message } from "../../src/stores/chatStore";
 
 class ResizeObserverMock {

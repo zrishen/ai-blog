@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+
 import { AuthProvider, useAuth } from "../../src/stores/authStore";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 import { AISidebar } from "../../src/features/ai-chat/AISidebar";

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+
 import { applyBackspaceShortcut } from "../../src/features/blog/utils/vditorShortcuts";
 
 function setupEditor(innerHTML: string): HTMLDivElement {

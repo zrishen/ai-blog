@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+
 import { AuthProvider, useAuth } from "../../src/stores/authStore";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 import { AISidebar } from "../../src/features/ai-chat/AISidebar";

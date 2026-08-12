@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+
 import { AuthProvider } from "../../src/stores/authStore";
 import { LoginDialog } from "../../src/features/auth/LoginDialog";
 
