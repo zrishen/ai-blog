@@ -13,7 +13,7 @@ import { useChat } from "../../../stores/chatStore";
 import { LoadingState, SectionCard, WorkspaceView } from "./shared";
 import { formatDate } from "./utils";
 
-import { logError } from "@/lib/logger";
+import { logError } from "@/api/logger";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
 import { useFileProcessing } from "../providers/FileProcessingProvider";

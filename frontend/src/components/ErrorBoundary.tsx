@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import * as Sentry from "@sentry/react";
 
-import { logError } from "../lib/logger";
+import { logError } from "../api/logger";
 
 interface Props {
   children: ReactNode;

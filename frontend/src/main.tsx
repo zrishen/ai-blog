@@ -26,7 +26,7 @@ window.addEventListener("unhandledrejection", (e) => {
 });
 
 // Sentry：DSN 未配置（VITE_SENTRY_DSN 为空）则跳过，本地开发零影响。
-const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
+const sentryDsn: string | undefined = import.meta.env.VITE_SENTRY_DSN as string | undefined;
 if (sentryDsn) {
   Sentry.init({ dsn: sentryDsn });
 }

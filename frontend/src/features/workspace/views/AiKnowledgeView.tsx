@@ -10,7 +10,7 @@ import type { RagSource } from "@/api/workspace";
 import type { BlogPostData } from "@/api/blog";
 import type { FileDocument } from "@/api/files";
 
-import { logError } from "@/lib/logger";
+import { logError } from "@/api/logger";
 import { BlogIcon } from "@/components/icons";
 import { getFileIcon } from "@/components/fileIcons";
 
