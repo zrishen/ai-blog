@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { useChat } from "../../../stores/chatStore";
-import { extractHeadings, type TocItem } from "../utils/blogToc";
+import { extractHeadings, slugify, type TocItem } from "../utils/blogToc";
 
 import { WorkspacePanel } from "@/components/ui/workspace-panel";
 
@@ -124,7 +124,7 @@ function BlogTocEdit({ title }: { title?: string }) {
       el.querySelectorAll("h2, h3, h4").forEach((node) => {
         const level = parseInt(node.tagName[1]);
         const text = node.textContent || "";
-        const slug = text.toLowerCase().replace(/[^\w一-鿿]+/g, "-").replace(/^-|-$/g, "");
+        const slug = slugify(text);
         hs.push({ level, text, slug });
       });
       if (!cancelled) {

@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionTitle } from "@/components/ui/section-title";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatMonthDayTime } from "@/lib/datetime";
 import { useAuth } from "@/stores/authStore";
 import { useChat } from "@/stores/chatStore";
 import { LoginDialog } from "@/features/auth";
@@ -365,7 +366,7 @@ function EpisodesTimeline({
               <Badge variant="default" className="rounded-full text-caption">{kindLabel(ep.kind)}</Badge>
               {ep.occurred_at && (
                 <span className="text-caption text-muted-foreground">
-                  {ep.occurred_at.slice(0, 16).replace("T", " ")}
+                  {formatMonthDayTime(ep.occurred_at)}
                 </span>
               )}
             </div>

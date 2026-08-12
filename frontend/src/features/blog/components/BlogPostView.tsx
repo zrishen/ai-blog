@@ -10,6 +10,7 @@ import { ArrowLeft, Pencil, Trash2, Globe, EyeOff, Calendar, Eye, Tags, AlertCir
 import { useChat } from "../../../stores/chatStore";
 import { cn } from "../../../lib/utils";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
+import { slugify } from "../utils/blogToc";
 import { getSectionIndexFromSelection } from "../utils/getSectionIndexFromSelection";
 import { expandBlankLines } from "../utils/markdownBlankLines";
 
@@ -169,17 +170,17 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
     },
     h2: ({ children, ...props }: { children?: React.ReactNode }) => {
       const text = typeof children === "string" ? children : "";
-      const slug = text.toLowerCase().replace(/[^\w一-鿿]+/g, "-").replace(/^-|-$/g, "");
+      const slug = slugify(text);
       return <h2 id={slug} {...props}>{children}</h2>;
     },
     h3: ({ children, ...props }: { children?: React.ReactNode }) => {
       const text = typeof children === "string" ? children : "";
-      const slug = text.toLowerCase().replace(/[^\w一-鿿]+/g, "-").replace(/^-|-$/g, "");
+      const slug = slugify(text);
       return <h3 id={slug} {...props}>{children}</h3>;
     },
     h4: ({ children, ...props }: { children?: React.ReactNode }) => {
       const text = typeof children === "string" ? children : "";
-      const slug = text.toLowerCase().replace(/[^\w一-鿿]+/g, "-").replace(/^-|-$/g, "");
+      const slug = slugify(text);
       return <h4 id={slug} {...props}>{children}</h4>;
     },
   }), []);
@@ -284,8 +285,8 @@ export function BlogPostView({ username, isOwner = true, previewPost, onBack }: 
   useEffect(() => {
     if (!contextMenu) return;
     const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (target.closest(".fixed.z-50")) return;
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      if (target?.closest(".fixed.z-50")) return;
       closeContextMenu();
     };
     window.addEventListener("mousedown", handler, true);
