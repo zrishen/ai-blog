@@ -62,7 +62,7 @@ def _clean_tag(raw: str) -> str | None:
     # 去除前缀编号: "1." "1、" "1）" "(1)" "- "
     tag = re.sub(r"^[\d\.\、\)\-\*\#]+\s*", "", tag)
     # 去除引号
-    tag = tag.strip("\"'""「」『』【】《》")
+    tag = tag.strip("\"'「」『』【】《》")
     # 去除常见无意义后缀
     tag = re.sub(r"[;；:：]+$", "", tag)
     tag = tag.strip()
@@ -90,9 +90,11 @@ async def suggest_tags(post: BlogPost) -> list[str]:
             if tags:
                 return tags
             if attempt < TAG_SUGGEST_RETRIES - 1:
-                logger.warning("suggest_tags empty response, retrying (attempt %d/%d)", attempt + 1, TAG_SUGGEST_RETRIES)
+                logger.warning(
+                    "suggest_tags empty response, retrying (attempt %d/%d)", attempt + 1, TAG_SUGGEST_RETRIES
+                )
         return []
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("suggest_tags timeout for post_id=%s", post.id)
         raise
     except Exception:

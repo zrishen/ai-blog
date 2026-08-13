@@ -7,6 +7,7 @@ from src.services.workspace.blog.blog_document_backfill_service import (
     backfill_blog_post_document,
 )
 
+
 def invalidate_verified_document(post: BlogPost) -> None:
     """Clear the derived document marker before the next canonical write."""
 

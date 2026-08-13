@@ -1,8 +1,7 @@
 """博客文章与分类路由。"""
 
-import asyncio
+import contextlib
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -10,19 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.workspace_lock import workspace_lock
 from src.database.engine import get_db
-from src.utils.auth import get_current_user, get_optional_user
 from src.database.models import User
 from src.schemas.blog import (
     BlogPostCreate,
     BlogPostListItem,
     BlogPostListResponse,
     BlogPostResponse,
-    BlogPostUpdate,
-    BlogPublishRequest,
     BlogPostRevisionListResponse,
     BlogPostRevisionResponse,
     BlogPostRevisionSummary,
+    BlogPostUpdate,
+    BlogPublishRequest,
 )
+from src.utils.auth import get_current_user, get_optional_user
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ def _revision_response(revision, *, published_revision_id: int | None) -> BlogPo
 async def get_public_user(
     username: str,
     db: AsyncSession = Depends(get_db),
-    viewer: Optional[User] = Depends(get_optional_user),
+    viewer: User | None = Depends(get_optional_user),
 ):
     from src.database.models import BlogSidebarSettings
     from src.services.workspace.blog.blog_service import get_user_by_username
@@ -69,9 +68,7 @@ async def get_public_user(
     if not owner:
         raise HTTPException(status_code=404, detail="User not found")
     sidebar = (
-        await db.execute(
-            select(BlogSidebarSettings).where(BlogSidebarSettings.user_id == owner.id)
-        )
+        await db.execute(select(BlogSidebarSettings).where(BlogSidebarSettings.user_id == owner.id))
     ).scalar_one_or_none()
     return {
         "id": owner.id,
@@ -87,12 +84,12 @@ async def get_public_user(
 async def list_public_user_posts(
     username: str,
     include_drafts: bool = False,
-    status: str = None,
-    search: str = None,
+    status: str | None = None,
+    search: str | None = None,
     page: int = 1,
-    per_page: Optional[int] = None,
+    per_page: int | None = None,
     db: AsyncSession = Depends(get_db),
-    viewer: Optional[User] = Depends(get_optional_user),
+    viewer: User | None = Depends(get_optional_user),
 ):
     from src.services.workspace.blog.blog_service import get_user_by_username, list_posts
 
@@ -123,7 +120,7 @@ async def get_public_user_post(
     username: str,
     slug: str,
     db: AsyncSession = Depends(get_db),
-    viewer: Optional[User] = Depends(get_optional_user),
+    viewer: User | None = Depends(get_optional_user),
 ):
     from src.services.workspace.blog.blog_service import get_post_for_site_viewer, increment_view_count
 
@@ -143,12 +140,12 @@ async def get_public_user_post(
 
 @router.get("/blog/posts", response_model=BlogPostListResponse)
 async def list_blog_posts(
-    status: str = None,
-    search: str = None,
+    status: str | None = None,
+    search: str | None = None,
     page: int = 1,
-    per_page: Optional[int] = None,
+    per_page: int | None = None,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User | None = Depends(get_optional_user),
 ):
     from src.services.workspace.blog.blog_service import list_posts
 
@@ -173,7 +170,7 @@ async def list_blog_posts(
 async def get_blog_post(
     post_id: int,
     db: AsyncSession = Depends(get_db),
-    user: Optional[User] = Depends(get_optional_user),
+    user: User | None = Depends(get_optional_user),
 ):
     from src.core.exceptions import NotFoundError, ValidationFailedError
     from src.services.workspace.blog.blog_body_service import get_post_body
@@ -194,27 +191,29 @@ async def get_blog_post(
         post.view_count += 1
     resp = BlogPostResponse.model_validate(post)
     if is_owner:
-        try:
+        with contextlib.suppress(NotFoundError, ValidationFailedError, OSError):
             resp.content = await get_post_body(post)
-        except (NotFoundError, ValidationFailedError, OSError):
-            pass
     return resp
 
 
 @router.post("/blog/posts", response_model=BlogPostResponse, status_code=201)
-async def create_blog_post(data: BlogPostCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def create_blog_post(
+    data: BlogPostCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
     from src.services.workspace.blog.blog_service import create_post
 
     async with workspace_lock(user.id):
         try:
             post = await create_post(db, data.model_dump(), user.id)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
         return BlogPostResponse.model_validate(post)
 
 
 @router.put("/blog/posts/{post_id}", response_model=BlogPostResponse)
-async def update_blog_post(post_id: int, data: BlogPostUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def update_blog_post(
+    post_id: int, data: BlogPostUpdate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
     from src.services.workspace.blog.blog_service import update_post
 
     async with workspace_lock(user.id):
@@ -223,8 +222,8 @@ async def update_blog_post(post_id: int, data: BlogPostUpdate, db: AsyncSession 
         except ValueError as e:
             msg = str(e)
             if msg == "Post not found":
-                raise HTTPException(status_code=404, detail="Post not found")
-            raise HTTPException(status_code=400, detail=msg)
+                raise HTTPException(status_code=404, detail="Post not found") from e
+            raise HTTPException(status_code=400, detail=msg) from e
         if not post:
             raise HTTPException(status_code=404, detail="Post not found")
         return BlogPostResponse.model_validate(post)
@@ -237,22 +236,24 @@ async def delete_blog_post(post_id: int, db: AsyncSession = Depends(get_db), use
     async with workspace_lock(user.id):
         try:
             deleted = await delete_post(db, post_id, user.id)
-        except ValueError:
-            raise HTTPException(status_code=404, detail="Post not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Post not found") from exc
         if not deleted:
             raise HTTPException(status_code=404, detail="Post not found")
         return {"status": "ok"}
 
 
 @router.put("/blog/posts/{post_id}/publish", response_model=BlogPostResponse)
-async def publish_blog_post(post_id: int, data: BlogPublishRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def publish_blog_post(
+    post_id: int, data: BlogPublishRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
+):
     from src.services.workspace.blog.blog_service import publish_post
 
     async with workspace_lock(user.id):
         try:
             post = await publish_post(db, post_id, data.publish, user.id)
-        except ValueError:
-            raise HTTPException(status_code=404, detail="Post not found")
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Post not found") from exc
         if not post:
             raise HTTPException(status_code=404, detail="Post not found")
         return BlogPostResponse.model_validate(post)
@@ -271,7 +272,9 @@ async def list_blog_post_revisions(
         raise HTTPException(status_code=404, detail="Post not found")
     revisions = await list_revisions(db, post_id, user.id)
     return BlogPostRevisionListResponse(
-        revisions=[_revision_summary(revision, published_revision_id=post.published_revision_id) for revision in revisions]
+        revisions=[
+            _revision_summary(revision, published_revision_id=post.published_revision_id) for revision in revisions
+        ]
     )
 
 
@@ -289,8 +292,8 @@ async def get_blog_post_revision(
         raise HTTPException(status_code=404, detail="Post not found")
     try:
         revision = await get_revision(db, post_id, revision_id, user.id)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Revision not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Revision not found") from exc
     return _revision_response(revision, published_revision_id=post.published_revision_id)
 
 
@@ -323,7 +326,7 @@ async def restore_blog_post_revision(
             post = await restore_revision(db, post_id, revision_id, user.id)
         except ValueError as exc:
             detail = str(exc)
-            raise HTTPException(status_code=404, detail=detail)
+            raise HTTPException(status_code=404, detail=detail) from exc
         return BlogPostResponse.model_validate(post)
 
 
@@ -341,7 +344,7 @@ async def delete_blog_post_revision(
     except ValueError as exc:
         detail = str(exc)
         status_code = 409 if detail == "Published revision cannot be deleted" else 404
-        raise HTTPException(status_code=status_code, detail=detail)
+        raise HTTPException(status_code=status_code, detail=detail) from exc
     return {"status": "ok"}
 
 
@@ -360,8 +363,8 @@ async def generate_blog_cover(post_id: int, db: AsyncSession = Depends(get_db), 
         except ValueError as e:
             msg = str(e)
             if msg == "Post not found":
-                raise HTTPException(status_code=404, detail="Post not found")
-            raise HTTPException(status_code=400, detail=msg)
+                raise HTTPException(status_code=404, detail="Post not found") from e
+            raise HTTPException(status_code=400, detail=msg) from e
         if not updated:
             raise HTTPException(status_code=404, detail="Post not found")
         return BlogPostResponse.model_validate(updated)
@@ -377,9 +380,9 @@ async def suggest_blog_tags(post_id: int, db: AsyncSession = Depends(get_db), us
         raise HTTPException(status_code=404, detail="Post not found")
     try:
         tags = await suggest_tags(post)
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="标签生成超时，请稍后重试")
-    except Exception:
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="标签生成超时，请稍后重试") from exc
+    except Exception as exc:
         logger.exception("suggest_blog_tags failed for post_id=%s", post_id)
-        raise HTTPException(status_code=502, detail="标签生成服务暂不可用，请稍后重试")
+        raise HTTPException(status_code=502, detail="标签生成服务暂不可用，请稍后重试") from exc
     return {"tags": tags}

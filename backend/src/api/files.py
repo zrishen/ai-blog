@@ -1,14 +1,13 @@
 """文件上传 + 文件库路由（文档/分类管理）。"""
 
 import asyncio
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Optional
 import logging
 import os
 import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, Cookie, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,8 +22,9 @@ from src.schemas.file_base import (
     FileDocumentResponse,
     FileDocumentUpdate,
 )
-from src.schemas.files import FileUploadResponse
 from src.schemas.file_processing import FileProcessingJobResponse
+from src.schemas.files import FileUploadResponse
+from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 from src.services.workspace.file.file_processing_service import (
     FileProcessingActiveError,
     cancel_jobs_for_resource,
@@ -45,9 +45,7 @@ from src.services.workspace.file.file_service import (
     matches_magic,
     save_file,
 )
-from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
 from src.utils.auth import decode_access_token, get_current_user, verify_refresh_token
-
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +71,7 @@ async def upload_file(file: UploadFile = File(...), user: User = Depends(get_cur
     try:
         stored_name, original_name = await save_file(file, user_id=user.id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return FileUploadResponse(
         stored_name=stored_name,
         original_name=original_name,
@@ -92,9 +90,7 @@ async def _find_published_post_referencing_image(
     公开图片只在"已被已发布文章引用"时才可访问，避免草稿/未关联/已删文章图片泄露。
     filename 是 stored_name（uuid.ext，全局唯一），用 contains 子串匹配即可。
     """
-    stmt = select(BlogPost).join(
-        BlogPostRevision, BlogPost.published_revision_id == BlogPostRevision.id
-    )
+    stmt = select(BlogPost).join(BlogPostRevision, BlogPost.published_revision_id == BlogPostRevision.id)
     if username is not None:
         stmt = stmt.join(User, User.id == BlogPost.user_id).where(User.username == username)
     stmt = stmt.where(
@@ -108,21 +104,23 @@ async def _find_published_post_referencing_image(
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
-async def _find_owner_post_referencing_image(
-    db: AsyncSession, filename: str, user_id: int
-) -> BlogPost | None:
+async def _find_owner_post_referencing_image(db: AsyncSession, filename: str, user_id: int) -> BlogPost | None:
     """该用户任意未删除文章（工作副本 content/cover_image 含 filename）。
 
     用于作者本人查看：草稿图片只在工作副本，发布后的编辑视图也在工作副本。
     """
-    stmt = select(BlogPost).where(
-        BlogPost.user_id == user_id,
-        BlogPost.deleted_at.is_(None),
-        or_(
-            BlogPost.content.contains(filename),
-            BlogPost.cover_image.contains(filename),
-        ),
-    ).limit(1)
+    stmt = (
+        select(BlogPost)
+        .where(
+            BlogPost.user_id == user_id,
+            BlogPost.deleted_at.is_(None),
+            or_(
+                BlogPost.content.contains(filename),
+                BlogPost.cover_image.contains(filename),
+            ),
+        )
+        .limit(1)
+    )
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
@@ -170,8 +168,8 @@ async def get_public_uploaded_image(
 
     try:
         file_path = get_uploaded_file_path(owner_id, filename)
-    except (OwnershipError, ValueError):
-        raise HTTPException(status_code=403, detail="Access denied")
+    except (OwnershipError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="Access denied") from exc
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(
@@ -200,8 +198,8 @@ async def get_blog_cover(
 
     try:
         file_path = get_uploaded_file_path(post.user_id, filename)
-    except (OwnershipError, ValueError):
-        raise HTTPException(status_code=403, detail="Access denied")
+    except (OwnershipError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="Access denied") from exc
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Cover image not found")
     return FileResponse(
@@ -228,8 +226,8 @@ async def get_uploaded_file(filename: str, user: User = Depends(get_current_user
 
     try:
         file_path = get_uploaded_file_path(user.id, filename)
-    except (OwnershipError, ValueError):
-        raise HTTPException(status_code=403, detail="Access denied")
+    except (OwnershipError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="Access denied") from exc
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(
@@ -262,7 +260,7 @@ def _is_user_collection(name: str, user_id: int) -> bool:
 )
 async def upload_to_file_library(
     file: UploadFile = File(...),
-    auto_index: Optional[bool] = Form(None),
+    auto_index: bool | None = Form(None),
     x_file_request_id: str = Header(..., alias="X-File-Request-Id"),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -407,10 +405,14 @@ async def list_file_documents(
     user: User = Depends(get_current_user),
 ):
     """List all file library documents."""
-    stmt = select(FileDocument).where(
-        FileDocument.user_id == str(user.id),
-        FileDocument.deleted_at.is_(None),
-    ).order_by(FileDocument.created_at.desc())
+    stmt = (
+        select(FileDocument)
+        .where(
+            FileDocument.user_id == str(user.id),
+            FileDocument.deleted_at.is_(None),
+        )
+        .order_by(FileDocument.created_at.desc())
+    )
     result = await db.execute(stmt)
     docs = result.scalars().all()
 
@@ -421,14 +423,16 @@ async def list_file_documents(
             parts = d.chunk_content.split()
             if parts and parts[0].isdigit():
                 chunk_count = int(parts[0])
-        documents.append(FileDocumentResponse(
-            id=d.id,
-            collection_name=d.collection_name,
-            original_name=d.original_name,
-            file_path=d.file_path,
-            chunk_count=chunk_count,
-            created_at=d.created_at,
-        ))
+        documents.append(
+            FileDocumentResponse(
+                id=d.id,
+                collection_name=d.collection_name,
+                original_name=d.original_name,
+                file_path=d.file_path,
+                chunk_count=chunk_count,
+                created_at=d.created_at,
+            )
+        )
 
     return FileDocumentListResponse(documents=documents)
 
@@ -481,19 +485,17 @@ async def delete_file_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Step 1: DB 软删，使其立刻对用户不可见
-    doc.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    doc.deleted_at = datetime.now(UTC).replace(tzinfo=None)
     await db.commit()
     # 进回收站即取消该资源进行中的索引任务，避免后台 job 继续跑完
-    await cancel_jobs_for_resource(
-        db, user_id=user.id, resource_type="file", resource_id=doc_id
-    )
+    await cancel_jobs_for_resource(db, user_id=user.id, resource_type="file", resource_id=doc_id)
 
     collection_name = doc.collection_name
     stored_name = doc.file_path
     try:
         await delete_document_chunks(collection_name, stored_name)
         await delete_resource_memory(user_id=user.id, resource_type="file", resource_id=doc_id)
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "File library soft-delete vector cleanup failed: doc_id=%s stored_name=%s",
             doc_id,
@@ -505,7 +507,7 @@ async def delete_file_document(
         if fresh is not None and fresh.deleted_at is not None:
             fresh.deleted_at = None
             await db.commit()
-        raise HTTPException(status_code=500, detail="Vector cleanup failed; document remains active")
+        raise HTTPException(status_code=500, detail="Vector cleanup failed; document remains active") from exc
     return {"status": "ok"}
 
 
@@ -524,10 +526,7 @@ async def list_file_collections(
         .group_by(FileDocument.collection_name)
         .order_by(FileDocument.collection_name)
     )
-    return [
-        FileCollectionResponse(name=name, document_count=count)
-        for name, count in result.all()
-    ]
+    return [FileCollectionResponse(name=name, document_count=count) for name, count in result.all()]
 
 
 @router.delete("/files/collections/{name}")
@@ -551,17 +550,14 @@ async def delete_file_collection(
     if not documents:
         raise HTTPException(status_code=404, detail="Collection not found")
 
-    deleted_count = 0
-    for doc in documents:
-        doc.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    for deleted_count, doc in enumerate(documents):
+        doc.deleted_at = datetime.now(UTC).replace(tzinfo=None)
         await db.commit()
-        await cancel_jobs_for_resource(
-            db, user_id=user.id, resource_type="file", resource_id=doc.id
-        )
+        await cancel_jobs_for_resource(db, user_id=user.id, resource_type="file", resource_id=doc.id)
         try:
             await delete_document_chunks(name, doc.file_path)
             await delete_resource_memory(user_id=user.id, resource_type="file", resource_id=doc.id)
-        except Exception:
+        except Exception as exc:
             logger.exception(
                 "File collection soft-delete vector cleanup failed: collection=%s doc_id=%s",
                 name,
@@ -575,7 +571,6 @@ async def delete_file_collection(
             raise HTTPException(
                 status_code=500,
                 detail=f"Vector cleanup failed after moving {deleted_count} documents to trash",
-            )
-        deleted_count += 1
+            ) from exc
 
     return {"status": "ok"}

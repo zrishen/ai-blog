@@ -1,11 +1,11 @@
 """Markdown 正文 AST 解析服务：把正文解析成块结构缓存到 DB（blocks_json），供 AI 章节定位（大纲提取/读单节）省 token。
 
-blocks_json 是 Markdown 正文的派生 AST 缓存；运行期 body 经 reconcile_blog_document 派生自 workspace md（真相），可从 md 重建。
+blocks_json 是 Markdown 正文的派生 AST 缓存；运行期 body 经 reconcile_blog_document
+派生自 workspace md（真相），可从 md 重建。
 """
 
 import logging
 import re
-from typing import Optional
 
 from markdown_it import MarkdownIt
 
@@ -31,7 +31,8 @@ def extract_inline_image_urls(text: str) -> list[str]:
 def parse_to_blocks(body: str) -> list[dict]:
     """把 Markdown 正文解析成块数组。
 
-    块结构：{"type": "heading"|"paragraph"|"code"|"list"|"quote"|"other", "level", "text", "content", "lang", "char_count"}；
+    块结构：{"type": "heading"|"paragraph"|"code"|"list"|"quote"|"other", "level", "text",
+    "content", "lang", "char_count"}；
     解析失败返回空列表（调用方应降级为读全文）。
     """
     if not body or not body.strip():
@@ -55,14 +56,16 @@ def parse_to_blocks(body: str) -> list[dict]:
             inline_token = tokens[i + 1] if i + 1 < len(tokens) else None
             text = (inline_token.content if inline_token and inline_token.type == "inline" else "").strip()
             content = "\n".join(lines[start:end]).rstrip()
-            blocks.append({
-                "type": "heading",
-                "level": int(token.tag[1:]) if token.tag.startswith("h") else 2,
-                "text": text,
-                "content": content,
-                "lang": "",
-                "char_count": len(text),
-            })
+            blocks.append(
+                {
+                    "type": "heading",
+                    "level": int(token.tag[1:]) if token.tag.startswith("h") else 2,
+                    "text": text,
+                    "content": content,
+                    "lang": "",
+                    "char_count": len(text),
+                }
+            )
             i += 3  # heading_open + inline + heading_close
             continue
 
@@ -71,28 +74,32 @@ def parse_to_blocks(body: str) -> list[dict]:
             inline_token = tokens[i + 1] if i + 1 < len(tokens) else None
             text = (inline_token.content if inline_token and inline_token.type == "inline" else "").strip()
             content = "\n".join(lines[start:end]).rstrip()
-            blocks.append({
-                "type": "paragraph",
-                "level": 0,
-                "text": text[:120],  # 摘要截断
-                "content": content,
-                "lang": "",
-                "char_count": len(text),
-            })
+            blocks.append(
+                {
+                    "type": "paragraph",
+                    "level": 0,
+                    "text": text[:120],  # 摘要截断
+                    "content": content,
+                    "lang": "",
+                    "char_count": len(text),
+                }
+            )
             i += 3  # paragraph_open + inline + paragraph_close
             continue
 
         if token.type in ("fence", "code_block") and token.map:
             start, end = token.map
             content = "\n".join(lines[start:end]).rstrip()
-            blocks.append({
-                "type": "code",
-                "level": 0,
-                "text": token.content.strip()[:120],
-                "content": content,
-                "lang": token.info.strip() if token.type == "fence" else "",
-                "char_count": len(token.content.strip()),
-            })
+            blocks.append(
+                {
+                    "type": "code",
+                    "level": 0,
+                    "text": token.content.strip()[:120],
+                    "content": content,
+                    "lang": token.info.strip() if token.type == "fence" else "",
+                    "char_count": len(token.content.strip()),
+                }
+            )
             i += 1
             continue
 
@@ -101,14 +108,16 @@ def parse_to_blocks(body: str) -> list[dict]:
             content = "\n".join(lines[start:end]).rstrip()
             items = _extract_list_items(tokens, i)
             text = "; ".join(items)[:120]
-            blocks.append({
-                "type": "list",
-                "level": 0,
-                "text": text,
-                "content": content,
-                "lang": "",
-                "char_count": len(text),
-            })
+            blocks.append(
+                {
+                    "type": "list",
+                    "level": 0,
+                    "text": text,
+                    "content": content,
+                    "lang": "",
+                    "char_count": len(text),
+                }
+            )
             i = _skip_list(tokens, i)
             continue
 
@@ -116,14 +125,16 @@ def parse_to_blocks(body: str) -> list[dict]:
             start, end = token.map
             content = "\n".join(lines[start:end]).rstrip()
             inline_text = _collect_inline_until(tokens, i + 1, "blockquote_close")
-            blocks.append({
-                "type": "quote",
-                "level": 0,
-                "text": inline_text[:120],
-                "content": content,
-                "lang": "",
-                "char_count": len(inline_text),
-            })
+            blocks.append(
+                {
+                    "type": "quote",
+                    "level": 0,
+                    "text": inline_text[:120],
+                    "content": content,
+                    "lang": "",
+                    "char_count": len(inline_text),
+                }
+            )
             i = _skip_until_close(tokens, i, "blockquote_open", "blockquote_close")
             continue
 
@@ -132,14 +143,16 @@ def parse_to_blocks(body: str) -> list[dict]:
             start, end = token.map
             content = "\n".join(lines[start:end]).rstrip()
             if content:
-                blocks.append({
-                    "type": "other",
-                    "level": 0,
-                    "text": content[:120],
-                    "content": content,
-                    "lang": "",
-                    "char_count": len(content),
-                })
+                blocks.append(
+                    {
+                        "type": "other",
+                        "level": 0,
+                        "text": content[:120],
+                        "content": content,
+                        "lang": "",
+                        "char_count": len(content),
+                    }
+                )
         i += 1
 
     return blocks
@@ -231,13 +244,15 @@ def extract_outline(blocks: list[dict]) -> list[dict]:
         section_index = len(outline) + 1
         char_count = _section_char_count(blocks, idx)
         first_sentence = _section_first_sentence(blocks, idx)
-        outline.append({
-            "section_index": section_index,
-            "level": block["level"],
-            "title": block["text"],
-            "char_count": char_count,
-            "first_sentence": first_sentence,
-        })
+        outline.append(
+            {
+                "section_index": section_index,
+                "level": block["level"],
+                "title": block["text"],
+                "char_count": char_count,
+                "first_sentence": first_sentence,
+            }
+        )
     return outline
 
 
@@ -245,7 +260,7 @@ def _section_char_count(blocks: list[dict], heading_idx: int) -> int:
     """计算某 heading 下到下一个同级/高级 heading 之间的字数(含 heading 自身)。"""
     base_level = blocks[heading_idx]["level"]
     total = blocks[heading_idx]["char_count"]
-    for block in blocks[heading_idx + 1:]:
+    for block in blocks[heading_idx + 1 :]:
         if block["type"] == "heading" and block["level"] <= base_level:
             break
         total += block["char_count"]
@@ -255,7 +270,7 @@ def _section_char_count(blocks: list[dict], heading_idx: int) -> int:
 def _section_first_sentence(blocks: list[dict], heading_idx: int) -> str:
     """取某 heading 下第一个非 heading 块的首句文字。"""
     base_level = blocks[heading_idx]["level"]
-    for block in blocks[heading_idx + 1:]:
+    for block in blocks[heading_idx + 1 :]:
         if block["type"] == "heading" and block["level"] <= base_level:
             break
         if block["type"] in ("paragraph", "list", "quote"):
@@ -263,7 +278,7 @@ def _section_first_sentence(blocks: list[dict], heading_idx: int) -> str:
     return ""
 
 
-def get_section_text(blocks: list[dict], section_index: int) -> Optional[str]:
+def get_section_text(blocks: list[dict], section_index: int) -> str | None:
     """按大纲序号（从 1 开始）返回该节的完整 markdown 文字；序号无效或无 heading 返回 None。"""
     headings = [(idx, b) for idx, b in enumerate(blocks) if b["type"] == "heading"]
     if section_index < 1 or section_index > len(headings):
@@ -272,14 +287,14 @@ def get_section_text(blocks: list[dict], section_index: int) -> Optional[str]:
     start_idx, heading_block = headings[section_index - 1]
     base_level = heading_block["level"]
     parts = [heading_block["content"]]
-    for block in blocks[start_idx + 1:]:
+    for block in blocks[start_idx + 1 :]:
         if block["type"] == "heading" and block["level"] <= base_level:
             break
         parts.append(block["content"])
     return "\n\n".join(p for p in parts if p)
 
 
-def get_section_char_range(body: str, blocks: list[dict], section_index: int) -> Optional[tuple[int, int]]:
+def get_section_char_range(body: str, blocks: list[dict], section_index: int) -> tuple[int, int] | None:
     """返回章节文本在 body 中的字符范围 [start, end)，用于 blog_edit_post 把 target_text 搜索限定在单章节内。
 
     实现：get_section_text 结果在 body 中正向定位一次，end = start + len(section_text)；无法定位返回 None。

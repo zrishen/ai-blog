@@ -2,17 +2,17 @@
 
 import json
 import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import AsyncGenerator
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import settings
 from src.database.models import BlogPost, BlogPostRevision, User
+from src.services.accounts.user.official_intro_service import build_intro_post_payload
 from src.services.infra.llm.llm_factory import _create_llm
 from src.services.infra.llm.llm_settings_service import build_llm_model_kwargs
-from src.services.accounts.user.official_intro_service import build_intro_post_payload
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,8 @@ async def _landing_context(db: AsyncSession) -> str:
     doc = build_intro_post_payload()
     parts = [
         "[平台公开介绍]",
-        f"标题：{doc['title']}\n摘要：{doc.get('excerpt', '') or ''}\n内容：{_truncate(doc.get('content', '') or '', 1500)}",
+        f"标题：{doc['title']}\n摘要：{doc.get('excerpt', '') or ''}\n"
+        f"内容：{_truncate(doc.get('content', '') or '', 1500)}",
     ]
     return _truncate("\n\n".join(parts), settings.public_chat_max_context_chars)
 
@@ -82,17 +83,21 @@ async def _user_public_context(db: AsyncSession, username: str, post_slug: str |
     if not owner:
         return None
 
-    stmt = select(BlogPost, BlogPostRevision).join(
-        BlogPostRevision,
-        and_(
-            BlogPost.published_revision_id == BlogPostRevision.id,
-            BlogPostRevision.post_id == BlogPost.id,
-            BlogPostRevision.user_id == BlogPost.user_id,
-        ),
-    ).where(
-        BlogPost.user_id == owner.id,
-        BlogPost.status == "published",
-        BlogPost.deleted_at.is_(None),
+    stmt = (
+        select(BlogPost, BlogPostRevision)
+        .join(
+            BlogPostRevision,
+            and_(
+                BlogPost.published_revision_id == BlogPostRevision.id,
+                BlogPostRevision.post_id == BlogPost.id,
+                BlogPostRevision.user_id == BlogPost.user_id,
+            ),
+        )
+        .where(
+            BlogPost.user_id == owner.id,
+            BlogPost.status == "published",
+            BlogPost.deleted_at.is_(None),
+        )
     )
     if post_slug:
         stmt = stmt.where(BlogPostRevision.slug == post_slug)
@@ -103,10 +108,9 @@ async def _user_public_context(db: AsyncSession, username: str, post_slug: str |
     parts = [f"[公开博客上下文]\n博客作者：{owner.username}"]
     if not posts:
         parts.append("该用户暂无公开文章。")
-    for post, revision in posts:
+    for _, revision in posts:
         parts.append(
-            f"标题：{revision.title}\n摘要：{revision.excerpt or ''}\n"
-            f"内容：{_truncate(revision.content or '', 1500)}"
+            f"标题：{revision.title}\n摘要：{revision.excerpt or ''}\n内容：{_truncate(revision.content or '', 1500)}"
         )
     return _truncate("\n\n".join(parts), settings.public_chat_max_context_chars)
 

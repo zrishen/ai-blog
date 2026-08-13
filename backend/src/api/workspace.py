@@ -1,7 +1,5 @@
 """Workspace filesystem and AI-knowledge routes."""
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,9 +24,7 @@ router = APIRouter()
 
 
 @router.get("/workspace/tree", response_model=WorkspaceTreeResponse)
-async def get_workspace_tree(
-    db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)
-):
+async def get_workspace_tree(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     return {"entries": await workspace_file_service.list_entries(db, user.id)}
 
 
@@ -38,9 +34,7 @@ async def create_folder(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await workspace_file_service.create_folder(
-        db, user.id, name=data.name, parent_path=data.parent_path
-    )
+    return await workspace_file_service.create_folder(db, user.id, name=data.name, parent_path=data.parent_path)
 
 
 @router.patch("/workspace/entries", response_model=WorkspaceEntryResponse)
@@ -58,9 +52,7 @@ async def move_entry(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return await workspace_file_service.move_entry(
-        db, user.id, path=data.path, target_path=data.target_path
-    )
+    return await workspace_file_service.move_entry(db, user.id, path=data.path, target_path=data.target_path)
 
 
 @router.delete("/workspace/folders", status_code=status.HTTP_204_NO_CONTENT)
@@ -125,7 +117,7 @@ async def leave_ai_knowledge(
 
 @router.get("/workspace/ai-knowledge", response_model=list[RagSourceResponse])
 async def list_ai_knowledge(
-    index_status: Optional[str] = None,
+    index_status: str | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):

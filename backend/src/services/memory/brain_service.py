@@ -16,6 +16,7 @@ from src.schemas.brain import (
     BrainPreference,
     BrainStats,
 )
+
 from . import graph_store, memory_embeddings
 
 
@@ -63,13 +64,20 @@ async def list_preferences(user_id: int) -> list[BrainPreference]:
 
 
 async def list_facts(
-    user_id: int, entity_id: str | None = None, only_valid: bool = True,
-    limit: int = 200, offset: int = 0,
+    user_id: int,
+    entity_id: str | None = None,
+    only_valid: bool = True,
+    limit: int = 200,
+    offset: int = 0,
 ) -> list[BrainFact]:
     if not settings.memory_enabled:
         return []
     rows = await graph_store.list_facts(
-        user_id=user_id, entity_id=entity_id, only_valid=only_valid, limit=limit, offset=offset,
+        user_id=user_id,
+        entity_id=entity_id,
+        only_valid=only_valid,
+        limit=limit,
+        offset=offset,
     )
     return [BrainFact(**r) for r in rows]
 
@@ -111,9 +119,9 @@ async def correct_fact(
     )
     if fact is None:
         raise NotFoundError("Active fact not found")
-    await memory_embeddings.index_node_refs_best_effort([
-        memory_embeddings.MemoryNodeRef(kind="fact", user_id=user_id, memory_id=fact["fact_id"])
-    ])
+    await memory_embeddings.index_node_refs_best_effort(
+        [memory_embeddings.MemoryNodeRef(kind="fact", user_id=user_id, memory_id=fact["fact_id"])]
+    )
     return BrainFact(**fact)
 
 
@@ -136,9 +144,7 @@ async def update_preference(
     )
     if preference is None:
         raise NotFoundError("Active preference not found")
-    await memory_embeddings.index_node_refs_best_effort([
-        memory_embeddings.MemoryNodeRef(
-            kind="preference", user_id=user_id, memory_id=preference["pref_id"]
-        )
-    ])
+    await memory_embeddings.index_node_refs_best_effort(
+        [memory_embeddings.MemoryNodeRef(kind="preference", user_id=user_id, memory_id=preference["pref_id"])]
+    )
     return BrainPreference(**preference)

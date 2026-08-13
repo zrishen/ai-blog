@@ -11,9 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import NotFoundError, OwnershipError
 from src.database.models import BlogPost as BlogPostModel
 from src.database.models import FileDocument as FileDocumentModel
-from src.database.models import FileProcessingJob
+from src.database.models import FileProcessingJob, _utcnow
 from src.database.models import RagSource as RagSourceModel
-from src.database.models import _utcnow
 
 # pending=待索引 active=已索引 stale=内容变更待重索引 failed=索引失败
 _ACTIVE = "active"
@@ -30,9 +29,7 @@ def blog_collection_name(user_id: int) -> str:
     return f"user_{user_id}_blog{get_embedding_collection_suffix()}"
 
 
-async def _get(
-    db: AsyncSession, user_id: int, resource_type: str, resource_id: int
-) -> RagSourceModel | None:
+async def _get(db: AsyncSession, user_id: int, resource_type: str, resource_id: int) -> RagSourceModel | None:
     stmt = select(RagSourceModel).where(
         RagSourceModel.user_id == user_id,
         RagSourceModel.resource_type == resource_type,
@@ -78,9 +75,7 @@ async def remove_from_ai_knowledge(
     return source
 
 
-async def mark_stale(
-    db: AsyncSession, user_id: int, resource_type: str, resource_id: int
-) -> RagSourceModel | None:
+async def mark_stale(db: AsyncSession, user_id: int, resource_type: str, resource_id: int) -> RagSourceModel | None:
     """内容变更后标记 stale。未加入 AI 知识的资源返回 None（无需标记）。"""
     source = await _get(db, user_id, resource_type, resource_id)
     if source is None:
@@ -170,15 +165,11 @@ async def mark_failed(
     return source
 
 
-async def get_rag_source(
-    db: AsyncSession, user_id: int, resource_type: str, resource_id: int
-) -> RagSourceModel | None:
+async def get_rag_source(db: AsyncSession, user_id: int, resource_type: str, resource_id: int) -> RagSourceModel | None:
     return await _get(db, user_id, resource_type, resource_id)
 
 
-async def list_ai_knowledge(
-    db: AsyncSession, user_id: int, *, status: str | None = None
-) -> list[RagSourceModel]:
+async def list_ai_knowledge(db: AsyncSession, user_id: int, *, status: str | None = None) -> list[RagSourceModel]:
     stmt = select(RagSourceModel).where(RagSourceModel.user_id == user_id)
     if status:
         stmt = stmt.where(RagSourceModel.index_status == status)
@@ -187,9 +178,7 @@ async def list_ai_knowledge(
     return await _without_soft_deleted_sources(db, sources)
 
 
-async def _without_soft_deleted_sources(
-    db: AsyncSession, sources: list[RagSourceModel]
-) -> list[RagSourceModel]:
+async def _without_soft_deleted_sources(db: AsyncSession, sources: list[RagSourceModel]) -> list[RagSourceModel]:
     """剔除底层资源已软删（进回收站）的 RAG 源，使 AI 知识与删除状态一致；恢复后自动重现。"""
     by_type: dict[str, list[int]] = {}
     for s in sources:
@@ -198,9 +187,7 @@ async def _without_soft_deleted_sources(
     hidden: set[tuple[str, int]] = set()
     for rtype, rids in by_type.items():
         if rtype == "blog_post":
-            stmt = select(BlogPostModel.id).where(
-                BlogPostModel.id.in_(rids), BlogPostModel.deleted_at.is_not(None)
-            )
+            stmt = select(BlogPostModel.id).where(BlogPostModel.id.in_(rids), BlogPostModel.deleted_at.is_not(None))
         elif rtype == "file":
             stmt = select(FileDocumentModel.id).where(
                 FileDocumentModel.id.in_(rids), FileDocumentModel.deleted_at.is_not(None)
@@ -217,9 +204,7 @@ async def _without_soft_deleted_sources(
 # ---- file 资源的真实索引（接 vectorize / FalkorDB）----
 
 
-async def _get_owned_file_document(
-    db: AsyncSession, user_id: int, document_id: int
-) -> FileDocumentModel:
+async def _get_owned_file_document(db: AsyncSession, user_id: int, document_id: int) -> FileDocumentModel:
     """取 FileDocument 并校验归属（FileDocument.user_id 存的是字符串）。"""
     doc = await db.get(FileDocumentModel, document_id)
     if doc is None or doc.deleted_at is not None:
@@ -232,7 +217,8 @@ async def _get_owned_file_document(
 async def index_file_document(
     db: AsyncSession, user_id: int, document_id: int
 ) -> tuple[RagSourceModel, FileProcessingJob]:
-    """对已上传文件触发异步索引：建 RagSource(pending) + 创建 index job 调度；worker 完成回写 active、失败标 failed，重新索引先 cleanup 覆盖旧向量。"""
+    """对已上传文件触发异步索引：建 RagSource(pending) + 创建 index job 调度；
+    worker 完成回写 active、失败标 failed，重新索引先 cleanup 覆盖旧向量。"""
     from src.services.workspace.file.file_processing_service import (
         create_or_reuse_index_job,
         schedule_job,
@@ -259,9 +245,7 @@ async def index_file_document(
     return source, job
 
 
-async def index_blog_post(
-    db: AsyncSession, user_id: int, post_id: int
-) -> tuple[RagSourceModel, FileProcessingJob]:
+async def index_blog_post(db: AsyncSession, user_id: int, post_id: int) -> tuple[RagSourceModel, FileProcessingJob]:
     """对文章触发异步索引：建 RagSource(pending) + 创建 index job 调度；worker 读 MD 正文向量化并回写状态。"""
     from src.services.workspace.file.file_processing_service import (
         create_or_reuse_index_job,
@@ -311,12 +295,10 @@ async def schedule_reindex_for_source(
     return None
 
 
-async def unindex_file_document(
-    db: AsyncSession, user_id: int, document_id: int
-) -> None:
+async def unindex_file_document(db: AsyncSession, user_id: int, document_id: int) -> None:
     """从 AI 知识移除文件：删向量 + 删 RagSource，文件本身保留并标记 not indexed。"""
-    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
     from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
+    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
 
     doc = await _get_owned_file_document(db, user_id, document_id)
     source = await get_rag_source(db, user_id, "file", document_id)
@@ -331,12 +313,10 @@ async def unindex_file_document(
     await db.commit()
 
 
-async def unindex_blog_post(
-    db: AsyncSession, user_id: int, post_id: int
-) -> None:
+async def unindex_blog_post(db: AsyncSession, user_id: int, post_id: int) -> None:
     """从 AI 知识移除文章：删向量 + 删 RagSource，文章本身保留。"""
-    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
     from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
+    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
 
     source = await get_rag_source(db, user_id, "blog_post", post_id)
     if source is None:

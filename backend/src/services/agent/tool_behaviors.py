@@ -5,6 +5,7 @@
 orchestrator 把 BEHAVIORS 注入 assemble_tools，按 mounted names 过滤后填 asm.behaviors，
 运行时按 descriptor.on_result / stream_projector_factory 通用分派。
 """
+
 from __future__ import annotations
 
 from src.services.agent.references import (
@@ -49,12 +50,8 @@ SIDEBAR_BEHAVIOR = ToolBehaviorDescriptor(on_result=_sidebar_handler)
 RAG_REFS_BEHAVIOR = ToolBehaviorDescriptor(on_result=_rag_refs_handler)
 MEMORY_REFS_BEHAVIOR = ToolBehaviorDescriptor(on_result=_memory_refs_handler)
 MCP_REFS_BEHAVIOR = ToolBehaviorDescriptor(on_result=_mcp_refs_handler)
-BLOG_WRITE_BEHAVIOR = ToolBehaviorDescriptor(
-    on_result=_blog_meta_handler, stream_projector_factory=BlogWriteProjector
-)
-BLOG_EDIT_BEHAVIOR = ToolBehaviorDescriptor(
-    on_result=_blog_meta_handler, stream_projector_factory=BlogEditProjector
-)
+BLOG_WRITE_BEHAVIOR = ToolBehaviorDescriptor(on_result=_blog_meta_handler, stream_projector_factory=BlogWriteProjector)
+BLOG_EDIT_BEHAVIOR = ToolBehaviorDescriptor(on_result=_blog_meta_handler, stream_projector_factory=BlogEditProjector)
 
 # name → 行为描述符。key 与 TOOL_REGISTRY / mounted_tool_names 对齐；
 # assemble_tools 按 mounted names 过滤此表填 asm.behaviors。

@@ -4,6 +4,7 @@
 + 动态平台工具（_PROVIDERS.provide）。行为等价现状：blog_7 + base_search_file + 条件
 base_recall_memory(memory_enabled) + 条件 mcp_call_tool(mcp_plugins 非空)。
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,10 +40,10 @@ class ToolFeatureFlags:
     memory_enabled: bool
     web_tools_enabled: bool = False
     workspace_files_enabled: bool = False  # WorkspaceFilesProvider
-    code_execution_enabled: bool = False   # CodeExecutionProvider
+    code_execution_enabled: bool = False  # CodeExecutionProvider
 
     @classmethod
-    def from_settings(cls) -> "ToolFeatureFlags":
+    def from_settings(cls) -> ToolFeatureFlags:
         return cls(
             memory_enabled=settings.memory_enabled,
             web_tools_enabled=settings.web_tools_enabled,
@@ -53,7 +54,7 @@ class ToolFeatureFlags:
 @dataclass(frozen=True)
 class ToolContext:
     user_id: int
-    skill: "SkillContext"
+    skill: SkillContext
     mcp_plugins: tuple[dict, ...]
     feature_flags: ToolFeatureFlags
 
@@ -62,7 +63,7 @@ class ToolContext:
 class AssembleResult:
     tools: list[BaseTool]
     mounted_tool_names: frozenset[str]
-    behaviors: dict[str, "ToolBehaviorDescriptor"] = field(default_factory=dict)
+    behaviors: dict[str, ToolBehaviorDescriptor] = field(default_factory=dict)
 
 
 class ToolProvider(Protocol):
@@ -119,9 +120,7 @@ class WorkspaceFilesProvider:
 _PROVIDERS: tuple[ToolProvider, ...] = (McpToolProvider(), WorkspaceFilesProvider(), WebToolProvider())
 
 
-def assemble_tools(
-    ctx: ToolContext, behaviors: dict[str, "ToolBehaviorDescriptor"] | None = None
-) -> AssembleResult:
+def assemble_tools(ctx: ToolContext, behaviors: dict[str, ToolBehaviorDescriptor] | None = None) -> AssembleResult:
     """唯一装配入口，替换 orchestrator 硬编码。
 
     (1) 校验 required_tool_names 全登记（未登记 → ValueError fail loud）；

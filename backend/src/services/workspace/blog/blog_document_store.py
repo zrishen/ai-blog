@@ -7,6 +7,7 @@ location once users organize documents into real directories.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -207,7 +208,12 @@ def _serialize(document: BlogDocument) -> str:
         "created": document.created_at.strftime(_CREATED_FORMAT),
     }
     frontmatter = "\n".join(
-        ["---", *(f"{field}: {json.dumps(values[field], ensure_ascii=False)}" for field in _FRONTMATTER_FIELDS), "---", ""]
+        [
+            "---",
+            *(f"{field}: {json.dumps(values[field], ensure_ascii=False)}" for field in _FRONTMATTER_FIELDS),
+            "---",
+            "",
+        ]
     )
     return frontmatter + document.body
 
@@ -221,7 +227,7 @@ def _parse(text: str, expected_slug: str | None = None) -> BlogDocument:
     if end < 0:
         raise BlogDocumentCorruptError("Blog document frontmatter is incomplete")
 
-    lines = text[len("---\n"):end].split("\n")
+    lines = text[len("---\n") : end].split("\n")
     if len(lines) != len(_FRONTMATTER_FIELDS):
         raise BlogDocumentCorruptError("Blog document frontmatter fields are invalid")
 
@@ -231,7 +237,7 @@ def _parse(text: str, expected_slug: str | None = None) -> BlogDocument:
         if not line.startswith(prefix):
             raise BlogDocumentCorruptError("Blog document frontmatter fields are invalid")
         try:
-            value = json.loads(line[len(prefix):])
+            value = json.loads(line[len(prefix) :])
         except json.JSONDecodeError as exc:
             raise BlogDocumentCorruptError("Blog document frontmatter values are invalid") from exc
         if field in {"type", "title", "slug", "status", "created"}:
@@ -245,7 +251,7 @@ def _parse(text: str, expected_slug: str | None = None) -> BlogDocument:
         document = BlogDocument(
             slug=values["slug"] or "",
             title=values["title"] or "",
-            body=text[end + len(delimiter):],
+            body=text[end + len(delimiter) :],
             created_at=_parse_created(values["created"] or ""),
             document_type=values["type"] or "",
             status=values["status"] or "",
@@ -321,10 +327,8 @@ def _atomic_write(path: Path, content: str) -> None:
     except OSError as exc:
         raise BlogDocumentStorageError("Blog document could not be written") from exc
     finally:
-        try:
+        with contextlib.suppress(OSError):
             temporary_path.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def write_blog_document(

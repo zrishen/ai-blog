@@ -1,7 +1,7 @@
 """Filesystem-native workspace and AI-knowledge request/response schemas."""
 
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated
 
 from pydantic import BaseModel, Field
 
@@ -13,7 +13,7 @@ WorkspacePath = Annotated[str, Field(max_length=500)]
 
 class FolderCreate(BaseModel):
     name: EntryName
-    parent_path: Optional[WorkspacePath] = None
+    parent_path: WorkspacePath | None = None
 
 
 class EntryPatch(BaseModel):
@@ -23,7 +23,7 @@ class EntryPatch(BaseModel):
 
 class EntryMove(BaseModel):
     path: WorkspacePath
-    target_path: Optional[WorkspacePath] = None
+    target_path: WorkspacePath | None = None
 
 
 class EntryDelete(BaseModel):
@@ -34,9 +34,9 @@ class WorkspaceEntryResponse(BaseModel):
     path: str
     name: str
     kind: str
-    resource_type: Optional[str] = None
-    resource_id: Optional[int] = None
-    blog_status: Optional[str] = None
+    resource_type: str | None = None
+    resource_id: int | None = None
+    blog_status: str | None = None
 
 
 class WorkspaceTreeResponse(BaseModel):
@@ -53,10 +53,10 @@ class RagSourceResponse(BaseModel):
     resource_type: str
     resource_id: int
     index_status: str
-    indexed_version: Optional[str] = None
+    indexed_version: str | None = None
     collection_name: str
-    error_message: Optional[str] = None
-    indexed_at: Optional[datetime] = None
+    error_message: str | None = None
+    indexed_at: datetime | None = None
     updated_at: datetime
 
     model_config = {"from_attributes": True}
@@ -64,4 +64,4 @@ class RagSourceResponse(BaseModel):
 
 class RagJoinResponse(BaseModel):
     rag_source: RagSourceResponse
-    job: Optional[FileProcessingJobResponse] = None
+    job: FileProcessingJobResponse | None = None

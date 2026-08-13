@@ -50,9 +50,7 @@ async def get_user_enabled_skills(db: AsyncSession, user_id: int) -> list[str]:
     """
 
     record = (
-        await db.execute(
-            select(UserSkillSettings).where(UserSkillSettings.user_id == user_id)
-        )
+        await db.execute(select(UserSkillSettings).where(UserSkillSettings.user_id == user_id))
     ).scalar_one_or_none()
     if record is None:
         return [sid for sid in SKILL_REGISTRY if sid in DEFAULT_ENABLED_SKILLS]
@@ -60,9 +58,7 @@ async def get_user_enabled_skills(db: AsyncSession, user_id: int) -> list[str]:
     return [sid for sid in SKILL_REGISTRY if sid in known]
 
 
-async def update_user_enabled_skills(
-    db: AsyncSession, user_id: int, enabled_skill_ids: Sequence[str]
-) -> list[str]:
+async def update_user_enabled_skills(db: AsyncSession, user_id: int, enabled_skill_ids: Sequence[str]) -> list[str]:
     """PUT 写路径：校验后 upsert 持久化，返回规范化后的列表。"""
 
     normalized = normalize_enabled_skill_ids(enabled_skill_ids)

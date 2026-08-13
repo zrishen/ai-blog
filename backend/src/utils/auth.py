@@ -5,8 +5,7 @@ access token 短期 JWT；refresh token 明文仅签发时返回一次，DB 只�
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
@@ -32,7 +31,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(user_id: int, username: str) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "username": username,
@@ -49,7 +48,7 @@ def create_preview_token(user_id: int, filename: str) -> str:
     用于 PDF iframe 等必须把凭证放 URL 的场景：泄露后仅能预览该用户该文件，
     无法调用其它需认证接口，filename 绑定也防越权预览其它文件。
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
         "type": "preview",
@@ -65,22 +64,24 @@ def _hash_refresh_token(raw: str) -> str:
 
 
 def _naive_utc(dt: datetime) -> datetime:
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt.astimezone(UTC).replace(tzinfo=None)
 
 
 async def create_refresh_token(user_id: int, db: AsyncSession) -> str:
     """生成新的 refresh token，DB 存哈希，返回明文（仅此一次交给 cookie）。"""
     raw = secrets.token_urlsafe(48)
-    db.add(RefreshToken(
-        user_id=user_id,
-        token_hash=_hash_refresh_token(raw),
-        expires_at=_naive_utc(datetime.now(timezone.utc) + timedelta(seconds=settings.refresh_token_expire_seconds)),
-    ))
+    db.add(
+        RefreshToken(
+            user_id=user_id,
+            token_hash=_hash_refresh_token(raw),
+            expires_at=_naive_utc(datetime.now(UTC) + timedelta(seconds=settings.refresh_token_expire_seconds)),
+        )
+    )
     await db.commit()
     return raw
 
 
-def decode_access_token(token: str) -> Optional[dict]:
+def decode_access_token(token: str) -> dict | None:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
     except jwt.PyJWTError:
@@ -90,7 +91,7 @@ def decode_access_token(token: str) -> Optional[dict]:
     return payload
 
 
-def decode_preview_token(token: str, expected_filename: str) -> Optional[dict]:
+def decode_preview_token(token: str, expected_filename: str) -> dict | None:
     """校验预览 token：签名有效 + type=preview + filename 绑定一致。"""
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
@@ -103,17 +104,15 @@ def decode_preview_token(token: str, expected_filename: str) -> Optional[dict]:
     return payload
 
 
-async def verify_refresh_token(raw: str | None, db: AsyncSession) -> Optional[User]:
+async def verify_refresh_token(raw: str | None, db: AsyncSession) -> User | None:
     """用 cookie 里的明文 refresh 查 DB 哈希，校验未过期、未吊销，返回所属用户。"""
     if not raw:
         return None
-    result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh_token(raw))
-    )
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh_token(raw)))
     record = result.scalar_one_or_none()
     if record is None or record.revoked_at is not None:
         return None
-    if record.expires_at < _naive_utc(datetime.now(timezone.utc)):
+    if record.expires_at < _naive_utc(datetime.now(UTC)):
         return None
     user = await db.get(User, record.user_id)
     return user
@@ -123,22 +122,18 @@ async def revoke_refresh_token(raw: str | None, db: AsyncSession) -> None:
     """登出时吊销对应 refresh token 记录。"""
     if not raw:
         return
-    result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh_token(raw))
-    )
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh_token(raw)))
     record = result.scalar_one_or_none()
     if record is not None and record.revoked_at is None:
-        record.revoked_at = _naive_utc(datetime.now(timezone.utc))
+        record.revoked_at = _naive_utc(datetime.now(UTC))
         await db.commit()
 
 
-async def find_refresh_token(raw: str | None, db: AsyncSession) -> Optional[RefreshToken]:
+async def find_refresh_token(raw: str | None, db: AsyncSession) -> RefreshToken | None:
     """按明文查 refresh 记录（含已吊销），供 /refresh 做轮换 / 重用检测。"""
     if not raw:
         return None
-    result = await db.execute(
-        select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh_token(raw))
-    )
+    result = await db.execute(select(RefreshToken).where(RefreshToken.token_hash == _hash_refresh_token(raw)))
     return result.scalar_one_or_none()
 
 
@@ -150,7 +145,7 @@ async def revoke_all_user_refresh_tokens(user_id: int, db: AsyncSession) -> None
             RefreshToken.revoked_at.is_(None),
         )
     )
-    now = _naive_utc(datetime.now(timezone.utc))
+    now = _naive_utc(datetime.now(UTC))
     for record in result.scalars().all():
         record.revoked_at = now
     await db.commit()
@@ -177,7 +172,7 @@ async def get_current_user(
 async def get_optional_user(
     token: str | None = Depends(_optional_oauth2_scheme),
     db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
+) -> User | None:
     """可选认证：与 get_current_user 逻辑相同但不抛 401，未认证时返回 None。"""
     if not token:
         return None

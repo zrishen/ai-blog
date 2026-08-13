@@ -2,13 +2,13 @@
 
 import asyncio
 import base64
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import logging
 import os
+import uuid
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
-import uuid
 from zipfile import BadZipFile, ZipFile
 
 from fastapi import UploadFile
@@ -68,7 +68,7 @@ class PreparedChatAttachment:
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _validated_settings() -> tuple[int, int, int, int]:
@@ -99,9 +99,7 @@ def _normalize_original_name(filename: str | None) -> tuple[str, str]:
 def _normalize_media_type(content_type: str | None, extension: str) -> str:
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
     if media_type not in _ALLOWED_MEDIA_TYPES[extension]:
-        raise ChatAttachmentValidationError(
-            f"Content type {media_type or 'missing'} does not match {extension}"
-        )
+        raise ChatAttachmentValidationError(f"Content type {media_type or 'missing'} does not match {extension}")
     return media_type
 
 
@@ -326,8 +324,7 @@ async def create_or_reuse_attachment(
         raise RuntimeError("Chat attachment pending limits must be positive")
     pending_count, pending_size = (
         await db.execute(
-            select(func.count(ChatAttachment.id), func.coalesce(func.sum(ChatAttachment.size_bytes), 0))
-            .where(
+            select(func.count(ChatAttachment.id), func.coalesce(func.sum(ChatAttachment.size_bytes), 0)).where(
                 ChatAttachment.user_id == user_id,
                 ChatAttachment.status.in_(["pending", "claimed"]),
             )
@@ -471,13 +468,9 @@ async def claim_attachments(
     if not normalized:
         return None, []
 
-    max_count, max_total_size, max_image_size, max_document_size, _, _ = (
-        _validated_message_limits()
-    )
+    max_count, max_total_size, max_image_size, max_document_size, _, _ = _validated_message_limits()
     if len(normalized) > max_count:
-        raise ChatAttachmentValidationError(
-            f"A message may contain at most {max_count} attachments"
-        )
+        raise ChatAttachmentValidationError(f"A message may contain at most {max_count} attachments")
 
     rows = list(
         (
@@ -487,7 +480,9 @@ async def claim_attachments(
                     ChatAttachment.attachment_id.in_(normalized),
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     by_id = {row.attachment_id: row for row in rows}
     if len(by_id) != len(normalized):
@@ -500,20 +495,12 @@ async def claim_attachments(
             raise ChatAttachmentStateError("Attachment is already being used")
         if attachment.expires_at <= utcnow():
             raise ChatAttachmentStateError("Attachment has expired; upload it again")
-        per_file_limit = (
-            max_image_size
-            if attachment.media_type.startswith("image/")
-            else max_document_size
-        )
+        per_file_limit = max_image_size if attachment.media_type.startswith("image/") else max_document_size
         if attachment.size_bytes > per_file_limit:
-            raise ChatAttachmentTooLargeError(
-                f"Attachment {attachment.original_name} exceeds its size limit"
-            )
+            raise ChatAttachmentTooLargeError(f"Attachment {attachment.original_name} exceeds its size limit")
         total_size += attachment.size_bytes
     if total_size > max_total_size:
-        raise ChatAttachmentTooLargeError(
-            f"Attachments exceed {max_total_size} byte total limit"
-        )
+        raise ChatAttachmentTooLargeError(f"Attachments exceed {max_total_size} byte total limit")
 
     if claim_token is None:
         claim_token = str(uuid.uuid4())
@@ -547,7 +534,9 @@ async def claim_attachments(
                     ChatAttachment.status == "claimed",
                 )
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     claimed_by_id = {row.attachment_id: row for row in claimed}
     return claim_token, [claimed_by_id[item] for item in normalized]
@@ -610,9 +599,7 @@ def _parse_document_attachment(path: Path) -> str:
     try:
         return parse_path(path)
     except Exception as exc:
-        raise ChatAttachmentValidationError(
-            f"Document attachment could not be parsed: {path.suffix.lower()}"
-        ) from exc
+        raise ChatAttachmentValidationError(f"Document attachment could not be parsed: {path.suffix.lower()}") from exc
 
 
 async def prepare_claimed_attachments(
@@ -628,17 +615,13 @@ async def prepare_claimed_attachments(
             raise ChatAttachmentStateError("Attachment is not claimed for this message")
         path = attachment_stored_path(attachment.user_id, attachment.stored_path)
         if not await asyncio.to_thread(path.is_file):
-            raise ChatAttachmentNotFoundError(
-                f"Attachment content not found: {attachment.original_name}"
-            )
+            raise ChatAttachmentNotFoundError(f"Attachment content not found: {attachment.original_name}")
 
         if attachment.media_type.startswith("image/"):
             try:
                 content = await asyncio.to_thread(path.read_bytes)
             except OSError as exc:
-                raise ChatAttachmentNotFoundError(
-                    f"Attachment content not found: {attachment.original_name}"
-                ) from exc
+                raise ChatAttachmentNotFoundError(f"Attachment content not found: {attachment.original_name}") from exc
             prepared.append(
                 PreparedChatAttachment(
                     attachment=attachment,
@@ -692,7 +675,9 @@ async def prepare_history_attachments(
                 )
                 .order_by(ChatAttachment.message_id, ChatAttachment.position)
             )
-        ).scalars().all()
+        )
+        .scalars()
+        .all()
     )
     prepared_by_message: dict[int, list[PreparedChatAttachment]] = {}
     for attachment in attachments:
@@ -782,9 +767,7 @@ async def delete_pending_attachment(
             raise ChatAttachmentNotFoundError("Attachment not found")
         attachment_status = attachment.status
         await db.rollback()
-        raise ChatAttachmentStateError(
-            f"{attachment_status.capitalize()} attachment cannot be deleted"
-        )
+        raise ChatAttachmentStateError(f"{attachment_status.capitalize()} attachment cannot be deleted")
 
     await db.commit()
     try:

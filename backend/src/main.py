@@ -1,8 +1,8 @@
 """FastAPI 应用入口：仅 app 装配（实例 + 中间件 + 路由）。启动逻辑见 bootstrap.py。"""
 
-from contextlib import asynccontextmanager
 import logging
 import subprocess
+from contextlib import asynccontextmanager
 from pathlib import Path
 from time import perf_counter
 
@@ -22,18 +22,23 @@ http_logger = logging.getLogger("http.access")
 def _resolve_version() -> str:
     """运行时版本：优先 git 标签（与部署 tag 一致），无 .git（容器）回退包元数据。"""
     try:
-        out = subprocess.check_output(
-            ["git", "describe", "--tags", "--always"],
-            cwd=str(Path(__file__).resolve().parent),
-            stderr=subprocess.DEVNULL,
-            timeout=2,
-        ).decode().strip()
+        out = (
+            subprocess.check_output(
+                ["git", "describe", "--tags", "--always"],
+                cwd=str(Path(__file__).resolve().parent),
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+            )
+            .decode()
+            .strip()
+        )
         if out:
             return out
     except Exception:
         pass
     try:
         from importlib.metadata import version
+
         return version("ai-blog")
     except Exception:
         return "0.0.0"

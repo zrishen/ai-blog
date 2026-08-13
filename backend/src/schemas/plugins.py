@@ -4,7 +4,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, model_validator
 
-
 PluginTransport = Literal["stdio", "streamable-http"]
 PluginPermissionLevel = Literal["read", "write"]
 
@@ -38,7 +37,9 @@ class AdminPluginCreate(BaseModel):
     transport: PluginTransport
     command: Annotated[str | None, Field(max_length=1000)] = None
     args: list[Annotated[str, Field(max_length=1000)]] = Field(default_factory=list, max_length=100)
-    env_vars: dict[Annotated[str, Field(min_length=1, max_length=100)], Annotated[str, Field(max_length=5000)]] = Field(default_factory=dict, max_length=100)
+    env_vars: dict[Annotated[str, Field(min_length=1, max_length=100)], Annotated[str, Field(max_length=5000)]] = Field(
+        default_factory=dict, max_length=100
+    )
     url: HttpUrl | None = None
     permission_level: PluginPermissionLevel = "read"
     is_published: bool = False
@@ -62,7 +63,9 @@ class AdminPluginUpdate(BaseModel):
     icon: Annotated[str, Field(min_length=1, max_length=40)] | None = None
     command: Annotated[str, Field(max_length=1000)] | None = None
     args: list[Annotated[str, Field(max_length=1000)]] | None = Field(default=None, max_length=100)
-    env_vars: dict[Annotated[str, Field(min_length=1, max_length=100)], Annotated[str, Field(max_length=5000)]] | None = Field(default=None, max_length=100)
+    env_vars: (
+        dict[Annotated[str, Field(min_length=1, max_length=100)], Annotated[str, Field(max_length=5000)]] | None
+    ) = Field(default=None, max_length=100)
     url: HttpUrl | None = None
     permission_level: PluginPermissionLevel | None = None
     is_published: bool | None = None

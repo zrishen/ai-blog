@@ -44,9 +44,12 @@ async def extract(text: str, llm: BaseChatModel, *, depth: str | None = None) ->
         parsed = _parse(str(resp.content))
         logger.info(
             "extract done depth=%s input_chars=%d entities=%d facts=%d episodes=%d prefs=%d",
-            depth, len(text),
-            len(parsed.get("entities", [])), len(parsed.get("facts", [])),
-            len(parsed.get("episodes", [])), len(parsed.get("preferences", [])),
+            depth,
+            len(text),
+            len(parsed.get("entities", [])),
+            len(parsed.get("facts", [])),
+            len(parsed.get("episodes", [])),
+            len(parsed.get("preferences", [])),
         )
         return parsed
     except Exception:

@@ -14,8 +14,8 @@ from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, Va
 from src.core.path_guard import workspace_dir, workspace_path
 from src.core.workspace_path import validate_workspace_relative_path, validate_workspace_segment
 from src.database.models import BlogPost, FileDocument
-from src.services.workspace.blog.blog_document_store import validate_blog_document_path
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
+from src.services.workspace.blog.blog_document_store import validate_blog_document_path
 from src.services.workspace.file.file_service import normalize_workspace_file_path
 from src.services.workspace.resource_resolver import ResourceKind, resolve_workspace_resource
 from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
@@ -104,9 +104,7 @@ async def list_entries(db: AsyncSession, user_id: int) -> list[WorkspaceEntry]:
     entries: list[WorkspaceEntry] = []
     for current_root, directories, filenames in os.walk(root, followlinks=False):
         current = Path(current_root)
-        directories[:] = sorted(
-            (name for name in directories if not name.startswith(".")), key=str.casefold
-        )
+        directories[:] = sorted((name for name in directories if not name.startswith(".")), key=str.casefold)
         for name in directories:
             path = current / name
             relative = path.relative_to(root).as_posix()

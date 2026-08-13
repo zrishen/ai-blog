@@ -2,8 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,15 +35,15 @@ class PublicPostView:
     title: str
     slug: str
     content: str
-    excerpt: Optional[str]
-    cover_image: Optional[str]
+    excerpt: str | None
+    cover_image: str | None
     status: str
-    tags: Optional[str]
-    author: Optional[str]
+    tags: str | None
+    author: str | None
     view_count: int
     created_at: datetime
     updated_at: datetime
-    published_at: Optional[datetime]
+    published_at: datetime | None
 
     @classmethod
     def from_post_revision(
@@ -71,10 +70,10 @@ class PublicPostView:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _check_ownership(post: Optional[BlogPostModel], user_id: int) -> BlogPostModel:
+def _check_ownership(post: BlogPostModel | None, user_id: int) -> BlogPostModel:
     if post is None or post.deleted_at is not None or post.user_id != user_id:
         raise ValueError("Post not found")
     return post
@@ -91,23 +90,21 @@ def _meta_from_post(post: BlogPostModel) -> dict:
     }
 
 
-async def get_user_by_username(db: AsyncSession, username: str) -> Optional[User]:
+async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     return (await db.execute(select(User).where(User.username == username))).scalar_one_or_none()
 
 
-async def get_post(db: AsyncSession, post_id: int) -> Optional[BlogPostModel]:
+async def get_post(db: AsyncSession, post_id: int) -> BlogPostModel | None:
     post = await db.get(BlogPostModel, post_id)
     return post if post is not None and post.deleted_at is None else None
 
 
-async def get_owned_post(db: AsyncSession, post_id: int, user_id: int) -> Optional[BlogPostModel]:
+async def get_owned_post(db: AsyncSession, post_id: int, user_id: int) -> BlogPostModel | None:
     post = await get_post(db, post_id)
     return post if post is not None and post.user_id == user_id else None
 
 
-async def _get_published_pair_by_id(
-    db: AsyncSession, post_id: int
-) -> tuple[BlogPostModel, BlogPostRevision] | None:
+async def _get_published_pair_by_id(db: AsyncSession, post_id: int) -> tuple[BlogPostModel, BlogPostRevision] | None:
     result = await db.execute(
         select(BlogPostModel, BlogPostRevision)
         .join(BlogPostRevision, BlogPostModel.published_revision_id == BlogPostRevision.id)
@@ -120,7 +117,7 @@ async def _get_published_pair_by_id(
     return result.one_or_none()
 
 
-async def get_published_post_by_id(db: AsyncSession, post_id: int) -> Optional[PublicPostView]:
+async def get_published_post_by_id(db: AsyncSession, post_id: int) -> PublicPostView | None:
     pair = await _get_published_pair_by_id(db, post_id)
     return PublicPostView.from_post_revision(*pair) if pair else None
 
@@ -129,8 +126,8 @@ async def get_post_for_site_viewer(
     db: AsyncSession,
     owner_username: str,
     slug: str,
-    viewer_user_id: Optional[int],
-) -> Optional[BlogPostModel | PublicPostView]:
+    viewer_user_id: int | None,
+) -> BlogPostModel | PublicPostView | None:
     owner = await get_user_by_username(db, owner_username)
     if not owner:
         return None
@@ -162,13 +159,13 @@ async def get_post_for_site_viewer(
 async def list_posts(
     db: AsyncSession,
     *,
-    viewer_user_id: Optional[int] = None,
-    owner_username: Optional[str] = None,
+    viewer_user_id: int | None = None,
+    owner_username: str | None = None,
     include_drafts_for_owner: bool = False,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
+    status: str | None = None,
+    search: str | None = None,
     page: int = 1,
-    per_page: Optional[int] = None,  # None 或 <=0 表示返回全部
+    per_page: int | None = None,  # None 或 <=0 表示返回全部
 ) -> dict:
     if owner_username:
         owner = await get_user_by_username(db, owner_username)
@@ -239,10 +236,7 @@ async def list_posts(
         if paginated:
             stmt = stmt.offset((page - 1) * per_page).limit(per_page)
         pairs = (await db.execute(stmt)).all()
-        posts = [
-            PublicPostView.from_post_revision(post, revision, include_content=False)
-            for post, revision in pairs
-        ]
+        posts = [PublicPostView.from_post_revision(post, revision, include_content=False) for post, revision in pairs]
 
     if total is None:
         total = len(posts)
@@ -279,12 +273,16 @@ async def _create_revision(
 
 async def _prune_revisions(db: AsyncSession, post: BlogPostModel) -> None:
     revisions = (
-        await db.execute(
-            select(BlogPostRevision)
-            .where(BlogPostRevision.post_id == post.id)
-            .order_by(BlogPostRevision.revision_number.desc())
+        (
+            await db.execute(
+                select(BlogPostRevision)
+                .where(BlogPostRevision.post_id == post.id)
+                .order_by(BlogPostRevision.revision_number.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     retained_count = len(revisions)
     for revision in reversed(revisions):
         if retained_count <= REVISION_LIMIT:
@@ -328,7 +326,7 @@ async def create_post(db: AsyncSession, data: dict, user_id: int) -> BlogPostMod
     return post
 
 
-async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) -> Optional[BlogPostModel]:
+async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) -> BlogPostModel | None:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     requested_status = data.get("status") if "status" in data else None
     current_body = await get_post_body(post)
@@ -341,7 +339,7 @@ async def update_post(db: AsyncSession, post_id: int, data: dict, user_id: int) 
     for key in ("excerpt", "cover_image", "tags"):
         if key in data:
             meta[key] = data[key]
-    body = data["content"] if "content" in data else current_body
+    body = data.get("content", current_body)
     if requested_status == "draft":
         meta["status"] = "draft"
 
@@ -381,7 +379,7 @@ async def commit_revision(db: AsyncSession, post_id: int, user_id: int) -> BlogP
     return revision
 
 
-async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: int) -> Optional[BlogPostModel]:
+async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: int) -> BlogPostModel | None:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     if not publish:
         post.status = "draft"
@@ -407,7 +405,9 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
     await sync_blog_document(db, post)
     logger.info(
         "blog publish user_id=%s post_id=%s revision_id=%s",
-        user_id, post.id, post.published_revision_id,
+        user_id,
+        post.id,
+        post.published_revision_id,
     )
     return post
 
@@ -415,17 +415,19 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
 async def list_revisions(db: AsyncSession, post_id: int, user_id: int) -> list[BlogPostRevision]:
     _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     return (
-        await db.execute(
-            select(BlogPostRevision)
-            .where(BlogPostRevision.post_id == post_id, BlogPostRevision.user_id == user_id)
-            .order_by(BlogPostRevision.revision_number.desc())
+        (
+            await db.execute(
+                select(BlogPostRevision)
+                .where(BlogPostRevision.post_id == post_id, BlogPostRevision.user_id == user_id)
+                .order_by(BlogPostRevision.revision_number.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
 
-async def get_revision(
-    db: AsyncSession, post_id: int, revision_id: int, user_id: int
-) -> BlogPostRevision:
+async def get_revision(db: AsyncSession, post_id: int, revision_id: int, user_id: int) -> BlogPostRevision:
     _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     revision = await db.get(BlogPostRevision, revision_id)
     if revision is None or revision.post_id != post_id or revision.user_id != user_id:
@@ -433,9 +435,7 @@ async def get_revision(
     return revision
 
 
-async def restore_revision(
-    db: AsyncSession, post_id: int, revision_id: int, user_id: int
-) -> BlogPostModel:
+async def restore_revision(db: AsyncSession, post_id: int, revision_id: int, user_id: int) -> BlogPostModel:
     post = _check_ownership(await db.get(BlogPostModel, post_id), user_id)
     revision = await get_revision(db, post_id, revision_id, user_id)
     slug = revision.slug
@@ -464,7 +464,10 @@ async def restore_revision(
     await sync_blog_document(db, restored)
     logger.info(
         "blog revision restored user_id=%s post_id=%s revision_id=%s revision_no=%s",
-        user_id, post_id, revision_id, revision.revision_number,
+        user_id,
+        post_id,
+        revision_id,
+        revision.revision_number,
     )
     return restored
 
@@ -478,7 +481,9 @@ async def delete_revision(db: AsyncSession, post_id: int, revision_id: int, user
     await db.commit()
     logger.info(
         "blog revision deleted user_id=%s post_id=%s revision_id=%s",
-        user_id, post_id, revision_id,
+        user_id,
+        post_id,
+        revision_id,
     )
 
 
@@ -498,12 +503,10 @@ async def delete_post(db: AsyncSession, post_id: int, user_id: int) -> bool:
     await db.commit()
     logger.info("blog post soft-deleted user_id=%s post_id=%s", user_id, post_id)
     # 进回收站即取消进行中的索引任务，并 best-effort 清理 AI 大脑记忆（不等维护周期）
-    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
     from src.services.memory.graph_store import delete_resource_memory
+    from src.services.workspace.file.file_processing_service import cancel_jobs_for_resource
 
-    await cancel_jobs_for_resource(
-        db, user_id=user_id, resource_type="blog_post", resource_id=post_id
-    )
+    await cancel_jobs_for_resource(db, user_id=user_id, resource_type="blog_post", resource_id=post_id)
     try:
         await delete_resource_memory(user_id=user_id, resource_type="blog_post", resource_id=post_id)
     except Exception:

@@ -5,10 +5,12 @@
 单例在 services/agent/tool_behaviors.py，由 orchestrator 注入 assemble_tools。
 registry/provider 仅引用此接口，保持 tools→services 零运行时依赖。
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from src.services.agent.streaming import StreamProjector
@@ -32,4 +34,4 @@ class ToolBehaviorDescriptor:
     """
 
     on_result: Callable[[ResultContext], dict] | None = None
-    stream_projector_factory: Callable[[], "StreamProjector"] | None = None
+    stream_projector_factory: Callable[[], StreamProjector] | None = None

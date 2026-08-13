@@ -45,15 +45,17 @@ def normalize_mcp_capabilities(mcp_plugins: list[dict]) -> list[dict[str, object
                 continue
             if not tool_name:
                 continue
-            capabilities.append({
-                "plugin_id": plugin.get("id"),
-                "plugin_slug": plugin_slug,
-                "plugin_name": plugin_name,
-                "tool_name": tool_name,
-                "tool_ref": f"{plugin_slug}/{tool_name}",
-                "description": description,
-                "input_schema": input_schema,
-            })
+            capabilities.append(
+                {
+                    "plugin_id": plugin.get("id"),
+                    "plugin_slug": plugin_slug,
+                    "plugin_name": plugin_name,
+                    "tool_name": tool_name,
+                    "tool_ref": f"{plugin_slug}/{tool_name}",
+                    "description": description,
+                    "input_schema": input_schema,
+                }
+            )
     return capabilities
 
 

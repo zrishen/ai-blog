@@ -100,14 +100,14 @@ def _extract_partial_json_string(args_json: str, field: str) -> str | None:
                 if i + 6 > len(args_json):
                     break
                 try:
-                    code_point = int(args_json[i + 2:i + 6], 16)
+                    code_point = int(args_json[i + 2 : i + 6], 16)
                 except ValueError:
                     break
                 if 0xD800 <= code_point <= 0xDBFF:
-                    if i + 12 > len(args_json) or args_json[i + 6:i + 8] != "\\u":
+                    if i + 12 > len(args_json) or args_json[i + 6 : i + 8] != "\\u":
                         break
                     try:
-                        low_surrogate = int(args_json[i + 8:i + 12], 16)
+                        low_surrogate = int(args_json[i + 8 : i + 12], 16)
                     except ValueError:
                         break
                     if not 0xDC00 <= low_surrogate <= 0xDFFF:
@@ -149,7 +149,7 @@ class BlogWriteProjector:
     _extract_partial_int 的数字定界（半截返回 None，防误投射）。
     """
 
-    __slots__ = ("started", "content_yielded")
+    __slots__ = ("content_yielded", "started")
 
     def __init__(self) -> None:
         self.started = False
@@ -162,17 +162,16 @@ class BlogWriteProjector:
         markers: list[str] = []
         if not self.started:
             self.started = True
-            markers.append(_BLOGSTART_MARKER + _compact_json(
-                {"post_id": post_id, "stream_id": stream_id}
-            ))
+            markers.append(_BLOGSTART_MARKER + _compact_json({"post_id": post_id, "stream_id": stream_id}))
         content_so_far = _extract_partial_content(args_so_far)
         if content_so_far is not None:
-            new_part = content_so_far[len(self.content_yielded):]
+            new_part = content_so_far[len(self.content_yielded) :]
             if new_part:
                 self.content_yielded = content_so_far
-                markers.append(_BLOGDELTA_MARKER + _compact_json(
-                    {"post_id": post_id, "stream_id": stream_id, "content_delta": new_part}
-                ))
+                markers.append(
+                    _BLOGDELTA_MARKER
+                    + _compact_json({"post_id": post_id, "stream_id": stream_id, "content_delta": new_part})
+                )
         return markers
 
 
@@ -184,7 +183,7 @@ class BlogEditProjector:
     _extract_partial_json_string（全解码 \\u 含 surrogate pair）。
     """
 
-    __slots__ = ("started", "target", "replacement_yielded")
+    __slots__ = ("replacement_yielded", "started", "target")
 
     def __init__(self) -> None:
         self.started = False
@@ -201,16 +200,18 @@ class BlogEditProjector:
             self.started = True
             self.target = target_so_far
             self.replacement_yielded = ""
-            markers.append(_PATCHSTART_MARKER + _compact_json(
-                {"post_id": post_id, "stream_id": stream_id, "target_text": target_so_far}
-            ))
+            markers.append(
+                _PATCHSTART_MARKER
+                + _compact_json({"post_id": post_id, "stream_id": stream_id, "target_text": target_so_far})
+            )
         if self.started:
             replacement_so_far = _extract_partial_replacement(args_so_far)
             if replacement_so_far is not None:
-                new_repl = replacement_so_far[len(self.replacement_yielded):]
+                new_repl = replacement_so_far[len(self.replacement_yielded) :]
                 if new_repl:
                     self.replacement_yielded = replacement_so_far
-                    markers.append(_PATCHDELTA_MARKER + _compact_json(
-                        {"post_id": post_id, "stream_id": stream_id, "replacement_delta": new_repl}
-                    ))
+                    markers.append(
+                        _PATCHDELTA_MARKER
+                        + _compact_json({"post_id": post_id, "stream_id": stream_id, "replacement_delta": new_repl})
+                    )
         return markers

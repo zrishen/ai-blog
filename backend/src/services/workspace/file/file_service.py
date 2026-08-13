@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import uuid
 from pathlib import Path, PurePosixPath
@@ -11,8 +12,6 @@ from src.core.exceptions import ValidationFailedError
 from src.core.path_guard import workspace_dir, workspace_path
 from src.core.workspace_path import validate_workspace_relative_path
 from src.utils import file_parser
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +62,8 @@ async def _store_document_chunks(
     if not isinstance(user_id, int):
         raise ValueError("Document indexing requires a numeric user ID")
 
-    from src.services.memory.graph_store import add_document_chunks
     from src.services.infra.embeddings.embedding_service import get_embedding_collection_suffix
+    from src.services.memory.graph_store import add_document_chunks
 
     await add_document_chunks(
         user_id=user_id,
@@ -107,7 +106,9 @@ def _is_supported(filename: str, *, allow_images: bool = True) -> bool:
     return ext in supported
 
 
-def _validate_file(filename: str, size: int | None, content_type: str | None, *, allow_images: bool = True) -> str | None:
+def _validate_file(
+    filename: str, size: int | None, content_type: str | None, *, allow_images: bool = True
+) -> str | None:
     """Return error message if invalid, None if OK."""
     if size is not None and size > MAX_FILE_SIZE:
         return "File exceeds 100MB limit"
@@ -208,13 +209,17 @@ async def is_hidden_soft_deleted_file(
     canonical_path = normalize_workspace_file_path(filename)
     legacy_name = PurePosixPath(canonical_path).name
     states = (
-        await db.execute(
-            select(FileDocument.deleted_at).where(
-                FileDocument.user_id == str(user_id),
-                FileDocument.file_path.in_({filename, canonical_path, legacy_name}),
+        (
+            await db.execute(
+                select(FileDocument.deleted_at).where(
+                    FileDocument.user_id == str(user_id),
+                    FileDocument.file_path.in_({filename, canonical_path, legacy_name}),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not states or any(deleted_at is None for deleted_at in states):
         return False
 
@@ -243,11 +248,13 @@ async def is_hidden_soft_deleted_file(
         return False
 
     blog_ref = await db.execute(
-        select(BlogPost.id).where(
+        select(BlogPost.id)
+        .where(
             BlogPost.user_id == user_id,
             BlogPost.deleted_at.is_(None),
             BlogPost.cover_image.in_(references),
-        ).limit(1)
+        )
+        .limit(1)
     )
     if blog_ref.first() is not None:
         return False
@@ -255,9 +262,7 @@ async def is_hidden_soft_deleted_file(
     from src.services.workspace.blog.blog_body_service import collect_blog_body_image_refs
 
     body_refs = await collect_blog_body_image_refs(db, user_id)
-    if filename in body_refs or legacy_name in body_refs:
-        return False
-    return True
+    return not (filename in body_refs or legacy_name in body_refs)
 
 
 async def vectorize_and_store(
@@ -271,7 +276,6 @@ async def vectorize_and_store(
 ) -> list[str]:
     """Parse, chunk, embed, and store documents; returns the stored chunk contents."""
     from src.services.infra.embeddings.embedding_service import get_embeddings
-
     from src.utils.chunker import chunk_text
 
     async def report(stage: str, completed: int, total: int, unit: str) -> None:
@@ -351,6 +355,7 @@ async def vectorize_and_store(
         collection_name,
         len(chunks),
     )
+
     async def vector_progress(completed: int, total: int, unit: str) -> None:
         await report("vector_store", completed, total, unit)
 
@@ -371,7 +376,10 @@ async def vectorize_and_store(
     )
     logger.info(
         "KB vectorization done: stored_name=%s user_id=%s chunks=%d duration_ms=%d",
-        stored_filename, user_id, len(chunks), int((time.time() - _t0) * 1000),
+        stored_filename,
+        user_id,
+        len(chunks),
+        int((time.time() - _t0) * 1000),
     )
 
     return chunks
@@ -388,7 +396,9 @@ async def vectorize_text_and_store(
     resource_id: int | None = None,
     progress_reporter=None,
 ) -> list[str]:
-    """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库；跳过文件解析，metadata 的 stored_name/chunk_id 用 source_id（资源稳定标识，如 "blog_post:123"），附带 resource_type 便于检索过滤。"""
+    """对纯文本（如博客 Markdown 正文）分块、向量化、写入向量库；跳过文件解析，
+    metadata 的 stored_name/chunk_id 用 source_id（资源稳定标识，如 "blog_post:123"），
+    附带 resource_type 便于检索过滤。"""
     from src.services.infra.embeddings.embedding_service import get_embeddings
     from src.utils.chunker import chunk_text
 
@@ -504,7 +514,9 @@ def _docx_to_html(path: Path) -> str:
         html_parts.append('<table border="1" cellpadding="4" style="border-collapse:collapse;width:100%">')
         for i, row in enumerate(table.rows):
             tag = "th" if i == 0 else "td"
-            html_parts.append(f"<tr>{''.join(f'<{tag}>{_escape_html(cell.text.strip())}</{tag}>' for cell in row.cells)}</tr>")
+            html_parts.append(
+                f"<tr>{''.join(f'<{tag}>{_escape_html(cell.text.strip())}</{tag}>' for cell in row.cells)}</tr>"
+            )
         html_parts.append("</table>")
     html_parts.append("</div>")
     return "\n".join(html_parts)

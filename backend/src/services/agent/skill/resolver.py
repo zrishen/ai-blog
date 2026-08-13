@@ -4,6 +4,7 @@ enabled skill 的 required_tool_tag 工具 + enabled_segment_names 段聚合返�
 默认启用集由 DEFAULT_ENABLED_SKILLS 决定（当前 writing + knowledge + memory）。
 输出形状遵循 SkillContext，不改 assemble_tools/PromptContext 调用点。
 """
+
 from __future__ import annotations
 
 from src.services.agent.skill.context import SkillContext

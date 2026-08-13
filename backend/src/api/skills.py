@@ -16,8 +16,5 @@ async def list_skills(
 ) -> SkillListResponse:
     del user
     return SkillListResponse(
-        skills=[
-            SkillSummary(id=d.id, name=d.name, description=d.description)
-            for d in list_skill_descriptors()
-        ]
+        skills=[SkillSummary(id=d.id, name=d.name, description=d.description) for d in list_skill_descriptors()]
     )

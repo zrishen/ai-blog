@@ -1,6 +1,6 @@
 """admin 用量统计 service：单用户周用量 + 全局概览指标（只读聚合查询）。"""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,11 +16,12 @@ from src.services.accounts.subscription import (
 
 def _naive_utc_now() -> datetime:
     """naive UTC now（与 subscription_expires_at 存储口径一致）。"""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 async def get_user_weekly_usage(db: AsyncSession, user_id: int) -> dict:
-    """单用户本周用量概览，返回 {user_id, username, active, period, used, limit, remaining}；用户不存在抛 LookupError。"""
+    """单用户本周用量概览，返回 {user_id, username, active, period, used, limit, remaining}；
+    用户不存在抛 LookupError。"""
     user = await db.get(User, user_id)
     if user is None:
         raise LookupError(f"用户不存在: user_id={user_id}")
@@ -43,9 +44,7 @@ async def get_overview(db: AsyncSession) -> dict:
     period = current_period_yw()
     now = _naive_utc_now()
 
-    total_users = (
-        await db.execute(select(func.count(User.id)))
-    ).scalar_one()
+    total_users = (await db.execute(select(func.count(User.id)))).scalar_one()
 
     active_subscriptions = (
         await db.execute(
@@ -56,23 +55,17 @@ async def get_overview(db: AsyncSession) -> dict:
         )
     ).scalar_one()
 
-    codes_total = (
-        await db.execute(select(func.count(RedemptionCode.id)))
-    ).scalar_one()
+    codes_total = (await db.execute(select(func.count(RedemptionCode.id)))).scalar_one()
 
     codes_used = (
-        await db.execute(
-            select(func.count(RedemptionCode.id)).where(
-                RedemptionCode.is_used.is_(True)
-            )
-        )
+        await db.execute(select(func.count(RedemptionCode.id)).where(RedemptionCode.is_used.is_(True)))
     ).scalar_one()
 
     this_week_tokens = (
         await db.execute(
-            select(
-                func.coalesce(func.sum(SubscriptionWeeklyUsage.tokens_used), 0)
-            ).where(SubscriptionWeeklyUsage.period_yw == period)
+            select(func.coalesce(func.sum(SubscriptionWeeklyUsage.tokens_used), 0)).where(
+                SubscriptionWeeklyUsage.period_yw == period
+            )
         )
     ).scalar_one()
 

@@ -35,9 +35,7 @@ class SubscriptionWeeklyUsage(Base):
     """订阅周用量：按 user + ISO 周（period_yw，如 "2026-W30"）累加 token；周一 00:00 (UTC+8) 自然切周。"""
 
     __tablename__ = "subscription_weekly_usage"
-    __table_args__ = (
-        UniqueConstraint("user_id", "period_yw", name="uq_subscription_weekly_usage_user_period"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "period_yw", name="uq_subscription_weekly_usage_user_period"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

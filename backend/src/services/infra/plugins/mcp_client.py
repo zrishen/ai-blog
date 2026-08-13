@@ -96,7 +96,7 @@ class PlatformPluginToolManager:
             if not tool:
                 return f"插件工具不存在：{tool_ref}。"
             return str(await asyncio.wait_for(tool.ainvoke(arguments), timeout=timeout))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Plugin tool call timed out: %s", tool_ref)
             return f"插件工具调用超时：{tool_ref}。"
         except Exception as exc:
@@ -128,15 +128,16 @@ async def discover_plugin_tools(
                 if attempt:
                     await asyncio.sleep(1)
                 try:
-                    async with stdio_client(params) as (read, write):
-                        async with ClientSession(read, write) as session:
-                            await asyncio.wait_for(session.initialize(), timeout=timeout)
-                            result = await asyncio.wait_for(session.list_tools(), timeout=timeout)
+                    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+                        await asyncio.wait_for(session.initialize(), timeout=timeout)
+                        result = await asyncio.wait_for(session.list_tools(), timeout=timeout)
                     return [
                         {
                             "name": tool.name,
                             "description": tool.description or "",
-                            "input_schema": tool.inputSchema if isinstance(tool.inputSchema, dict) else {"type": "object", "properties": {}},
+                            "input_schema": tool.inputSchema
+                            if isinstance(tool.inputSchema, dict)
+                            else {"type": "object", "properties": {}},
                         }
                         for tool in result.tools
                     ]
@@ -150,19 +151,20 @@ async def discover_plugin_tools(
                 return []
             from mcp.client.streamable_http import streamablehttp_client
 
-            async with streamablehttp_client(url) as (read, write, _):
-                async with ClientSession(read, write) as session:
-                    await asyncio.wait_for(session.initialize(), timeout=timeout)
-                    result = await asyncio.wait_for(session.list_tools(), timeout=timeout)
+            async with streamablehttp_client(url) as (read, write, _), ClientSession(read, write) as session:
+                await asyncio.wait_for(session.initialize(), timeout=timeout)
+                result = await asyncio.wait_for(session.list_tools(), timeout=timeout)
             return [
                 {
                     "name": tool.name,
                     "description": tool.description or "",
-                    "input_schema": tool.inputSchema if isinstance(tool.inputSchema, dict) else {"type": "object", "properties": {}},
+                    "input_schema": tool.inputSchema
+                    if isinstance(tool.inputSchema, dict)
+                    else {"type": "object", "properties": {}},
                 }
                 for tool in result.tools
             ]
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.error("Plugin tool discovery timed out for %s", transport)
     except Exception as exc:
         logger.error("Plugin tool discovery failed for %s: %s", transport, exc, exc_info=True)

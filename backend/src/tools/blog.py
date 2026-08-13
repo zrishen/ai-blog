@@ -1,15 +1,15 @@
 """博客 LangChain 工具 — 文章 CRUD + 精准替换。"""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from langchain_core.tools import tool
 from sqlalchemy import select
 
 from src.core.context import current_user_id_cv
 from src.core.workspace_lock import workspace_lock
-from src.database.session import async_session
 from src.database.models import BlogPost as BlogPostModel
+from src.database.session import async_session
 from src.services.workspace.blog.blog_body_service import get_post_body
 
 logger = logging.getLogger(__name__)
@@ -24,8 +24,8 @@ async def blog_create_post(title: str, tags: str = "", excerpt: str = "") -> str
     参数 tags: 标签，逗号分隔，如 "ai, agent"。
     参数 excerpt: 文章摘要（可选）。"""
     from src.services.workspace.blog.blog_storage_service import (
-        slug_from_title,
         ensure_unique_slug,
+        slug_from_title,
         upsert_post_from_meta,
     )
 
@@ -33,40 +33,39 @@ async def blog_create_post(title: str, tags: str = "", excerpt: str = "") -> str
     if user_id is None:
         return "错误: 未认证用户无法创建文章。"
 
-    async with workspace_lock(user_id):
-        async with async_session() as db:
-            base_slug = slug_from_title(title)
-            slug = await ensure_unique_slug(base_slug, db, user_id=user_id)
+    async with workspace_lock(user_id), async_session() as db:
+        base_slug = slug_from_title(title)
+        slug = await ensure_unique_slug(base_slug, db, user_id=user_id)
 
-            from src.database.models import User as UserModel
+        from src.database.models import User as UserModel
 
-            user_result = await db.execute(select(UserModel).where(UserModel.id == user_id))
-            user_row = user_result.scalar_one_or_none()
-            author_name = user_row.username if user_row else "ai-blog"
+        user_result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+        user_row = user_result.scalar_one_or_none()
+        author_name = user_row.username if user_row else "ai-blog"
 
-            meta = {
-                "title": title.strip(),
-                "slug": slug,
-                "tags": tags.strip(),
-                "status": "draft",
-                "author": author_name,
-                "excerpt": excerpt.strip() or None,
-                "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-                "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
-                "published_at": None,
-            }
+        meta = {
+            "title": title.strip(),
+            "slug": slug,
+            "tags": tags.strip(),
+            "status": "draft",
+            "author": author_name,
+            "excerpt": excerpt.strip() or None,
+            "created_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
+            "updated_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
+            "published_at": None,
+        }
 
-            post = await upsert_post_from_meta(db, user_id=user_id, slug=slug, meta=meta, body="")
-            if post is None:
-                return f"文章创建失败: slug={slug}"
-            from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
+        post = await upsert_post_from_meta(db, user_id=user_id, slug=slug, meta=meta, body="")
+        if post is None:
+            return f"文章创建失败: slug={slug}"
+        from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
 
-            await sync_blog_document(db, post)
-            return (
-                f"文章草稿已创建: id={post.id}, slug={slug}, "
-                f"title={title.strip()}, status={meta['status']}。"
-                "请继续调用 blog_write_post 写入完整正文。"
-            )
+        await sync_blog_document(db, post)
+        return (
+            f"文章草稿已创建: id={post.id}, slug={slug}, "
+            f"title={title.strip()}, status={meta['status']}。"
+            "请继续调用 blog_write_post 写入完整正文。"
+        )
 
 
 @tool
@@ -87,8 +86,8 @@ async def blog_write_post(
     参数 status: 新状态 draft/published（可选）。
     参数 excerpt: 新摘要（可选）。"""
     from src.services.workspace.blog.blog_storage_service import (
-        slug_from_title,
         ensure_unique_slug,
+        slug_from_title,
         upsert_post_from_meta,
     )
 
@@ -96,66 +95,62 @@ async def blog_write_post(
     if user_id is None:
         return "错误: 未认证用户无法更新文章。"
 
-    async with workspace_lock(user_id):
-        async with async_session() as db:
-            post = await db.get(BlogPostModel, post_id)
-            if not post or post.deleted_at is not None:
-                return f"文章不存在: id={post_id}"
-            if post.user_id != user_id:
-                return f"文章不存在: id={post_id}"
+    async with workspace_lock(user_id), async_session() as db:
+        post = await db.get(BlogPostModel, post_id)
+        if not post or post.deleted_at is not None:
+            return f"文章不存在: id={post_id}"
+        if post.user_id != user_id:
+            return f"文章不存在: id={post_id}"
 
-            meta = {
-                "title": post.title,
-                "tags": post.tags,
-                "status": post.status,
-                "author": post.author,
-                "excerpt": post.excerpt,
-                "cover_image": post.cover_image,
-            }
-            body = await get_post_body(post)
+        meta = {
+            "title": post.title,
+            "tags": post.tags,
+            "status": post.status,
+            "author": post.author,
+            "excerpt": post.excerpt,
+            "cover_image": post.cover_image,
+        }
+        body = await get_post_body(post)
 
-            if title.strip():
-                meta["title"] = title.strip()
-                old_slug = post.slug
-                new_slug = await ensure_unique_slug(
-                    slug_from_title(title.strip()), db, user_id=user_id, exclude_id=post_id
-                )
-                if new_slug != old_slug:
-                    meta["slug"] = new_slug
-            if content:
-                body = content
-            if tags.strip():
-                meta["tags"] = tags.strip()
-            if status.strip():
-                meta["status"] = status.strip()
-            if excerpt.strip():
-                meta["excerpt"] = excerpt.strip()
+        if title.strip():
+            meta["title"] = title.strip()
+            old_slug = post.slug
+            new_slug = await ensure_unique_slug(slug_from_title(title.strip()), db, user_id=user_id, exclude_id=post_id)
+            if new_slug != old_slug:
+                meta["slug"] = new_slug
+        if content:
+            body = content
+        if tags.strip():
+            meta["tags"] = tags.strip()
+        if status.strip():
+            meta["status"] = status.strip()
+        if excerpt.strip():
+            meta["excerpt"] = excerpt.strip()
 
-            meta["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
-            slug = meta.get("slug", post.slug)
+        meta["updated_at"] = datetime.now(UTC).replace(tzinfo=None).isoformat()
+        slug = meta.get("slug", post.slug)
 
-            updated = await upsert_post_from_meta(
-                db, user_id=user_id, slug=slug, meta=meta, body=body, existing_post_id=post_id
-            )
-            if updated is None:
-                return f"文章更新失败: id={post_id}"
-            from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
+        updated = await upsert_post_from_meta(
+            db, user_id=user_id, slug=slug, meta=meta, body=body, existing_post_id=post_id
+        )
+        if updated is None:
+            return f"文章更新失败: id={post_id}"
+        from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
 
-            await sync_blog_document(db, updated)
-            if status.strip() == "published":
-                from src.services.workspace.blog.blog_service import publish_post
+        await sync_blog_document(db, updated)
+        if status.strip() == "published":
+            from src.services.workspace.blog.blog_service import publish_post
 
-                updated = await publish_post(db, updated.id, True, user_id)
-            elif status.strip() == "draft":
-                from src.services.workspace.blog.blog_service import publish_post
+            updated = await publish_post(db, updated.id, True, user_id)
+        elif status.strip() == "draft":
+            from src.services.workspace.blog.blog_service import publish_post
 
-                updated = await publish_post(db, updated.id, False, user_id)
-            if updated is None:
-                return f"文章更新失败: id={post_id}"
-            return (
-                f"文章已更新: id={updated.id}, slug={slug}, "
-                f"title={meta.get('title', '')}, status={meta.get('status', '')}"
-            )
+            updated = await publish_post(db, updated.id, False, user_id)
+        if updated is None:
+            return f"文章更新失败: id={post_id}"
+        return (
+            f"文章已更新: id={updated.id}, slug={slug}, title={meta.get('title', '')}, status={meta.get('status', '')}"
+        )
 
 
 @tool
@@ -170,9 +165,10 @@ async def blog_edit_post(
     参数 post_id: 文章的数据库 ID（必填）。
     参数 target_text: 需要被替换的原文片段（必填），必须与正文中完全一致。
     参数 replacement_text: 替换后的新文本（必填）。
-    参数 section_index: 章节序号（可选，从 1 开始，来自 outline 或上下文）。传入后只在该章节范围内匹配 target_text，章节内唯一即可替换，避免全文重复时被拒绝。"""
-    from src.services.workspace.markdown.markdown_ast_service import get_section_char_range, parse_to_blocks
+    参数 section_index: 章节序号（可选，从 1 开始，来自 outline 或上下文）。
+    传入后只在该章节范围内匹配 target_text，章节内唯一即可替换，避免全文重复时被拒绝。"""
     from src.services.workspace.blog.blog_storage_service import upsert_post_from_meta
+    from src.services.workspace.markdown.markdown_ast_service import get_section_char_range, parse_to_blocks
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -181,75 +177,71 @@ async def blog_edit_post(
     if not target_text.strip():
         return "错误: target_text 不能为空。"
 
-    async with workspace_lock(user_id):
-        async with async_session() as db:
-            post = await db.get(BlogPostModel, post_id)
-            if not post or post.deleted_at is not None:
-                return f"文章不存在: id={post_id}"
-            if post.user_id != user_id:
-                return f"文章不存在: id={post_id}"
+    async with workspace_lock(user_id), async_session() as db:
+        post = await db.get(BlogPostModel, post_id)
+        if not post or post.deleted_at is not None:
+            return f"文章不存在: id={post_id}"
+        if post.user_id != user_id:
+            return f"文章不存在: id={post_id}"
 
-            body = await get_post_body(post)
+        body = await get_post_body(post)
 
-            search_body = body
-            search_start = 0
-            search_end = len(body)
-            section_scope = ""
+        search_body = body
+        search_start = 0
+        search_end = len(body)
+        section_scope = ""
 
-            if section_index > 0:
-                blocks = post.blocks_json or parse_to_blocks(body)
-                char_range = get_section_char_range(body, blocks, section_index)
-                if char_range is None:
-                    return (
-                        f"错误: section_index={section_index} 无法定位对应章节。"
-                        "请先用 blog_read_post(mode='outline') 查看可用章节序号。"
-                    )
-                search_start, search_end = char_range
-                search_body = body[search_start:search_end]
-                section_scope = f" (限定第 {section_index} 节内)"
-
-            match_count = search_body.count(target_text)
-            if match_count == 0:
+        if section_index > 0:
+            blocks = post.blocks_json or parse_to_blocks(body)
+            char_range = get_section_char_range(body, blocks, section_index)
+            if char_range is None:
                 return (
-                    f"错误: 在文章{section_scope or '中'}未找到目标文本「{target_text[:80]}...」。\n"
-                    "请先使用 blog_read_post(mode='full') 查看文章完整内容，"
-                    "确保 target_text 与正文中完全一致（包括空格和换行）。"
+                    f"错误: section_index={section_index} 无法定位对应章节。"
+                    "请先用 blog_read_post(mode='outline') 查看可用章节序号。"
                 )
-            if match_count > 1:
-                return (
-                    f"错误: 目标文本在{section_scope or '文章'}中出现 {match_count} 次，无法确定要修改哪一处。\n"
-                    "请先使用 blog_read_post(mode='outline') 查看文章结构，"
-                    "再使用 blog_read_post(mode='section', section_index=N) 读取目标章节，"
-                    "并提供包含上下文的唯一 target_text。"
-                )
+            search_start, search_end = char_range
+            search_body = body[search_start:search_end]
+            section_scope = f" (限定第 {section_index} 节内)"
 
-            local_start = search_body.find(target_text)
-            global_start = search_start + local_start
-            global_end = global_start + len(target_text)
-            new_body = body[:global_start] + replacement_text + body[global_end:]
-
-            meta = {
-                "title": post.title,
-                "tags": post.tags,
-                "status": post.status,
-                "author": post.author,
-                "excerpt": post.excerpt,
-                "cover_image": post.cover_image,
-            }
-            slug = post.slug
-            updated = await upsert_post_from_meta(
-                db, user_id=user_id, slug=slug, meta=meta, body=new_body, existing_post_id=post_id
-            )
-            if updated is None:
-                return f"文章更新失败: id={post_id}"
-            from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
-
-            await sync_blog_document(db, updated)
-            scope_suffix = f", section={section_index}" if section_index > 0 else ""
+        match_count = search_body.count(target_text)
+        if match_count == 0:
             return (
-                f"文章已精准修改: id={updated.id}, slug={slug}, "
-                f"title={meta.get('title', '')}{scope_suffix}"
+                f"错误: 在文章{section_scope or '中'}未找到目标文本「{target_text[:80]}...」。\n"
+                "请先使用 blog_read_post(mode='full') 查看文章完整内容，"
+                "确保 target_text 与正文中完全一致（包括空格和换行）。"
             )
+        if match_count > 1:
+            return (
+                f"错误: 目标文本在{section_scope or '文章'}中出现 {match_count} 次，无法确定要修改哪一处。\n"
+                "请先使用 blog_read_post(mode='outline') 查看文章结构，"
+                "再使用 blog_read_post(mode='section', section_index=N) 读取目标章节，"
+                "并提供包含上下文的唯一 target_text。"
+            )
+
+        local_start = search_body.find(target_text)
+        global_start = search_start + local_start
+        global_end = global_start + len(target_text)
+        new_body = body[:global_start] + replacement_text + body[global_end:]
+
+        meta = {
+            "title": post.title,
+            "tags": post.tags,
+            "status": post.status,
+            "author": post.author,
+            "excerpt": post.excerpt,
+            "cover_image": post.cover_image,
+        }
+        slug = post.slug
+        updated = await upsert_post_from_meta(
+            db, user_id=user_id, slug=slug, meta=meta, body=new_body, existing_post_id=post_id
+        )
+        if updated is None:
+            return f"文章更新失败: id={post_id}"
+        from src.services.workspace.blog.blog_document_sync_service import sync_blog_document
+
+        await sync_blog_document(db, updated)
+        scope_suffix = f", section={section_index}" if section_index > 0 else ""
+        return f"文章已精准修改: id={updated.id}, slug={slug}, title={meta.get('title', '')}{scope_suffix}"
 
 
 @tool
@@ -263,22 +255,22 @@ async def blog_delete_post(post_id: int) -> str:
     if user_id is None:
         return "错误: 未认证用户无法删除文章。"
 
-    async with workspace_lock(user_id):
-        async with async_session() as db:
-            post = await get_owned_post(db, post_id, user_id)
-            if not post:
-                return f"文章不存在: id={post_id}"
+    async with workspace_lock(user_id), async_session() as db:
+        post = await get_owned_post(db, post_id, user_id)
+        if not post:
+            return f"文章不存在: id={post_id}"
 
-            slug = post.slug
-            title = post.title
-            await delete_post(db, post_id, user_id)
-            return f"文章已移入回收站: id={post_id}, slug={slug}, title={title}"
+        slug = post.slug
+        title = post.title
+        await delete_post(db, post_id, user_id)
+        return f"文章已移入回收站: id={post_id}, slug={slug}, title={title}"
 
 
 @tool
 async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "", page: int = 1) -> str:
     """搜索或列出博客文章，也可搜索单篇文章内容。
-    当用户要求查看有哪些文章、列出文章或按标题查找博客文章时，不传 post_id；当需要在某篇文章内查找文字、定位重复片段或辅助精准编辑时，传入 post_id。
+    当用户要求查看有哪些文章、列出文章或按标题查找博客文章时，不传 post_id；
+    当需要在某篇文章内查找文字、定位重复片段或辅助精准编辑时，传入 post_id。
     参数 query: 搜索关键词；搜索文章列表时可为空，表示列出文章；搜索单篇正文时必填。
     参数 post_id: 文章 ID；大于 0 时只搜索该文章正文，默认 0 表示搜索文章列表。
     参数 status: 搜索文章列表时按状态筛选，draft（草稿）或 published（发布），留空则全部搜索。
@@ -346,7 +338,8 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
         if keyword:
             keyword_lower = keyword.lower()
             matched = [
-                post for post in all_posts
+                post
+                for post in all_posts
                 if keyword_lower in post.title.lower()
                 or keyword_lower in (post.excerpt or "").lower()
                 or keyword_lower in (post.tags or "").lower()
@@ -356,7 +349,7 @@ async def blog_search_posts(query: str = "", post_id: int = 0, status: str = "",
 
         total = len(matched)
         start = (page - 1) * per_page
-        posts = matched[start:start + per_page]
+        posts = matched[start : start + per_page]
 
         if not posts:
             if keyword:
@@ -470,7 +463,9 @@ async def _read_post_outline(post_id: int) -> str:
     for item in outline:
         indent = "  " if item["level"] > 2 else ""
         first = f" 首句: {item['first_sentence']}" if item["first_sentence"] else ""
-        lines.append(f"  {indent}[{item['section_index']}] {'#' * item['level']} {item['title']} ({item['char_count']}字){first}")
+        lines.append(
+            f"  {indent}[{item['section_index']}] {'#' * item['level']} {item['title']} ({item['char_count']}字){first}"
+        )
     lines.append("\n提示: 用 blog_read_post(post_id, mode='section', section_index=N) 读取指定章节的完整文字。")
     return "\n".join(lines)
 
@@ -531,9 +526,7 @@ async def update_blog_sidebar(html: str) -> str:
         return "错误: 未认证用户无法更新左栏。"
 
     async with async_session() as db:
-        result = await db.execute(
-            select(BlogSidebarSettingsModel).where(BlogSidebarSettingsModel.user_id == user_id)
-        )
+        result = await db.execute(select(BlogSidebarSettingsModel).where(BlogSidebarSettingsModel.user_id == user_id))
         settings = result.scalar_one_or_none()
         if settings is None:
             settings = BlogSidebarSettingsModel(user_id=user_id, html=html)

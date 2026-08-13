@@ -1,6 +1,8 @@
-"""统一回收站服务：聚合 conversation / file_document / blog_post 三类软删资源，提供列表、恢复与永久删除；严格当前用户隔离，仅作用于 deleted_at 非空记录。
+"""统一回收站服务：聚合 conversation / file_document / blog_post 三类软删资源，提供列表、恢复与永久删除；
+严格当前用户隔离，仅作用于 deleted_at 非空记录。
 
-永久删除遵循「DB 先提交、物理后清理」：先硬删记录并 commit，再 best-effort 清理物理资源（上传文件 / FalkorDB 向量），失败留孤儿由维护任务回收，避免「DB 仍可见、资源已丢」的不一致。
+永久删除遵循「DB 先提交、物理后清理」：先硬删记录并 commit，再 best-effort 清理物理资源（上传文件 / FalkorDB 向量），
+失败留孤儿由维护任务回收，避免「DB 仍可见、资源已丢」的不一致。
 """
 
 from __future__ import annotations
@@ -8,9 +10,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import PurePath
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy import delete as sql_delete
@@ -21,11 +23,21 @@ from src.core.path_guard import attachment_stored_path
 from src.core.workspace_path import is_safe_workspace_segment
 from src.database.models import (
     BlogPost as BlogPostModel,
+)
+from src.database.models import (
     BlogPostRevision,
-    ChatAttachment as ChatAttachmentModel,
-    Conversation as ConversationModel,
-    FileDocument as FileDocumentModel,
     FileProcessingJob,
+)
+from src.database.models import (
+    ChatAttachment as ChatAttachmentModel,
+)
+from src.database.models import (
+    Conversation as ConversationModel,
+)
+from src.database.models import (
+    FileDocument as FileDocumentModel,
+)
+from src.database.models import (
     Message as MessageModel,
 )
 from src.schemas.trash import (
@@ -33,14 +45,14 @@ from src.schemas.trash import (
     TrashFailedItem,
     TrashItem,
 )
+from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
+from src.services.workspace import rag_service
 from src.services.workspace.file.file_processing_service import (
     create_or_reuse_restore_job,
     has_active_restore,
     schedule_job,
 )
 from src.services.workspace.file.file_service import get_uploaded_file_path
-from src.services.memory.graph_store import delete_document_chunks, delete_resource_memory
-from src.services.workspace import rag_service
 from src.services.workspace.trash.workspace_trash_service import (
     get_blog_trash_entry,
     get_workspace_trash_entry,
@@ -56,7 +68,7 @@ SUPPORTED_TYPES = {"conversation", "file_document", "blog_post", "workspace_file
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 # ── 路径与引用安全检查 ──────────────────────────────────────────
@@ -67,16 +79,14 @@ def _is_safe_user_relative_name(name: str) -> bool:
     return is_safe_workspace_segment(name)
 
 
-def _is_external_or_empty(value: Optional[str]) -> bool:
+def _is_external_or_empty(value: str | None) -> bool:
     """默认封面（外链或空）不参与本地文件清理。"""
     if not value:
         return True
     raw = value.strip()
     if not raw:
         return True
-    if raw.startswith(("http://", "https://", "//", "data:", "blob:", "ftp:", "file:")):
-        return True
-    return False
+    return bool(raw.startswith(("http://", "https://", "//", "data:", "blob:", "ftp:", "file:")))
 
 
 # 兼容 /api/ 与 /api/v1/ 前缀（历史 markdown 可能存旧前缀引用）
@@ -84,7 +94,7 @@ _UPLOAD_REF_RE = re.compile(r"^/api(?:/v1)?/(?:public/)?uploads/(?:([^/]+)/)?([^
 _COVER_REF_RE = re.compile(r"^/api(?:/v1)?/blog/cover/([^/]+)$")
 
 
-def _extract_local_filename(value: str) -> Optional[str]:
+def _extract_local_filename(value: str) -> str | None:
     """从 /api/[v1/]uploads/{name}、/api/[v1/]public/uploads/{user}/{name}、/api/[v1/]blog/cover/{name}
     或纯文件名中提取并校验最终的 stored filename。
 
@@ -142,11 +152,7 @@ async def _count_other_blog_cover_refs(
     if exclude_post_id is not None:
         stmt = stmt.where(BlogPostModel.id != exclude_post_id)
     result = await db.execute(stmt)
-    return sum(
-        1
-        for cover_value in result.scalars().all()
-        if _extract_local_filename(cover_value or "") == stored_name
-    )
+    return sum(1 for cover_value in result.scalars().all() if _extract_local_filename(cover_value or "") == stored_name)
 
 
 async def _count_other_blog_body_refs(
@@ -159,9 +165,7 @@ async def _count_other_blog_body_refs(
     """统计当前用户其他博客正文 md 内联引用同一 stored 文件名的命中数。"""
     from src.services.workspace.blog.blog_body_service import collect_blog_body_image_refs
 
-    refs = await collect_blog_body_image_refs(
-        db, user_id, exclude_post_id=exclude_post_id
-    )
+    refs = await collect_blog_body_image_refs(db, user_id, exclude_post_id=exclude_post_id)
     return 1 if stored_name in refs else 0
 
 
@@ -187,10 +191,7 @@ async def _count_message_refs_for_filename(
     return sum(
         1
         for image_url, file_url in result.all()
-        if any(
-            _extract_local_filename(value or "") == stored_name
-            for value in (image_url, file_url)
-        )
+        if any(_extract_local_filename(value or "") == stored_name for value in (image_url, file_url))
     )
 
 
@@ -203,43 +204,51 @@ async def list_trash(db: AsyncSession, *, user_id: int) -> list[TrashItem]:
     items: list[TrashItem] = []
 
     convs = (
-        await db.execute(
-            select(ConversationModel).where(
-                ConversationModel.user_id == user_id,
-                ConversationModel.deleted_at.is_not(None),
+        (
+            await db.execute(
+                select(ConversationModel).where(
+                    ConversationModel.user_id == user_id,
+                    ConversationModel.deleted_at.is_not(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for c in convs:
         if c.deleted_at is None:
             continue
-        items.append(
-            TrashItem(type="conversation", id=c.id, name=c.title, deleted_at=c.deleted_at)
-        )
+        items.append(TrashItem(type="conversation", id=c.id, name=c.title, deleted_at=c.deleted_at))
 
     docs = (
-        await db.execute(
-            select(FileDocumentModel).where(
-                FileDocumentModel.user_id == user_id_str,
-                FileDocumentModel.deleted_at.is_not(None),
+        (
+            await db.execute(
+                select(FileDocumentModel).where(
+                    FileDocumentModel.user_id == user_id_str,
+                    FileDocumentModel.deleted_at.is_not(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for d in docs:
         if d.deleted_at is None:
             continue
-        items.append(
-            TrashItem(type="file_document", id=d.id, name=d.original_name, deleted_at=d.deleted_at)
-        )
+        items.append(TrashItem(type="file_document", id=d.id, name=d.original_name, deleted_at=d.deleted_at))
 
     posts = (
-        await db.execute(
-            select(BlogPostModel).where(
-                BlogPostModel.user_id == user_id,
-                BlogPostModel.deleted_at.is_not(None),
+        (
+            await db.execute(
+                select(BlogPostModel).where(
+                    BlogPostModel.user_id == user_id,
+                    BlogPostModel.deleted_at.is_not(None),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     for p in posts:
         if p.deleted_at is None:
             continue
@@ -379,9 +388,7 @@ async def restore_item(
 # ── 永久删除 ───────────────────────────────────────────────────
 
 
-async def _collect_conversation_attachment_names(
-    db: AsyncSession, conversation_id: int
-) -> list[str]:
+async def _collect_conversation_attachment_names(db: AsyncSession, conversation_id: int) -> list[str]:
     """收集会话下所有 Message 引用的本地附件 stored 文件名（去重）。"""
     result = await db.execute(
         select(MessageModel.image_url, MessageModel.file_url).where(
@@ -498,14 +505,10 @@ async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -
     await db.execute(
         sql_delete(ChatAttachmentModel).where(
             ChatAttachmentModel.user_id == user_id,
-            ChatAttachmentModel.message_id.in_(
-                select(MessageModel.id).where(MessageModel.conversation_id == item_id)
-            ),
+            ChatAttachmentModel.message_id.in_(select(MessageModel.id).where(MessageModel.conversation_id == item_id)),
         )
     )
-    await db.execute(
-        sql_delete(MessageModel).where(MessageModel.conversation_id == item_id)
-    )
+    await db.execute(sql_delete(MessageModel).where(MessageModel.conversation_id == item_id))
     await db.execute(
         sql_delete(ConversationModel).where(
             ConversationModel.id == item_id,
@@ -523,9 +526,7 @@ async def _purge_conversation(db: AsyncSession, *, item_id: int, user_id: int) -
                 user_id=user_id,
             )
         except Exception:
-            logger.warning(
-                "回收站清理附件失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True
-            )
+            logger.warning("回收站清理附件失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True)
     for stored_path in chat_attachment_paths:
         try:
             path = attachment_stored_path(user_id, stored_path.as_posix())
@@ -558,9 +559,7 @@ async def _purge_file_document(db: AsyncSession, *, item_id: int, user_id: int) 
     doc_id = doc.id
 
     # 先硬删 DB 并提交，再 best-effort 清理向量与文件，避免「DB 还在、资源已丢」。
-    await db.execute(
-        sql_delete(FileDocumentModel).where(FileDocumentModel.id == doc_id)
-    )
+    await db.execute(sql_delete(FileDocumentModel).where(FileDocumentModel.id == doc_id))
     await db.commit()
 
     # commit 成功后 best-effort 清理；失败留孤儿，由清理脚本回收。
@@ -581,9 +580,7 @@ async def _purge_file_document(db: AsyncSession, *, item_id: int, user_id: int) 
             user_id=user_id,
         )
     except Exception:
-        logger.warning(
-            "上传文件清理失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True
-        )
+        logger.warning("上传文件清理失败（留待孤儿清理）: stored_name=%s", stored_name, exc_info=True)
     # 关联移出 AI 知识（删 RagSource）；向量已在上面清理，避免孤儿源残留。
     try:
         if await rag_service.get_rag_source(db, user_id, "file", doc_id) is not None:
@@ -608,11 +605,7 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
     # commit 前先收集物理资源信息
     post_id = post.id
     cover_value = post.cover_image or ""
-    cover_stored = (
-        _extract_local_filename(cover_value)
-        if not _is_external_or_empty(cover_value)
-        else None
-    )
+    cover_stored = _extract_local_filename(cover_value) if not _is_external_or_empty(cover_value) else None
 
     # 先删除关联 revisions，再删除文章本体，避免依赖数据库级联行为。
     await db.execute(
@@ -646,9 +639,7 @@ async def _purge_blog_post(db: AsyncSession, *, item_id: int, user_id: int) -> N
                 user_id=user_id,
             )
         except Exception:
-            logger.warning(
-                "封面清理失败（留待孤儿清理）: stored_name=%s", cover_stored, exc_info=True
-            )
+            logger.warning("封面清理失败（留待孤儿清理）: stored_name=%s", cover_stored, exc_info=True)
     if trash_entry is not None:
         await purge_workspace_trash_entry(db, entry=trash_entry)
         await db.commit()
@@ -751,8 +742,8 @@ def _error_code_from_exception(exc: HTTPException) -> str:
 
 __all__ = [
     "SUPPORTED_TYPES",
-    "list_trash",
-    "restore_item",
-    "purge_item",
     "empty_trash",
+    "list_trash",
+    "purge_item",
+    "restore_item",
 ]

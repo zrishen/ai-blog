@@ -3,6 +3,7 @@
 按来源拆成纯函数，由各工具的 ToolBehaviorDescriptor.on_result 选择调用。
 """
 
+import contextlib
 import logging
 import re
 from typing import Any
@@ -26,10 +27,8 @@ def _extract_rag_refs(result_text: str) -> list[dict[str, Any]]:
         if collection_m:
             ref["collection"] = collection_m.group(1).rstrip("，。")
         if distance_m and distance_m.group(1) != "unknown":
-            try:
+            with contextlib.suppress(ValueError):
                 ref["distance"] = float(distance_m.group(1))
-            except ValueError:
-                pass
         refs.append(ref)
     return refs
 
@@ -60,10 +59,8 @@ def _extract_memory_refs(result_text: str) -> list[dict[str, Any]]:
         if path_m:
             ref["path"] = path_m.group(1).rstrip("，。")
         if distance_m and distance_m.group(1) != "unknown":
-            try:
+            with contextlib.suppress(ValueError):
                 ref["distance"] = float(distance_m.group(1))
-            except ValueError:
-                pass
         refs.append(ref)
     return refs
 
@@ -82,7 +79,10 @@ def _extract_mcp_refs(tool_input: dict | None) -> list[dict[str, Any]]:
 _BLOG_META_PATTERNS: dict[str, tuple[str, ...]] = {
     "blog_create_post": ("id", "slug", "title", "status"),
     "blog_write_post": ("id", "slug", "title", "status"),
-    "blog_edit_post": ("id", "slug",),
+    "blog_edit_post": (
+        "id",
+        "slug",
+    ),
     "blog_delete_post": ("id", "slug", "title"),
 }
 

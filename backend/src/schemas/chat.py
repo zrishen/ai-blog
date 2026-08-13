@@ -1,9 +1,7 @@
-from typing import Optional
-
 from pydantic import BaseModel
 
 
 class ChatResponse(BaseModel):
     content: str
-    conversation_id: Optional[int] = None
+    conversation_id: int | None = None
     message_id: int

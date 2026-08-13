@@ -48,9 +48,7 @@ async def restore_trash_item(
 ):
     if item_type not in SUPPORTED_TYPES:
         raise HTTPException(status_code=400, detail=f"不支持的类型: {item_type}")
-    item = await restore_item(
-        db, item_type=item_type, item_id=item_id, user_id=user.id
-    )
+    item = await restore_item(db, item_type=item_type, item_id=item_id, user_id=user.id)
     if item_type == "file_document":
         response.status_code = status.HTTP_202_ACCEPTED
         return FileProcessingJobResponse.model_validate(item)

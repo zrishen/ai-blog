@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src.config import settings
-from src.services.memory import graph_store
 from src.services.infra.embeddings import embedding_service
+from src.services.memory import graph_store
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class EmbeddingIndexReport:
     failed: int = 0
     by_kind: dict[str, int] = field(default_factory=dict)
 
-    def merge(self, other: "EmbeddingIndexReport") -> None:
+    def merge(self, other: EmbeddingIndexReport) -> None:
         self.selected += other.selected
         self.embedded += other.embedded
         self.skipped += other.skipped
@@ -125,7 +125,7 @@ async def _index_rows(
             "text": row["text"],
             "embedding": embedding,
         }
-        for row, embedding in zip(prepared, embeddings)
+        for row, embedding in zip(prepared, embeddings, strict=True)
     ]
     report.embedded = await graph_store.upsert_node_embeddings(
         kind=kind,
@@ -238,7 +238,5 @@ async def reindex_all(
             missing_only=True,
         )
         if remaining:
-            raise RuntimeError(
-                f"Memory reindex incomplete for kind={kind}; remaining nodes require retry"
-            )
+            raise RuntimeError(f"Memory reindex incomplete for kind={kind}; remaining nodes require retry")
     return report

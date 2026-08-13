@@ -4,6 +4,7 @@ SKILL_REGISTRY + DEFAULT_ENABLED_SKILLS 为唯一源，resolve_skills 读此派�
 指令文本是 PromptSegment 段（prompts.py 唯一源）；skill 只声明「启用哪些段名」（字符串契约，
 不 import prompts，解耦）；不内嵌 instructions 文本（由 prompts.py 段承载）。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

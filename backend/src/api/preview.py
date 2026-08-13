@@ -1,10 +1,11 @@
 """文件预览路由（docx/xlsx → HTML，PDF → inline）。"""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.core.exceptions import OwnershipError
 from src.database.engine import get_db
 from src.database.models import User
@@ -13,7 +14,6 @@ from src.services.workspace.file.file_service import (
     get_uploaded_file_path,
     is_hidden_soft_deleted_file,
 )
-from src.config import settings
 from src.utils.auth import (
     create_preview_token,
     decode_access_token,
@@ -83,8 +83,8 @@ async def preview_file(
 
     try:
         path = get_uploaded_file_path(user.id, filename)
-    except (OwnershipError, ValueError):
-        raise HTTPException(status_code=403, detail="Access denied")
+    except (OwnershipError, ValueError) as exc:
+        raise HTTPException(status_code=403, detail="Access denied") from exc
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -96,12 +96,17 @@ async def preview_file(
 <html><head>
 <meta charset="utf-8">
 <style>
-  .file-preview-document {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 8px; line-height: 1.6; }}
+  .file-preview-document {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 8px;
+    line-height: 1.6;
+  }}
   .file-preview-document h1, .file-preview-document h2, .file-preview-document h3 {{ color: #333; }}
   .file-preview-document table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
   .file-preview-document th {{ background: #f5f5f5; text-align: left; }}
   .file-preview-document td, .file-preview-document th {{ padding: 8px; border: 1px solid #ddd; }}
-  .file-preview-document .docx-preview, .file-preview-document .xlsx-preview {{ width: 100%; max-width: none; margin: 0; }}
+  .file-preview-document .docx-preview,
+  .file-preview-document .xlsx-preview {{ width: 100%; max-width: none; margin: 0; }}
 </style></head><body><div class="file-preview-document">{html_content}</div></body></html>"""
         return HTMLResponse(content=full_html)
 

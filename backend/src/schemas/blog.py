@@ -1,7 +1,7 @@
 """博客文章的 Pydantic 模型。"""
 
 from datetime import datetime
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -19,20 +19,20 @@ Author = Annotated[str, Field(max_length=100)]
 class BlogPostCreate(BaseModel):
     title: Title
     content: str
-    excerpt: Optional[Excerpt] = None
-    cover_image: Optional[CoverImage] = None
-    status: Optional[BlogStatus] = "draft"
-    tags: Optional[Tags] = None
-    author: Optional[Author] = None
+    excerpt: Excerpt | None = None
+    cover_image: CoverImage | None = None
+    status: BlogStatus | None = "draft"
+    tags: Tags | None = None
+    author: Author | None = None
 
 
 class BlogPostUpdate(BaseModel):
-    title: Optional[Title] = None
-    content: Optional[str] = None
-    excerpt: Optional[Excerpt] = None
-    cover_image: Optional[CoverImage] = None
-    status: Optional[BlogStatus] = None
-    tags: Optional[Tags] = None
+    title: Title | None = None
+    content: str | None = None
+    excerpt: Excerpt | None = None
+    cover_image: CoverImage | None = None
+    status: BlogStatus | None = None
+    tags: Tags | None = None
 
 
 class BlogPostResponse(BaseModel):
@@ -40,32 +40,33 @@ class BlogPostResponse(BaseModel):
     title: str
     slug: str
     content: str
-    excerpt: Optional[str] = None
-    cover_image: Optional[str] = None
+    excerpt: str | None = None
+    cover_image: str | None = None
     status: str
-    tags: Optional[str] = None
-    author: Optional[str] = None
+    tags: str | None = None
+    author: str | None = None
     view_count: int
     created_at: datetime
     updated_at: datetime
-    published_at: Optional[datetime] = None
+    published_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
 
 class BlogPostListItem(BaseModel):
     """博客列表项（不含完整 content）。"""
+
     id: int
     title: str
     slug: str
-    excerpt: Optional[str] = None
-    cover_image: Optional[str] = None
+    excerpt: str | None = None
+    cover_image: str | None = None
     status: str
-    tags: Optional[str] = None
-    author: Optional[str] = None
+    tags: str | None = None
+    author: str | None = None
     view_count: int
     created_at: datetime
-    published_at: Optional[datetime] = None
+    published_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -95,11 +96,11 @@ class BlogPostRevisionSummary(BaseModel):
 class BlogPostRevisionResponse(BlogPostRevisionSummary):
     slug: str
     content: str
-    excerpt: Optional[str] = None
-    cover_image: Optional[str] = None
-    category_id: Optional[int] = None
-    tags: Optional[str] = None
-    author: Optional[str] = None
+    excerpt: str | None = None
+    cover_image: str | None = None
+    category_id: int | None = None
+    tags: str | None = None
+    author: str | None = None
 
 
 class BlogPostRevisionListResponse(BaseModel):

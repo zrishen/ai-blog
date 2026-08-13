@@ -6,6 +6,7 @@
 import logging
 import logging.handlers
 import sys
+
 from src.config import DATA_DIR
 from src.core.context import request_id_cv
 
@@ -20,10 +21,10 @@ _OWN_CODE_PREFIX = "src."
 
 # 控制台颜色（仅 tty 时启用）
 _ANSI_COLORS = {
-    logging.DEBUG: "\033[36m",    # 青色
-    logging.INFO: "\033[32m",     # 绿色
+    logging.DEBUG: "\033[36m",  # 青色
+    logging.INFO: "\033[32m",  # 绿色
     logging.WARNING: "\033[33m",  # 黄色
-    logging.ERROR: "\033[31m",    # 红色
+    logging.ERROR: "\033[31m",  # 红色
     logging.CRITICAL: "\033[1;31m",  # 粗红
 }
 _RESET = "\033[0m"
@@ -72,7 +73,7 @@ class _OriginFilter(logging.Filter):
 # Prevent uvicorn/stdlib basicConfig from overriding our logging config.
 # basicConfig only takes effect if root.handlers is empty, but it also
 # resets root level. Stub it out so our config always wins.
-logging.basicConfig = lambda *_, **__: None  # noqa: F841  # type: ignore[assignment]
+logging.basicConfig = lambda *_, **__: None  # type: ignore[assignment]
 
 
 def _json_formatter() -> logging.Formatter:
@@ -93,10 +94,12 @@ def setup_logging(level: str = "INFO") -> None:
     json_fmt = _json_formatter()
 
     console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(_ColoredFormatter(
-        "[%(asctime)s] [%(levelname)s] [%(request_id)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    ))
+    console.setFormatter(
+        _ColoredFormatter(
+            "[%(asctime)s] [%(levelname)s] [%(request_id)s] %(name)s: %(message)s",
+            datefmt="%H:%M:%S",
+        )
+    )
     console.setLevel(level)
     console.addFilter(_RequestIdFilter())
 

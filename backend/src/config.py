@@ -223,12 +223,10 @@ class Settings(BaseSettings):
         if not stripped:
             raise ValueError(
                 "jwt_secret 未配置：请通过环境变量 JWT_SECRET 或 backend/.env 注入高熵随机值"
-                "（可用 python -c \"import secrets; print(secrets.token_urlsafe(48))\" 生成）。"
+                '（可用 python -c "import secrets; print(secrets.token_urlsafe(48))" 生成）。'
             )
         if stripped == "dev-secret-key-change-in-production-env":
-            raise ValueError(
-                "jwt_secret 仍在使用仓库内的公开默认值，存在被伪造 JWT 的风险，请替换为高熵随机值。"
-            )
+            raise ValueError("jwt_secret 仍在使用仓库内的公开默认值，存在被伪造 JWT 的风险，请替换为高熵随机值。")
         return stripped
 
     @field_validator("llm_settings_encryption_key")

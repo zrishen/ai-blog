@@ -3,7 +3,7 @@
 续期范式同 redemption_service.redeem：未过期叠加，过期/无 now+days。
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,12 +39,13 @@ async def grant_subscription(
     *,
     now: datetime | None = None,
 ) -> datetime:
-    """管理员直接延期订阅（不走兑换码），返回新 subscription_expires_at；续期逻辑同 redeem（未过期叠加）；用户不存在抛 LookupError。"""
+    """管理员直接延期订阅（不走兑换码），返回新 subscription_expires_at；
+    续期逻辑同 redeem（未过期叠加）；用户不存在抛 LookupError。"""
     user = await db.get(User, user_id)
     if user is None:
         raise LookupError(f"用户不存在: {user_id}")
 
-    now_naive = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    now_naive = now or datetime.now(UTC).replace(tzinfo=None)
     duration = timedelta(days=days)
     if user.subscription_expires_at and user.subscription_expires_at > now_naive:
         new_expires = user.subscription_expires_at + duration  # 未过期：叠加

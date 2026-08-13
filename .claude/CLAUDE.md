@@ -29,6 +29,6 @@
 
 原则：最小范围改；遵循架构/接口；不改无关代码，职责单一；数据 user-scoped；废弃代码及时删除。**本导航只讲"全局已有什么能力"建立全局观、不讲怎么做；新增/改变已有能力时，主动同步更新对应这句（不等提醒）。**
 
-验证：前端 `npm run lint && npm run build && npm run test`，后端 `uv run pytest`。**分级验证省时间**：日常改单域只跑 `npx vitest run tests/<域>/`（后端 `uv run pytest tests/<域>/`），仅动共享层（api/client、chatStore、types、SSE）或 commit 前跑全量。
+验证：前端 `npm run lint && npm run build && npm run test`，后端 `uv run pytest`（默认 4 进程并行，单进程调试加 `-n0`）。**分级验证省时间**：前端日常改单域 `npx vitest run tests/<域>/`，后端改单域 `uv run pytest tests/<域>/ --no-cov`；仅动共享层或 commit 前跑全量。后端测试起 testcontainers 真容器，单用例 ~1.3s，全量不快——日常务必只跑改动域 + `--no-cov`。
 
 注释：简洁，只说作用不写原因，多数情况不写。

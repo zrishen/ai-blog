@@ -4,6 +4,7 @@ import pytest
 
 from src.core.context import current_user_id_cv
 from src.core.exceptions import NotFoundError, OwnershipError, ValidationFailedError
+from src.database import session as session_module
 from src.tools import workspace_files
 
 
@@ -86,7 +87,7 @@ async def test_workspace_move_delegates_to_path_service(monkeypatch, user_contex
         calls.append((db, user_id, path, target_path))
         return SimpleNamespace(path="archive/note.md")
 
-    monkeypatch.setattr(workspace_files, "async_session", Session)
+    monkeypatch.setattr(session_module, "async_session", Session)
     monkeypatch.setattr(workspace_files, "move_entry", fake_move)
 
     assert await workspace_files.move.ainvoke(
@@ -103,6 +104,9 @@ async def test_workspace_delete_removes_unmanaged_regular_file(monkeypatch, user
         def scalar_one_or_none(self):
             return None
 
+        def scalars(self):
+            return []
+
     class Session:
         async def __aenter__(self):
             return self
@@ -113,10 +117,13 @@ async def test_workspace_delete_removes_unmanaged_regular_file(monkeypatch, user
         async def execute(self, _statement):
             return Result()
 
+        async def scalar(self, _statement):
+            return None
+
         async def commit(self):
             return None
 
-    monkeypatch.setattr(workspace_files, "async_session", Session)
+    monkeypatch.setattr(session_module, "async_session", Session)
     async def fake_move(db, *, user_id, relative_path):
         calls.append((db, user_id, relative_path))
 

@@ -2,28 +2,28 @@
 
 from fastapi import APIRouter
 
-from src.api.chat import router as chat_router
-from src.api.chat_attachments import router as chat_attachments_router
-from src.api.conversations import router as conversations_router
-from src.api.plugins import router as plugins_router
-from src.api.client_errors import router as client_errors_router
-from src.api.status import router as status_router
-from src.api.skills import router as skills_router
-from src.api.files import router as files_router
-from src.api.blog import router as blog_router
-from src.api.workspace import router as workspace_router
-from src.api.preview import router as preview_router
-from src.api.auth import router as auth_router
-from src.api.public_chat import router as public_chat_router
-from src.api.settings import router as settings_router
-from src.api.trash import router as trash_router
 from src.api.admin import router as admin_router
 from src.api.admin_codes import router as admin_codes_router
+from src.api.admin_plugins import router as admin_plugins_router
 from src.api.admin_usage import router as admin_usage_router
 from src.api.admin_users import router as admin_users_router
-from src.api.admin_plugins import router as admin_plugins_router
-from src.api.subscription import router as subscription_router
+from src.api.auth import router as auth_router
+from src.api.blog import router as blog_router
 from src.api.brain import router as brain_router
+from src.api.chat import router as chat_router
+from src.api.chat_attachments import router as chat_attachments_router
+from src.api.client_errors import router as client_errors_router
+from src.api.conversations import router as conversations_router
+from src.api.files import router as files_router
+from src.api.plugins import router as plugins_router
+from src.api.preview import router as preview_router
+from src.api.public_chat import router as public_chat_router
+from src.api.settings import router as settings_router
+from src.api.skills import router as skills_router
+from src.api.status import router as status_router
+from src.api.subscription import router as subscription_router
+from src.api.trash import router as trash_router
+from src.api.workspace import router as workspace_router
 
 router = APIRouter()
 

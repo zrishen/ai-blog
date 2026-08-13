@@ -6,12 +6,12 @@
 """
 
 # ---- 节点 label ----
-ENTITY = "Entity"          # 语义记忆：人/组织/概念/地点
-FACT = "Fact"              # 时序事实：subject+predicate+object + valid_from/to + confidence
-EPISODE = "Episode"        # 情景记忆：一次对话/事件 + occurred_at
+ENTITY = "Entity"  # 语义记忆：人/组织/概念/地点
+FACT = "Fact"  # 时序事实：subject+predicate+object + valid_from/to + confidence
+EPISODE = "Episode"  # 情景记忆：一次对话/事件 + occurred_at
 PREFERENCE = "Preference"  # 程序记忆：用户偏好/习惯
-CHUNK = "Chunk"            # 原文层：向量检索，不建图谱边
-DOCUMENT = "Document"      # 来源锚点：指向 PG 业务数据
+CHUNK = "Chunk"  # 原文层：向量检索，不建图谱边
+DOCUMENT = "Document"  # 来源锚点：指向 PG 业务数据
 
 # 可向量检索的节点类型。动态 Cypher label / id 属性只能来自此白名单。
 VECTOR_NODE_SPECS = {
@@ -29,13 +29,13 @@ GRAPH_NODE_SPECS = {
 
 # ---- 边 type ----
 RELATES_TO = "RELATES_TO"  # Entity-[relation]->Entity（带时效 valid_from/to + weight）
-SUBJECT = "SUBJECT"        # Fact -> Entity（主语）
-OBJECT = "OBJECT"          # Fact -> Entity（宾语）
-INVOLVES = "INVOLVES"      # Episode -> Entity/Fact
-MENTIONS = "MENTIONS"      # Chunk -> Entity（召回原文跳实体的锚定边）
-SOURCES = "SOURCES"        # Document -> Fact/Entity（知识出处）
+SUBJECT = "SUBJECT"  # Fact -> Entity（主语）
+OBJECT = "OBJECT"  # Fact -> Entity（宾语）
+INVOLVES = "INVOLVES"  # Episode -> Entity/Fact
+MENTIONS = "MENTIONS"  # Chunk -> Entity（召回原文跳实体的锚定边）
+SOURCES = "SOURCES"  # Document -> Fact/Entity（知识出处）
 SUPERSEDES = "SUPERSEDES"  # 新 Fact -> 旧 Fact（事实演化，旧 Fact valid_to 置位）
-SAME_AS = "SAME_AS"        # Entity -> Entity（消歧/合并）
+SAME_AS = "SAME_AS"  # Entity -> Entity（消歧/合并）
 GRAPH_RECALL_EDGES = (
     MENTIONS,
     SUBJECT,

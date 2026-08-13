@@ -16,9 +16,10 @@ Scope:
 from __future__ import annotations
 
 import functools
+from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Literal
+from typing import Any, Literal
 
 from src.config import settings
 from src.core.context import current_user_id_cv

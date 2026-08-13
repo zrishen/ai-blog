@@ -8,9 +8,9 @@ schema 唯一源是 `src.database.models.Base.metadata`；baseline 用 metadata.
 import asyncio
 import logging
 
-from alembic import command
 from alembic.config import Config
 
+from alembic import command
 from src.config import BASE_DIR
 
 logger = logging.getLogger(__name__)

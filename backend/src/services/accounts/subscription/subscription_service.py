@@ -5,7 +5,7 @@
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -30,7 +30,7 @@ def is_subscription_active(user: User, *, now: datetime | None = None) -> bool:
     """订阅是否在有效期内（subscription_expires_at 为 naive UTC）。"""
     if not user.subscription_expires_at:
         return False
-    current = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    current = now or datetime.now(UTC).replace(tzinfo=None)
     return user.subscription_expires_at > current
 
 
@@ -63,7 +63,7 @@ async def consume_tokens(
     if tokens <= 0:
         return await get_weekly_usage(db, user_id, period=period)
     period = period or current_period_yw()
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     stmt = (
         pg_insert(SubscriptionWeeklyUsage)
         .values(
@@ -87,7 +87,11 @@ async def consume_tokens(
     used = result.scalar_one()
     logger.info(
         "subscription charge user_id=%s tokens=%d weekly_used=%d period=%s limit=%d",
-        user_id, tokens, used, period, settings.subscription_weekly_token_limit,
+        user_id,
+        tokens,
+        used,
+        period,
+        settings.subscription_weekly_token_limit,
     )
     return used
 
@@ -103,7 +107,9 @@ async def should_use_platform_key(db: AsyncSession, user: User | None) -> bool:
         used = await get_weekly_usage(db, user.id)
         logger.warning(
             "platform_key fallback user_id=%s reason=quota_exhausted used=%d limit=%d",
-            user.id, used, settings.subscription_weekly_token_limit,
+            user.id,
+            used,
+            settings.subscription_weekly_token_limit,
         )
         return False
     return True

@@ -38,9 +38,7 @@ def _without_image_blocks(messages: list[dict]) -> list[dict]:
             fallback.append(dict(message))
             continue
         text_blocks = [
-            block
-            for block in content
-            if isinstance(block, dict) and block.get("type") in {"text", "output_text"}
+            block for block in content if isinstance(block, dict) and block.get("type") in {"text", "output_text"}
         ]
         fallback.append({**message, "content": text_blocks or ""})
     return fallback
@@ -49,10 +47,7 @@ def _without_image_blocks(messages: list[dict]) -> list[dict]:
 def _has_image_blocks(messages: list[dict]) -> bool:
     return any(
         isinstance(message.get("content"), list)
-        and any(
-            isinstance(block, dict) and block.get("type") in {"image", "image_url"}
-            for block in message["content"]
-        )
+        and any(isinstance(block, dict) and block.get("type") in {"image", "image_url"} for block in message["content"])
         for message in messages
     )
 
@@ -73,22 +68,20 @@ def _build_current_user_content(
             content.append({"type": "text", "text": _attachment_document_block(item)})
             continue
         if not item.image_base64:
-            raise ChatAttachmentError(
-                f"Image attachment could not be read: {item.attachment.original_name}"
-            )
+            raise ChatAttachmentError(f"Image attachment could not be read: {item.attachment.original_name}")
         if provider == "anthropic":
-            content.append({
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": item.attachment.media_type,
-                    "data": item.image_base64,
-                },
-            })
-        else:
-            data_url = (
-                f"data:{item.attachment.media_type};base64,{item.image_base64}"
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": item.attachment.media_type,
+                        "data": item.image_base64,
+                    },
+                }
             )
+        else:
+            data_url = f"data:{item.attachment.media_type};base64,{item.image_base64}"
             content.append({"type": "image_url", "image_url": {"url": data_url}})
 
     if not content:
@@ -147,9 +140,7 @@ async def _build_messages(
         rc = compact_recent_count or settings.compact_recent_count
         try:
             async with async_session() as cdb:
-                raw, compact_usage = await compact_history(
-                    cdb, conv, raw, compact_summarizer, threshold, rc
-                )
+                raw, compact_usage = await compact_history(cdb, conv, raw, compact_summarizer, threshold, rc)
         except Exception:
             logger.exception("compact summarizer failed, fallback to full history")
             raw = list(db_messages[-40:])
@@ -180,28 +171,37 @@ async def _build_messages(
             if matched_ids == tc_ids:
                 tool_msg_list = []
                 for k in range(i + 1, j):
-                    tool_msg_list.append({
-                        "role": "tool",
-                        "tool_call_id": raw[k].tool_call_id,
-                        "content": raw[k].content,
-                    })
+                    tool_msg_list.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": raw[k].tool_call_id,
+                            "content": raw[k].content,
+                        }
+                    )
 
-                messages.append({
-                    "role": "assistant",
-                    "content": m.content or None,
-                    "tool_calls": [
-                        {"id": tc["id"], "type": "function", "function": {"name": tc["name"], "arguments": json.dumps(tc["args"])}}
-                        for tc in (m.tool_calls or [])
-                    ],
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": m.content or None,
+                        "tool_calls": [
+                            {
+                                "id": tc["id"],
+                                "type": "function",
+                                "function": {"name": tc["name"], "arguments": json.dumps(tc["args"])},
+                            }
+                            for tc in (m.tool_calls or [])
+                        ],
+                    }
+                )
                 messages.extend(tool_msg_list)
                 i = j
                 continue
             else:
                 logger.warning(
-                    "Skipping incomplete tool_calls sequence at message index %d: "
-                    "expected ids=%s, matched=%s",
-                    i, tc_ids, matched_ids,
+                    "Skipping incomplete tool_calls sequence at message index %d: expected ids=%s, matched=%s",
+                    i,
+                    tc_ids,
+                    matched_ids,
                 )
                 i += 1
                 while i < len(raw) and raw[i].role == "tool":
@@ -235,9 +235,12 @@ async def _build_messages(
 
     # 注入已有上下文摘要（compact 成功后 conv.summary 已更新；或之前会话遗留的摘要）
     if conv is not None and getattr(conv, "summary", None):
-        messages.insert(0, {
-            "role": "system",
-            "content": "[之前对话的摘要，供你参考上下文]\n" + conv.summary,
-        })
+        messages.insert(
+            0,
+            {
+                "role": "system",
+                "content": "[之前对话的摘要，供你参考上下文]\n" + conv.summary,
+            },
+        )
 
     return messages, full_user_message, user_token_count, compact_usage

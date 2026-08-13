@@ -32,11 +32,7 @@ class BlogDocumentPromotionPreflight:
 
     @property
     def is_complete(self) -> bool:
-        return (
-            self.total_active_posts == self.verified_posts
-            and self.legacy_posts == 0
-            and self.error_posts == 0
-        )
+        return self.total_active_posts == self.verified_posts and self.legacy_posts == 0 and self.error_posts == 0
 
 
 @dataclass(frozen=True)
@@ -54,6 +50,7 @@ class BlogDocumentPromotionBatchResult:
     failed: int
     failed_post_ids: tuple[int, ...]
     stale_marked: int
+
 
 async def preflight_blog_document_promotion(db: AsyncSession) -> BlogDocumentPromotionPreflight:
     """Read active post storage states without modifying data."""

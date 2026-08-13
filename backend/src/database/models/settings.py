@@ -59,9 +59,7 @@ class UserSkillSettings(Base):
 
 class PublicChatDailyUsage(Base):
     __tablename__ = "public_chat_daily_usage"
-    __table_args__ = (
-        UniqueConstraint("ip_address", "usage_date", name="uq_public_chat_daily_usage_ip_date"),
-    )
+    __table_args__ = (UniqueConstraint("ip_address", "usage_date", name="uq_public_chat_daily_usage_ip_date"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     ip_address = Column(String(64), nullable=False)
@@ -73,9 +71,7 @@ class PublicChatDailyUsage(Base):
 
 class WebToolDailyUsage(Base):
     __tablename__ = "web_tool_daily_usage"
-    __table_args__ = (
-        UniqueConstraint("user_id", "usage_date", name="uq_web_tool_daily_usage_user_date"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "usage_date", name="uq_web_tool_daily_usage_user_date"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

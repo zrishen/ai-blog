@@ -1,13 +1,13 @@
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 import logging
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
+from langchain_core.messages import AIMessage, ToolMessage
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import ChatAttachment, Conversation, Message
 from src.database.session import async_session
-from langchain_core.messages import AIMessage, ToolMessage
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ async def delete_conversation(conversation_id: int, user_id: int, session: Async
         conv = result.scalar_one_or_none()
         if conv is None:
             return
-        conv.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        conv.deleted_at = datetime.now(UTC).replace(tzinfo=None)
         if session is None:
             await s.commit()
 
@@ -75,20 +75,20 @@ async def get_messages(conversation_id: int, user_id: int, session: AsyncSession
             logger.warning("获取对话消息失败：会话不存在 conversation_id=%s user=%s", conversation_id, user_id)
             return []
         result = await s.execute(
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at, Message.id)
+            select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at, Message.id)
         )
         return result.scalars().all()
 
 
-async def update_conversation_title(conversation_id: int, user_id: int, title: str, session: AsyncSession | None = None):
+async def update_conversation_title(
+    conversation_id: int, user_id: int, title: str, session: AsyncSession | None = None
+):
     async with _get_session(session) as s:
         conv = await s.get(Conversation, conversation_id)
         if conv and conv.user_id == user_id and conv.deleted_at is None:
             short = title.replace("\n", " ").strip()[:50] or "New Chat"
             conv.title = short
-            conv.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            conv.updated_at = datetime.now(UTC).replace(tzinfo=None)
             if session is None:
                 await s.commit()
 
@@ -129,7 +129,7 @@ async def save_chat_turn(
 ) -> tuple[int, Message, Message]:
     async with async_session() as s:
         async with s.begin():
-            now = datetime.now(timezone.utc).replace(tzinfo=None)
+            now = datetime.now(UTC).replace(tzinfo=None)
             conv = await s.get(Conversation, conversation_id) if conversation_id else None
             if conv is None or conv.user_id != user_id or conv.deleted_at is not None:
                 conv = Conversation(title="New Chat", user_id=user_id, created_at=now, updated_at=now)
@@ -150,7 +150,9 @@ async def save_chat_turn(
                                 ChatAttachment.status == "claimed",
                             )
                         )
-                    ).scalars().all()
+                    )
+                    .scalars()
+                    .all()
                 )
                 by_id = {item.attachment_id: item for item in claimed_attachments}
                 if set(by_id) != set(ordered_attachment_ids):
@@ -196,26 +198,29 @@ async def save_chat_turn(
             for msg in process_messages:
                 if isinstance(msg, AIMessage):
                     tool_calls_data = [
-                        {"id": tc["id"], "name": tc["name"], "args": tc["args"]}
-                        for tc in (msg.tool_calls or [])
+                        {"id": tc["id"], "name": tc["name"], "args": tc["args"]} for tc in (msg.tool_calls or [])
                     ] or None
-                    s.add(Message(
-                        conversation_id=conv.id,
-                        role="assistant",
-                        content=_message_text(msg.content),
-                        tool_calls=tool_calls_data,
-                        token_count=0,
-                        created_at=now,
-                    ))
+                    s.add(
+                        Message(
+                            conversation_id=conv.id,
+                            role="assistant",
+                            content=_message_text(msg.content),
+                            tool_calls=tool_calls_data,
+                            token_count=0,
+                            created_at=now,
+                        )
+                    )
                 elif isinstance(msg, ToolMessage):
-                    s.add(Message(
-                        conversation_id=conv.id,
-                        role="tool",
-                        content=_message_text(msg.content),
-                        tool_call_id=msg.tool_call_id,
-                        token_count=0,
-                        created_at=now,
-                    ))
+                    s.add(
+                        Message(
+                            conversation_id=conv.id,
+                            role="tool",
+                            content=_message_text(msg.content),
+                            tool_call_id=msg.tool_call_id,
+                            token_count=0,
+                            created_at=now,
+                        )
+                    )
 
             final_message = Message(
                 conversation_id=conv.id,

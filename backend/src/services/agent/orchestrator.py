@@ -1,34 +1,43 @@
 """Chat 主编排：LangGraph ReAct Agent 流式执行 + 附件 claim 生命周期 + 视觉兜底。
 
-stream_chat 是唯一对外入口（组装消息→建 agent→流式 SSE→落库）。被测试 monkeypatch 的依赖必须在此 import，使 `from src.services.agent import orchestrator as chat_service` 后 patch 生效。
+stream_chat 是唯一对外入口（组装消息→建 agent→流式 SSE→落库）。被测试 monkeypatch 的依赖必须在此 import，
+使 `from src.services.agent import orchestrator as chat_service` 后 patch 生效。
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, AsyncGenerator
+from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.prebuilt import create_react_agent
 
 from src.config import settings
+from src.core.context import current_user_id_cv
 from src.database.session import async_session
 from src.prompts import (
     COMPACT_SUMMARY_PROMPT,
     CTX_ABOUT,
     CTX_FILES,
     CTX_HOME,
+    CTX_LEFTBAR_HEIGHT,
+    CTX_LEFTBAR_HTML,
     CTX_POST,
     CTX_SELECTED_SECTION,
     CTX_SELECTED_TEXT,
     CTX_SELECTED_TEXT_LABEL,
-    CTX_LEFTBAR_HEIGHT,
-    CTX_LEFTBAR_HTML,
     PromptContext,
     resolve_active_segments,
+)
+from src.services.accounts.subscription import (
+    compute_charge_tokens,
+    consume_tokens,
+    should_use_platform_key,
 )
 from src.services.agent.chat_attachment_service import (
     PreparedChatAttachment,
@@ -41,20 +50,14 @@ from src.services.agent.conversation_service import (
     save_chat_turn,
     update_conversation_title,
 )
+from src.services.agent.skill import resolve_skills
+from src.services.infra.llm.llm_factory import _chat_model_kwargs, _create_llm, _system_prompt
 from src.services.infra.llm.llm_settings_service import get_user_llm_settings, has_usable_api_key
 from src.services.infra.plugins.plugin_service import list_enabled_plugin_runtime_configs
-from src.services.accounts.subscription import (
-    compute_charge_tokens,
-    consume_tokens,
-    should_use_platform_key,
-)
-from src.core.context import current_user_id_cv
-from src.services.agent.skill import resolve_skills
-from src.tools.mcp import format_mcp_capabilities, normalize_mcp_capabilities
 from src.tools.behavior import ResultContext
+from src.tools.mcp import format_mcp_capabilities, normalize_mcp_capabilities
 from src.tools.provider import ToolContext, ToolFeatureFlags, assemble_tools
 
-from src.services.infra.llm.llm_factory import _chat_model_kwargs, _create_llm, _system_prompt
 from .messages import (
     _build_current_user_content,  # noqa: F401  # 供 test 直接单测调用
     _build_messages,
@@ -76,6 +79,8 @@ from .tool_behaviors import BEHAVIORS
 logger = logging.getLogger(__name__)
 
 _MISSING_API_KEY_MESSAGE = "请先在「设置」页填写你自己的 API 密钥，或订阅后使用。"
+
+_memory_persist_tasks: set[asyncio.Task[None]] = set()
 
 
 class _MissingApiKeyError(RuntimeError):
@@ -102,13 +107,15 @@ async def _persist_chat_memory(
         text = _memory_episode_text(user_message, assistant_message)
         extracted = await extractor.extract(text, llm)
         participant_names = [e["name"] for e in extracted.get("entities", []) if e.get("name")]
-        extracted["episodes"] = [{
-            "kind": "chat",
-            "summary": text,
-            "conversation_id": conversation_id,
-            "message_id": message_id,
-            "participants": participant_names,
-        }]
+        extracted["episodes"] = [
+            {
+                "kind": "chat",
+                "summary": text,
+                "conversation_id": conversation_id,
+                "message_id": message_id,
+                "participants": participant_names,
+            }
+        ]
         await consolidator.consolidate(user_id=user_id, extracted=extracted)
     except asyncio.CancelledError:
         raise
@@ -121,6 +128,7 @@ async def _persist_chat_memory(
 
 
 # ── Attachment claim lifecycle ──
+
 
 async def _keep_attachment_claim_alive(
     claim_token: str,
@@ -148,10 +156,8 @@ async def _stop_claim_heartbeat(task: asyncio.Task[None] | None) -> None:
     if task is None:
         return
     task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
 
 async def _release_claim_best_effort(
@@ -174,6 +180,7 @@ async def _release_claim_best_effort(
 
 
 # ── Vision fallback execution ──
+
 
 def _is_vision_unsupported_error(error: Exception) -> bool:
     message = str(error).lower()
@@ -283,9 +290,12 @@ def _build_page_context_parts(
     parts: list[str] = []
     page_type = context.get("page_type", "other")
     if page_type == "post":
-        parts.append(CTX_POST.format(
-            title=context.get("post_title", ""), post_id=context.get("post_id"),
-        ))
+        parts.append(
+            CTX_POST.format(
+                title=context.get("post_title", ""),
+                post_id=context.get("post_id"),
+            )
+        )
     elif page_type == "files":
         parts.append(CTX_FILES)
     elif page_type == "home":
@@ -296,9 +306,12 @@ def _build_page_context_parts(
     selected = context.get("selected_text")
     if selected:
         if page_type != "post" and context.get("post_id"):
-            parts.append(CTX_POST.format(
-                title=context.get("post_title", ""), post_id=context["post_id"],
-            ))
+            parts.append(
+                CTX_POST.format(
+                    title=context.get("post_title", ""),
+                    post_id=context["post_id"],
+                )
+            )
         if "blog_edit_post" in mounted_tool_names:
             parts.append(CTX_SELECTED_TEXT)
             section_index = context.get("section_index") or 0
@@ -320,6 +333,7 @@ def _build_page_context_parts(
 
 
 # ── Main stream ──
+
 
 async def stream_chat(
     user_message: str,
@@ -374,10 +388,12 @@ async def stream_chat(
             if not isinstance(content, str):
                 content = _extract_text_content(content)
             parts.append(f"{m.role}: {content}\n")
-        resp = await llm.ainvoke([
-            SystemMessage(content=COMPACT_SUMMARY_PROMPT),
-            HumanMessage(content="".join(parts)),
-        ])
+        resp = await llm.ainvoke(
+            [
+                SystemMessage(content=COMPACT_SUMMARY_PROMPT),
+                HumanMessage(content="".join(parts)),
+            ]
+        )
         return resp.content, getattr(resp, "usage_metadata", None)
 
     # 2. Claim 附件并组装消息（附件失败不静默忽略）
@@ -393,10 +409,8 @@ async def stream_chat(
                 )
                 prepared_attachments = await prepare_claimed_attachments(claimed_attachments)
                 await db.commit()
-            claim_heartbeat_task = asyncio.create_task(
-                _keep_attachment_claim_alive(attachment_claim_token, user_id)
-            )
-        api_messages, full_user_message, user_token_count, compact_usage = await _build_messages(
+            claim_heartbeat_task = asyncio.create_task(_keep_attachment_claim_alive(attachment_claim_token, user_id))
+        api_messages, _full_user_message, user_token_count, compact_usage = await _build_messages(
             user_message,
             conversation_id,
             user_id,
@@ -421,13 +435,15 @@ async def stream_chat(
         )
         logger.error("Failed to prepare chat attachments: %s", e, exc_info=True)
         yield f"{_STREAMERROR_MARKER}{json.dumps({'round_id': 1, 'message': f'附件读取失败：{e}'})}"
-        yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps({
-            "type": "done",
-            "conversation_id": conversation_id,
-            "message_id": 0,
-            "user_message_id": 0,
-            "attachments": [],
-        })
+        yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps(
+            {
+                "type": "done",
+                "conversation_id": conversation_id,
+                "message_id": 0,
+                "user_message_id": 0,
+                "attachments": [],
+            }
+        )
         return
 
     # 单次 input 上限（仅平台 key：防超长上下文烧平台 key）
@@ -435,30 +451,37 @@ async def stream_chat(
         input_tokens = sum(estimate_tokens(m.get("content", "")) for m in api_messages)
         if input_tokens > settings.subscription_per_request_token_limit:
             await _stop_claim_heartbeat(claim_heartbeat_task)
-            await _release_claim_best_effort(
-                attachment_claim_token, user_id, reason="per-request input limit"
-            )
+            await _release_claim_best_effort(attachment_claim_token, user_id, reason="per-request input limit")
             attachment_claim_token = None
-            yield f"{_STREAMERROR_MARKER}{json.dumps({'round_id': 1, 'message': f'本次对话过长（约 {input_tokens} token），超出单次上限 {settings.subscription_per_request_token_limit}，请减少历史或附件后重试。'})}"
-            yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps({
-                "type": "done",
-                "conversation_id": conversation_id,
-                "message_id": 0,
-                "user_message_id": 0,
-                "attachments": [],
-            })
+            over_limit_msg = (
+                f"本次对话过长（约 {input_tokens} token），超出单次上限 "
+                f"{settings.subscription_per_request_token_limit}，请减少历史或附件后重试。"
+            )
+            yield f"{_STREAMERROR_MARKER}{json.dumps({'round_id': 1, 'message': over_limit_msg})}"
+            yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps(
+                {
+                    "type": "done",
+                    "conversation_id": conversation_id,
+                    "message_id": 0,
+                    "user_message_id": 0,
+                    "attachments": [],
+                }
+            )
             return
 
     # 3. Build agent（assemble_tools 唯一装配入口；行为等价原硬编码）
     skill_ctx = resolve_skills(
         enabled_ids=frozenset(enabled_skills) if enabled_skills is not None else None
     )  # None→默认；[] 显式禁用所有 skill（is not None 区分空列表与缺省）
-    asm = assemble_tools(ToolContext(
-        user_id=user_id,
-        skill=skill_ctx,
-        mcp_plugins=tuple(mcp_plugins),
-        feature_flags=ToolFeatureFlags.from_settings(),
-    ), behaviors=BEHAVIORS)
+    asm = assemble_tools(
+        ToolContext(
+            user_id=user_id,
+            skill=skill_ctx,
+            mcp_plugins=tuple(mcp_plugins),
+            feature_flags=ToolFeatureFlags.from_settings(),
+        ),
+        behaviors=BEHAVIORS,
+    )
     agent_tools = asm.tools
 
     if use_platform_key:
@@ -469,9 +492,15 @@ async def stream_chat(
         model_kwargs = _chat_model_kwargs(thinking_mode, user_llm_settings)
     logger.info(
         ">>> Chat start: conv=%s user=%s msg_chars=%d mode=%s model=%s max_tokens=%s tools=%d api_msgs=%d mcp=%d",
-        conversation_id, user_id, len(user_message), thinking_mode,
-        model_kwargs.get("model"), model_kwargs.get("max_tokens"),
-        len(agent_tools), len(api_messages), len(mcp_plugins),
+        conversation_id,
+        user_id,
+        len(user_message),
+        thinking_mode,
+        model_kwargs.get("model"),
+        model_kwargs.get("max_tokens"),
+        len(agent_tools),
+        len(api_messages),
+        len(mcp_plugins),
     )
 
     # 6. Stream agent execution
@@ -569,17 +598,25 @@ async def stream_chat(
                     _stream_args.clear()
                     _projectors.clear()
                     history_start = {
-                        "type": "start", "toolName": tool_name, "call_id": call_id,
-                        "round_id": tool_round_id, "loop_step_index": loop_step_index,
+                        "type": "start",
+                        "toolName": tool_name,
+                        "call_id": call_id,
+                        "round_id": tool_round_id,
+                        "loop_step_index": loop_step_index,
                     }
                     tool_events_for_history.append(history_start)
                     yield f"\n\n{_DONE_MARKER}TOOLDONE{_DONE_MARKER}\n"
-                    yield json.dumps({
-                        "status": "start", "tool_name": tool_name, "result": "调用中...",
-                        "call_id": call_id, "round_id": tool_round_id,
-                        "loop_step_index": loop_step_index,
-                        "stream_id": str(call_meta.get("stream_id", "")),
-                    })
+                    yield json.dumps(
+                        {
+                            "status": "start",
+                            "tool_name": tool_name,
+                            "result": "调用中...",
+                            "call_id": call_id,
+                            "round_id": tool_round_id,
+                            "loop_step_index": loop_step_index,
+                            "stream_id": str(call_meta.get("stream_id", "")),
+                        }
+                    )
 
                 elif kind == "on_tool_end":
                     tool_name = event.get("name", "")
@@ -596,7 +633,8 @@ async def stream_chat(
                     )
                     if not call_id:
                         matching_ids = [
-                            candidate_id for candidate_id in _tool_call_ids_by_name.get(tool_name, [])
+                            candidate_id
+                            for candidate_id in _tool_call_ids_by_name.get(tool_name, [])
                             if candidate_id in _tool_call_input_by_id
                         ]
                         if len(matching_ids) == 1:
@@ -607,8 +645,11 @@ async def stream_chat(
                     if call_id:
                         _collected_agent_msgs.append(ToolMessage(content=result_text, tool_call_id=call_id))
                     payload: dict[str, object] = {
-                        "status": "end", "tool_name": tool_name, "result": result_text,
-                        "call_id": call_id, "round_id": tool_round_id,
+                        "status": "end",
+                        "tool_name": tool_name,
+                        "result": result_text,
+                        "call_id": call_id,
+                        "round_id": tool_round_id,
                         "loop_step_index": loop_step_index,
                         "stream_id": str(call_meta.get("stream_id", "")),
                     }
@@ -617,16 +658,21 @@ async def stream_chat(
                     merge: dict[str, object] = {}
                     if descriptor and descriptor.on_result:
                         tool_input_for_call = _tool_call_input_by_id.get(call_id, _last_tool_input)
-                        merge = descriptor.on_result(ResultContext(
-                            tool_name=tool_name,
-                            result_text=result_text,
-                            tool_input=tool_input_for_call,
-                        ))
+                        merge = descriptor.on_result(
+                            ResultContext(
+                                tool_name=tool_name,
+                                result_text=result_text,
+                                tool_input=tool_input_for_call,
+                            )
+                        )
                         if merge:
                             payload.update(merge)
                     history_event: dict[str, Any] = {
-                        "type": "end", "toolName": tool_name, "result": result_text,
-                        "call_id": call_id, "round_id": tool_round_id,
+                        "type": "end",
+                        "toolName": tool_name,
+                        "result": result_text,
+                        "call_id": call_id,
+                        "round_id": tool_round_id,
                         "loop_step_index": loop_step_index,
                     }
                     if "references" in merge:
@@ -648,7 +694,7 @@ async def stream_chat(
                         content_reasoning = _extract_reasoning_content(chunk.content)
                         if content_reasoning:
                             reasoning_debug_parts.append(content_reasoning)
-                            yield f"{_REASONING_MARKER}{{\"reasoning_delta\":{json.dumps(content_reasoning)}}}"
+                            yield f'{_REASONING_MARKER}{{"reasoning_delta":{json.dumps(content_reasoning)}}}'
 
                     # 模型推理内容（多字段兼容）
                     if chunk and hasattr(chunk, "additional_kwargs"):
@@ -666,7 +712,7 @@ async def stream_chat(
                                     break
                         if reasoning:
                             reasoning_debug_parts.append(str(reasoning))
-                            yield f"{_REASONING_MARKER}{{\"reasoning_delta\":{json.dumps(reasoning)}}}"
+                            yield f'{_REASONING_MARKER}{{"reasoning_delta":{json.dumps(reasoning)}}}'
 
                     # 2) 工具参数 token → 博客内容流式输出
                     if chunk and hasattr(chunk, "tool_call_chunks") and chunk.tool_call_chunks:
@@ -685,10 +731,12 @@ async def stream_chat(
                                 elif idx in _projectors:
                                     del _projectors[idx]
                                 if _is_new_tool:
-                                    yield _TOOLPREP_MARKER + _compact_json({
-                                        "tool_name": _tool_name_chunk,
-                                        "stream_id": f"{_round_id}:{idx}",
-                                    })
+                                    yield _TOOLPREP_MARKER + _compact_json(
+                                        {
+                                            "tool_name": _tool_name_chunk,
+                                            "stream_id": f"{_round_id}:{idx}",
+                                        }
+                                    )
 
                             if tc_chunk.get("args"):
                                 _stream_args[idx] = (_stream_args.get(idx, "") or "") + tc_chunk["args"]
@@ -768,11 +816,15 @@ async def stream_chat(
             )
         elif "tool_calls" in err_msg and ("must be followed" in err_msg or "400" in err_msg):
             error_message = "抱歉，对话历史中存在不完整的工具调用记录，已自动清理。请重新发送您的消息。"
-        elif prepared_attachments and any(item.kind == "image" for item in prepared_attachments) and (
-            "image" in err_msg.lower()
-            or "vision" in err_msg.lower()
-            or "multimodal" in err_msg.lower()
-            or "content block" in err_msg.lower()
+        elif (
+            prepared_attachments
+            and any(item.kind == "image" for item in prepared_attachments)
+            and (
+                "image" in err_msg.lower()
+                or "vision" in err_msg.lower()
+                or "multimodal" in err_msg.lower()
+                or "content block" in err_msg.lower()
+            )
         ):
             error_message = "当前模型不支持图片输入，请切换视觉模型或移除图片后重试（MODEL_VISION_UNSUPPORTED）。"
         else:
@@ -820,7 +872,9 @@ async def stream_chat(
                         async with async_session() as db:
                             await consume_tokens(db, user_id, compact_charge)
                     except Exception:
-                        logger.exception("Failed to charge compact summary tokens user_id=%s charge=%d", user_id, compact_charge)
+                        logger.exception(
+                            "Failed to charge compact summary tokens user_id=%s charge=%d", user_id, compact_charge
+                        )
         try:
             assistant_token_count = estimate_tokens(full_content)
             new_conv_id, saved_user_message, new_message = await save_chat_turn(
@@ -850,21 +904,17 @@ async def stream_chat(
                     "size_bytes": item.attachment.size_bytes,
                     "status": "attached",
                     "position": item.position,
-                    "download_url": (
-                        f"/api/v1/chat/attachments/{item.attachment.attachment_id}/content"
-                    ),
+                    "download_url": (f"/api/v1/chat/attachments/{item.attachment.attachment_id}/content"),
                     "extraction_truncated": item.extraction_truncated,
                 }
                 for item in prepared_attachments
             ]
             attachment_claim_token = None
             if not conversation_id:
-                try:
+                with contextlib.suppress(Exception):
                     await update_conversation_title(new_conv_id, user_id, user_message[:50])
-                except Exception:
-                    pass
             if settings.memory_enabled and full_content:
-                asyncio.create_task(
+                task = asyncio.create_task(
                     _persist_chat_memory(
                         user_id=user_id,
                         conversation_id=new_conv_id,
@@ -875,6 +925,8 @@ async def stream_chat(
                     ),
                     name=f"persist-chat-memory:{user_id}:{message_id}",
                 )
+                _memory_persist_tasks.add(task)
+                task.add_done_callback(_memory_persist_tasks.discard)
         except asyncio.CancelledError:
             await _stop_claim_heartbeat(claim_heartbeat_task)
             await _release_claim_best_effort(
@@ -897,16 +949,24 @@ async def stream_chat(
         reason="stream ended without binding",
     )
 
-    yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps({
-        "type": "done",
-        "conversation_id": new_conv_id,
-        "message_id": message_id,
-        "user_message_id": user_message_id,
-        "attachments": response_attachments,
-    })
+    yield f"\n\n{_DONE_MARKER}DONE{_DONE_MARKER}\n" + json.dumps(
+        {
+            "type": "done",
+            "conversation_id": new_conv_id,
+            "message_id": message_id,
+            "user_message_id": user_message_id,
+            "attachments": response_attachments,
+        }
+    )
     logger.info(
         "<<< Chat end: conv=%s msg=%s user=%s took=%.1fs chars=%d rounds=%d tool_calls=%d confirmed=%s usage=%s",
-        new_conv_id, message_id, user_id, time.time() - chat_t0, len(full_content),
-        _round_id, len(tool_events_for_history), final_confirmed,
+        new_conv_id,
+        message_id,
+        user_id,
+        time.time() - chat_t0,
+        len(full_content),
+        _round_id,
+        len(tool_events_for_history),
+        final_confirmed,
         _collected_usage or "none",
     )

@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime, timezone
-import math
+from datetime import UTC, datetime
 from typing import Any
 
 from falkordb import FalkorDB
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _now_iso() -> str:
@@ -45,8 +45,9 @@ def _new_id() -> str:
 @dataclass
 class MemoryHit:
     """recall 单条结果。score 是 FalkorDB 向量距离，越小越相关。"""
+
     content: str
-    kind: str                      # entity / fact / episode / chunk / preference
+    kind: str  # entity / fact / episode / chunk / preference
     score: float | None = None
     metadata: dict[str, Any] | None = None
 
@@ -107,7 +108,7 @@ def _parse_iso(value: Any) -> datetime | None:
     else:
         return None
     if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        parsed = parsed.astimezone(UTC).replace(tzinfo=None)
     return parsed
 
 
@@ -163,6 +164,7 @@ def _rerank_score(hit: MemoryHit, *, now: datetime) -> float:
 
 # ---------------- 客户端 / 索引 ----------------
 
+
 async def ping() -> bool:
     """FalkorDB 连通性检查（bootstrap fail-fast / status）。"""
     try:
@@ -214,9 +216,12 @@ def _vector_index_details(
         return None
 
     property_options: Any = options.get(prop) if isinstance(options, Mapping) else None
-    if not isinstance(property_options, Mapping) and isinstance(options, Mapping):
-        if "dimension" in options or "similarityFunction" in options:
-            property_options = options
+    if (
+        not isinstance(property_options, Mapping)
+        and isinstance(options, Mapping)
+        and ("dimension" in options or "similarityFunction" in options)
+    ):
+        property_options = options
     if not isinstance(property_options, Mapping):
         property_options = {}
     return property_options, str(status or "")
@@ -247,9 +252,7 @@ def _validate_vector_index(
         except (TypeError, ValueError) as exc:
             raise RuntimeError(f"Vector index {label}.{prop} has no valid dimension") from exc
         if indexed_dim != dim:
-            raise RuntimeError(
-                f"Vector index {label}.{prop} dimension mismatch: expected {dim}, actual {indexed_dim}"
-            )
+            raise RuntimeError(f"Vector index {label}.{prop} dimension mismatch: expected {dim}, actual {indexed_dim}")
     return not require_operational or status.upper() == "OPERATIONAL"
 
 
@@ -323,14 +326,26 @@ async def list_vector_indexed_kinds(embedding_model_slug: str) -> set[str]:
 
 # ---------------- 知识层写入 ----------------
 
+
 async def add_entity(
-    *, user_id: int, name: str, entity_type: str | None = None,
-    aliases: list[str] | None = None, description: str | None = None, confidence: float = 1.0,
+    *,
+    user_id: int,
+    name: str,
+    entity_type: str | None = None,
+    aliases: list[str] | None = None,
+    description: str | None = None,
+    confidence: float = 1.0,
 ) -> str:
     eid = _new_id()
     params = {
-        "eid": eid, "uid": user_id, "name": name, "etype": entity_type,
-        "aliases": aliases or [], "desc": description or "", "conf": confidence, "now": _now_iso(),
+        "eid": eid,
+        "uid": user_id,
+        "name": name,
+        "etype": entity_type,
+        "aliases": aliases or [],
+        "desc": description or "",
+        "conf": confidence,
+        "now": _now_iso(),
     }
     await _write(
         f"CREATE (n:{S.ENTITY} {{entity_id:$eid, user_id:$uid, name:$name, entity_type:$etype, "
@@ -341,15 +356,32 @@ async def add_entity(
 
 
 async def add_fact(
-    *, user_id: int, subject_id: str, predicate: str, object_text: str,
-    object_id: str | None = None, valid_from: str | None = None, valid_to: str | None = None,
-    confidence: float = 1.0, source_doc_id: str | None = None, protected: bool = False,
+    *,
+    user_id: int,
+    subject_id: str,
+    predicate: str,
+    object_text: str,
+    object_id: str | None = None,
+    valid_from: str | None = None,
+    valid_to: str | None = None,
+    confidence: float = 1.0,
+    source_doc_id: str | None = None,
+    protected: bool = False,
 ) -> str:
     fid = _new_id()
     params = {
-        "fid": fid, "uid": user_id, "sid": subject_id, "pred": predicate, "obj": object_text,
-        "oid": object_id, "vf": valid_from or _now_iso(), "vt": valid_to, "conf": confidence,
-        "sdoc": source_doc_id, "prot": protected, "now": _now_iso(),
+        "fid": fid,
+        "uid": user_id,
+        "sid": subject_id,
+        "pred": predicate,
+        "obj": object_text,
+        "oid": object_id,
+        "vf": valid_from or _now_iso(),
+        "vt": valid_to,
+        "conf": confidence,
+        "sdoc": source_doc_id,
+        "prot": protected,
+        "now": _now_iso(),
     }
     await _write(
         f"CREATE (f:{S.FACT} {{fact_id:$fid, user_id:$uid, subject_id:$sid, predicate:$pred, "
@@ -365,23 +397,33 @@ async def add_fact(
         )
     else:
         await _write(
-            f"MATCH (f:{S.FACT} {{fact_id:$fid}}), (s:{S.ENTITY} {{entity_id:$sid}}) "
-            f"CREATE (f)-[:{S.SUBJECT}]->(s)",
+            f"MATCH (f:{S.FACT} {{fact_id:$fid}}), (s:{S.ENTITY} {{entity_id:$sid}}) CREATE (f)-[:{S.SUBJECT}]->(s)",
             {"fid": fid, "sid": subject_id},
         )
     return fid
 
 
 async def add_episode(
-    *, user_id: int, kind: str, summary: str, occurred_at: str | None = None,
-    conversation_id: int | None = None, message_id: int | None = None,
+    *,
+    user_id: int,
+    kind: str,
+    summary: str,
+    occurred_at: str | None = None,
+    conversation_id: int | None = None,
+    message_id: int | None = None,
     participants: list[str] | None = None,
 ) -> str:
     eid = _new_id()
     params = {
-        "eid": eid, "uid": user_id, "kind": kind, "summary": summary,
-        "occ": occurred_at or _now_iso(), "cid": conversation_id, "mid": message_id,
-        "parts": participants or [], "now": _now_iso(),
+        "eid": eid,
+        "uid": user_id,
+        "kind": kind,
+        "summary": summary,
+        "occ": occurred_at or _now_iso(),
+        "cid": conversation_id,
+        "mid": message_id,
+        "parts": participants or [],
+        "now": _now_iso(),
     }
     await _write(
         f"CREATE (e:{S.EPISODE} {{episode_id:$eid, user_id:$uid, kind:$kind, summary:$summary, "
@@ -393,7 +435,12 @@ async def add_episode(
 
 
 async def add_preference(
-    *, user_id: int, key: str, value: str, confidence: float = 1.0, protected: bool = False,
+    *,
+    user_id: int,
+    key: str,
+    value: str,
+    confidence: float = 1.0,
+    protected: bool = False,
 ) -> str:
     pid = _new_id()
     now = _now_iso()
@@ -401,8 +448,17 @@ async def add_preference(
         f"CREATE (p:{S.PREFERENCE} {{pref_id:$pid, user_id:$uid, key:$key, value:$val, "
         f"confidence:$conf, valid_from:$vf, valid_to:$vt, protected:$prot, "
         f"created_at:$now, last_accessed_at:$now}})",
-        {"pid": pid, "uid": user_id, "key": key, "val": value, "conf": confidence,
-         "vf": now, "vt": None, "prot": protected, "now": now},
+        {
+            "pid": pid,
+            "uid": user_id,
+            "key": key,
+            "val": value,
+            "conf": confidence,
+            "vf": now,
+            "vt": None,
+            "prot": protected,
+            "now": now,
+        },
     )
     return pid
 
@@ -433,10 +489,7 @@ async def fetch_nodes_for_embedding(
         filters.append(f"node.{id_key} IN $ids")
         params["ids"] = ids
     if cursor is not None:
-        filters.append(
-            f"(node.user_id > $cursor_uid OR "
-            f"(node.user_id = $cursor_uid AND node.{id_key} > $cursor_id))"
-        )
+        filters.append(f"(node.user_id > $cursor_uid OR (node.user_id = $cursor_uid AND node.{id_key} > $cursor_id))")
         params.update({"cursor_uid": cursor[0], "cursor_id": cursor[1]})
     if missing_only:
         if normalized == "chunk":
@@ -486,35 +539,34 @@ async def fetch_nodes_for_embedding(
 
     rows = _rows(await _read(cypher, params))
     if normalized == "chunk":
-        return [
-            {"user_id": row[0], "memory_id": row[1], "content": row[2]}
-            for row in rows
-        ]
+        return [{"user_id": row[0], "memory_id": row[1], "content": row[2]} for row in rows]
     if normalized == "entity":
         return [
             {
-                "user_id": row[0], "memory_id": row[1], "name": row[2],
-                "entity_type": row[3], "aliases": row[4] or [], "description": row[5],
+                "user_id": row[0],
+                "memory_id": row[1],
+                "name": row[2],
+                "entity_type": row[3],
+                "aliases": row[4] or [],
+                "description": row[5],
             }
             for row in rows
         ]
     if normalized == "fact":
         return [
             {
-                "user_id": row[0], "memory_id": row[1], "subject_id": row[2],
-                "subject_name": row[3], "predicate": row[4], "object_text": row[5],
+                "user_id": row[0],
+                "memory_id": row[1],
+                "subject_id": row[2],
+                "subject_name": row[3],
+                "predicate": row[4],
+                "object_text": row[5],
             }
             for row in rows
         ]
     if normalized == "episode":
-        return [
-            {"user_id": row[0], "memory_id": row[1], "kind": row[2], "summary": row[3]}
-            for row in rows
-        ]
-    return [
-        {"user_id": row[0], "memory_id": row[1], "key": row[2], "value": row[3]}
-        for row in rows
-    ]
+        return [{"user_id": row[0], "memory_id": row[1], "kind": row[2], "summary": row[3]} for row in rows]
+    return [{"user_id": row[0], "memory_id": row[1], "key": row[2], "value": row[3]} for row in rows]
 
 
 async def upsert_node_embeddings(
@@ -548,8 +600,7 @@ async def upsert_node_embeddings(
             set_clause += f", node.{text_prop}=$text"
             params["text"] = row["text"]
         result = await _write(
-            f"MATCH (node:{label} {{user_id:$uid, {id_key}:$mid}}) "
-            f"{set_clause} RETURN count(node)",
+            f"MATCH (node:{label} {{user_id:$uid, {id_key}:$mid}}) {set_clause} RETURN count(node)",
             params,
         )
         result_rows = _rows(result)
@@ -631,17 +682,14 @@ async def get_preference(*, user_id: int, pref_id: str) -> dict | None:
     }
 
 
-async def update_preference(
-    *, user_id: int, pref_id: str, value: str, confidence: float | None = None
-) -> dict | None:
+async def update_preference(*, user_id: int, pref_id: str, value: str, confidence: float | None = None) -> dict | None:
     """Version a preference so prior values remain auditable but inactive."""
     existing = await get_preference(user_id=user_id, pref_id=pref_id)
     if existing is None:
         return None
     new_confidence = existing["confidence"] if confidence is None else confidence
     await _write(
-        f"MATCH (p:{S.PREFERENCE} {{user_id:$uid, key:$key}}) WHERE p.valid_to IS NULL "
-        "SET p.valid_to=$now",
+        f"MATCH (p:{S.PREFERENCE} {{user_id:$uid, key:$key}}) WHERE p.valid_to IS NULL SET p.valid_to=$now",
         {"uid": user_id, "key": existing["key"], "now": _now_iso()},
     )
     new_id = await add_preference(
@@ -709,9 +757,7 @@ async def link_document(*, user_id: int, resource_type: str, resource_id: int, t
     return _rows(result)[0][0]
 
 
-async def link_document_knowledge(
-    *, doc_id: str, entity_ids: list[str], fact_ids: list[str]
-) -> None:
+async def link_document_knowledge(*, doc_id: str, entity_ids: list[str], fact_ids: list[str]) -> None:
     for entity_id in entity_ids:
         await _write(
             f"MATCH (d:{S.DOCUMENT} {{doc_id:$doc}}), (e:{S.ENTITY} {{entity_id:$entity}}) "
@@ -720,13 +766,13 @@ async def link_document_knowledge(
         )
     for fact_id in fact_ids:
         await _write(
-            f"MATCH (d:{S.DOCUMENT} {{doc_id:$doc}}), (f:{S.FACT} {{fact_id:$fact}}) "
-            f"MERGE (d)-[:{S.SOURCES}]->(f)",
+            f"MATCH (d:{S.DOCUMENT} {{doc_id:$doc}}), (f:{S.FACT} {{fact_id:$fact}}) MERGE (d)-[:{S.SOURCES}]->(f)",
             {"doc": doc_id, "fact": fact_id},
         )
 
 
 # ---------------- 巩固 ----------------
+
 
 async def supersede_fact(*, new_fact_id: str, old_fact_id: str) -> None:
     """新事实取代旧事实：旧 Fact valid_to 置位 + SUPERSEDES 边（保留旧记录可回溯）。"""
@@ -748,10 +794,18 @@ async def bump_entity_confidence(*, user_id: int, entity_id: str, confidence: fl
 
 # ---------------- 原文层（承接旧 vector_store 契约）----------------
 
+
 async def add_document_chunks(
-    *, user_id: int, collection_name: str, stored_name: str,
-    chunks: list[str], embeddings: list[list[float]], metadata_list: list[dict] | None = None,
-    embedding_model: str, vector_dim: int, progress_callback=None,
+    *,
+    user_id: int,
+    collection_name: str,
+    stored_name: str,
+    chunks: list[str],
+    embeddings: list[list[float]],
+    metadata_list: list[dict] | None = None,
+    embedding_model: str,
+    vector_dim: int,
+    progress_callback=None,
 ) -> None:
     """原文层：批量写扁平 Chunk 向量（不建图谱边）。承接旧 add_documents 语义。"""
     if not chunks:
@@ -759,13 +813,21 @@ async def add_document_chunks(
     prop = _safe_prop(embedding_model)
     await ensure_vector_index(embedding_model, vector_dim)
     metadata_list = metadata_list or [{}] * len(chunks)
-    for i, (text, emb, meta) in enumerate(zip(chunks, embeddings, metadata_list)):
+    for i, (text, emb, meta) in enumerate(zip(chunks, embeddings, metadata_list, strict=True)):
         cid = f"{stored_name}:{i}"
         params = {
-            "cid": cid, "uid": user_id, "col": collection_name, "stored": stored_name,
-            "content": text, "emb": emb, "rt": meta.get("resource_type"),
-            "rid": meta.get("resource_id"), "src": meta.get("source") or meta.get("file_name"),
-            "idx": i, "total": len(chunks), "now": _now_iso(),
+            "cid": cid,
+            "uid": user_id,
+            "col": collection_name,
+            "stored": stored_name,
+            "content": text,
+            "emb": emb,
+            "rt": meta.get("resource_type"),
+            "rid": meta.get("resource_id"),
+            "src": meta.get("source") or meta.get("file_name"),
+            "idx": i,
+            "total": len(chunks),
+            "now": _now_iso(),
         }
         await _write(
             f"MERGE (c:{S.CHUNK} {{chunk_id:$cid, user_id:$uid}}) SET c.collection_name=$col, "
@@ -781,8 +843,13 @@ async def add_document_chunks(
 
 
 async def search_documents(
-    *, user_id: int, collection_name: str | None, query_embedding: list[float],
-    embedding_model: str, top_k: int, whitelist_stored_names: set[str],
+    *,
+    user_id: int,
+    collection_name: str | None,
+    query_embedding: list[float],
+    embedding_model: str,
+    top_k: int,
+    whitelist_stored_names: set[str],
 ) -> list[MemoryHit]:
     """原文层向量检索（仅 Chunk，无图扩展）。白名单下推到 Cypher。对应 tools/file.py base_search_file。"""
     prop = _safe_prop(embedding_model)
@@ -814,8 +881,11 @@ async def search_documents(
         )
         hits: list[MemoryHit] = []
         for row in _rows(rs):
-            hits.append(MemoryHit(content=row[0], kind="chunk", score=row[3],
-                                  metadata={"stored_name": row[1], "source": row[2]}))
+            hits.append(
+                MemoryHit(
+                    content=row[0], kind="chunk", score=row[3], metadata={"stored_name": row[1], "source": row[2]}
+                )
+            )
         return hits
 
     return await asyncio.to_thread(_do)
@@ -846,10 +916,16 @@ async def link_chunk_entities(*, user_id: int, stored_name: str, chunk_index: in
 
 # ---------------- recall（时序：向量 + 时效 + 图扩展 + 置信度）----------------
 
+
 async def recall(
-    *, user_id: int, query_embedding: list[float], embedding_model: str,
-    top_k: int | None = None, hops: int | None = None,
-    whitelist_stored_names: set[str] | None = None, kinds: list[str] | None = None,
+    *,
+    user_id: int,
+    query_embedding: list[float],
+    embedding_model: str,
+    top_k: int | None = None,
+    hops: int | None = None,
+    whitelist_stored_names: set[str] | None = None,
+    kinds: list[str] | None = None,
     only_valid: bool = True,
 ) -> list[MemoryHit]:
     """多类型语义候选 + user-scoped 受限图扩展 + 多信号排序。"""
@@ -884,10 +960,7 @@ async def recall(
                 "uid": user_id,
                 "wl": wl,
             }
-            prefix = (
-                f"CALL db.idx.vector.queryNodes('{label}', '{prop}', $k, vecf32($vec)) "
-                "YIELD node, score "
-            )
+            prefix = f"CALL db.idx.vector.queryNodes('{label}', '{prop}', $k, vecf32($vec)) YIELD node, score "
             if kind == "chunk":
                 cypher = (
                     prefix
@@ -901,16 +974,22 @@ async def recall(
                     entities = row[3] or []
                     if entities:
                         content += "\n关联实体: " + ", ".join(entities)
-                    hits.append(MemoryHit(
-                        content=content,
-                        kind=kind,
-                        score=row[2],
-                        metadata={
-                            "id": row[4], "source": row[1], "entities": entities,
-                            "ingested_at": row[5],
-                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
-                        },
-                    ))
+                    hits.append(
+                        MemoryHit(
+                            content=content,
+                            kind=kind,
+                            score=row[2],
+                            metadata={
+                                "id": row[4],
+                                "source": row[1],
+                                "entities": entities,
+                                "ingested_at": row[5],
+                                "graph_distance": 0,
+                                "evidence": "direct-vector-match",
+                                "path": [],
+                            },
+                        )
+                    )
             elif kind == "entity":
                 cypher = (
                     prefix
@@ -922,17 +1001,24 @@ async def recall(
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
-                    hits.append(MemoryHit(
-                        content=row[0],
-                        kind=kind,
-                        score=row[1],
-                        metadata={
-                            "id": row[2], "source": row[3], "name": row[3],
-                            "entity_type": row[4], "confidence": row[5],
-                            "ingested_at": row[6],
-                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
-                        },
-                    ))
+                    hits.append(
+                        MemoryHit(
+                            content=row[0],
+                            kind=kind,
+                            score=row[1],
+                            metadata={
+                                "id": row[2],
+                                "source": row[3],
+                                "name": row[3],
+                                "entity_type": row[4],
+                                "confidence": row[5],
+                                "ingested_at": row[6],
+                                "graph_distance": 0,
+                                "evidence": "direct-vector-match",
+                                "path": [],
+                            },
+                        )
+                    )
             elif kind == "fact":
                 cypher = (
                     prefix
@@ -943,19 +1029,27 @@ async def recall(
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
-                    hits.append(MemoryHit(
-                        content=row[0],
-                        kind=kind,
-                        score=row[1],
-                        metadata={
-                            "id": row[2], "source": row[8] or "memory",
-                            "subject_id": row[3], "predicate": row[4],
-                            "valid_from": row[5], "valid_to": row[6],
-                            "confidence": row[7], "source_doc_id": row[8],
-                            "ingested_at": row[9],
-                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
-                        },
-                    ))
+                    hits.append(
+                        MemoryHit(
+                            content=row[0],
+                            kind=kind,
+                            score=row[1],
+                            metadata={
+                                "id": row[2],
+                                "source": row[8] or "memory",
+                                "subject_id": row[3],
+                                "predicate": row[4],
+                                "valid_from": row[5],
+                                "valid_to": row[6],
+                                "confidence": row[7],
+                                "source_doc_id": row[8],
+                                "ingested_at": row[9],
+                                "graph_distance": 0,
+                                "evidence": "direct-vector-match",
+                                "path": [],
+                            },
+                        )
+                    )
             elif kind == "episode":
                 cypher = (
                     prefix
@@ -966,19 +1060,26 @@ async def recall(
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
-                    hits.append(MemoryHit(
-                        content=row[0],
-                        kind=kind,
-                        score=row[1],
-                        metadata={
-                            "id": row[2], "source": f"conversation:{row[5]}" if row[5] else "memory",
-                            "episode_kind": row[3], "occurred_at": row[4],
-                            "conversation_id": row[5], "message_id": row[6],
-                            "confidence": row[7] if len(row) > 7 else None,
-                            "ingested_at": row[8] if len(row) > 8 else None,
-                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
-                        },
-                    ))
+                    hits.append(
+                        MemoryHit(
+                            content=row[0],
+                            kind=kind,
+                            score=row[1],
+                            metadata={
+                                "id": row[2],
+                                "source": f"conversation:{row[5]}" if row[5] else "memory",
+                                "episode_kind": row[3],
+                                "occurred_at": row[4],
+                                "conversation_id": row[5],
+                                "message_id": row[6],
+                                "confidence": row[7] if len(row) > 7 else None,
+                                "ingested_at": row[8] if len(row) > 8 else None,
+                                "graph_distance": 0,
+                                "evidence": "direct-vector-match",
+                                "path": [],
+                            },
+                        )
+                    )
             else:
                 cypher = (
                     prefix
@@ -988,23 +1089,29 @@ async def recall(
                     + "ORDER BY score ASC LIMIT $limit"
                 )
                 for row in _rows(_run(graph, cypher, params)):
-                    hits.append(MemoryHit(
-                        content=row[0],
-                        kind=kind,
-                        score=row[1],
-                        metadata={
-                            "id": row[2], "source": "preference", "key": row[3],
-                            "valid_from": row[4], "valid_to": row[5], "confidence": row[6],
-                            "ingested_at": row[7],
-                            "graph_distance": 0, "evidence": "direct-vector-match", "path": [],
-                        },
-                    ))
+                    hits.append(
+                        MemoryHit(
+                            content=row[0],
+                            kind=kind,
+                            score=row[1],
+                            metadata={
+                                "id": row[2],
+                                "source": "preference",
+                                "key": row[3],
+                                "valid_from": row[4],
+                                "valid_to": row[5],
+                                "confidence": row[6],
+                                "ingested_at": row[7],
+                                "graph_distance": 0,
+                                "evidence": "direct-vector-match",
+                                "path": [],
+                            },
+                        )
+                    )
         seed_hits = list(hits)
         if max_hops:
             seed_refs = [
-                (hit.kind, str((hit.metadata or {}).get("id")))
-                for hit in seed_hits
-                if (hit.metadata or {}).get("id")
+                (hit.kind, str((hit.metadata or {}).get("id"))) for hit in seed_hits if (hit.metadata or {}).get("id")
             ]
             expanded = _expand_memory_seeds_sync(
                 graph,
@@ -1042,17 +1149,11 @@ async def recall(
     return await _annotate_superseded_replacements(user_id=user_id, hits=ranked)
 
 
-async def _annotate_superseded_replacements(
-    *, user_id: int, hits: list[MemoryHit]
-) -> list[MemoryHit]:
+async def _annotate_superseded_replacements(*, user_id: int, hits: list[MemoryHit]) -> list[MemoryHit]:
     """Fact 演化标注：为命中的当前 Fact 回填它取代的旧值（metadata.replaced）。
     拆到独立纯 MATCH 查询：queryNodes YIELD 内做 OPTIONAL MATCH + 聚合/路径表达式会让
     FalkorDB SDK 迭代异常（StopIteration），纯 MATCH 批量查询稳定。"""
-    fact_ids = [
-        str((h.metadata or {}).get("id"))
-        for h in hits
-        if h.kind == "fact" and (h.metadata or {}).get("id")
-    ]
+    fact_ids = [str((h.metadata or {}).get("id")) for h in hits if h.kind == "fact" and (h.metadata or {}).get("id")]
     if not fact_ids:
         return hits
     rs = await _read(
@@ -1165,11 +1266,13 @@ def _expand_memory_seeds_sync(
                 "RETURN labels(node), properties(node), type(rel), startNode(rel)=seed "
                 "ORDER BY type(rel) LIMIT $limit"
             )
-            rows = _rows(_run(
-                graph,
-                cypher,
-                {"uid": user_id, "seed_id": seed_id, "limit": max(1, limit - len(hits))},
-            ))
+            rows = _rows(
+                _run(
+                    graph,
+                    cypher,
+                    {"uid": user_id, "seed_id": seed_id, "limit": max(1, limit - len(hits))},
+                )
+            )
             for row in rows:
                 if len(row) < 4 or not isinstance(row[1], Mapping):
                     continue
@@ -1197,14 +1300,16 @@ def _expand_memory_seeds_sync(
                     "ingested_at": properties.get("created_at"),
                     "graph_distance": depth,
                     "evidence": {"seed_kind": seed_kind, "seed_id": seed_id},
-                    "path": [{
-                        "from_kind": seed_kind,
-                        "from_id": seed_id,
-                        "relation": row[2],
-                        "direction": "out" if row[3] else "in",
-                        "to_kind": kind,
-                        "to_id": memory_id,
-                    }],
+                    "path": [
+                        {
+                            "from_kind": seed_kind,
+                            "from_id": seed_id,
+                            "relation": row[2],
+                            "direction": "out" if row[3] else "in",
+                            "to_kind": kind,
+                            "to_id": memory_id,
+                        }
+                    ],
                     "expanded": True,
                 }
                 hits.append(MemoryHit(content=content, kind=kind, score=None, metadata=metadata))
@@ -1217,6 +1322,7 @@ def _expand_memory_seeds_sync(
 
 
 # ---------------- 运维 ----------------
+
 
 async def list_resource_memory() -> list[dict]:
     """Return resource keys represented by document anchors or indexed chunks."""
@@ -1254,15 +1360,13 @@ async def delete_resource_memory(*, user_id: int, resource_type: str, resource_i
     """Delete the graph representation for a removed or unindexed resource."""
     params = {"uid": user_id, "rt": resource_type, "rid": resource_id}
     doc_result = await _read(
-        f"MATCH (d:{S.DOCUMENT} {{user_id:$uid, resource_type:$rt, resource_id:$rid}}) "
-        "RETURN d.doc_id",
+        f"MATCH (d:{S.DOCUMENT} {{user_id:$uid, resource_type:$rt, resource_id:$rid}}) RETURN d.doc_id",
         params,
     )
     doc_ids = [row[0] for row in _rows(doc_result) if row and row[0]]
     if doc_ids:
         await _write(
-            f"MATCH (f:{S.FACT} {{user_id:$uid}}) "
-            "WHERE f.source_doc_id IN $doc_ids DETACH DELETE f",
+            f"MATCH (f:{S.FACT} {{user_id:$uid}}) WHERE f.source_doc_id IN $doc_ids DETACH DELETE f",
             {"uid": user_id, "doc_ids": doc_ids},
         )
     await _write(
@@ -1283,6 +1387,7 @@ async def delete_resource_memory(*, user_id: int, resource_type: str, resource_i
 
 # ---------------- 只读列表查询（brain_service / 前端可视化）----------------
 
+
 async def list_entities(*, user_id: int, limit: int = 200, offset: int = 0) -> list[dict]:
     """列出用户全部实体（按创建时间倒序）。"""
     cypher = (
@@ -1294,8 +1399,16 @@ async def list_entities(*, user_id: int, limit: int = 200, offset: int = 0) -> l
     )
     rs = await _read(cypher, {"uid": user_id, "skip": offset, "limit": limit})
     return [
-        {"entity_id": r[0], "name": r[1], "entity_type": r[2], "aliases": r[3] or [],
-         "description": r[4], "confidence": r[5], "created_at": r[6], "last_accessed_at": r[7]}
+        {
+            "entity_id": r[0],
+            "name": r[1],
+            "entity_type": r[2],
+            "aliases": r[3] or [],
+            "description": r[4],
+            "confidence": r[5],
+            "created_at": r[6],
+            "last_accessed_at": r[7],
+        }
         for r in _rows(rs)
     ]
 
@@ -1309,8 +1422,14 @@ async def list_episodes(*, user_id: int, limit: int = 100, offset: int = 0) -> l
     )
     rs = await _read(cypher, {"uid": user_id, "skip": offset, "limit": limit})
     return [
-        {"episode_id": r[0], "kind": r[1], "summary": r[2], "occurred_at": r[3],
-         "conversation_id": r[4], "participants": r[5] or []}
+        {
+            "episode_id": r[0],
+            "kind": r[1],
+            "summary": r[2],
+            "occurred_at": r[3],
+            "conversation_id": r[4],
+            "participants": r[5] or [],
+        }
         for r in _rows(rs)
     ]
 
@@ -1323,15 +1442,16 @@ async def list_preferences(*, user_id: int) -> list[dict]:
         f"RETURN p.pref_id, p.key, p.value, p.confidence, p.valid_from ORDER BY p.key"
     )
     rs = await _read(cypher, {"uid": user_id})
-    return [
-        {"pref_id": r[0], "key": r[1], "value": r[2], "confidence": r[3], "valid_from": r[4]}
-        for r in _rows(rs)
-    ]
+    return [{"pref_id": r[0], "key": r[1], "value": r[2], "confidence": r[3], "valid_from": r[4]} for r in _rows(rs)]
 
 
 async def list_facts(
-    *, user_id: int, entity_id: str | None = None, only_valid: bool = True,
-    limit: int = 200, offset: int = 0,
+    *,
+    user_id: int,
+    entity_id: str | None = None,
+    only_valid: bool = True,
+    limit: int = 200,
+    offset: int = 0,
 ) -> list[dict]:
     """列出事实；entity_id 给定时只返回该实体相关事实（经 SUBJECT/OBJECT 边）。"""
     valid_filter = " AND f.valid_to IS NULL" if only_valid else ""
@@ -1356,8 +1476,16 @@ async def list_facts(
         params = {"uid": user_id, "skip": offset, "limit": limit}
     rs = await _read(cypher, params)
     return [
-        {"fact_id": r[0], "subject_id": r[1], "predicate": r[2], "object_text": r[3],
-         "valid_from": r[4], "valid_to": r[5], "confidence": r[6], "source_doc_id": r[7]}
+        {
+            "fact_id": r[0],
+            "subject_id": r[1],
+            "predicate": r[2],
+            "object_text": r[3],
+            "valid_from": r[4],
+            "valid_to": r[5],
+            "confidence": r[6],
+            "source_doc_id": r[7],
+        }
         for r in _rows(rs)
     ]
 
@@ -1370,10 +1498,7 @@ async def graph_neighborhood(*, user_id: int, limit: int = 80) -> dict:
         f"ORDER BY e.confidence DESC, e.last_accessed_at DESC LIMIT $limit"
     )
     nodes_rs = await _read(nodes_q, {"uid": user_id, "limit": limit})
-    entities = [
-        {"id": r[0], "name": r[1], "entity_type": r[2], "confidence": r[3]}
-        for r in _rows(nodes_rs)
-    ]
+    entities = [{"id": r[0], "name": r[1], "entity_type": r[2], "confidence": r[3]} for r in _rows(nodes_rs)]
     if not entities:
         return {"nodes": [], "edges": []}
     ids = [e["id"] for e in entities]
@@ -1383,18 +1508,14 @@ async def graph_neighborhood(*, user_id: int, limit: int = 80) -> dict:
         f"RETURN a.entity_id, type(r), b.entity_id, coalesce(r.weight, 1.0)"
     )
     edges_rs = await _read(edges_q, {"uid": user_id, "ids": ids})
-    edges = [
-        {"source": r[0], "type": r[1], "target": r[2], "weight": r[3]}
-        for r in _rows(edges_rs)
-    ]
+    edges = [{"source": r[0], "type": r[1], "target": r[2], "weight": r[3]} for r in _rows(edges_rs)]
     return {"nodes": entities, "edges": edges}
 
 
 async def stats(user_id: int) -> dict:
     """各类记忆节点计数。"""
     cypher = (
-        f"MATCH (n) WHERE n.user_id=$uid AND NOT (n)-[:{S.SAME_AS}]->() "
-        "RETURN labels(n)[0] AS label, count(n) AS cnt"
+        f"MATCH (n) WHERE n.user_id=$uid AND NOT (n)-[:{S.SAME_AS}]->() RETURN labels(n)[0] AS label, count(n) AS cnt"
     )
     rs = await _read(cypher, {"uid": user_id})
     counts = {r[0]: r[1] for r in _rows(rs)}
@@ -1409,6 +1530,7 @@ async def stats(user_id: int) -> dict:
 
 
 # ---------------- 巩固辅助查询 ----------------
+
 
 async def find_entity_by_name(*, user_id: int, name: str, entity_type: str | None = None) -> str | None:
     """按 user + name(+type) 找现有规范 Entity id（排除 SAME_AS 源节点），供消歧去重。"""
@@ -1434,10 +1556,7 @@ async def find_active_facts(*, user_id: int, subject_id: str, predicate: str) ->
 
 async def find_active_preference(*, user_id: int, key: str) -> dict | None:
     """找该 user+key 的当前有效 Preference（valid_to 为空），供首次/重复/版本化仲裁。"""
-    cypher = (
-        f"MATCH (p:{S.PREFERENCE} {{user_id:$uid, key:$key}}) "
-        f"WHERE p.valid_to IS NULL RETURN p.pref_id, p.value"
-    )
+    cypher = f"MATCH (p:{S.PREFERENCE} {{user_id:$uid, key:$key}}) WHERE p.valid_to IS NULL RETURN p.pref_id, p.value"
     rs = await _read(cypher, {"uid": user_id, "key": key})
     rows = _rows(rs)
     if not rows:
@@ -1446,6 +1565,7 @@ async def find_active_preference(*, user_id: int, key: str) -> dict | None:
 
 
 # ---------------- 内部：Cypher 执行辅助 ----------------
+
 
 def _run(graph, cypher: str, params: dict | None = None):
     """执行 Cypher（写/读统一），返回 ResultSet。"""

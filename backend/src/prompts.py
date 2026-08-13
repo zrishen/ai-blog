@@ -4,8 +4,8 @@ prompt 注入采用 PromptSegment 注册表（resolve_active_segments 按 priori
 取代旧 module 级 ``+=`` 拼接。owner = 本文件；llm_factory._system_prompt 仅做瘦渲染。
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from src.config import settings
 from src.tools.registry import tool_names_by_tag  # WRITING_TOOL_NAMES 派生（统一工具名源）
@@ -37,7 +37,8 @@ CORE_TOOL_RULES_TEXT = (
 
 # 写作 create-before-write 规则（写作 skill 激活 + 挂 blog_* 工具门控）
 WRITING_CREATE_TEXT = (
-    "处理博客时，新建文章必须先调用 blog_create_post 创建空草稿并取得 post_id，再调用 blog_write_post 写入完整正文，不得创建草稿后直接结束；"
+    "处理博客时，新建文章必须先调用 blog_create_post 创建空草稿并取得 post_id，"
+    "再调用 blog_write_post 写入完整正文，不得创建草稿后直接结束；"
     "局部修改正文使用 blog_edit_post；修改文章属性或重写全文使用 blog_write_post。"
 )
 
@@ -82,7 +83,9 @@ SIDEBAR_TOOL_RULES = (
 
 # 文件库(base_search_file)提示词
 
-RAG_AUTO = "\n\n当用户提到文件库、上传文件、文档、资料、根据文档等私有资料线索时，应调用 base_search_file；普通闲聊不必调用。"
+RAG_AUTO = (
+    "\n\n当用户提到文件库、上传文件、文档、资料、根据文档等私有资料线索时，应调用 base_search_file；普通闲聊不必调用。"
+)
 
 KNOWLEDGE_GRAPH_RULES = (
     "当问题涉及知识库中提取的实体、概念之间的关系或已有事实时，可调用 knowledge_query_graph。"
@@ -128,8 +131,7 @@ CTX_SELECTED_SECTION = "选中内容位于文章第 {section_index} 节。调用
 
 # 博客左栏（侧栏）自定义编辑上下文：透传当前 HTML + 卡片可用高度，让 AI 基于现状修改、按高度生成填满内容
 CTX_LEFTBAR_HEIGHT = (
-    "当前左栏卡片可用高度约 {height}px（宽约 240–320px），"
-    "请生成刚好填满该高度的内容（避免溢出或大片留白）。"
+    "当前左栏卡片可用高度约 {height}px（宽约 240–320px），请生成刚好填满该高度的内容（避免溢出或大片留白）。"
 )
 CTX_LEFTBAR_HTML = "当前左栏 HTML（可基于其修改或重做）：\n{html}"
 
@@ -193,61 +195,80 @@ def _writing_on(ctx: PromptContext) -> bool:
 SEG_SYSTEM_BASE = PromptSegment("system_base", SYSTEM_BASE, priority=0)
 SEG_SYSTEM_DATE = PromptSegment("system_date", SYSTEM_DATE, priority=1, format_keys=("today",))
 SEG_CORE_RULES = PromptSegment(
-    "core_tool_rules", CORE_TOOL_RULES_TEXT, priority=10,
+    "core_tool_rules",
+    CORE_TOOL_RULES_TEXT,
+    priority=10,
     condition=lambda c: bool(c.mounted_tool_names),
 )
 # 写作三段 default_active=False，靠 enabled_segments（writing skill 启用）激活；
 #           condition=_writing_on 双保险（挂写作工具才注入），防 skill 启用但工具 gated off 时仍注入。
 SEG_WRITING_CREATE = PromptSegment(
-    "writing_create_flow", WRITING_CREATE_TEXT, priority=11,
-    default_active=False, condition=_writing_on,
+    "writing_create_flow",
+    WRITING_CREATE_TEXT,
+    priority=11,
+    default_active=False,
+    condition=_writing_on,
 )
 SEG_WRITING_MERMAID = PromptSegment(
-    "writing_mermaid", BLOG_MERMAID_GUIDE, priority=12,
-    default_active=False, condition=_writing_on,
+    "writing_mermaid",
+    BLOG_MERMAID_GUIDE,
+    priority=12,
+    default_active=False,
+    condition=_writing_on,
 )
 SEG_WRITING_SIDEBAR = PromptSegment(
-    "writing_sidebar", SIDEBAR_TOOL_RULES, priority=13,
-    default_active=False, condition=_writing_on,
+    "writing_sidebar",
+    SIDEBAR_TOOL_RULES,
+    priority=13,
+    default_active=False,
+    condition=_writing_on,
 )
 # RAG_AUTO 原 _system_prompt 无条件追加，现改 base_search_file 门控。
 # 默认场景（恒挂 base_search_file）等价；非默认（无该工具）更严格——不引导 LLM 调不存在的工具。
 SEG_KNOWLEDGE_LIBRARY = PromptSegment(
-    "knowledge_library", RAG_AUTO + KNOWLEDGE_GRAPH_RULES, priority=30,
+    "knowledge_library",
+    RAG_AUTO + KNOWLEDGE_GRAPH_RULES,
+    priority=30,
     default_active=False,
-    condition=lambda c: (
-        "base_search_file" in c.mounted_tool_names or "knowledge_query_graph" in c.mounted_tool_names
-    ),
+    condition=lambda c: "base_search_file" in c.mounted_tool_names or "knowledge_query_graph" in c.mounted_tool_names,
 )
 SEG_MEMORY_RECALL = PromptSegment(
-    "memory_recall", MEMORY_RECALL_RULES, priority=31,
+    "memory_recall",
+    MEMORY_RECALL_RULES,
+    priority=31,
     default_active=False,
     condition=lambda c: "base_recall_memory" in c.mounted_tool_names,
 )
 SEG_MCP_CAPS = PromptSegment(
-    "mcp_capabilities", MCP_CAPABILITIES, priority=40, format_keys=("cap_text",),
+    "mcp_capabilities",
+    MCP_CAPABILITIES,
+    priority=40,
+    format_keys=("cap_text",),
     condition=lambda c: bool(c.mcp_capabilities_text),
 )
 
-PROMPT_SEGMENT_REGISTRY: dict[str, PromptSegment] = {s.name: s for s in [
-    SEG_SYSTEM_BASE,
-    SEG_SYSTEM_DATE,
-    SEG_CORE_RULES,
-    SEG_WRITING_CREATE,
-    SEG_WRITING_MERMAID,
-    SEG_WRITING_SIDEBAR,
-    SEG_KNOWLEDGE_LIBRARY,
-    SEG_MEMORY_RECALL,
-    SEG_MCP_CAPS,
-]}
+PROMPT_SEGMENT_REGISTRY: dict[str, PromptSegment] = {
+    s.name: s
+    for s in [
+        SEG_SYSTEM_BASE,
+        SEG_SYSTEM_DATE,
+        SEG_CORE_RULES,
+        SEG_WRITING_CREATE,
+        SEG_WRITING_MERMAID,
+        SEG_WRITING_SIDEBAR,
+        SEG_KNOWLEDGE_LIBRARY,
+        SEG_MEMORY_RECALL,
+        SEG_MCP_CAPS,
+    ]
+}
 
 
 def resolve_active_segments(ctx: PromptContext) -> list[PromptSegment]:
     """eligible = (default_active OR in enabled_segments) AND condition；按 priority 升序返回。"""
     active = [
-        seg for seg in sorted(PROMPT_SEGMENT_REGISTRY.values(), key=lambda s: s.priority)
-        if (seg.default_active or seg.name in ctx.enabled_segments)
-        and (seg.condition is None or seg.condition(ctx))
+        seg
+        for seg in sorted(PROMPT_SEGMENT_REGISTRY.values(), key=lambda s: s.priority)
+        if (seg.default_active or seg.name in ctx.enabled_segments) and (seg.condition is None or seg.condition(ctx))
     ]
     skill_chars = sum(len(seg.template) for seg in active if not seg.default_active)
     if skill_chars > settings.skill_prompt_max_chars:

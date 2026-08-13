@@ -27,12 +27,14 @@ async def _ensure_super_admin(session) -> None:
 
     user = (await session.execute(select(User).where(User.username == username))).scalar_one_or_none()
     if user is None:
-        session.add(User(
-            username=username,
-            password_hash=hash_password(password),
-            is_admin=True,
-            is_super_admin=True,
-        ))
+        session.add(
+            User(
+                username=username,
+                password_hash=hash_password(password),
+                is_admin=True,
+                is_super_admin=True,
+            )
+        )
         await session.commit()
         return
     if not user.is_admin or not user.is_super_admin:
@@ -48,10 +50,10 @@ async def startup() -> None:
     init_sentry()
     await init_db()
 
-    from src.services.workspace.file.file_processing_service import reconcile_jobs
-    from src.services.workspace.blog.blog_service import ensure_intro_post
     from src.services.accounts.user.official_intro_service import build_intro_post_payload
     from src.services.accounts.user.user_service import ensure_system_user
+    from src.services.workspace.blog.blog_service import ensure_intro_post
+    from src.services.workspace.file.file_processing_service import reconcile_jobs
 
     await reconcile_jobs()
 

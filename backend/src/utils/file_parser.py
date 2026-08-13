@@ -24,7 +24,7 @@ def _parse_docx(path: Path, progress_callback=None) -> str:
     try:
         doc = Document(str(path))
     except ValueError as e:
-        raise ValueError(f"Invalid or corrupted DOCX file: {e}")
+        raise ValueError(f"Invalid or corrupted DOCX file: {e}") from e
 
     total = len(doc.paragraphs) + sum(len(table.rows) for table in doc.tables) + 1
     completed = 0

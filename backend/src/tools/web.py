@@ -62,16 +62,13 @@ def _normalise_hostname(value: str) -> str:
         pass
     else:
         raise _UnsafeWebTarget("IP literal hosts are not allowed")
-    if (
-        len(host) > 253
-        or any(
-            not label
-            or len(label) > 63
-            or label.startswith("-")
-            or label.endswith("-")
-            or not all(character.isalnum() or character == "-" for character in label)
-            for label in host.split(".")
-        )
+    if len(host) > 253 or any(
+        not label
+        or len(label) > 63
+        or label.startswith("-")
+        or label.endswith("-")
+        or not all(character.isalnum() or character == "-" for character in label)
+        for label in host.split(".")
     ):
         raise _UnsafeWebTarget("invalid hostname")
     return host
@@ -104,9 +101,7 @@ def _allowed_ports() -> frozenset[int]:
 
 def _allowed_content_types() -> frozenset[str]:
     return frozenset(
-        entry.strip().lower()
-        for entry in settings.web_fetch_allowed_content_types.split(",")
-        if entry.strip()
+        entry.strip().lower() for entry in settings.web_fetch_allowed_content_types.split(",") if entry.strip()
     )
 
 
@@ -397,9 +392,7 @@ async def web_search(query: str) -> str:
 
     endpoint = urlsplit(settings.web_search_endpoint)
     params = [
-        (key, value)
-        for key, value in parse_qsl(endpoint.query, keep_blank_values=True)
-        if key not in {"q", "format"}
+        (key, value) for key, value in parse_qsl(endpoint.query, keep_blank_values=True) if key not in {"q", "format"}
     ]
     params.extend((("q", query), ("format", "json")))
     search_url = urlunsplit((endpoint.scheme, endpoint.netloc, endpoint.path, urlencode(params), ""))
@@ -442,6 +435,4 @@ async def web_search(query: str) -> str:
         rendered.append("\n".join(lines))
     if not rendered:
         return "未找到结果。"
-    return "搜索结果：\n\n" + "\n\n".join(
-        f"{index}. {result}" for index, result in enumerate(rendered, start=1)
-    )
+    return "搜索结果：\n\n" + "\n\n".join(f"{index}. {result}" for index, result in enumerate(rendered, start=1))

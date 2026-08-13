@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-
 FileProcessingJobType = Literal["upload", "restore", "index"]
 FileProcessingJobStatus = Literal["staging", "queued", "running", "succeeded", "failed"]
 

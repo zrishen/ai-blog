@@ -1,6 +1,6 @@
 """Persistent per-IP daily rate limit for anonymous public chat."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +20,7 @@ async def consume_public_chat_request(
     """Consume one request and return today's count, or None if the quota is exhausted."""
     current = now or datetime.now(CHINA_TIMEZONE)
     usage_date = current.astimezone(CHINA_TIMEZONE).date()
-    timestamp = current.astimezone(timezone.utc).replace(tzinfo=None)
+    timestamp = current.astimezone(UTC).replace(tzinfo=None)
 
     statement = (
         pg_insert(PublicChatDailyUsage)

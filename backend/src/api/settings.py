@@ -81,9 +81,7 @@ async def update_sidebar_settings(
 
     from src.database.models import BlogSidebarSettings
 
-    result = await db.execute(
-        select(BlogSidebarSettings).where(BlogSidebarSettings.user_id == user.id)
-    )
+    result = await db.execute(select(BlogSidebarSettings).where(BlogSidebarSettings.user_id == user.id))
     record = result.scalar_one_or_none()
     if record is None:
         record = BlogSidebarSettings(user_id=user.id, show_tags=data.show_tags)

@@ -43,7 +43,8 @@ def _get_openai_client() -> AsyncOpenAI:
 
 
 def _get_local_model():
-    """懒加载本地 sentence-transformers 模型（首次调用加载、常驻内存）；double-check 加锁防止预热与 RAG 并发重复加载。"""
+    """懒加载本地 sentence-transformers 模型（首次调用加载、常驻内存）；
+    double-check 加锁防止预热与 RAG 并发重复加载。"""
     global _local_model
     if _local_model is None:
         with _local_model_lock:
@@ -74,7 +75,7 @@ async def _embed_local(texts: list[str], progress_callback=None) -> list[list[fl
         len(texts),
     )
     for start in range(0, len(texts), batch_size):
-        batch = texts[start:start + batch_size]
+        batch = texts[start : start + batch_size]
         batch_embeddings = await loop.run_in_executor(
             None,
             lambda b=batch: model.encode(b, normalize_embeddings=True).tolist(),
@@ -105,7 +106,7 @@ async def get_embeddings(texts: list[str], progress_callback=None) -> list[list[
 
     logger.info("Embedding batch started: model=%s texts=%s", settings.embedding_model, len(texts))
     for start in range(0, len(texts), batch_size):
-        batch = texts[start:start + batch_size]
+        batch = texts[start : start + batch_size]
         batch_number = start // batch_size + 1
         total_batches = (len(texts) + batch_size - 1) // batch_size
         try:
@@ -130,9 +131,7 @@ async def get_embeddings(texts: list[str], progress_callback=None) -> list[list[
         indexes = [item.index for item in response.data]
         expected_indexes = list(range(len(batch)))
         if len(indexes) != len(batch) or len(set(indexes)) != len(indexes) or sorted(indexes) != expected_indexes:
-            raise ValueError(
-                f"Invalid embedding response indexes: expected={expected_indexes} actual={indexes}"
-            )
+            raise ValueError(f"Invalid embedding response indexes: expected={expected_indexes} actual={indexes}")
         ordered = sorted(response.data, key=lambda item: item.index)
         batch_embeddings = [[float(value) for value in item.embedding] for item in ordered]
         if any(not embedding for embedding in batch_embeddings):

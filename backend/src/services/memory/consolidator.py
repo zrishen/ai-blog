@@ -16,38 +16,62 @@ _PREFERENCE_MIN_CONFIDENCE = 0.7
 
 
 async def consolidate_entity(
-    *, user_id: int, name: str, entity_type: str | None = None,
-    aliases: list[str] | None = None, description: str | None = None, confidence: float = 1.0,
+    *,
+    user_id: int,
+    name: str,
+    entity_type: str | None = None,
+    aliases: list[str] | None = None,
+    description: str | None = None,
+    confidence: float = 1.0,
 ) -> tuple[str, bool]:
-    """去重：同名同类型已存在 → 复用 canonical（confidence 取 max，不新建重复节点避免图膨胀）；否则新建。返回 (entity_id, is_new)。"""
+    """去重：同名同类型已存在 → 复用 canonical（confidence 取 max，不新建重复节点避免图膨胀）；
+    否则新建。返回 (entity_id, is_new)。"""
     existing = await graph_store.find_entity_by_name(user_id=user_id, name=name, entity_type=entity_type)
     if existing:
         if confidence and confidence > 0:
             await graph_store.bump_entity_confidence(
-                user_id=user_id, entity_id=existing, confidence=confidence,
+                user_id=user_id,
+                entity_id=existing,
+                confidence=confidence,
             )
         return existing, False
     new_id = await graph_store.add_entity(
-        user_id=user_id, name=name, entity_type=entity_type,
-        aliases=aliases, description=description, confidence=confidence,
+        user_id=user_id,
+        name=name,
+        entity_type=entity_type,
+        aliases=aliases,
+        description=description,
+        confidence=confidence,
     )
     return new_id, True
 
 
 async def consolidate_fact(
-    *, user_id: int, subject_id: str, predicate: str, object_text: str,
-    object_id: str | None = None, confidence: float = 1.0, source_doc_id: str | None = None,
+    *,
+    user_id: int,
+    subject_id: str,
+    predicate: str,
+    object_text: str,
+    object_id: str | None = None,
+    confidence: float = 1.0,
+    source_doc_id: str | None = None,
 ) -> str:
     """冲突检测：同主体+谓词的有效 Fact 若 object 相同 → 复用（去重）；object 不同 → 新建并 SUPERSEDES 旧 Fact。
-    SUPERSEDES 表示事实纠正/更新，新 Fact 是当前权威值，标 protected 不参与衰减。object_id 非空时建 OBJECT 边。返回 fact_id。"""
+    SUPERSEDES 表示事实纠正/更新，新 Fact 是当前权威值，标 protected 不参与衰减。
+    object_id 非空时建 OBJECT 边。返回 fact_id。"""
     active = await graph_store.find_active_facts(user_id=user_id, subject_id=subject_id, predicate=predicate)
     for old in active:
         if old["object_text"] == object_text:
             return old["fact_id"]  # 相同事实已存在，复用避免重复累积
     will_supersede = any(old["object_text"] != object_text for old in active)
     new_id = await graph_store.add_fact(
-        user_id=user_id, subject_id=subject_id, predicate=predicate, object_text=object_text,
-        object_id=object_id, confidence=confidence, source_doc_id=source_doc_id,
+        user_id=user_id,
+        subject_id=subject_id,
+        predicate=predicate,
+        object_text=object_text,
+        object_id=object_id,
+        confidence=confidence,
+        source_doc_id=source_doc_id,
         protected=will_supersede,
     )
     for old in active:
@@ -58,7 +82,11 @@ async def consolidate_fact(
 
 
 async def consolidate_preference(
-    *, user_id: int, key: str, value: str, confidence: float = 1.0,
+    *,
+    user_id: int,
+    key: str,
+    value: str,
+    confidence: float = 1.0,
 ) -> str | None:
     """仲裁偏好：key 归一化 + 置信度门槛 + 查图判断首次/重复/版本化。返回 pref_id 或 None（跳过）。
 
@@ -75,13 +103,19 @@ async def consolidate_preference(
     existing = await graph_store.find_active_preference(user_id=user_id, key=norm_key)
     if existing is None:
         return await graph_store.add_preference(
-            user_id=user_id, key=norm_key, value=norm_value, confidence=confidence,
+            user_id=user_id,
+            key=norm_key,
+            value=norm_value,
+            confidence=confidence,
         )
     if existing["value"] == norm_value:
         logger.info("Preference 重复跳过: key=%s", norm_key)
         return None
     updated = await graph_store.update_preference(
-        user_id=user_id, pref_id=existing["pref_id"], value=norm_value, confidence=confidence,
+        user_id=user_id,
+        pref_id=existing["pref_id"],
+        value=norm_value,
+        confidence=confidence,
     )
     logger.info("Preference 版本化: key=%s old_pref_id=%s", norm_key, existing["pref_id"])
     return updated["pref_id"] if updated else None
@@ -105,7 +139,9 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
         except (TypeError, KeyError, ValueError) as e:
             logger.warning(
                 "memory consolidate skipped invalid entity user_id=%s index=%d error_type=%s",
-                user_id, index, type(e).__name__,
+                user_id,
+                index,
+                type(e).__name__,
             )
             continue
         result["entities"].append((eid, is_new))
@@ -118,15 +154,20 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
                 continue
             object_id = name_to_id.get(fact.get("object_text", ""))  # object 命中已抽取实体则建 OBJECT 边
             fid = await consolidate_fact(
-                user_id=user_id, subject_id=sid, predicate=fact["predicate"],
-                object_text=fact["object_text"], object_id=object_id,
+                user_id=user_id,
+                subject_id=sid,
+                predicate=fact["predicate"],
+                object_text=fact["object_text"],
+                object_id=object_id,
                 confidence=fact.get("confidence", 1.0),
                 source_doc_id=fact.get("source_doc_id"),
             )
         except (TypeError, KeyError, ValueError) as e:
             logger.warning(
                 "memory consolidate skipped invalid fact user_id=%s index=%d error_type=%s",
-                user_id, index, type(e).__name__,
+                user_id,
+                index,
+                type(e).__name__,
             )
             continue
         result["facts"].append(fid)
@@ -137,14 +178,18 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
         except (TypeError, KeyError, ValueError) as e:
             logger.warning(
                 "memory consolidate skipped invalid episode user_id=%s index=%d error_type=%s",
-                user_id, index, type(e).__name__,
+                user_id,
+                index,
+                type(e).__name__,
             )
             continue
         result["episodes"].append(eid)
         participants = [name_to_id[n] for n in ep.get("participants", []) if n in name_to_id]
         if participants:
             await graph_store.link_episode_entities(
-                user_id=user_id, episode_id=eid, entity_ids=participants,
+                user_id=user_id,
+                episode_id=eid,
+                entity_ids=participants,
             )
 
     for pref in extracted.get("preferences", []):
@@ -161,13 +206,9 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
         memory_embeddings.MemoryNodeRef(kind="entity", user_id=user_id, memory_id=eid)
         for eid in dict.fromkeys(entity_id for entity_id, _ in result["entities"])
     ]
+    refs.extend(memory_embeddings.MemoryNodeRef(kind="fact", user_id=user_id, memory_id=fid) for fid in result["facts"])
     refs.extend(
-        memory_embeddings.MemoryNodeRef(kind="fact", user_id=user_id, memory_id=fid)
-        for fid in result["facts"]
-    )
-    refs.extend(
-        memory_embeddings.MemoryNodeRef(kind="episode", user_id=user_id, memory_id=eid)
-        for eid in result["episodes"]
+        memory_embeddings.MemoryNodeRef(kind="episode", user_id=user_id, memory_id=eid) for eid in result["episodes"]
     )
     refs.extend(
         memory_embeddings.MemoryNodeRef(kind="preference", user_id=user_id, memory_id=pid)
@@ -178,7 +219,11 @@ async def consolidate(*, user_id: int, extracted: dict) -> dict:
     new_entities = sum(1 for _, is_new in result["entities"] if is_new)
     logger.info(
         "memory consolidate done user_id=%s entities=%d(new=%d) facts=%d episodes=%d prefs=%d",
-        user_id, len(result["entities"]), new_entities,
-        len(result["facts"]), len(result["episodes"]), len(result["preferences"]),
+        user_id,
+        len(result["entities"]),
+        new_entities,
+        len(result["facts"]),
+        len(result["episodes"]),
+        len(result["preferences"]),
     )
     return result

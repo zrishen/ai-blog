@@ -48,13 +48,17 @@ def _image_base_url() -> str:
 
 def _stored_cover_name(post: BlogPost, content_type: str | None = None) -> str:
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
-    extension = {
-        "image/avif": ".avif",
-        "image/gif": ".gif",
-        "image/jpeg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp",
-    }.get(media_type) or mimetypes.guess_extension(media_type) or ".png"
+    extension = (
+        {
+            "image/avif": ".avif",
+            "image/gif": ".gif",
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+        }.get(media_type)
+        or mimetypes.guess_extension(media_type)
+        or ".png"
+    )
     if extension not in {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}:
         extension = ".png"
     return f"blog-cover-{post.id}-{uuid.uuid4().hex}{extension}"
@@ -105,7 +109,9 @@ async def generate_cover_image(post: BlogPost) -> str:
         stored_name = await _generate_siliconflow_cover(post, prompt)
         logger.info(
             "blog cover generated post_id=%s provider=siliconflow model=%s stored_name=%s",
-            post.id, settings.image_generation_model, stored_name,
+            post.id,
+            settings.image_generation_model,
+            stored_name,
         )
         return stored_name
 
@@ -126,6 +132,8 @@ async def generate_cover_image(post: BlogPost) -> str:
     stored_name = _store_cover_image(post, base64.b64decode(result.data[0].b64_json), "image/png")
     logger.info(
         "blog cover generated post_id=%s provider=openai model=%s stored_name=%s",
-        post.id, settings.image_generation_model, stored_name,
+        post.id,
+        settings.image_generation_model,
+        stored_name,
     )
     return stored_name

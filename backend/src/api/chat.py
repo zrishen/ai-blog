@@ -36,8 +36,8 @@ async def chat(data: MessageRequest, user: User = Depends(get_current_user)):
             try:
                 payload = json.loads(chunk.split(_STREAMERROR_MARKER, 1)[1])
                 raise HTTPException(status_code=500, detail=payload.get("message", "聊天流错误"))
-            except json.JSONDecodeError:
-                raise HTTPException(status_code=500, detail="聊天流错误")
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=500, detail="聊天流错误") from exc
         if _ROUNDEND_MARKER in chunk:
             try:
                 payload = json.loads(chunk.split(_ROUNDEND_MARKER, 1)[1])

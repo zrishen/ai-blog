@@ -10,7 +10,7 @@ import math
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -21,12 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import settings
 from src.database.models import BlogPost, FileDocument, FileProcessingJob, User
 from src.database.session import async_session
+from src.services.accounts.subscription.subscription_service import should_use_platform_key
 from src.services.infra.llm.llm_factory import _chat_model_kwargs, _create_llm
-from src.services.workspace.blog.blog_body_service import get_post_body
-from src.services.workspace.file.file_service import delete_uploaded_file, vectorize_and_store, vectorize_text_and_store
 from src.services.infra.llm.llm_settings_service import get_user_llm_settings, has_usable_api_key
 from src.services.memory import consolidator, extractor, graph_store
-from src.services.accounts.subscription.subscription_service import should_use_platform_key
+from src.services.workspace.blog.blog_body_service import get_post_body
+from src.services.workspace.file.file_service import delete_uploaded_file, vectorize_and_store, vectorize_text_and_store
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ _worker_semaphores: dict[int, dict[str, Any]] = {}
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _worker_concurrency_state() -> tuple[Any, asyncio.Semaphore]:
@@ -145,8 +145,7 @@ def empty_progress(model_version: str, current_stage: str | None = None) -> dict
         "model_version": model_version,
         "current_stage": first_stage,
         "stages": {
-            stage: {"completed": 0, "total": 1, "unit": "operation"}
-            for stage in PROGRESS_MODELS[model_version]
+            stage: {"completed": 0, "total": 1, "unit": "operation"} for stage in PROGRESS_MODELS[model_version]
         },
     }
 
@@ -236,9 +235,7 @@ async def create_or_reuse_upload_job(
 
     active_key = _active_key("upload", user_id, None)
     active = (
-        await db.execute(
-            select(FileProcessingJob).where(FileProcessingJob.active_key == active_key)
-        )
+        await db.execute(select(FileProcessingJob).where(FileProcessingJob.active_key == active_key))
     ).scalar_one_or_none()
     if active:
         raise FileProcessingActiveError(active)
@@ -280,12 +277,10 @@ async def create_or_reuse_upload_job(
         if existing:
             return existing, False
         active = (
-            await db.execute(
-                select(FileProcessingJob).where(FileProcessingJob.active_key == active_key)
-            )
+            await db.execute(select(FileProcessingJob).where(FileProcessingJob.active_key == active_key))
         ).scalar_one_or_none()
         if active:
-            raise FileProcessingActiveError(active)
+            raise FileProcessingActiveError(active) from None
         raise
     await db.refresh(job)
     return job, True
@@ -300,9 +295,7 @@ async def create_or_reuse_restore_job(
 ) -> FileProcessingJob:
     active_key = _active_key("restore", user_id, source_document.id)
     existing = (
-        await db.execute(
-            select(FileProcessingJob).where(FileProcessingJob.active_key == active_key)
-        )
+        await db.execute(select(FileProcessingJob).where(FileProcessingJob.active_key == active_key))
     ).scalar_one_or_none()
     if existing:
         return existing
@@ -333,9 +326,7 @@ async def create_or_reuse_restore_job(
     except IntegrityError:
         await db.rollback()
         return (
-            await db.execute(
-                select(FileProcessingJob).where(FileProcessingJob.active_key == active_key)
-            )
+            await db.execute(select(FileProcessingJob).where(FileProcessingJob.active_key == active_key))
         ).scalar_one()
     await db.refresh(job)
     return job
@@ -352,7 +343,8 @@ async def create_or_reuse_index_job(
     stored_name: str,
     client_request_id: str | None = None,
 ) -> FileProcessingJob:
-    """创建「加入 AI 知识」索引 job（幂等：同一资源已有活跃 index job 则复用；stored_name 同时是向量删除键，file=doc.file_path，blog=f"blog_post:{id}"）。"""
+    """创建「加入 AI 知识」索引 job（幂等：同一资源已有活跃 index job 则复用；
+    stored_name 同时是向量删除键，file=doc.file_path，blog=f"blog_post:{id}"）。"""
     active_key = _active_key(
         "index",
         user_id,
@@ -361,9 +353,7 @@ async def create_or_reuse_index_job(
         target_resource_id=target_resource_id,
     )
     existing = (
-        await db.execute(
-            select(FileProcessingJob).where(FileProcessingJob.active_key == active_key)
-        )
+        await db.execute(select(FileProcessingJob).where(FileProcessingJob.active_key == active_key))
     ).scalar_one_or_none()
     if existing:
         return existing
@@ -395,9 +385,7 @@ async def create_or_reuse_index_job(
     except IntegrityError:
         await db.rollback()
         return (
-            await db.execute(
-                select(FileProcessingJob).where(FileProcessingJob.active_key == active_key)
-            )
+            await db.execute(select(FileProcessingJob).where(FileProcessingJob.active_key == active_key))
         ).scalar_one()
     await db.refresh(job)
     return job
@@ -438,12 +426,14 @@ async def mark_upload_queued(db: AsyncSession, job: FileProcessingJob) -> None:
 
 async def has_active_restore(db: AsyncSession, *, user_id: int, source_document_id: int) -> bool:
     result = await db.execute(
-        select(FileProcessingJob.id).where(
+        select(FileProcessingJob.id)
+        .where(
             FileProcessingJob.user_id == user_id,
             FileProcessingJob.source_document_id == source_document_id,
             FileProcessingJob.job_type == "restore",
             FileProcessingJob.status.in_(ACTIVE_STATUSES),
-        ).limit(1)
+        )
+        .limit(1)
     )
     return result.first() is not None
 
@@ -457,9 +447,7 @@ def schedule_job(job_id: str) -> None:
     task.add_done_callback(lambda finished, key=job_id: _task_registry.pop(key, None))
 
 
-async def cancel_jobs_for_resource(
-    db: AsyncSession, *, user_id: int, resource_type: str, resource_id: int
-) -> None:
+async def cancel_jobs_for_resource(db: AsyncSession, *, user_id: int, resource_type: str, resource_id: int) -> None:
     """取消并终结某资源进行中的 index job：从 AI 知识移除资源时调用，避免 job 仍跑完
     浪费 embedding/LLM、写入记忆孤儿，并在 mark_indexed 时因 RagSource 已删而误标 failed。"""
     result = await db.execute(
@@ -520,9 +508,7 @@ async def _update_progress(
 async def _peek_job_user_id(job_id: str) -> int | None:
     """主键查 job.user_id，用于 acquire 信号量前选 per-user 槽；job 不存在返回 None。"""
     async with async_session() as db:
-        row = (await db.execute(
-            select(FileProcessingJob.user_id).where(FileProcessingJob.id == job_id)
-        )).first()
+        row = (await db.execute(select(FileProcessingJob.user_id).where(FileProcessingJob.id == job_id))).first()
         return row[0] if row else None
 
 
@@ -588,9 +574,7 @@ async def _snapshot_blog_post_body(db: AsyncSession, job: FileProcessingJob) -> 
     )
 
 
-async def _vectorize_blog_post(
-    job: FileProcessingJob, snapshot: _BlogBodySnapshot, reporter
-) -> list[str]:
+async def _vectorize_blog_post(job: FileProcessingJob, snapshot: _BlogBodySnapshot, reporter) -> list[str]:
     """Vectorize the immutable blog-body snapshot prepared before cleanup."""
     return await vectorize_text_and_store(
         snapshot.body,
@@ -672,8 +656,10 @@ async def _index_document_knowledge(
         total_facts += len(consolidated["facts"])
         entity_ids = [entity_id for entity_id, _ in consolidated["entities"]]
         await graph_store.link_chunk_entities(
-            user_id=job.user_id, stored_name=stored_name,
-            chunk_index=chunk_index, entity_ids=entity_ids,
+            user_id=job.user_id,
+            stored_name=stored_name,
+            chunk_index=chunk_index,
+            entity_ids=entity_ids,
         )
         await graph_store.link_document_knowledge(
             doc_id=doc_id,
@@ -684,7 +670,11 @@ async def _index_document_knowledge(
             await progress_reporter("brain_extract", chunk_index + 1, len(chunks), "chunk")
     logger.info(
         "document knowledge extracted user_id=%s doc_id=%s chunks=%d entities=%d facts=%d",
-        job.user_id, doc_id, len(chunks), total_entities, total_facts,
+        job.user_id,
+        doc_id,
+        len(chunks),
+        total_entities,
+        total_facts,
     )
 
 
@@ -720,9 +710,7 @@ async def _run_job(job_id: str) -> None:
                 if job.job_type == "restore" and job.source_document_id is not None:
                     from src.services.workspace import rag_service
 
-                    if await rag_service.get_rag_source(
-                        db, job.user_id, "file", job.source_document_id
-                    ) is None:
+                    if await rag_service.get_rag_source(db, job.user_id, "file", job.source_document_id) is None:
                         await _finalize_success(db, job.id, token, [], indexed=False)
                         return
                 blog_snapshot: _BlogBodySnapshot | None = None
@@ -780,7 +768,7 @@ async def _run_job(job_id: str) -> None:
                         resource_type=job.target_resource_type if job.job_type == "index" else None,
                         resource_id=job.target_resource_id if job.job_type == "index" else None,
                         progress_reporter=reporter,
-                )
+                    )
                 if job.job_type == "index":
                     await _index_document_knowledge(db, job, chunks, reporter)
                     # 推进 RagSource 状态；file 顺带回写 chunk 数到 FileDocument。
@@ -815,10 +803,15 @@ async def _run_job(job_id: str) -> None:
                             version=str(len(chunks)),
                         )
                 logger.info(
-                    "file job done job_id=%s job_type=%s user_id=%s resource=%s/%s chunks=%d indexed=True duration_ms=%d",
-                    job.id, job.job_type, job.user_id,
-                    job.target_resource_type, job.target_resource_id,
-                    len(chunks), int((time.time() - _t0) * 1000),
+                    "file job done job_id=%s job_type=%s user_id=%s resource=%s/%s "
+                    "chunks=%d indexed=True duration_ms=%d",
+                    job.id,
+                    job.job_type,
+                    job.user_id,
+                    job.target_resource_type,
+                    job.target_resource_id,
+                    len(chunks),
+                    int((time.time() - _t0) * 1000),
                 )
                 await _finalize_success(db, job.id, token, chunks, indexed=True)
             except asyncio.CancelledError:
@@ -964,16 +957,20 @@ async def reconcile_jobs() -> None:
     now = utcnow()
     async with async_session() as db:
         jobs = (
-            await db.execute(
-                select(FileProcessingJob).where(
-                    or_(
-                        FileProcessingJob.status == "queued",
-                        FileProcessingJob.status == "running",
-                        FileProcessingJob.status == "staging",
+            (
+                await db.execute(
+                    select(FileProcessingJob).where(
+                        or_(
+                            FileProcessingJob.status == "queued",
+                            FileProcessingJob.status == "running",
+                            FileProcessingJob.status == "staging",
+                        )
                     )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         to_schedule: list[str] = []
         delayed_reconcile: list[tuple[str, float]] = []
         for job in jobs:

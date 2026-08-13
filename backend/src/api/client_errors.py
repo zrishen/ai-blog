@@ -6,7 +6,6 @@ per-IP 限流防前端死循环刷爆日志文件。
 """
 
 import logging
-from typing import Optional
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -55,7 +54,7 @@ def _enforce_client_error_rate_limit(request: Request) -> None:
 async def report_client_error(
     body: ClientErrorReport,
     request: Request,
-    user: Optional[User] = Depends(get_optional_user),
+    user: User | None = Depends(get_optional_user),
 ) -> dict:
     _enforce_client_error_rate_limit(request)
     ip = request.client.host if request.client else "unknown"
@@ -63,7 +62,12 @@ async def report_client_error(
     user_agent = request.headers.get("user-agent", "-")
     logger.error(
         "client_error source=%s user_id=%s ip=%s path=%s message=%.500s stack=%.1000s ua=%.500s",
-        body.source, user_id, ip, _safe_client_path(body.url),
-        body.message, body.stack or "", user_agent,
+        body.source,
+        user_id,
+        ip,
+        _safe_client_path(body.url),
+        body.message,
+        body.stack or "",
+        user_agent,
     )
     return {"status": "ok"}

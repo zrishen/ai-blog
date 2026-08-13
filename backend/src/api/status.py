@@ -4,8 +4,9 @@
 日志不外泄，避免暴露内部拓扑；IP 级限流防高频请求放大 DB / 磁盘 / 图库探测负载。
 """
 
+import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -61,9 +62,9 @@ async def check_status(request: Request):
         # 仅确保规范 users 容器存在且安全，不遍历统计（防磁盘 IO 被高频请求放大）。
         workspace_root = Path(settings.workspace_root)
         users_root = workspace_root / "users"
-        workspace_root.mkdir(parents=True, exist_ok=True)
-        users_root.mkdir(exist_ok=True)
-        if users_root.is_symlink() or not users_root.is_dir():
+        await asyncio.to_thread(workspace_root.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(users_root.mkdir, exist_ok=True)
+        if await asyncio.to_thread(users_root.is_symlink) or not await asyncio.to_thread(users_root.is_dir):
             raise OSError("workspace users container is unsafe")
     except Exception:
         logger.warning("/status workspace check failed", exc_info=True)
@@ -86,7 +87,7 @@ async def check_status(request: Request):
 
     return StatusResponse(
         status=overall,
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         components=StatusComponents(
             database=db_status,
             uploads=uploads_status,

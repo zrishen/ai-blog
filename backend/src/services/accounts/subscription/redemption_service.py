@@ -1,7 +1,7 @@
 """兑换码：批量生成 + 激活/续期订阅（未过期则叠加 duration_days，过期/无订阅则 now + duration_days）。"""
 
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +43,8 @@ async def create_codes(
 
 
 async def redeem(db: AsyncSession, *, user_id: int, code_str: str) -> datetime:
-    """兑换码激活/续期订阅（未过期叠加、过期/无则 now+duration），返回新 expires_at；码无效/已使用/用户不存在抛 ValueError。"""
+    """兑换码激活/续期订阅（未过期叠加、过期/无则 now+duration），返回新 expires_at；
+    码无效/已使用/用户不存在抛 ValueError。"""
     result = await db.execute(select(RedemptionCode).where(RedemptionCode.code == code_str))
     code = result.scalar_one_or_none()
     if code is None:
@@ -55,7 +56,7 @@ async def redeem(db: AsyncSession, *, user_id: int, code_str: str) -> datetime:
     if user is None:
         raise ValueError("用户不存在")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(UTC).replace(tzinfo=None)
     duration = timedelta(days=code.duration_days)
     if user.subscription_expires_at and user.subscription_expires_at > now:
         new_expires = user.subscription_expires_at + duration  # 未过期：叠加

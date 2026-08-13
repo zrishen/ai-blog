@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import uuid
 from pathlib import Path, PurePosixPath
@@ -14,7 +15,7 @@ from src.core.exceptions import ConflictError, NotFoundError, OwnershipError, Va
 from src.core.path_guard import require_user, workspace_dir, workspace_path
 from src.core.workspace_lock import workspace_lock
 from src.core.workspace_path import validate_workspace_relative_path
-from src.database.session import async_session
+from src.database import session as session_module
 from src.services.workspace.blog.blog_document_reconcile_service import reconcile_blog_document
 from src.services.workspace.resource_resolver import ResourceKind, resolve_workspace_resource
 from src.services.workspace.trash.workspace_trash_service import move_workspace_entry_to_trash
@@ -45,7 +46,18 @@ def _relative_path(value: str) -> str:
 
 
 def _glob_pattern(value: str) -> str:
-    validate_workspace_relative_path(value, max_length=_MAX_PATH_LENGTH)
+    """glob pattern 校验：允许 ``*?[]`` 通配符，只防 ``..`` 穿越 / 绝对路径 / 反斜杠 / 控制字符。"""
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > _MAX_PATH_LENGTH
+        or "\\" in value
+        or any(ord(ch) < 32 for ch in value)
+    ):
+        raise ValidationFailedError("Workspace glob pattern is invalid")
+    path = PurePosixPath(value)
+    if path.is_absolute() or value != path.as_posix() or ".." in path.parts:
+        raise ValidationFailedError("Workspace glob pattern is invalid")
     return value
 
 
@@ -94,10 +106,8 @@ def _atomic_write(target: Path, content: str) -> None:
     except OSError as exc:
         raise OwnershipError("Workspace file could not be written") from exc
     finally:
-        try:
+        with contextlib.suppress(OSError):
             temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
 
 
 def _write_text(user_id: int, relative_path: str, content: str) -> None:
@@ -107,14 +117,14 @@ def _write_text(user_id: int, relative_path: str, content: str) -> None:
 
 
 async def _sync_managed_blog_document(user_id: int, relative_path: str) -> None:
-    async with async_session() as db:
+    async with session_module.async_session() as db:
         await reconcile_blog_document(db, user_id=user_id, relative_path=relative_path)
 
 
 async def _assert_not_managed_file_document(user_id: int, relative_path: str) -> None:
     """受管 FileDocument 必须经专用 API 更新/删除，禁止通用文件工具覆盖。"""
 
-    async with async_session() as db:
+    async with session_module.async_session() as db:
         resolved = await resolve_workspace_resource(db, user_id=user_id, relative_path=relative_path)
     if resolved.kind is ResourceKind.FILE_DOCUMENT:
         raise ConflictError("Managed file document must be updated through its dedicated API")
@@ -252,7 +262,7 @@ async def move(path: str, target_folder: str = "") -> str:
     user_id = _user_id()
     async with workspace_lock(user_id):
         await asyncio.to_thread(ensure_workspace_repository, user_id)
-        async with async_session() as db:
+        async with session_module.async_session() as db:
             entry = await move_entry(db, user_id, path=relative_path, target_path=target_path)
         await asyncio.to_thread(record_workspace_change, user_id, f"Move {relative_path} to {entry.path}")
     return f"Moved {relative_path} to {entry.path}"
@@ -267,7 +277,7 @@ async def delete(path: str) -> str:
     user_id = _user_id()
     async with workspace_lock(user_id):
         await asyncio.to_thread(ensure_workspace_repository, user_id)
-        async with async_session() as db:
+        async with session_module.async_session() as db:
             resolved = await resolve_workspace_resource(db, user_id=user_id, relative_path=relative_path)
             if resolved.kind is ResourceKind.BLOG_POST:
                 from src.services.workspace.blog.blog_service import delete_post

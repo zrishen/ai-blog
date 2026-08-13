@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 from src.database.models import ChatAttachment
 
-
 ChatAttachmentStatus = Literal["pending", "claimed", "attached"]
 ChatAttachmentKind = Literal["image", "file"]
 

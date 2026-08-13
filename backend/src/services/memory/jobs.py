@@ -76,10 +76,7 @@ async def _reconcile_orphans_in_session(db: AsyncSession) -> int:
     changes = 0
     graph_resources = await graph_store.list_resource_memory()
     sources = list((await db.execute(select(RagSource))).scalars().all())
-    source_keys = {
-        (source.user_id, source.resource_type, source.resource_id): source
-        for source in sources
-    }
+    source_keys = {(source.user_id, source.resource_type, source.resource_id): source for source in sources}
     processed: set[tuple[int, str, int]] = set()
     to_reindex: list[tuple[int, str, int]] = []
 
@@ -157,9 +154,7 @@ async def _reconcile_orphans_in_session(db: AsyncSession) -> int:
                     resource_id,
                 )
         except Exception:
-            logger.exception(
-                "Failed to schedule brain reindex for %s/%s", resource_type, resource_id
-            )
+            logger.exception("Failed to schedule brain reindex for %s/%s", resource_type, resource_id)
     return changes
 
 
@@ -232,8 +227,7 @@ async def merge_same_as(*, user_id: int | None = None, dry_run: bool = False) ->
         for edge, label, direction in _SAME_AS_REDIRECTS:
             if direction == "in":
                 await graph_store._write(
-                    pair_match + f"MATCH (x:{label} {{user_id:$uid}})-[:{edge}]->(src) "
-                    f"MERGE (x)-[:{edge}]->(canon)",
+                    pair_match + f"MATCH (x:{label} {{user_id:$uid}})-[:{edge}]->(src) MERGE (x)-[:{edge}]->(canon)",
                     sp,
                 )
             else:

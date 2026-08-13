@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from sqlalchemy import select
@@ -40,7 +40,7 @@ def _naive_utc(dt: datetime) -> datetime:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _collect_trash_files(trash: Path) -> list[Path]:
@@ -80,11 +80,7 @@ async def _recover_trash_orphans(db: AsyncSession, user_id: int) -> int:
     active = {
         tp
         for (tp,) in (
-            await db.execute(
-                select(WorkspaceTrashEntry.trashed_path).where(
-                    WorkspaceTrashEntry.user_id == user_id
-                )
-            )
+            await db.execute(select(WorkspaceTrashEntry.trashed_path).where(WorkspaceTrashEntry.user_id == user_id))
         ).all()
     }
 
@@ -96,9 +92,7 @@ async def _recover_trash_orphans(db: AsyncSession, user_id: int) -> int:
             continue
         original_path = _parse_trashed_path(trashed_path) or file.name
         try:
-            trashed_at = _naive_utc(
-                datetime.fromtimestamp(file.stat().st_mtime, tz=timezone.utc)
-            )
+            trashed_at = _naive_utc(datetime.fromtimestamp(file.stat().st_mtime, tz=UTC))
         except OSError:
             trashed_at = _utcnow()
         db.add(
@@ -187,9 +181,7 @@ async def reconcile_all_workspaces() -> dict[int, WorkspaceReconcileReport]:
         pass
 
     async with _db_session.async_session() as db:
-        blog_ids = {
-            uid for (uid,) in (await db.execute(select(BlogPost.user_id).distinct())).all()
-        }
+        blog_ids = {uid for (uid,) in (await db.execute(select(BlogPost.user_id).distinct())).all()}
         doc_ids: set[int] = set()
         for (uid_str,) in (await db.execute(select(FileDocument.user_id).distinct())).all():
             try:

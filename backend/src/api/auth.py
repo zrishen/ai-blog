@@ -1,12 +1,13 @@
 """Auth API routes: register, login, refresh, logout, me.
 
-access token 短期 JWT 走响应体；refresh token 走 HttpOnly cookie（仅 /api/v1/auth 下携带），/refresh 换新、/logout 吊销。
+access token 短期 JWT 走响应体；refresh token 走 HttpOnly cookie（仅 /api/v1/auth 下携带），
+/refresh 换新、/logout 吊销。
 """
 
 import logging
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -104,7 +105,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _client_ip(request: Request) -> str:
@@ -115,13 +116,9 @@ def _client_ip(request: Request) -> str:
 def _enforce_auth_rate_limit(request: Request, action: str) -> None:
     """per-IP 滑动窗口频率限制：防登录撞库与注册/邀请码暴力尝试，超限返 429。"""
     ip = _client_ip(request)
-    limit = (
-        settings.auth_login_rate_limit if action == "login" else settings.auth_register_rate_limit
-    )
+    limit = settings.auth_login_rate_limit if action == "login" else settings.auth_register_rate_limit
     bucket = f"{action}:{ip}"
-    if not check_rate_limit(
-        bucket, limit=limit, window_seconds=settings.auth_rate_limit_window_seconds
-    ):
+    if not check_rate_limit(bucket, limit=limit, window_seconds=settings.auth_rate_limit_window_seconds):
         logger.warning("auth rate limited action=%s ip=%s", action, ip)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -153,10 +150,10 @@ async def register(
     db.add(user)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         # 并发注册竞态：两个请求都通过上面的存在性检查，commit 时唯一约束触发
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户名已存在")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="用户名已存在") from exc
     await db.refresh(user)
 
     # 入门文章 best-effort：失败仅记日志不阻断注册，避免「用户已建、注册接口 500」的半注册状态
@@ -174,8 +171,8 @@ async def register(
 
 async def _seed_intro_article(db: AsyncSession, user_id: int):
     """为新注册用户创建一篇入门文章（来自官方介绍模板）。"""
-    from src.services.workspace.blog.blog_service import create_post
     from src.services.accounts.user.official_intro_service import build_intro_post_payload
+    from src.services.workspace.blog.blog_service import create_post
 
     intro_data = build_intro_post_payload()
     await create_post(db, intro_data, user_id)

@@ -3,10 +3,12 @@
 TOOL_REGISTRY 按「现状装配顺序」定义——assemble_tools 遍历此 dict 保插入序，asm.tools 顺序
 == 旧 agent_tools 顺序（行为等价）。新工具进 registry 或经 ToolProvider 动态产。
 """
+
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from langchain_core.tools import BaseTool
 
@@ -30,8 +32,10 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class ToolSpec:
     tool: BaseTool
-    gate: Callable[["ToolContext"], bool] | None = None
-    tags: frozenset[str] = frozenset()  # skill 归属标签（"writing"/"base"）；skill required_tools = tool_names_by_tag(tag)
+    gate: Callable[[ToolContext], bool] | None = None
+    tags: frozenset[str] = (
+        frozenset()
+    )  # skill 归属标签（"writing"/"base"）；skill required_tools = tool_names_by_tag(tag)
 
 
 # tags：writing=写作 skill；base=通用底座（always required；知识库/记忆 skill 化时改 knowledge/memory + 建 skill）

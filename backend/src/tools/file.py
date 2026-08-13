@@ -62,8 +62,8 @@ async def _search_collections(
     *,
     user_id: int,
 ) -> list[tuple[str, object]]:
-    from src.services.memory import graph_store
     from src.services.infra.embeddings.embedding_service import get_embedding_collection_suffix
+    from src.services.memory import graph_store
 
     async def search_one(name: str, stored_names: set[str]) -> list[tuple[str, object]]:
         try:
@@ -132,9 +132,7 @@ def _format_rag_context(results: list[tuple[str, object]]) -> str:
     parts = ["[检索到的参考内容]"]
     total_chars = 0
 
-    for index, (collection_name, result) in enumerate(
-        results[: settings.rag_top_k * 2], start=1
-    ):
+    for index, (collection_name, result) in enumerate(results[: settings.rag_top_k * 2], start=1):
         metadata = getattr(result, "metadata", None) or {}
         source = metadata.get("source") or metadata.get("file_name") or "unknown"
         distance = getattr(result, "score", None)
@@ -158,11 +156,7 @@ def _format_rag_context(results: list[tuple[str, object]]) -> str:
 
 
 def _format_empty_rag_context(reason: str) -> str:
-    return (
-        "[文件库检索结果]\n"
-        f"{reason}\n"
-        "如果回答需要依赖文件库，请明确说明未找到相关资料，不要编造。"
-    )
+    return f"[文件库检索结果]\n{reason}\n如果回答需要依赖文件库，请明确说明未找到相关资料，不要编造。"
 
 
 @tool
@@ -170,8 +164,8 @@ async def base_search_file(query: str) -> str:
     """搜索已加入 AI 知识的内容（文件库文档 + 博客文章）的语义相关片段。
     当需要从用户上传的文件或博客文章中查找信息、回答事实性问题时使用此工具。
     参数 query: 搜索查询字符串。"""
-    from src.services.infra.embeddings.embedding_service import get_embeddings
     from src.core.context import current_user_id_cv
+    from src.services.infra.embeddings.embedding_service import get_embeddings
 
     user_id = current_user_id_cv.get()
     if user_id is None:

@@ -1,6 +1,6 @@
 """对话管理路由。"""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -42,9 +42,7 @@ def _is_displayable_history_message(message: Message) -> bool:
     if message.role not in {"user", "assistant"}:
         return False
     # 中间轮 AIMessage（有 tool_calls 且无思考元数据）不显示，只用于上下文重建
-    if message.role == "assistant" and message.tool_calls and not message.thinking_duration_ms:
-        return False
-    return True
+    return not (message.role == "assistant" and message.tool_calls and not message.thinking_duration_ms)
 
 
 @router.get("/conversations", response_model=ConversationListResponse)
@@ -75,15 +73,13 @@ async def create_conversation(
     conv = Conversation(
         title=data.title,
         user_id=user.id,
-        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
-        updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        created_at=datetime.now(UTC).replace(tzinfo=None),
+        updated_at=datetime.now(UTC).replace(tzinfo=None),
     )
     db.add(conv)
     await db.commit()
     await db.refresh(conv)
-    return ConversationResponse(
-        id=conv.id, title=conv.title, created_at=conv.created_at, updated_at=conv.updated_at
-    )
+    return ConversationResponse(id=conv.id, title=conv.title, created_at=conv.created_at, updated_at=conv.updated_at)
 
 
 @router.delete("/conversations/{conversation_id}")
@@ -118,7 +114,9 @@ async def get_conversation_messages(
                     )
                     .order_by(ChatAttachment.message_id, ChatAttachment.position)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
     attachments_by_message: dict[int, list[ChatAttachmentResponse]] = {}
     for attachment in attachment_rows:

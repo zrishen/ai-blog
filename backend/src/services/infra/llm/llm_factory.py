@@ -11,6 +11,7 @@ from langchain_openai import ChatOpenAI
 
 try:
     from langchain_anthropic import ChatAnthropic
+
     _HAS_ANTHROPIC = True
 except ImportError:
     ChatAnthropic = None
@@ -18,12 +19,14 @@ except ImportError:
 
 try:
     from langchain_deepseek import ChatDeepSeek
+
     _HAS_DEEPSEEK = True
 except ImportError:
     _HAS_DEEPSEEK = False
 
 from src.config import settings
 from src.prompts import PromptSegment
+
 from .llm_settings_service import build_llm_model_kwargs
 
 logger = logging.getLogger(__name__)
@@ -76,9 +79,7 @@ def _chat_model_kwargs(
     *,
     allow_official_fallback: bool = False,
 ) -> dict[str, Any]:
-    kwargs = build_llm_model_kwargs(
-        thinking_mode, llm_settings, allow_official_fallback=allow_official_fallback
-    )
+    kwargs = build_llm_model_kwargs(thinking_mode, llm_settings, allow_official_fallback=allow_official_fallback)
     extra_body = _extra_body_for_mode(thinking_mode)
     if extra_body and kwargs.get("protocol") == "openai":
         reasoning_effort = extra_body.pop("reasoning_effort", None)
@@ -99,9 +100,7 @@ def _create_llm(model_kwargs: dict[str, Any], thinking_mode: str):
         if not _HAS_ANTHROPIC or ChatAnthropic is None:
             raise RuntimeError("Anthropic protocol requires langchain-anthropic")
         anthropic_kwargs = {
-            k: v
-            for k, v in llm_kwargs.items()
-            if k not in ("api_key", "base_url", "reasoning_effort", "extra_body")
+            k: v for k, v in llm_kwargs.items() if k not in ("api_key", "base_url", "reasoning_effort", "extra_body")
         }
         reasoning_effort = llm_kwargs.get("reasoning_effort")
         if reasoning_effort:

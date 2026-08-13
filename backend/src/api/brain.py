@@ -3,7 +3,7 @@
 memory_enabled=False 时返回空结构 + enabled=False（不 503，前端展示空态）。
 """
 
-from fastapi import APIRouter, Depends, Response, status, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from src.schemas.brain import (
     BrainEntity,

@@ -3,6 +3,7 @@
 resolve_skills 产出；assemble_tools 取 required_tool_names，orchestrator 取
 enabled_segment_names 填 PromptContext。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

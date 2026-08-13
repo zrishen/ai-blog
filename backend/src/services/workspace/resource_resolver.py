@@ -7,7 +7,7 @@ agent 文件工具与 HTTP workspace service 共用，避免 agent 绕过 FileDo
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from src.database.models import BlogPost, FileDocument
 from src.services.workspace.file.file_service import normalize_workspace_file_path
 
 
-class ResourceKind(str, Enum):
+class ResourceKind(StrEnum):
     BLOG_POST = "blog_post"
     FILE_DOCUMENT = "file_document"
     UNMANAGED = "unmanaged"

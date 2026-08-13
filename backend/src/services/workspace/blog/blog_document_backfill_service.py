@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +42,7 @@ class BlogDocumentBackfillResult:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _relative_path(post: BlogPost) -> str:
@@ -185,7 +185,9 @@ async def _recover_marker_commit_failure(
     try:
         await _mark_error(db, post, marker_error)
     except Exception as error_recording_error:
-        raise BlogDocumentBackfillError("Document verification marker failed and its error state could not be recorded") from error_recording_error
+        raise BlogDocumentBackfillError(
+            "Document verification marker failed and its error state could not be recorded"
+        ) from error_recording_error
     raise BlogDocumentBackfillError("Document verification marker commit failed") from marker_error
 
 
@@ -217,7 +219,9 @@ async def _recover_verified_check_commit_failure(
             raise BlogDocumentBackfillError(
                 "Verified document check failed and its error state could not be recorded"
             ) from error_recording_error
-        raise BlogDocumentBackfillError("Verified blog document is inconsistent after commit failure") from consistency_error
+        raise BlogDocumentBackfillError(
+            "Verified blog document is inconsistent after commit failure"
+        ) from consistency_error
 
     result = BlogDocumentBackfillResult(
         post_id=post.id,

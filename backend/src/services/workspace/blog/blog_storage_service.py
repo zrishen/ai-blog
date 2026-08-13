@@ -2,8 +2,7 @@
 
 import logging
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +45,7 @@ async def ensure_unique_slug(
     db: AsyncSession,
     *,
     user_id: int,
-    exclude_id: Optional[int] = None,
+    exclude_id: int | None = None,
 ) -> str:
     slug = base_slug
     counter = 1
@@ -63,7 +62,7 @@ async def ensure_unique_slug(
         counter += 1
 
 
-async def resolve_category(db: AsyncSession, name: Optional[str], *, user_id: int) -> Optional[int]:
+async def resolve_category(db: AsyncSession, name: str | None, *, user_id: int) -> int | None:
     if not name:
         return None
     result = await db.execute(
@@ -81,7 +80,7 @@ async def resolve_category(db: AsyncSession, name: Optional[str], *, user_id: in
     return category.id
 
 
-def _parse_datetime(value: object) -> Optional[datetime]:
+def _parse_datetime(value: object) -> datetime | None:
     if isinstance(value, datetime):
         return value
     if value:
@@ -99,8 +98,8 @@ async def upsert_post_from_meta(
     slug: str,
     meta: dict,
     body: str,
-    existing_post_id: Optional[int] = None,
-) -> Optional[BlogPostModel]:
+    existing_post_id: int | None = None,
+) -> BlogPostModel | None:
     """Persist a complete working copy and refresh its derived AST cache."""
     post: BlogPostModel | None = None
     if existing_post_id is not None:
@@ -151,7 +150,7 @@ async def upsert_post_from_meta(
     published_at = _parse_datetime(meta.get("published_at"))
     if published_at is not None:
         post.published_at = published_at
-    post.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    post.updated_at = datetime.now(UTC).replace(tzinfo=None)
 
     await db.commit()
     await db.refresh(post)

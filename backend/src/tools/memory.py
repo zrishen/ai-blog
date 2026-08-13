@@ -22,8 +22,8 @@ async def base_recall_memory(query: str) -> str:
     当需要回忆用户曾说过的事、用户偏好、或实体间关系时使用此工具
     （区别于文件库文档检索 base_search_file——后者检索上传的文档原文）。
     参数 query: 回忆查询字符串。"""
-    from src.services.infra.embeddings.embedding_service import get_embedding_collection_suffix, get_embeddings
     from src.core.context import current_user_id_cv
+    from src.services.infra.embeddings.embedding_service import get_embedding_collection_suffix, get_embeddings
 
     user_id = current_user_id_cv.get()
     if user_id is None:
@@ -45,7 +45,10 @@ async def base_recall_memory(query: str) -> str:
     )
     logger.info(
         "memory recall user_id=%s hits=%d top_k=%d hops=%d",
-        user_id, len(hits), settings.memory_recall_top_k, settings.memory_recall_hops,
+        user_id,
+        len(hits),
+        settings.memory_recall_top_k,
+        settings.memory_recall_hops,
     )
     if hits:
         try:
@@ -94,10 +97,7 @@ def _format_memory_context(hits) -> str:
         total += len(block)
     shown = len(parts) - 1
     if shown <= 0:
-        return (
-            "[大脑记忆结果]\n"
-            "检索到的记忆超过上下文限制，未能注入有效内容。\n"
-        )
+        return "[大脑记忆结果]\n检索到的记忆超过上下文限制，未能注入有效内容。\n"
     if shown < len(hits):
         parts.append(f"（另有 {len(hits) - shown} 条记忆因超出上下文限制未展示）")
     return "\n".join(parts)
