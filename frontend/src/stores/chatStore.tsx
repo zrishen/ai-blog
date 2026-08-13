@@ -41,7 +41,6 @@ interface ChatState {
   theme: Theme;
 
   currentPage: Page;
-  pluginCenterOpen: boolean;
 
   aiSidebarOpen: boolean;
   aiSidebarConversationId: number | null;
@@ -103,7 +102,6 @@ interface ChatState {
 type ChatAction =
   | { type: "SET_THEME"; payload: Theme }
   | { type: "SET_PAGE"; payload: Page }
-  | { type: "TOGGLE_PLUGIN_CENTER"; payload?: boolean }
   | { type: "SET_AI_SIDEBAR_OPEN"; payload: boolean }
   | { type: "SET_AI_SIDEBAR_CONV_ID"; payload: number | null }
   | { type: "SET_AI_SIDEBAR_SELECTED_KEY"; payload: AISidebarConversationKey | null }
@@ -219,7 +217,6 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         currentPage: getInitialPage(),
-        pluginCenterOpen: false,
         aiSidebarOpen: true,
         ...AI_SIDEBAR_DEFAULTS,
         ...BLOG_DEFAULTS,
@@ -265,7 +262,6 @@ const initialState: ChatState = {
   theme: savedTheme,
 
   currentPage: getInitialPage(),
-  pluginCenterOpen: false,
   aiSidebarOpen: true,
 
   ...AI_SIDEBAR_DEFAULTS,

@@ -13,8 +13,7 @@ import { SiteBlogRoute, SitePostRoute } from "./features/blog";
 import { LandingPage } from "./features/landing";
 import { WorkspacePage } from "./features/workspace";
 import { BrainPage } from "./features/brain";
-import { OverviewPage, UsersPage, CodesPage, UsagePage, PluginsPage } from "./features/admin";
-import { PluginCenterDialog } from "./features/plugins";
+import { OverviewPage, UsersPage, CodesPage, UsagePage } from "./features/admin";
 import { VisualRegressionRoute } from "./components/VisualRegressionRoute";
 import { useMediaQuery } from "./hooks/useMediaQuery";
 import "./App.css";
@@ -91,7 +90,6 @@ function MainContent() {
         <Route path="users" element={<UsersPage />} />
         <Route path="codes" element={<CodesPage />} />
         <Route path="usage" element={<UsagePage />} />
-        <Route path="plugins" element={<PluginsPage />} />
       </Route>
       {import.meta.env.DEV && <Route path="/__visual-regression" element={<VisualRegressionRoute />} />}
       <Route path="*" element={<Navigate to="/" replace />} />
@@ -272,7 +270,7 @@ function MobileWorkspace({ aiContext }: { aiContext: AISidebarRouteContext }) {
 
 function AuthenticatedApp() {
   const state = useChatState();
-  const { isAuthenticated, isInitializing } = useAuth();
+  const { isInitializing } = useAuth();
   const aiContext = useAISidebarRouteContext();
   const isMobileWorkspace = useMediaQuery(MOBILE_WORKSPACE_QUERY);
   const [groupApi, groupRef] = useGroupCallbackRef();
@@ -352,7 +350,6 @@ function AuthenticatedApp() {
           </>
         )}
 
-        {isAuthenticated && state.pluginCenterOpen && <PluginCenterDialog />}
       </div>
   );
 }

@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import {
   Plus,
-  Blocks,
   ArrowUp,
   Square,
   Paperclip,
@@ -36,7 +35,6 @@ interface ChatInputBarProps {
   onSelectAttachments: (files: FileList) => void;
   onRetryAttachment: (localId: string) => void;
   onRemoveAttachment: (localId: string) => void;
-  onOpenPlugins: () => void;
   onOpenSkills: () => void;
 }
 
@@ -55,7 +53,6 @@ export function ChatInputBar({
   onSelectAttachments,
   onRetryAttachment,
   onRemoveAttachment,
-  onOpenPlugins,
   onOpenSkills,
 }: ChatInputBarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
@@ -114,10 +111,6 @@ export function ChatInputBar({
             >
               <Paperclip className="mr-2 h-4 w-4" />
               上传文件
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onOpenPlugins}>
-              <Blocks className="mr-2 h-4 w-4" />
-              插件
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onOpenSkills}>
               <Sparkles className="mr-2 h-4 w-4" />

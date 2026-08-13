@@ -164,18 +164,6 @@ describe("AISidebar handleSend 心脏分支", () => {
     vi.unstubAllGlobals();
   });
 
-  it("未登录点击 MCP 服务时打开登录弹窗而不是 MCP 配置", async () => {
-    const user = userEvent.setup();
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
-
-    renderSidebar();
-    await user.click(await screen.findByRole("button", { name: "添加内容" }));
-    await user.click(await screen.findByText("插件"));
-
-    expect(await screen.findByText("登录弹窗")).toBeInTheDocument();
-    expect(latestChat?.state.pluginCenterOpen).toBe(false);
-  });
-
   it("上传附件后发送 attachments，并让乐观用户消息携带附件", async () => {
     const uploaded: ChatAttachment = {
       id: "attachment-1",

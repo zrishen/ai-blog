@@ -647,14 +647,6 @@ export function AISidebarChat({
     setHistoryReloadKey((key) => key + 1);
   }, [setHistoryReloadKey]);
 
-  const handleOpenPlugins = useCallback(() => {
-    if (!isAuthenticated) {
-      setLoginDialogOpen(true);
-      return;
-    }
-    dispatch({ type: "TOGGLE_PLUGIN_CENTER", payload: true });
-  }, [dispatch, isAuthenticated]);
-
   const handleOpenSkills = useCallback(() => {
     if (!isAuthenticated) {
       setLoginDialogOpen(true);
@@ -665,8 +657,7 @@ export function AISidebarChat({
 
   const handleLoginSuccess = useCallback(() => {
     setLoginDialogOpen(false);
-    dispatch({ type: "TOGGLE_PLUGIN_CENTER", payload: true });
-  }, [dispatch]);
+  }, []);
 
   const handleJumpToLatest = useCallback(() => {
     scrollToLatest("smooth");
@@ -761,7 +752,6 @@ export function AISidebarChat({
         onKeyDown={handleKeyDown}
         onSend={handleSendClick}
         onStop={handleStop}
-        onOpenPlugins={handleOpenPlugins}
         onOpenSkills={handleOpenSkills}
       />
 

@@ -32,8 +32,6 @@ export const TOOL_DISPLAY: Record<string, string> = {
   move: "移动文件",
   delete: "删除文件",
   git: "Git 操作",
-  // mcp
-  mcp_call_tool: "插件工具",
 };
 
 export function formatToolName(tool: ToolLike): string {

@@ -22,7 +22,6 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInputBar
     onKeyDown: vi.fn(),
     onSend: vi.fn(),
     onStop: vi.fn(),
-    onOpenPlugins: vi.fn(),
     onOpenSkills: vi.fn(),
     ...overrides,
   };

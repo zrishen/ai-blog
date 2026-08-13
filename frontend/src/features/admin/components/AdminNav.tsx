@@ -1,7 +1,6 @@
 import { NavLink } from "react-router-dom";
 import {
   Activity,
-  Blocks,
   LayoutDashboard,
   Ticket,
   Users as UsersIcon,
@@ -14,7 +13,6 @@ const NAV_ITEMS = [
   { to: "/admin/users", label: "用户", icon: UsersIcon, end: false },
   { to: "/admin/codes", label: "兑换码", icon: Ticket, end: false },
   { to: "/admin/usage", label: "用量", icon: Activity, end: false },
-  { to: "/admin/plugins", label: "插件", icon: Blocks, end: false },
 ] as const;
 
 export function AdminNav() {

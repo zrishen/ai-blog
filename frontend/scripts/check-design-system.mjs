@@ -11,8 +11,6 @@ const componentContracts = [
   ["src/components/auth/LoginForm.tsx", "TabsTrigger"],
   ["src/components/auth/LoginForm.tsx", "Alert"],
   ["src/components/settings/LLMSettingsDialog.tsx", "Select"],
-  ["src/features/plugins/PluginCenterDialog.tsx", "DialogContent"],
-  ["src/features/admin/components/PluginsPage.tsx", "Textarea"],
   ["src/features/subscription/SubscriptionPanel.tsx", "Alert"],
   ["src/features/blog/components/BlogPostView.tsx", "variant=\"destructive\""],
 ];

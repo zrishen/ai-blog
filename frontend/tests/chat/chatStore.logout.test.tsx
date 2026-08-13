@@ -25,7 +25,6 @@ describe("chatStore LOGOUT 全量重置", () => {
     act(() => {
       result.current.dispatch({ type: "SET_WORKSPACE_SELECTED_FOLDER_PATH", payload: POLLUTED_FOLDER });
       result.current.dispatch({ type: "SET_PAGE", payload: "workspace" });
-      result.current.dispatch({ type: "TOGGLE_PLUGIN_CENTER" });
       result.current.dispatch({ type: "SET_AI_SIDEBAR_OPEN", payload: false });
       result.current.dispatch({ type: "SET_LLM_SUPPORTS_THINKING", payload: false });
       result.current.dispatch({ type: "SET_AI_SIDEBAR_CONV_ID", payload: 777 });
@@ -42,7 +41,6 @@ describe("chatStore LOGOUT 全量重置", () => {
     const s = result.current.state;
     expect(s.workspaceSelectedFolderPath).toBeNull();
     expect(s.currentPage).toBe("blog");
-    expect(s.pluginCenterOpen).toBe(false);
     expect(s.aiSidebarOpen).toBe(true);
     expect(s.llmSupportsThinking).toBe(true);
     expect(s.aiSidebarConversationId).toBeNull();

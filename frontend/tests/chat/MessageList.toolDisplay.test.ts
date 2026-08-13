@@ -15,7 +15,6 @@ describe("tool display registry", () => {
       "base_search_file", "knowledge_query_graph", "base_recall_memory",
       "web_search", "web_fetch",
       "read", "write", "edit", "glob", "grep", "move", "delete", "git",
-      "mcp_call_tool",
     ];
     for (const name of expected) {
       expect(TOOL_DISPLAY[name], `${name} 应有展示名`).toBeTruthy();

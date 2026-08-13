@@ -8,7 +8,6 @@ import "@testing-library/jest-dom/vitest";
 const mocks = vi.hoisted(() => ({
   state: {
     aiSidebarOpen: true,
-    pluginCenterOpen: false,
     currentPage: "workspace",
     blogCurrentPostId: null,
     blogPosts: [],
@@ -74,9 +73,6 @@ vi.mock("../../src/features/landing/LandingPage", () => ({
 }));
 vi.mock("../../src/features/workspace/WorkspacePage", () => ({
   WorkspacePage: () => <div>工作区主内容</div>,
-}));
-vi.mock("../../src/features/plugins/PluginCenterDialog", () => ({
-  PluginCenterDialog: () => <div>Plugins</div>,
 }));
 vi.mock("../../src/features/admin/components/OverviewPage", () => ({
   OverviewPage: () => <div>管理员概览</div>,

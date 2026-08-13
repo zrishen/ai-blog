@@ -41,6 +41,7 @@ class ToolFeatureFlags:
     web_tools_enabled: bool = False
     workspace_files_enabled: bool = False  # WorkspaceFilesProvider
     code_execution_enabled: bool = False  # CodeExecutionProvider
+    mcp_enabled: bool = False  # McpToolProvider
 
     @classmethod
     def from_settings(cls) -> ToolFeatureFlags:
@@ -48,6 +49,7 @@ class ToolFeatureFlags:
             memory_enabled=settings.memory_enabled,
             web_tools_enabled=settings.web_tools_enabled,
             workspace_files_enabled=settings.workspace_files_enabled,
+            mcp_enabled=settings.mcp_enabled,
         )
 
 
@@ -78,6 +80,8 @@ class McpToolProvider:
     name = "mcp"
 
     def provide(self, ctx: ToolContext) -> list[BaseTool]:
+        if not ctx.feature_flags.mcp_enabled:
+            return []
         plugins = list(ctx.mcp_plugins)
         if not plugins:
             return []

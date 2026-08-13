@@ -29,6 +29,7 @@ def _ctx(
     memory_enabled=True,
     web_tools_enabled=False,
     workspace_files_enabled=False,
+    mcp_enabled=False,
     mcp_plugins=(),
     required=None,
 ) -> ToolContext:
@@ -43,6 +44,7 @@ def _ctx(
             memory_enabled=memory_enabled,
             web_tools_enabled=web_tools_enabled,
             workspace_files_enabled=workspace_files_enabled,
+            mcp_enabled=mcp_enabled,
         ),
     )
 
@@ -72,10 +74,18 @@ def test_mcp_off_when_no_plugins():
 def test_mcp_on_when_plugins_present():
     plugins = [{"slug": "p", "name": "P", "is_published": True,
                 "tools": [{"name": "t", "input_schema": {"type": "object", "properties": {}}}]}]
-    asm = assemble_tools(_ctx(mcp_plugins=plugins))
+    asm = assemble_tools(_ctx(mcp_enabled=True, mcp_plugins=plugins))
     assert "mcp_call_tool" in asm.mounted_tool_names
     # mcp_call_tool 追加在末尾（保现状序）
     assert asm.tools[-1].name == "mcp_call_tool"
+
+
+def test_mcp_off_when_flag_disabled():
+    """mcp_enabled=False（默认停用）→ 即使有启用插件也不挂 mcp_call_tool。"""
+    plugins = [{"slug": "p", "name": "P", "is_published": True,
+                "tools": [{"name": "t", "input_schema": {"type": "object", "properties": {}}}]}]
+    asm = assemble_tools(_ctx(mcp_plugins=plugins))
+    assert "mcp_call_tool" not in asm.mounted_tool_names
 
 
 def test_unknown_required_tool_raises():

@@ -176,6 +176,8 @@ class Settings(BaseSettings):
     smart_extra_body: str | None = None
 
     # ---- MCP ----
+    # 平台插件（MCP）整体停用：关闭时不加载插件、不挂 mcp_call_tool（前端 UI 已移除，API 暂保留）
+    mcp_enabled: bool = False
     mcp_call_timeout_seconds: float = 30.0
 
     # ---- Web 工具 ----

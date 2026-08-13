@@ -355,7 +355,8 @@ async def stream_chat(
             user_llm_settings = await get_user_llm_settings(db, user_id)
             user_obj = await db.get(User, user_id)
             use_platform_key = await should_use_platform_key(db, user_obj)
-            mcp_plugins = await list_enabled_plugin_runtime_configs(db, user_id)
+            if settings.mcp_enabled:
+                mcp_plugins = await list_enabled_plugin_runtime_configs(db, user_id)
     except Exception as e:
         logger.warning("Failed to load enabled platform plugins from DB: %s", e)
 
