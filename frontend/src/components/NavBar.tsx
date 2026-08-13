@@ -9,7 +9,6 @@ import {
   LogOut,
   Home,
   Settings,
-  Trash2,
   Menu,
   MessageSquare,
   Shield,
@@ -39,6 +38,7 @@ import { ProjectMark } from "@/components/ProjectMark";
 import { cn } from "@/lib/utils";
 import { navItemVariants } from "@/lib/visualVariants";
 import { useWorkspacePrimaryNavigation } from "@/components/useWorkspacePrimaryNavigation";
+
 import { useChat, toggleTheme } from "../stores/chatStore";
 import { useAuth } from "../stores/authStore";
 
@@ -63,11 +63,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
     handleHome,
     handleLoginSuccess,
   } = useWorkspacePrimaryNavigation();
-  const goTrash = () => {
-    dispatch({ type: "SET_WORKSPACE_SELECTED_VIEW", payload: "trash" });
-    dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: null });
-    navigate("/workspace");
-  };
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false);
 
@@ -224,10 +219,6 @@ export function NavBar({ onOpenNavigation, onOpenAI, navigationButtonRef, aiButt
             <DropdownMenuItem onClick={openSettingsDialog}>
               <Settings className="w-4 h-4 text-muted-foreground" />
               设置
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={goTrash}>
-              <Trash2 className="w-4 h-4 text-muted-foreground" />
-              回收站
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
