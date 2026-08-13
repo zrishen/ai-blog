@@ -125,6 +125,7 @@ export interface SendChatOptions {
   attachments?: Array<{ id: string }>;
   thinkingMode?: ThinkingMode;
   context?: Record<string, unknown>;
+  enabledSkills?: string[];
   signal?: AbortSignal;
   callbacks: SendChatCallbacks;
 }
@@ -313,18 +314,21 @@ export async function sendChat(
   conversationId: number | null,
   options: SendChatOptions,
 ) {
-  const { attachments, thinkingMode, context, signal, callbacks } = options;
+  const { attachments, thinkingMode, context, enabledSkills, signal, callbacks } = options;
   const { onChunk, onRoundDelta, onRoundEnd, onStreamError } = callbacks;
   const emitChunk = onRoundDelta || onRoundEnd || onStreamError ? undefined : onChunk;
   const res = await apiFetch(`${API_BASE}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    // enabled_skills: null=后端默认全开；[]=显式全关；非空=显式子集。
+    // 必须用 ?? 不能用 ||：[] || null 会变 null，丢失「显式全关」语义。
     body: JSON.stringify({
       content,
       conversation_id: conversationId,
       attachments: attachments ?? [],
       thinking_mode: thinkingMode ?? "balanced",
       context: context ?? null,
+      enabled_skills: enabledSkills ?? null,
     }),
     signal,
   });

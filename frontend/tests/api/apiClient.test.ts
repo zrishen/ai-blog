@@ -489,4 +489,40 @@ describe("简单 API 函数：URL 与 payload", () => {
     const headers = new Headers(init.headers);
     expect(headers.get("Authorization")).toBe("Bearer tok-abc");
   });
+
+  it("sendChat body 默认 enabled_skills=null（未传）", async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeResponse(makeChunkedStream(['{"conversation_id":1,"message_id":1}\x00DONE\x00'])),
+    );
+    await sendChat("hi", null, { callbacks: { onChunk: () => {}, onDone: () => {} } });
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.enabled_skills).toBeNull();
+  });
+
+  it("sendChat body enabled_skills=[] 保留空数组（显式全关，禁用 ||）", async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeResponse(makeChunkedStream(['{"conversation_id":1,"message_id":1}\x00DONE\x00'])),
+    );
+    await sendChat("hi", null, {
+      enabledSkills: [],
+      callbacks: { onChunk: () => {}, onDone: () => {} },
+    });
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.enabled_skills).toEqual([]);
+  });
+
+  it("sendChat body enabled_skills 透传子集", async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeResponse(makeChunkedStream(['{"conversation_id":1,"message_id":1}\x00DONE\x00'])),
+    );
+    await sendChat("hi", null, {
+      enabledSkills: ["writing", "memory"],
+      callbacks: { onChunk: () => {}, onDone: () => {} },
+    });
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.enabled_skills).toEqual(["writing", "memory"]);
+  });
 });

@@ -14,6 +14,7 @@ import {
 import { collectMessageReferences } from "./messageHelpers";
 import { maskStreamingMarkdown } from "./streamingMarkdown";
 import { MessageAttachments } from "./MessageAttachments";
+import { formatToolName, toolPrepLabel } from "./toolDisplay";
 
 import type { Message } from "@/types/chat";
 
@@ -583,7 +584,7 @@ function ActionNode({ tools }: { tools: ToolPair[] }) {
   const preparingCount = tools.filter((t) => !t.end && t.start?.status === "preparing").length;
   const title = tools.length === 1
     ? (tools[0].start?.status === "preparing" && !tools[0].end
-      ? toolPrepLabel(formatToolName(tools[0]))
+      ? toolPrepLabel(tools[0].start?.toolName ?? "")
       : `${allComplete ? "已运行" : "正在运行"} ${formatToolName(tools[0])}`)
     : preparingCount > 0
       ? `正在生成 ${tools.length} 条命令…`
@@ -620,18 +621,8 @@ function TimelineNode({ children }: { children: React.ReactNode }) {
   );
 }
 
-function formatToolName(tool: ToolPair) {
-  return tool.end?.toolName || tool.start?.toolName || "操作";
-}
+// 后端工具名 → 前端展示名映射在独立模块 toolDisplay.ts（避免组件文件混导出非组件破坏 fast refresh）。
 
-function toolPrepLabel(toolName: string): string {
-  if (toolName === "blog_write_post") return "正在生成文章";
-  if (toolName === "blog_create_post") return "正在创建草稿";
-  if (toolName === "blog_edit_post") return "正在生成修改";
-  if (toolName.startsWith("blog_")) return "正在生成文章";
-  if (toolName.startsWith("file_") || toolName.includes("search")) return "正在检索文件";
-  return `正在准备 ${toolName}`;
-}
 
 function ToolDetail({ tool }: { tool: ToolPair }) {
   const evt = tool.end || tool.start;

@@ -8,6 +8,7 @@ import { revisionReducer } from "./slices/revisionSlice";
 import { aiSidebarReducer } from "./slices/aiSidebarSlice";
 import { workspaceReducer } from "./slices/workspaceSlice";
 import { brainReducer } from "./slices/brainSlice";
+import { skillReducer } from "./slices/skillSlice";
 
 import type { BrainTab, Page, Theme, WorkspaceView } from "./types";
 import type { BlogPost, BlogView } from "@/types/blog";
@@ -22,6 +23,7 @@ import type {
 } from "@/types/chat";
 import type { WorkspaceEntry } from "@/api/workspace";
 import type { BrainStats } from "@/api/brain";
+import type { SkillId } from "@/types/skill";
 
 export interface BlogStreamingState {
   runId: string;
@@ -91,6 +93,11 @@ interface ChatState {
   leftbarHtml: string | null;
   leftbarShowTags: boolean;
   aiLeftbarEditContext: { html: string | null; heightPx?: number | null } | null;
+
+  // skill 启用选择：null=未从后端加载完成（禁止发送，防发空请求）；非空=已加载的启用集（[] = 显式全关）
+  enabledSkills: SkillId[] | null;
+  // skill 设置是否加载完成（成功或失败都置 true，失败时 enabledSkills 保持 null → 后端默认全开）
+  skillsLoaded: boolean;
 }
 
 type ChatAction =
@@ -148,6 +155,8 @@ type ChatAction =
   | { type: "SET_BRAIN_TAB"; payload: BrainTab }
   | { type: "SET_BRAIN_STATS"; payload: BrainStats | null }
   | { type: "DECREMENT_BRAIN_STATS"; payload: { field: "entities" | "facts" | "episodes" | "preferences"; by?: number } }
+  | { type: "SET_ENABLED_SKILLS"; payload: SkillId[] }
+  | { type: "SET_SKILLS_LOADED"; payload: boolean }
   | { type: "LOGOUT" };
 
 // ── 用户域初始值：initialState 与 LOGOUT 共享同一来源，新字段只需加到一个对象 ──
@@ -190,6 +199,11 @@ const BRAIN_DEFAULTS = {
   brainStats: null as BrainStats | null,
 };
 
+const SKILL_DEFAULTS = {
+  enabledSkills: null as SkillId[] | null,
+  skillsLoaded: false,
+};
+
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   state = blogReducer(state, action);
   state = aiContextReducer(state, action);
@@ -198,6 +212,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
   state = aiSidebarReducer(state, action);
   state = workspaceReducer(state, action);
   state = brainReducer(state, action);
+  state = skillReducer(state, action);
   switch (action.type) {
     // Auth — 登出时清除用户级别 UI 状态（不删后端数据）
     case "LOGOUT":
@@ -210,6 +225,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...BLOG_DEFAULTS,
         ...WORKSPACE_DEFAULTS,
         ...BRAIN_DEFAULTS,
+        ...SKILL_DEFAULTS,
         workspaceSelectedView: "overview" as WorkspaceView,
         fileLibraryRevision: state.fileLibraryRevision + 1,
         trashRevision: state.trashRevision + 1,
@@ -256,6 +272,7 @@ const initialState: ChatState = {
   ...BLOG_DEFAULTS,
   ...WORKSPACE_DEFAULTS,
   ...BRAIN_DEFAULTS,
+  ...SKILL_DEFAULTS,
   workspaceSelectedView: loadWorkspaceView(),
 
   fileLibraryRevision: 0,

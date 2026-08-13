@@ -35,6 +35,7 @@ describe("chatStore LOGOUT 全量重置", () => {
       result.current.dispatch({ type: "SET_FILE_SELECTED_FILE", payload: "users/42/secret.md" });
       result.current.dispatch({ type: "SET_WORKSPACE_EDITING_BLOG", payload: 55 });
       result.current.dispatch({ type: "SET_BRAIN_STATS", payload: POLLUTED_STATS });
+      result.current.dispatch({ type: "SET_ENABLED_SKILLS", payload: ["writing"] });
       result.current.dispatch({ type: "LOGOUT" });
     });
 
@@ -51,6 +52,8 @@ describe("chatStore LOGOUT 全量重置", () => {
     expect(s.fileSelectedFile).toBeNull();
     expect(s.workspaceEditingBlogId).toBeNull();
     expect(s.brainStats).toBeNull();
+    expect(s.enabledSkills).toBeNull();
+    expect(s.skillsLoaded).toBe(false);
     expect(s.aiSidebarMessagesByKey).toEqual({});
     expect(s.aiSidebarAttachmentsByKey).toEqual({});
     expect(s.blogPosts).toEqual([]);

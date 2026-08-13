@@ -5,6 +5,7 @@ import {
   ArrowUp,
   Square,
   Paperclip,
+  Sparkles,
 } from "lucide-react";
 
 import { AttachmentDraftList } from "./AttachmentDraftList";
@@ -36,6 +37,7 @@ interface ChatInputBarProps {
   onRetryAttachment: (localId: string) => void;
   onRemoveAttachment: (localId: string) => void;
   onOpenPlugins: () => void;
+  onOpenSkills: () => void;
 }
 
 export function ChatInputBar({
@@ -54,6 +56,7 @@ export function ChatInputBar({
   onRetryAttachment,
   onRemoveAttachment,
   onOpenPlugins,
+  onOpenSkills,
 }: ChatInputBarProps) {
   const attachmentInputRef = useRef<HTMLInputElement>(null);
 
@@ -115,6 +118,10 @@ export function ChatInputBar({
             <DropdownMenuItem onClick={onOpenPlugins}>
               <Blocks className="mr-2 h-4 w-4" />
               插件
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpenSkills}>
+              <Sparkles className="mr-2 h-4 w-4" />
+              skill
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -22,8 +22,8 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInputBar
     onKeyDown: vi.fn(),
     onSend: vi.fn(),
     onStop: vi.fn(),
-    onPickFiles: vi.fn(),
     onOpenPlugins: vi.fn(),
+    onOpenSkills: vi.fn(),
     ...overrides,
   };
   render(<ChatInputBar {...props} />);
@@ -67,6 +67,15 @@ describe("ChatInputBar attachments", () => {
       clipboardData: { files: [file] },
     });
     expect(props.onSelectAttachments).toHaveBeenCalledWith([file]);
+  });
+
+  it("+ 菜单含 skill 项，点击触发 onOpenSkills", async () => {
+    const user = userEvent.setup();
+    const props = renderInput();
+    await user.click(screen.getByRole("button", { name: "添加内容" }));
+    const skillItem = screen.getByText("skill");
+    await user.click(skillItem);
+    expect(props.onOpenSkills).toHaveBeenCalledOnce();
   });
 
   it.each(["uploading", "failed"] as const)("%s 附件时禁用发送", (status) => {

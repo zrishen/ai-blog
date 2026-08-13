@@ -10,6 +10,7 @@ import { useChatAttachments } from "../hooks/useChatAttachments";
 
 import { ChatInputBar } from "./ChatInputBar";
 import { MessageList } from "./MessageList";
+import { SkillSettingsDialog } from "./SkillSettingsDialog";
 import { createPatchDeltaPlayer, type PatchDeltaPlayer } from "./patchDeltaPlayer";
 import {
   blogToolOperations,
@@ -25,6 +26,7 @@ import type { RunState } from "../AISidebar";
 import { listSitePosts, getBlogPost } from "@/api/blog";
 import { getMessages } from "@/api/conversations";
 import { sendChat, sendSharedLandingChat, sendSharedUserChat } from "@/api/chat";
+import { getSkillSettings } from "@/api/skills";
 import { errorMessage } from "@/lib/errors";
 import { logWarn } from "@/api/logger";
 
@@ -89,6 +91,7 @@ export function AISidebarChat({
   } = useAISidebarRuntime();
 
   const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [skillsDialogOpen, setSkillsDialogOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const historyRequestSeqRef = useRef(new Map<AISidebarConversationKey, number>());
   const streamingByKeyRef = useRef(state.aiSidebarStreamingByKey);
@@ -108,6 +111,25 @@ export function AISidebarChat({
   useEffect(() => {
     streamingByKeyRef.current = state.aiSidebarStreamingByKey;
   }, [state.aiSidebarStreamingByKey]);
+
+  // 加载当前用户的 skill 设置（一次性，skillsLoaded 守卫防重复；LOGOUT 置 false 后新用户重载）。
+  // 失败时仅标记加载结束、enabledSkills 保持 null → sendChat 透传 null → 后端默认全开，不阻断发送。
+  useEffect(() => {
+    if (!isPrivate || !isAuthenticated || !user?.id || state.skillsLoaded) return;
+    let cancelled = false;
+    getSkillSettings()
+      .then((data) => {
+        if (!cancelled) dispatch({ type: "SET_ENABLED_SKILLS", payload: data.enabled_skills });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        dispatch({ type: "SET_SKILLS_LOADED", payload: true });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPrivate, isAuthenticated, user?.id, state.skillsLoaded]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -193,6 +215,8 @@ export function AISidebarChat({
       attachmentLocalIds,
       optimisticUserMessageId,
     } = params;
+    // skill 设置未加载完时禁止发送（私有聊天才透传 enabled_skills；公开聊天不经此路径）
+    if (isPrivate && !state.skillsLoaded) return;
     const controller = new AbortController();
     abortControllersRef.current.set(convKey, controller);
     const runState: RunState = {
@@ -270,6 +294,7 @@ export function AISidebarChat({
         await sendChat(text, initialConversationId, {
           attachments: sentAttachments,
           thinkingMode: state.aiSidebarThinkingMode,
+          enabledSkills: state.enabledSkills ?? undefined,
           context: pageContext,
           signal: controller.signal,
           callbacks: {
@@ -539,7 +564,7 @@ export function AISidebarChat({
       dispatch({ type: "SET_AI_SIDEBAR_STREAMING_FOR_KEY", payload: { key: activeKey, streaming: false } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attachments, dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.aiSelectionContext, state.aiLeftbarEditContext]);
+  }, [attachments, dispatch, isPrivate, pageType, postSlug, postTitle, siteUsername, loadConvs, refreshOwnPosts, state.aiSidebarThinkingMode, state.blogCurrentPostId, state.aiSelectionContext, state.aiLeftbarEditContext, state.enabledSkills, state.skillsLoaded]);
 
   const handleSend = useCallback(async (textOverride?: string) => {
     const convKey = getActiveKey();
@@ -630,6 +655,14 @@ export function AISidebarChat({
     dispatch({ type: "TOGGLE_PLUGIN_CENTER", payload: true });
   }, [dispatch, isAuthenticated]);
 
+  const handleOpenSkills = useCallback(() => {
+    if (!isAuthenticated) {
+      setLoginDialogOpen(true);
+      return;
+    }
+    setSkillsDialogOpen(true);
+  }, [isAuthenticated]);
+
   const handleLoginSuccess = useCallback(() => {
     setLoginDialogOpen(false);
     dispatch({ type: "TOGGLE_PLUGIN_CENTER", payload: true });
@@ -718,7 +751,7 @@ export function AISidebarChat({
         input={selectedInput}
         attachments={attachments.drafts}
         attachmentsEnabled={isPrivate && isAuthenticated && !selectedStreaming}
-        sendDisabled={attachments.hasUploading || attachments.hasFailed || (!selectedInput.trim() && attachments.uploaded.length === 0)}
+        sendDisabled={attachments.hasUploading || attachments.hasFailed || (!selectedInput.trim() && attachments.uploaded.length === 0) || (isPrivate && !state.skillsLoaded)}
         getAttachmentPreviewUrl={attachments.getPreviewUrl}
         onSelectAttachments={attachments.addFiles}
         onRetryAttachment={attachments.retry}
@@ -729,9 +762,11 @@ export function AISidebarChat({
         onSend={handleSendClick}
         onStop={handleStop}
         onOpenPlugins={handleOpenPlugins}
+        onOpenSkills={handleOpenSkills}
       />
 
       <LoginDialog open={loginDialogOpen} onOpenChange={setLoginDialogOpen} onSuccess={handleLoginSuccess} />
+      <SkillSettingsDialog open={skillsDialogOpen} onOpenChange={setSkillsDialogOpen} />
     </div>
   );
 }
