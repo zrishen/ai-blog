@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { MessageList } from "../../src/features/ai-chat/ai-sidebar/MessageList";
 
-import type { Message } from "../../src/stores/chatStore";
+import type { Message } from "../../src/types/chat";
 
 class ResizeObserverMock {
   observe() {}

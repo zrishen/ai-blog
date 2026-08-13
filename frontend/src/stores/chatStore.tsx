@@ -10,24 +10,18 @@ import { workspaceReducer } from "./slices/workspaceSlice";
 import { brainReducer } from "./slices/brainSlice";
 
 import type { BrainTab, Page, Theme, WorkspaceView } from "./types";
-import type { FileDocument } from "@/api/files";
 import type { BlogPost, BlogView } from "@/types/blog";
 import type {
   AISidebarConversationKey,
   AISidebarHistoryState,
   AIStreamEvent,
-  Conversation,
   DraftAttachment,
   Message,
   MessageUpdatePatch,
-  Reference,
   ThinkingMode,
-  ToolEvent,
 } from "@/types/chat";
 import type { WorkspaceEntry } from "@/api/workspace";
 import type { BrainStats } from "@/api/brain";
-
-import { isDisplayableMessage } from "@/types/chat";
 
 export interface BlogStreamingState {
   runId: string;
@@ -156,6 +150,46 @@ type ChatAction =
   | { type: "DECREMENT_BRAIN_STATS"; payload: { field: "entities" | "facts" | "episodes" | "preferences"; by?: number } }
   | { type: "LOGOUT" };
 
+// ── 用户域初始值：initialState 与 LOGOUT 共享同一来源，新字段只需加到一个对象 ──
+
+const AI_SIDEBAR_DEFAULTS = {
+  aiSidebarConversationId: null as number | null,
+  aiSidebarSelectedKey: null as AISidebarConversationKey | null,
+  aiSidebarMessagesByKey: {} as Record<AISidebarConversationKey, Message[]>,
+  aiSidebarStreamingByKey: {} as Record<AISidebarConversationKey, boolean>,
+  aiSidebarInputsByKey: {} as Record<AISidebarConversationKey, string>,
+  aiSidebarErrorsByKey: {} as Record<AISidebarConversationKey, string | null>,
+  aiSidebarHistoryByKey: {} as Record<AISidebarConversationKey, AISidebarHistoryState>,
+  aiSidebarAttachmentsByKey: {} as Record<AISidebarConversationKey, DraftAttachment[]>,
+  aiSidebarThinkingMode: "balanced" as ThinkingMode,
+  llmSupportsThinking: true,
+};
+
+const BLOG_DEFAULTS = {
+  blogPosts: [] as BlogPost[],
+  blogCurrentView: "list" as BlogView,
+  blogCurrentPostId: null as number | null,
+  blogSelectedTag: null as string | null,
+  blogStreamingByPostId: {} as Record<number, BlogStreamingState>,
+  aiSelectionContext: null as ChatState["aiSelectionContext"],
+  blogPatchStreamingByPostId: {} as Record<number, BlogPatchStreamingState>,
+  leftbarHtml: null as string | null,
+  leftbarShowTags: true,
+  aiLeftbarEditContext: null as ChatState["aiLeftbarEditContext"],
+};
+
+const WORKSPACE_DEFAULTS = {
+  fileSelectedFile: null as string | null,
+  workspaceTree: [] as WorkspaceEntry[],
+  workspaceSelectedFolderPath: null as string | null,
+  workspaceEditingBlogId: null as number | null,
+};
+
+const BRAIN_DEFAULTS = {
+  brainTab: "graph" as BrainTab,
+  brainStats: null as BrainStats | null,
+};
+
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   state = blogReducer(state, action);
   state = aiContextReducer(state, action);
@@ -172,33 +206,11 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         currentPage: getInitialPage(),
         pluginCenterOpen: false,
         aiSidebarOpen: true,
-        aiSidebarConversationId: null,
-        aiSidebarSelectedKey: null,
-        aiSidebarMessagesByKey: {},
-        aiSidebarStreamingByKey: {},
-        aiSidebarInputsByKey: {},
-        aiSidebarErrorsByKey: {},
-        aiSidebarHistoryByKey: {},
-        aiSidebarAttachmentsByKey: {},
-        aiSidebarThinkingMode: "balanced",
-        llmSupportsThinking: true,
-        blogPosts: [],
-        blogCurrentView: "list",
-        blogCurrentPostId: null,
-        blogSelectedTag: null,
-        blogStreamingByPostId: {},
-        aiSelectionContext: null,
-        leftbarHtml: null,
-        leftbarShowTags: true,
-        aiLeftbarEditContext: null,
-        blogPatchStreamingByPostId: {},
-        fileSelectedFile: null,
-        workspaceTree: [],
-        workspaceSelectedView: "overview",
-        workspaceSelectedFolderPath: null,
-        workspaceEditingBlogId: null,
-        brainTab: "graph",
-        brainStats: null,
+        ...AI_SIDEBAR_DEFAULTS,
+        ...BLOG_DEFAULTS,
+        ...WORKSPACE_DEFAULTS,
+        ...BRAIN_DEFAULTS,
+        workspaceSelectedView: "overview" as WorkspaceView,
         fileLibraryRevision: state.fileLibraryRevision + 1,
         trashRevision: state.trashRevision + 1,
         aiKnowledgeRevision: state.aiKnowledgeRevision + 1,
@@ -238,40 +250,13 @@ const initialState: ChatState = {
 
   currentPage: getInitialPage(),
   pluginCenterOpen: false,
-
-  // AI Sidebar — default open, no conversation yet
   aiSidebarOpen: true,
-  aiSidebarConversationId: null,
-  aiSidebarSelectedKey: null,
-  aiSidebarMessagesByKey: {},
-  aiSidebarStreamingByKey: {},
-  aiSidebarInputsByKey: {},
-  aiSidebarErrorsByKey: {},
-  aiSidebarHistoryByKey: {},
-  aiSidebarAttachmentsByKey: {},
-  aiSidebarThinkingMode: "balanced",
-  llmSupportsThinking: true,
 
-  blogPosts: [],
-  blogCurrentView: "list",
-  blogCurrentPostId: null,
-  blogSelectedTag: null,
-  blogStreamingByPostId: {},
-  aiSelectionContext: null,
-  leftbarHtml: null,
-  leftbarShowTags: true,
-  aiLeftbarEditContext: null,
-  blogPatchStreamingByPostId: {},
-
-  fileSelectedFile: null,
-
-  workspaceTree: [],
+  ...AI_SIDEBAR_DEFAULTS,
+  ...BLOG_DEFAULTS,
+  ...WORKSPACE_DEFAULTS,
+  ...BRAIN_DEFAULTS,
   workspaceSelectedView: loadWorkspaceView(),
-  workspaceSelectedFolderPath: null,
-  workspaceEditingBlogId: null,
-
-  brainTab: "graph",
-  brainStats: null,
 
   fileLibraryRevision: 0,
   trashRevision: 0,
@@ -324,6 +309,8 @@ export function useChatDispatch(): React.Dispatch<ChatAction> {
   return useContext(ChatDispatchContext);
 }
 
+export type { ChatAction, ChatState };
+
 export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   const stored = localStorage.getItem("theme");
   const current: Theme = stored && THEMES.includes(stored as Theme) ? (stored as Theme) : "light";
@@ -331,5 +318,3 @@ export function toggleTheme(dispatch: React.Dispatch<ChatAction>) {
   dispatch({ type: "SET_THEME", payload: next });
 }
 
-export type { Message, Conversation, DraftAttachment, FileDocument, BlogPost, ChatState, ChatAction, AISidebarConversationKey, ToolEvent, Reference };
-export { isDisplayableMessage };

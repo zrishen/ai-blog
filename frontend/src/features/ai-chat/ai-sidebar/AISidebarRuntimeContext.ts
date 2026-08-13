@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import type { AISidebarConversationKey, Conversation } from "../../../stores/chatStore";
+import type { AISidebarConversationKey, Conversation } from "@/types/chat";
 import type { RunState } from "../AISidebar";
 
 // AISidebar 运行时 Context：跨 list/chat/runChatStream 共享的 state/ref/handler。

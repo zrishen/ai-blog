@@ -5,7 +5,7 @@ import { act, render, screen } from "@testing-library/react";
 import { BlogPostCard } from "../../src/features/blog/components/BlogPostCard";
 import { ChatProvider, useChat } from "../../src/stores/chatStore";
 
-import type { BlogPost } from "../../src/stores/chatStore";
+import type { BlogPost } from "../../src/types/blog";
 
 const basePost: BlogPost = {
   id: 1,

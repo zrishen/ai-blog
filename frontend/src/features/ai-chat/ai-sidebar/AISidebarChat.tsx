@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, AlertCircle } from "lucide-react";
 
 import { useAuth } from "../../../stores/authStore";
-import { isDisplayableMessage, useChat } from "../../../stores/chatStore";
+import { useChat } from "../../../stores/chatStore";
+import { isDisplayableMessage } from "@/types/chat";
 import { LoginDialog } from "@/components/auth/LoginDialog";
 import { useChatAttachments } from "../hooks/useChatAttachments";
 
@@ -18,7 +19,7 @@ import {
 import { useAISidebarRuntime } from "./AISidebarRuntimeContext";
 
 import type { BlogToolMeta, StreamReference } from "@/api/chat";
-import type { AISidebarConversationKey, Message, Reference } from "../../../stores/chatStore";
+import type { AISidebarConversationKey, Message, Reference } from "@/types/chat";
 import type { RunState } from "../AISidebar";
 
 import { listSitePosts, getBlogPost } from "@/api/blog";

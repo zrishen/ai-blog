@@ -16,7 +16,7 @@ import { AISidebarRuntimeContext, type AISidebarRuntime } from "./ai-sidebar/AIS
 import { AISidebarList } from "./ai-sidebar/AISidebarList";
 import { AISidebarChat } from "./ai-sidebar/AISidebarChat";
 
-import type { AISidebarConversationKey, Conversation, ToolEvent } from "../../stores/chatStore";
+import type { AISidebarConversationKey, Conversation, ToolEvent } from "@/types/chat";
 
 import { fetchConversations } from "@/api/conversations";
 import { Button } from "@/components/ui/button";

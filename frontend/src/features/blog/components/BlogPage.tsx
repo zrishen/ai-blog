@@ -8,7 +8,7 @@ import { splitBlogTags } from "../utils/blogTags";
 import { BlogPostCard } from "./BlogPostCard";
 import { BlogEditor } from "./BlogEditor";
 
-import type { BlogPost } from "../../../stores/chatStore";
+import type { BlogPost } from "@/types/blog";
 
 import { logError } from "@/api/logger";
 import { listSitePosts } from "@/api/blog";

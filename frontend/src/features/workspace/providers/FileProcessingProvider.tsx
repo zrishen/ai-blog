@@ -1,6 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
 
 import {
   FileUploadNetworkError,
@@ -16,7 +15,8 @@ import { useAuth } from "@/stores/authStore";
 import { useChatDispatch } from "@/stores/chatStore";
 import { errorMessage } from "@/lib/errors";
 
-import { FileProcessingProgress, type FileProcessingProgressValue } from "./FileProcessingProgress";
+import type { FileProcessingProgressValue } from "./FileProcessingProgress";
+import { UploadOverlay } from "./UploadOverlay";
 
 const STORAGE_KEY = "file_processing_upload_v1";
 const POLL_MS = 1000;
@@ -612,36 +612,7 @@ export function FileProcessingProvider({ children }: { children: React.ReactNode
     }}>
       {children}
       {uploadTask && (
-        <div
-          role="status"
-          aria-live="polite"
-          data-testid="file-processing-upload-overlay"
-          className="fixed top-20 left-1/2 z-50 w-[380px] max-w-[90vw] -translate-x-1/2 rounded-panel border border-border/70 bg-card/95 px-4 py-3 shadow-2xl shadow-foreground/10 backdrop-blur-xl"
-        >
-          <div className="mb-1.5 flex items-center justify-between gap-2">
-            <div className="min-w-0 flex-1 truncate text-meta font-medium">{uploadTask.fileName}</div>
-            {uploadTask.status === "failed" && (
-              <button
-                type="button"
-                onClick={clearUploadError}
-                aria-label="关闭上传提示"
-                className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          {uploadTask.status === "failed" ? (
-            <div className="text-fine leading-relaxed text-destructive">{uploadTask.error}</div>
-          ) : (
-            <>
-              <FileProcessingProgress value={uploadTask} />
-              {queueLength > 0 && (
-                <div className="mt-1 text-meta text-muted-foreground">还有 {queueLength} 个文件等待上传</div>
-              )}
-            </>
-          )}
-        </div>
+        <UploadOverlay uploadTask={uploadTask} queueLength={queueLength} onClose={clearUploadError} />
       )}
     </FileProcessingContext.Provider>
   );

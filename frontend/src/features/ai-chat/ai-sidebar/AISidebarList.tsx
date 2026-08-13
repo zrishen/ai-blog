@@ -7,7 +7,7 @@ import { ConversationListView, type ConversationListItem } from "./ConversationL
 import { useAISidebarRuntime } from "./AISidebarRuntimeContext";
 import { saveAISidebarSession } from "./constants";
 
-import type { AISidebarConversationKey } from "../../../stores/chatStore";
+import type { AISidebarConversationKey } from "@/types/chat";
 
 import { deleteConversation } from "@/api/conversations";
 import {

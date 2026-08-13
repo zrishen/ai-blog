@@ -4,7 +4,7 @@ import { User, Eye, Calendar, Tags } from "lucide-react";
 import { useChat } from "../../../stores/chatStore";
 import { getBlogTagStyle, splitBlogTags } from "../utils/blogTags";
 
-import type { BlogPost } from "../../../stores/chatStore";
+import type { BlogPost } from "@/types/blog";
 
 import { Badge } from "@/components/ui/badge";
 import { surfaceVariants } from "@/lib/visualVariants";

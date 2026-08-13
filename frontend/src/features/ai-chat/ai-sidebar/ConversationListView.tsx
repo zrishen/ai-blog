@@ -9,7 +9,7 @@ import {
 
 import { formatDate } from "./messageHelpers";
 
-import type { AISidebarConversationKey } from "../../../stores/chatStore";
+import type { AISidebarConversationKey } from "@/types/chat";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { surfaceVariants } from "@/lib/visualVariants";

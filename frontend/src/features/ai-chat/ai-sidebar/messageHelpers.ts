@@ -1,4 +1,4 @@
-import type { Reference } from "../../../stores/chatStore";
+import type { Reference } from "@/types/chat";
 
 import { formatMonthDay, parseDate } from "@/lib/datetime";
 

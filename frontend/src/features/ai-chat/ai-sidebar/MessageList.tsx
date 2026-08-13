@@ -15,7 +15,7 @@ import { collectMessageReferences } from "./messageHelpers";
 import { maskStreamingMarkdown } from "./streamingMarkdown";
 import { MessageAttachments } from "./MessageAttachments";
 
-import type { Message } from "../../../stores/chatStore";
+import type { Message } from "@/types/chat";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
