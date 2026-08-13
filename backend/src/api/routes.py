@@ -8,6 +8,7 @@ from src.api.conversations import router as conversations_router
 from src.api.plugins import router as plugins_router
 from src.api.client_errors import router as client_errors_router
 from src.api.status import router as status_router
+from src.api.skills import router as skills_router
 from src.api.files import router as files_router
 from src.api.blog import router as blog_router
 from src.api.workspace import router as workspace_router
@@ -31,6 +32,7 @@ router.include_router(client_errors_router)
 
 router.include_router(auth_router)
 router.include_router(settings_router)
+router.include_router(skills_router)
 
 router.include_router(conversations_router)
 

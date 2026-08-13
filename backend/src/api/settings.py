@@ -10,6 +10,11 @@ from src.schemas.settings import (
     SidebarSettingsResponse,
     SidebarSettingsUpdate,
 )
+from src.schemas.skills import SkillSettingsResponse, SkillSettingsUpdate
+from src.services.agent.skill.settings_service import (
+    get_user_enabled_skills,
+    update_user_enabled_skills,
+)
 from src.services.infra.llm.llm_settings_service import (
     get_user_llm_settings,
     model_supports_thinking,
@@ -87,3 +92,22 @@ async def update_sidebar_settings(
         record.show_tags = data.show_tags
     await db.commit()
     return SidebarSettingsResponse(show_tags=record.show_tags)
+
+
+@router.get("/settings/skills", response_model=SkillSettingsResponse)
+async def get_skill_settings(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    enabled = await get_user_enabled_skills(db, user.id)
+    return SkillSettingsResponse(enabled_skills=enabled)
+
+
+@router.put("/settings/skills", response_model=SkillSettingsResponse)
+async def update_skill_settings(
+    data: SkillSettingsUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    enabled = await update_user_enabled_skills(db, user.id, data.enabled_skills)
+    return SkillSettingsResponse(enabled_skills=enabled)

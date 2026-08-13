@@ -36,7 +36,7 @@ async def test_init_db_builds_full_schema_and_is_idempotent(monkeypatch):
                     "file_documents", "file_processing_jobs", "redemption_codes",
                     "subscription_weekly_usage", "rag_sources",
                     "platform_plugins", "llm_settings", "public_chat_daily_usage",
-                    "web_tool_daily_usage", "workspace_trash_entries",
+                    "web_tool_daily_usage", "workspace_trash_entries", "user_skill_settings",
                 }.issubset(tables)
                 # 旧幂等迁移概念已并入 baseline（models 含全部列）
                 conv_cols = {c["name"] for c in insp.get_columns("conversations")}
@@ -69,6 +69,8 @@ async def test_init_db_builds_full_schema_and_is_idempotent(monkeypatch):
                 assert "ck_blog_posts_content_storage_state" not in {
                     constraint["name"] for constraint in insp.get_check_constraints("blog_posts")
                 }
+                # 0010 随 0006+ 一起被回滚（downgrade 到 0005）
+                assert "user_skill_settings" not in set(insp.get_table_names())
 
             async with eng.connect() as conn:
                 await conn.run_sync(check_rollback)

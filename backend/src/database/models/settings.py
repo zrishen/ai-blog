@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
 from .base import Base, _utcnow
 
@@ -41,6 +42,19 @@ class BlogSidebarSettings(Base):
     show_tags = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class UserSkillSettings(Base):
+    """用户显式启用的 agent skill 集合（user-scoped 1:1）。无记录 = 用 DEFAULT_ENABLED_SKILLS。"""
+
+    __tablename__ = "user_skill_settings"
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_skill_settings_user_id"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    enabled_skills = Column(JSONB, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=_utcnow)
+    updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
 
 
 class PublicChatDailyUsage(Base):

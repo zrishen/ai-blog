@@ -34,7 +34,7 @@ class MessageRequest(BaseModel):
     attachments: list[MessageAttachmentRequest] = Field(default_factory=list, max_length=20)
     thinking_mode: Literal["fast", "balanced", "smart"] = "balanced"
     context: Optional[dict] = None
-    enabled_skills: Optional[list[str]] = None  # 用户启用 skill；None=后端默认（DEFAULT_ENABLED_SKILLS={'writing'}）
+    enabled_skills: Optional[list[str]] = None  # None=后端默认全开；[]=显式全关；非空=显式子集
 
 
 class MessageResponse(BaseModel):

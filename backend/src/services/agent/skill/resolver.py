@@ -1,7 +1,7 @@
 """resolve_skills 真实现：读 SKILL_REGISTRY + DEFAULT_ENABLED_SKILLS 派生 SkillContext。
 
-通用底座工具（tag="base"）always required（知识库/记忆 skill 化后改 tag 交对应 skill）。
 enabled skill 的 required_tool_tag 工具 + enabled_segment_names 段聚合返回。
+默认启用集由 DEFAULT_ENABLED_SKILLS 决定（当前 writing + knowledge + memory）。
 输出形状遵循 SkillContext，不改 assemble_tools/PromptContext 调用点。
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ def resolve_skills(enabled_ids: frozenset[str] | None = None) -> SkillContext:
 
     - enabled_ids=None → DEFAULT_ENABLED_SKILLS（向后兼容无参调用 resolve_skills()）。
     - unknown skill id → ValueError fail loud（防 typo 静默丢 skill）。
-    - 默认场景（writing + knowledge 启用）：base 记忆工具、写作工具和知识库工具均可用。
+    - 默认场景（DEFAULT_ENABLED_SKILLS 全开）：写作/知识库/记忆工具与对应指令段均激活。
     """
     enabled = enabled_ids if enabled_ids is not None else DEFAULT_ENABLED_SKILLS
 

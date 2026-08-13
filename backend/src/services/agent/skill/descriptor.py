@@ -55,5 +55,5 @@ SKILL_REGISTRY: dict[str, SkillDescriptor] = {
     ),
 }
 
-# 默认启用的 skill（用户未传 enabled_skills 时）；目前仅 writing（知识库/记忆待 skill 化）
+# 用户未传 enabled_skills 时使用的默认 skill 集合
 DEFAULT_ENABLED_SKILLS: frozenset[str] = frozenset({"writing", "knowledge", "memory"})

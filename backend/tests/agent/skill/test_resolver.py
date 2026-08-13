@@ -13,8 +13,8 @@ _KNOWLEDGE_SEGMENTS = frozenset({"knowledge_library"})
 _MEMORY_SEGMENTS = frozenset({"memory_recall"})
 
 
-def test_resolve_skills_default_equals_writing_plus_base():
-    """默认（None）== DEFAULT_ENABLED_SKILLS={'writing'}：required=writing+base 共 9 工具，segments=writing×3。"""
+def test_resolve_skills_default_equals_default_enabled_skills():
+    """默认（None）== DEFAULT_ENABLED_SKILLS（writing+knowledge+memory 全开）：10 工具 + 三组段。"""
     ctx = resolve_skills()
     assert isinstance(ctx, SkillContext)
     assert ctx.required_tool_names == (
@@ -26,7 +26,7 @@ def test_resolve_skills_default_equals_writing_plus_base():
 
 
 def test_resolve_skills_explicit_empty_enabled_ids():
-    """显式空集 → 仅 base 通用底座工具 + 无 skill 段（writing 不启用）。"""
+    """显式空集 → 无 skill 工具 + 无 skill 段（base 已无工具）。"""
     ctx = resolve_skills(enabled_ids=frozenset())
     assert ctx.required_tool_names == tool_names_by_tag("base")
     assert ctx.enabled_segment_names == frozenset()
@@ -45,9 +45,16 @@ def test_resolve_skills_unknown_id_raises():
         resolve_skills(enabled_ids=frozenset({"nonexistent"}))
 
 
-def test_default_enabled_skills_is_writing():
-    """DEFAULT_ENABLED_SKILLS={'writing'}（1.4 仅 writing；知识库/记忆 P2 skill 化）。"""
+def test_default_enabled_skills_is_full_set():
+    """DEFAULT_ENABLED_SKILLS = writing + knowledge + memory（三类内置 skill 全开）。"""
     assert DEFAULT_ENABLED_SKILLS == frozenset({"writing", "knowledge", "memory"})
+
+
+def test_default_enabled_skills_subset_of_registry():
+    """默认启用集必须是已注册 skill（防 registry 演进后默认集指向幽灵 skill）。"""
+    from src.services.agent.skill.descriptor import SKILL_REGISTRY
+
+    assert DEFAULT_ENABLED_SKILLS <= SKILL_REGISTRY.keys()
 
 
 def test_writing_segment_names_match_prompts():

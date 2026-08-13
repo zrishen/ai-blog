@@ -7,6 +7,12 @@ from .blog import BlogCategory, BlogPost, BlogPostRevision
 from .chat import ChatAttachment, Conversation, Message
 from .file import FileDocument, FileProcessingJob
 from .plugin import PlatformPlugin, UserPlugin
-from .settings import BlogSidebarSettings, LLMSettings, PublicChatDailyUsage, WebToolDailyUsage
+from .settings import (
+    BlogSidebarSettings,
+    LLMSettings,
+    PublicChatDailyUsage,
+    UserSkillSettings,
+    WebToolDailyUsage,
+)
 from .subscription import RedemptionCode, SubscriptionWeeklyUsage
 from .workspace import RagSource, WorkspaceTrashEntry
