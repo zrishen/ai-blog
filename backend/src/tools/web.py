@@ -78,7 +78,11 @@ def _allowed_hosts() -> frozenset[str]:
     raw_hosts = (entry for entry in settings.web_fetch_allowed_hosts.split(","))
     hosts: set[str] = set()
     for entry in raw_hosts:
-        if not entry.strip():
+        entry = entry.strip()
+        if not entry:
+            continue
+        if entry == "*":
+            hosts.add("*")  # 哨兵：放行任意公网 host（DNS 解析后仍强制公网 IP）
             continue
         hosts.add(_normalise_hostname(entry))
     return frozenset(hosts)
@@ -119,7 +123,7 @@ def _validate_target(url: str, *, hosts: frozenset[str], ports: frozenset[int]) 
         raise _UnsafeWebTarget("invalid port") from exc
 
     host = _normalise_hostname(parsed.hostname)
-    if host not in hosts or port not in ports:
+    if ("*" not in hosts and host not in hosts) or port not in ports:
         raise _UnsafeWebTarget("target is outside the outbound allowlist")
 
     netloc = host if port == (443 if parsed.scheme == "https" else 80) else f"{host}:{port}"
@@ -346,7 +350,7 @@ async def _consume_quota() -> bool:
 
 def _request_failure_message(exc: Exception) -> str:
     if isinstance(exc, _UnsafeWebTarget):
-        return "无法访问该地址：仅允许配置白名单中的公开 HTTP(S) 站点。"
+        return "无法访问该地址：仅允许公开的 HTTP(S) 站点。"
     if isinstance(exc, _ResponseTooLarge):
         return "无法读取该页面：响应超过允许的大小。"
     if isinstance(exc, _UnsupportedContentType):
@@ -357,7 +361,7 @@ def _request_failure_message(exc: Exception) -> str:
 @tool
 @require_user
 async def web_fetch(url: str) -> str:
-    """读取已获准公网网站的文本内容；仅支持白名单中的 HTTP(S) URL。"""
+    """读取公网网站的文本内容；仅支持 HTTP(S)，解析后 IP 必须为公网地址。"""
     if not await _consume_quota():
         return "今日 Web 工具调用额度已用完。"
     try:

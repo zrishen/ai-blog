@@ -75,6 +75,24 @@ def test_non_public_addresses_are_rejected():
         assert not web._is_public_address(address)
 
 
+def test_wildcard_hosts_allow_any_public_host_but_still_restrict_port_and_scheme(monkeypatch):
+    monkeypatch.setattr(web.settings, "web_fetch_allowed_hosts", "*")
+    hosts = web._allowed_hosts()
+    ports = web._allowed_ports()
+
+    assert web._validate_target("https://any.example.org/docs", hosts=hosts, ports=ports).url == (
+        "https://any.example.org/docs"
+    )
+    for value in (
+        "https://any.example.org:444/docs",  # 端口仍受限
+        "file:///etc/passwd",  # 协议仍受限
+        "https://127.0.0.1/",  # IP literal 仍被拒（公网解析防线在 _resolve_public_addresses）
+        "https://user@example.org/",  # userinfo 仍被拒
+    ):
+        with pytest.raises(web._UnsafeWebTarget):
+            web._validate_target(value, hosts=hosts, ports=ports)
+
+
 @pytest.mark.asyncio
 async def test_pinned_backend_connects_to_verified_ip(monkeypatch):
     class Backend:
