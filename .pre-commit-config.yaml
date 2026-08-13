@@ -1,0 +1,25 @@
+# pre-commit 钩子：只放秒级静态检查，pytest/tsc/vitest 留在 CI。
+# 增量原则：改了什么查什么——files 匹配让"只改后端"不触发前端钩子，反之亦然。
+repos:
+  - repo: local
+    hooks:
+      - id: backend-ruff
+        name: backend ruff（src 增量）
+        entry: uv run --project backend ruff check
+        language: system
+        files: ^backend/src/.*\.py$
+        types: [python]
+
+      - id: backend-basedpyright
+        name: backend basedpyright（src 项目级）
+        entry: uv run --project backend basedpyright -p backend/pyrightconfig.json
+        language: system
+        files: ^backend/src/.*\.py$
+        pass_filenames: false
+
+      - id: frontend-lint
+        name: frontend lint（含设计系统 checker）
+        entry: bash -c 'cd frontend && npm run lint'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false

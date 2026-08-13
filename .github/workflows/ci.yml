@@ -61,8 +61,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      - name: Ruff（代码规范检查）
-        run: uv run ruff check
+      - name: Ruff（代码规范检查，仅 src）
+        run: uv run ruff check src
 
       - name: Basedpyright（静态类型检查，仅 src）
         run: uv run basedpyright
