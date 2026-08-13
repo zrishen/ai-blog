@@ -300,6 +300,8 @@ async def upload_to_file_library(
     if not created:
         return FileProcessingJobResponse.model_validate(job)
 
+    if job.staging_path is None:
+        raise HTTPException(status_code=500, detail="Upload staging path missing")
     staging_path = Path(job.staging_path)
     final_path = get_uploaded_file_path(user.id, stored_name, mode="write")
     total = 0

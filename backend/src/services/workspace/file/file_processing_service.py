@@ -500,7 +500,7 @@ async def _update_progress(
     job.current_stage = stage
     job.progress_percent = percent
     job.heartbeat_at = utcnow()
-    job.updated_at = job.heartbeat_at
+    job.updated_at = job.heartbeat_at or utcnow()
     await db.commit()
     return percent
 
@@ -533,7 +533,7 @@ async def _claim_job(db: AsyncSession, job_id: str) -> tuple[FileProcessingJob, 
             error_message=None,
         )
     )
-    if result.rowcount != 1:
+    if result.rowcount != 1:  # type: ignore[attr-defined]
         await db.rollback()
         return None
     await db.commit()
@@ -558,7 +558,7 @@ async def _heartbeat_job(job_id: str, token: str) -> None:
                 .values(heartbeat_at=now, updated_at=now)
             )
             await heartbeat_db.commit()
-            if result.rowcount != 1:
+            if result.rowcount != 1:  # type: ignore[attr-defined]
                 return
 
 
@@ -774,32 +774,37 @@ async def _run_job(job_id: str) -> None:
                     # 推进 RagSource 状态；file 顺带回写 chunk 数到 FileDocument。
                     from src.services.workspace import rag_service
 
-                    if job.target_resource_type == "file":
-                        indexed_doc = await db.get(FileDocument, job.target_resource_id)
+                    target_type = job.target_resource_type
+                    target_id = job.target_resource_id
+                    assert target_type is not None
+                    assert target_id is not None
+
+                    if target_type == "file":
+                        indexed_doc = await db.get(FileDocument, target_id)
                         if indexed_doc is not None:
                             indexed_doc.chunk_content = f"{len(chunks)} chunks"
                         await rag_service.mark_indexed(
                             db,
                             job.user_id,
-                            job.target_resource_type,
-                            job.target_resource_id,
+                            target_type,
+                            target_id,
                             version=str(len(chunks)),
                         )
-                    elif job.target_resource_type == "blog_post":
+                    elif target_type == "blog_post":
                         if blog_snapshot is None:  # pragma: no cover - guarded by the branch above
                             raise RuntimeError("Blog body snapshot was not prepared")
                         await rag_service.mark_blog_post_indexed_if_current(
                             db,
                             job.user_id,
-                            job.target_resource_id,
+                            target_id,
                             body_sha256=blog_snapshot.sha256,
                         )
                     else:
                         await rag_service.mark_indexed(
                             db,
                             job.user_id,
-                            job.target_resource_type,
-                            job.target_resource_id,
+                            target_type,
+                            target_id,
                             version=str(len(chunks)),
                         )
                 logger.info(

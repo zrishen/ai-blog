@@ -91,7 +91,7 @@ async def join_ai_knowledge(
         )
         job = None
     return RagJoinResponse(
-        rag_source=source,
+        rag_source=RagSourceResponse.model_validate(source),
         job=FileProcessingJobResponse.model_validate(job) if job else None,
     )
 

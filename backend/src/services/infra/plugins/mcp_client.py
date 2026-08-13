@@ -90,7 +90,7 @@ class PlatformPluginToolManager:
         if not configs:
             return f"插件配置无效：{tool_ref}。"
         try:
-            client = MultiServerMCPClient(configs)
+            client = MultiServerMCPClient(configs)  # type: ignore[arg-type]
             tools = await asyncio.wait_for(client.get_tools(), timeout=timeout)
             tool = {item.name: item for item in tools}.get(tool_name)
             if not tool:

@@ -10,7 +10,7 @@ import json
 import logging
 import time
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import datetime
 from typing import Any
 
@@ -216,7 +216,7 @@ def _append_vision_fallback_instruction(messages: list[dict]) -> list[dict]:
 
 
 async def _astream_events_with_heartbeat(
-    events_gen: AsyncGenerator[dict[str, Any], None],
+    events_gen: AsyncIterator[Any],
     idle_timeout: float,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """给 astream_events 加间隔超时兜底。

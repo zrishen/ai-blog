@@ -89,7 +89,7 @@ async def _search_collections(
     )
     merged: list[tuple[str, object]] = []
     for batch in batches:
-        if not isinstance(batch, Exception):
+        if not isinstance(batch, BaseException):
             merged.extend(batch)
     return merged
 

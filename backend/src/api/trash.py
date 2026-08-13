@@ -6,6 +6,8 @@ DELETE /api/v1/trash/{type}/{id}                永久删除（仅作用于回�
 DELETE /api/v1/trash                            -> {status, deleted, failed, remaining}
 """
 
+from typing import cast
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +16,7 @@ from src.database.models import User
 from src.schemas.file_processing import FileProcessingJobResponse
 from src.schemas.trash import (
     TrashClearResponse,
+    TrashItem,
     TrashListResponse,
     TrashRestoreResponse,
 )
@@ -52,7 +55,7 @@ async def restore_trash_item(
     if item_type == "file_document":
         response.status_code = status.HTTP_202_ACCEPTED
         return FileProcessingJobResponse.model_validate(item)
-    return TrashRestoreResponse(status="ok", item=item)
+    return TrashRestoreResponse(status="ok", item=cast(TrashItem, item))
 
 
 @router.delete("/trash/{item_type}/{item_id}")

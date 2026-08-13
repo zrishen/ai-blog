@@ -126,10 +126,11 @@ async def generate_cover_image(post: BlogPost) -> str:
     except Exception as exc:
         raise ValueError(f"Image generation failed: {exc}") from exc
 
-    if not result.data or not getattr(result.data[0], "b64_json", None):
+    b64_json = result.data[0].b64_json if result.data else None
+    if not b64_json:
         raise ValueError("Image generation did not return base64 image data")
 
-    stored_name = _store_cover_image(post, base64.b64decode(result.data[0].b64_json), "image/png")
+    stored_name = _store_cover_image(post, base64.b64decode(b64_json), "image/png")
     logger.info(
         "blog cover generated post_id=%s provider=openai model=%s stored_name=%s",
         post.id,

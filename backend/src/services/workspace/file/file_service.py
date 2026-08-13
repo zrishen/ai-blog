@@ -141,7 +141,7 @@ def matches_magic(filename: str, content: bytes) -> bool:
     return content.startswith(expected)
 
 
-async def save_file(file: UploadFile, *, allow_images: bool = True, user_id: int | str = 1) -> tuple[str, str]:
+async def save_file(file: UploadFile, *, allow_images: bool = True, user_id: int = 1) -> tuple[str, str]:
     """Save uploaded file (streamed to disk) and return (stored_filename, original_name)."""
     filename = file.filename or "file"
     error = _validate_file(filename, file.size, file.content_type, allow_images=allow_images)
@@ -501,7 +501,7 @@ def _docx_to_html(path: Path) -> str:
         if not text:
             html_parts.append("<p>&nbsp;</p>")
             continue
-        style = para.style.name.lower() if para.style else ""
+        style = para.style.name.lower() if para.style and para.style.name else ""
         if "heading 1" in style:
             html_parts.append(f"<h1>{_escape_html(text)}</h1>")
         elif "heading 2" in style:

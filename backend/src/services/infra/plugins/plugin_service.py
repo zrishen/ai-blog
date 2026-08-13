@@ -5,7 +5,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
 from src.database.models import PlatformPlugin, UserPlugin
@@ -215,7 +215,7 @@ async def set_admin_plugin_published(db, plugin_id: int, is_published: bool) -> 
 
 async def delete_admin_plugin(db, plugin_id: int) -> None:
     plugin = await get_admin_plugin(db, plugin_id)
-    await db.execute(UserPlugin.__table__.delete().where(UserPlugin.plugin_id == plugin.id))
+    await db.execute(delete(UserPlugin).where(UserPlugin.plugin_id == plugin.id))
     await db.delete(plugin)
     await db.commit()
     logger.info("Platform plugin deleted: id=%s slug=%s", plugin.id, plugin.slug)

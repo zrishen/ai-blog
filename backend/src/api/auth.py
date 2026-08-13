@@ -8,6 +8,7 @@ import logging
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
+from typing import Literal, cast
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -94,7 +95,7 @@ def _set_refresh_cookie(response: Response, request: Request, raw_token: str) ->
         raw_token,
         httponly=True,
         secure=_resolve_cookie_secure(request),
-        samesite=settings.cookie_samesite,
+        samesite=cast(Literal["lax", "strict", "none"], settings.cookie_samesite),
         max_age=settings.refresh_token_expire_seconds,
         path=_REFRESH_PATH,
     )

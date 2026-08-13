@@ -77,7 +77,8 @@ def build_llm_model_kwargs(
     False（默认）要求用户自备 api_key，缺则 kwargs.api_key=None 由上层拒绝调用。
     """
     protocol = normalize_llm_protocol(llm_settings.protocol if llm_settings else None)
-    has_custom_model = bool(llm_settings and llm_settings.model_name)
+    custom_model = llm_settings.model_name if llm_settings else None
+    has_custom_model = bool(custom_model)
 
     user_api_key = decrypt_secret(llm_settings.api_key) if llm_settings and llm_settings.api_key else None
     user_base_url = normalize_llm_base_url(llm_settings.base_url if llm_settings else None)
@@ -85,11 +86,11 @@ def build_llm_model_kwargs(
     if allow_official_fallback:
         api_key = user_api_key or settings.openai_api_key
         base_url = user_base_url or settings.base_url
-        model = llm_settings.model_name if has_custom_model else settings.model_name
+        model = custom_model if has_custom_model else settings.model_name
     else:
         api_key = user_api_key
         base_url = user_base_url
-        model = llm_settings.model_name if has_custom_model else None
+        model = custom_model if has_custom_model else None
 
     kwargs: dict[str, Any] = {
         "protocol": protocol,

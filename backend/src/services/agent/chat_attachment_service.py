@@ -209,7 +209,7 @@ async def recover_stale_claimed_attachments(
             )
             .values(status="pending", claim_token=None, claimed_at=None, updated_at=now)
         )
-        recovered += result.rowcount or 0
+        recovered += result.rowcount or 0  # type: ignore[reportAttributeAccessIssue]
     await db.commit()
     return recovered
 
@@ -520,7 +520,7 @@ async def claim_attachments(
         )
         .values(status="claimed", claim_token=claim_token, claimed_at=now, updated_at=now)
     )
-    if result.rowcount != len(normalized):
+    if result.rowcount != len(normalized):  # type: ignore[reportAttributeAccessIssue]
         await db.rollback()
         raise ChatAttachmentStateError("One or more attachments are already being used")
     await db.commit()
@@ -561,7 +561,7 @@ async def refresh_attachment_claim(
         .values(claimed_at=now, updated_at=now)
     )
     await db.commit()
-    return result.rowcount or 0
+    return result.rowcount or 0  # type: ignore[reportAttributeAccessIssue]
 
 
 async def release_attachment_claim(
@@ -583,7 +583,7 @@ async def release_attachment_claim(
         .values(status="pending", claim_token=None, claimed_at=None, updated_at=now)
     )
     await db.commit()
-    return result.rowcount or 0
+    return result.rowcount or 0  # type: ignore[reportAttributeAccessIssue]
 
 
 def _read_text_attachment(path: Path) -> str:

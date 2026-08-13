@@ -1,8 +1,9 @@
 """订阅模型：兑换码 + 订阅周用量（按 token 周额度计量）。"""
 
+from datetime import datetime
+
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     ForeignKey,
     Integer,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, _utcnow
 
@@ -20,15 +22,15 @@ class RedemptionCode(Base):
 
     __tablename__ = "redemption_codes"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    code = Column(String(64), unique=True, nullable=False, index=True)
-    duration_days = Column(Integer, nullable=False)
-    is_used = Column(Boolean, nullable=False, default=False, server_default=text("false"))
-    used_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    used_at = Column(DateTime, nullable=True)
-    created_by_admin_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    note = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=_utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    duration_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    used_by_user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_admin_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
 
 class SubscriptionWeeklyUsage(Base):
@@ -37,9 +39,9 @@ class SubscriptionWeeklyUsage(Base):
     __tablename__ = "subscription_weekly_usage"
     __table_args__ = (UniqueConstraint("user_id", "period_yw", name="uq_subscription_weekly_usage_user_period"),)
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    period_yw = Column(String(10), nullable=False)
-    tokens_used = Column(Integer, nullable=False, default=0, server_default=text("0"))
-    created_at = Column(DateTime, default=_utcnow, nullable=False)
-    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    period_yw: Mapped[str] = mapped_column(String(10), nullable=False)
+    tokens_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

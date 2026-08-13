@@ -1,6 +1,9 @@
 """认证模型：用户 + refresh token。"""
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, text
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base, _utcnow
 
@@ -8,13 +11,13 @@ from .base import Base, _utcnow
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(50), unique=True, nullable=False)
-    password_hash = Column(String(200), nullable=False)
-    is_admin = Column(Boolean, nullable=False, default=False, server_default=text("false"))
-    is_super_admin = Column(Boolean, nullable=False, default=False, server_default=text("false"))
-    subscription_expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=_utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    is_super_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
+    subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
 
 
 class RefreshToken(Base):
@@ -22,9 +25,9 @@ class RefreshToken(Base):
 
     __tablename__ = "refresh_tokens"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    token_hash = Column(String(128), unique=True, nullable=False, index=True)
-    expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=_utcnow)
-    revoked_at = Column(DateTime, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

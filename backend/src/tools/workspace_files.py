@@ -282,6 +282,7 @@ async def delete(path: str) -> str:
             if resolved.kind is ResourceKind.BLOG_POST:
                 from src.services.workspace.blog.blog_service import delete_post
 
+                assert resolved.resource_id is not None
                 await delete_post(db, resolved.resource_id, user_id)
                 message = f"Moved managed blog {relative_path} to the recycle bin"
                 change = f"Delete managed blog {relative_path}"

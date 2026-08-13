@@ -247,8 +247,11 @@ def _validate_vector_index(
             f"Vector index {label}.{prop} uses incompatible similarity function: {similarity or 'unknown'}"
         )
     if dim is not None:
+        dimension = options.get("dimension")
+        if dimension is None:
+            raise RuntimeError(f"Vector index {label}.{prop} has no valid dimension")
         try:
-            indexed_dim = int(options.get("dimension"))
+            indexed_dim = int(dimension)
         except (TypeError, ValueError) as exc:
             raise RuntimeError(f"Vector index {label}.{prop} has no valid dimension") from exc
         if indexed_dim != dim:

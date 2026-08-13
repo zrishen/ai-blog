@@ -298,7 +298,7 @@ async def backfill_blog_post_document(
         post.last_storage_error = None
         result = BlogDocumentBackfillResult(
             post_id=post.id,
-            file_path=post.file_path,
+            file_path=relative_path,
             content_sha256=digest,
             wrote_document=True,
         )

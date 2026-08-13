@@ -26,7 +26,9 @@ def _extract_text_content(content: Any) -> str:
 
 def _estimate_image_tokens(block: dict) -> int:
     """按图片块的 base64 data 长度估算视觉 token。"""
-    source = block.get("source") if isinstance(block.get("source"), dict) else {}
+    source = block.get("source")
+    if not isinstance(source, dict):
+        source = {}
     data = source.get("data", "")
     if isinstance(data, str) and data:
         return _IMAGE_BASE_TOKENS + len(data) // _IMAGE_BYTES_PER_TOKEN

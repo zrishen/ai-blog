@@ -32,7 +32,7 @@ def _parse_docx(path: Path, progress_callback=None) -> str:
     for para in doc.paragraphs:
         text = para.text.strip()
         if text:
-            style_name = para.style.name.lower() if para.style else ""
+            style_name = (para.style.name or "").lower() if para.style else ""
             if "heading 1" in style_name:
                 parts.append(f"\n\n## {text}")
             elif "heading 2" in style_name:

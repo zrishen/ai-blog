@@ -114,7 +114,11 @@ async def _get_published_pair_by_id(db: AsyncSession, post_id: int) -> tuple[Blo
             BlogPostModel.status == "published",
         )
     )
-    return result.one_or_none()
+    row = result.one_or_none()
+    if row is None:
+        return None
+    post, revision = row
+    return post, revision
 
 
 async def get_published_post_by_id(db: AsyncSession, post_id: int) -> PublicPostView | None:
@@ -199,7 +203,7 @@ async def list_posts(
             .order_by(desc(BlogPostModel.updated_at), desc(BlogPostModel.id))
         )
         if paginated:
-            stmt = stmt.offset((page - 1) * per_page).limit(per_page)
+            stmt = stmt.offset((page - 1) * (per_page or 0)).limit(per_page)
         posts = (await db.execute(stmt)).scalars().all()
     else:
         if status and status != "published":
@@ -234,7 +238,7 @@ async def list_posts(
             .order_by(desc(BlogPostModel.published_at), desc(BlogPostModel.id))
         )
         if paginated:
-            stmt = stmt.offset((page - 1) * per_page).limit(per_page)
+            stmt = stmt.offset((page - 1) * (per_page or 0)).limit(per_page)
         pairs = (await db.execute(stmt)).all()
         posts = [PublicPostView.from_post_revision(post, revision, include_content=False) for post, revision in pairs]
 
@@ -414,7 +418,7 @@ async def publish_post(db: AsyncSession, post_id: int, publish: bool, user_id: i
 
 async def list_revisions(db: AsyncSession, post_id: int, user_id: int) -> list[BlogPostRevision]:
     _check_ownership(await db.get(BlogPostModel, post_id), user_id)
-    return (
+    return list(
         (
             await db.execute(
                 select(BlogPostRevision)

@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     # 无默认值：缺失或用公开弱值启动即失败；须通过 JWT_SECRET 注入高熵随机值
     jwt_secret: str = ""
     registration_invite_code: str = ""
-    llm_settings_encryption_key: str
+    llm_settings_encryption_key: str = ""
 
     # ---- Token 有效期 ----
     # access 短期 JWT 存客户端内存；refresh 存 DB 哈希，放 HttpOnly cookie
@@ -242,4 +242,4 @@ class Settings(BaseSettings):
         return stripped
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

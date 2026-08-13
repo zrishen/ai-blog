@@ -55,15 +55,14 @@ class BlogDocumentPromotionBatchResult:
 async def preflight_blog_document_promotion(db: AsyncSession) -> BlogDocumentPromotionPreflight:
     """Read active post storage states without modifying data."""
 
-    state_counts = dict(
-        (
-            await db.execute(
-                select(BlogPost.content_storage_state, func.count(BlogPost.id))
-                .where(BlogPost.deleted_at.is_(None))
-                .group_by(BlogPost.content_storage_state)
-            )
-        ).all()
-    )
+    rows = (
+        await db.execute(
+            select(BlogPost.content_storage_state, func.count(BlogPost.id))
+            .where(BlogPost.deleted_at.is_(None))
+            .group_by(BlogPost.content_storage_state)
+        )
+    ).all()
+    state_counts: dict[str, int] = {str(state): int(count) for state, count in rows}
     legacy_posts = int(state_counts.get("legacy", 0))
     verified_posts = int(state_counts.get("verified", 0))
     error_posts = int(state_counts.get("error", 0))

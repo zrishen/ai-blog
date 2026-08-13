@@ -124,6 +124,8 @@ async def _flag_missing_blog_posts(db: AsyncSession, user_id: int) -> int:
     )
     flagged = 0
     for post in posts:
+        if post.file_path is None:
+            continue
         try:
             resolved = workspace_path(user_id, post.file_path, mode="read")
         except Exception:

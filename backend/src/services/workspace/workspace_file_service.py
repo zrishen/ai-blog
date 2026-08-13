@@ -208,7 +208,8 @@ async def move_entry(
                 )
             )
         ).scalars()
-        if post.file_path == source_relative or post.file_path.startswith(f"{source_relative}/")
+        if post.file_path is not None
+        and (post.file_path == source_relative or post.file_path.startswith(f"{source_relative}/"))
     ]
     documents = [
         document

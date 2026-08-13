@@ -2,6 +2,7 @@
 
 import contextlib
 import logging
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.workspace_lock import workspace_lock
 from src.database.engine import get_db
-from src.database.models import User
+from src.database.models import BlogPost, User
 from src.schemas.blog import (
     BlogPostCreate,
     BlogPostListItem,
@@ -192,7 +193,7 @@ async def get_blog_post(
     resp = BlogPostResponse.model_validate(post)
     if is_owner:
         with contextlib.suppress(NotFoundError, ValidationFailedError, OSError):
-            resp.content = await get_post_body(post)
+            resp.content = await get_post_body(cast(BlogPost, post))
     return resp
 
 

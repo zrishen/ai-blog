@@ -64,6 +64,9 @@ jobs:
       - name: Ruff（代码规范检查）
         run: uv run ruff check
 
+      - name: Basedpyright（静态类型检查，仅 src）
+        run: uv run basedpyright
+
       - name: Pytest（单元测试 + 覆盖率）
         run: uv run pytest
 

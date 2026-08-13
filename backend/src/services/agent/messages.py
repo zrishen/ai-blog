@@ -164,8 +164,9 @@ async def _build_messages(
             j = i + 1
             matched_ids: set[str] = set()
             while j < len(raw) and raw[j].role == "tool" and len(matched_ids) < len(tc_ids):
-                if raw[j].tool_call_id in tc_ids:
-                    matched_ids.add(raw[j].tool_call_id)
+                tool_call_id = raw[j].tool_call_id
+                if tool_call_id is not None and tool_call_id in tc_ids:
+                    matched_ids.add(tool_call_id)
                 j += 1
 
             if matched_ids == tc_ids:
@@ -234,12 +235,13 @@ async def _build_messages(
     user_token_count = estimate_tokens(current_content)
 
     # 注入已有上下文摘要（compact 成功后 conv.summary 已更新；或之前会话遗留的摘要）
-    if conv is not None and getattr(conv, "summary", None):
+    summary = getattr(conv, "summary", None)
+    if conv is not None and summary:
         messages.insert(
             0,
             {
                 "role": "system",
-                "content": "[之前对话的摘要，供你参考上下文]\n" + conv.summary,
+                "content": "[之前对话的摘要，供你参考上下文]\n" + summary,
             },
         )
 

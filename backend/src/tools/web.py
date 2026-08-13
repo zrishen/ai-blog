@@ -8,7 +8,7 @@ import json
 import socket
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpcore
@@ -146,7 +146,7 @@ def _is_public_address(value: str) -> bool:
 async def _resolve_public_addresses(host: str, port: int) -> tuple[str, ...]:
     loop = asyncio.get_running_loop()
     records = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    addresses = tuple(dict.fromkeys(record[4][0] for record in records))
+    addresses = tuple(dict.fromkeys(str(record[4][0]) for record in records))
     if not addresses or any(not _is_public_address(address) for address in addresses):
         raise _UnsafeWebTarget("hostname resolves to a non-public address")
     return addresses
@@ -170,7 +170,7 @@ class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
         last_error: Exception | None = None
         for address in addresses:
             try:
-                return await self._backend.connect_tcp(
+                return await self._backend.connect_tcp(  # type: ignore[attr-defined]
                     address,
                     port,
                     timeout=timeout,
@@ -192,7 +192,7 @@ class _PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
         raise _UnsafeWebTarget("unix sockets are not allowed")
 
     async def sleep(self, seconds: float) -> None:
-        await self._backend.sleep(seconds)
+        await self._backend.sleep(seconds)  # type: ignore[attr-defined]
 
 
 class _CoreResponseStream(httpx.AsyncByteStream):
@@ -242,7 +242,7 @@ class _PinnedAsyncHTTPTransport(httpx.AsyncBaseTransport):
         return httpx.Response(
             status_code=response.status,
             headers=response.headers,
-            stream=_CoreResponseStream(response.stream),
+            stream=_CoreResponseStream(cast(AsyncIterator[bytes], response.stream)),
             extensions=response.extensions,
         )
 

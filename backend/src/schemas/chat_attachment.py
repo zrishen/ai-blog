@@ -1,7 +1,7 @@
 """AI chat attachment response schemas."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel
 
@@ -41,7 +41,7 @@ class ChatAttachmentResponse(BaseModel):
             original_name=attachment.original_name,
             mime_type=attachment.media_type,
             size_bytes=attachment.size_bytes,
-            status=attachment.status,
+            status=cast(ChatAttachmentStatus, attachment.status),
             position=attachment.position,
             download_url=content_url,
             extraction_truncated=attachment.extraction_truncated,
