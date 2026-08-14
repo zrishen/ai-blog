@@ -99,7 +99,7 @@ export function BlogPage({ username, isOwner }: BlogPageProps) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col touch-pan-y overflow-y-auto bg-background p-2">
+    <div className="flex h-full min-h-0 flex-1 flex-col touch-pan-y overflow-y-auto bg-card p-2">
       {/* 列表只允许纵向滚动（touch-pan-y），把横向触摸交给边缘滑动手势；否则浏览器会把触摸序列绑定到滚动容器，导致滑出抽屉时中栏被一起拖动、面板跟到一半就卡住。 */}
       {visiblePosts.length === 0 ? (
         <EmptyState
