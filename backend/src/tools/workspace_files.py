@@ -205,6 +205,37 @@ async def edit(path: str, old_text: str, new_text: str) -> str:
     return f"Edited {relative_path}"
 
 
+def _create_folder(user_id: int, relative_path: str) -> bool:
+    workspace_dir(user_id, create=True)
+    target = workspace_path(user_id, relative_path)
+    if target.is_symlink() or target.is_file():
+        raise ConflictError("Workspace path is not a directory")
+    created = not target.exists()
+    if not created:
+        return False
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise OwnershipError("Workspace folder could not be created") from exc
+    # mkdir 后重新经 write 模式校验：父目录此时已存在，确认落点仍在用户根内、无 symlink 逃逸
+    resolved = workspace_path(user_id, relative_path, mode="write")
+    if resolved.is_symlink() or not resolved.is_dir():
+        raise OwnershipError("Workspace folder could not be created safely")
+    return True
+
+
+@tool
+@require_user
+async def create_folder(path: str) -> str:
+    """Create a workspace folder (including parents). Idempotent: succeeds if it already exists."""
+
+    relative_path = _relative_path(path)
+    user_id = _user_id()
+    async with workspace_lock(user_id):
+        created = await asyncio.to_thread(_create_folder, user_id, relative_path)
+    return f"{'Created' if created else 'Exists'} {relative_path}"
+
+
 @tool
 @require_user
 async def glob(pattern: str = "**/*", limit: int = 100) -> str:

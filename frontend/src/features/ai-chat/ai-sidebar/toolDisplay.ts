@@ -27,6 +27,7 @@ export const TOOL_DISPLAY: Record<string, string> = {
   read: "读取文件",
   write: "写入文件",
   edit: "编辑文件",
+  create_folder: "新建文件夹",
   glob: "查找文件",
   grep: "搜索内容",
   move: "移动文件",

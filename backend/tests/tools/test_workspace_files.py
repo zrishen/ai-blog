@@ -73,6 +73,30 @@ async def test_workspace_tools_require_authenticated_user():
 
 
 @pytest.mark.asyncio
+async def test_workspace_create_folder_creates_nested_and_is_idempotent(user_context):
+    assert await workspace_files.create_folder.ainvoke({"path": "projects/website/src"}) == "Created projects/website/src"
+
+    # 幂等：再次创建已存在的目录直接成功
+    assert await workspace_files.create_folder.ainvoke({"path": "projects/website/src"}) == "Exists projects/website/src"
+
+    # 目录真实落盘且可写入
+    assert await workspace_files.write.ainvoke(
+        {"path": "projects/website/src/index.md", "content": "# site"}
+    ) == "Wrote projects/website/src/index.md"
+    assert await workspace_files.read.ainvoke({"path": "projects/website/src/index.md"}) == "projects/website/src/index.md (lines 1-1):\n# site"
+
+
+@pytest.mark.asyncio
+async def test_workspace_create_folder_rejects_existing_file_path(user_context):
+    await workspace_files.write.ainvoke({"path": "notes/plan.md", "content": "x"})
+
+    from src.core.exceptions import ConflictError
+
+    with pytest.raises(ConflictError):
+        await workspace_files.create_folder.ainvoke({"path": "notes/plan.md"})
+
+
+@pytest.mark.asyncio
 async def test_workspace_move_delegates_to_path_service(monkeypatch, user_context):
     calls = []
 

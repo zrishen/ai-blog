@@ -18,6 +18,7 @@ from src.tools.mcp import build_mcp_call_tool, normalize_mcp_capabilities
 from src.tools.registry import TOOL_REGISTRY
 from src.tools.web import web_fetch, web_search
 from src.tools.workspace_files import (
+    create_folder,
     delete,
     edit,
     git,
@@ -112,6 +113,7 @@ class WorkspaceFilesProvider:
             read,
             write,
             edit,
+            create_folder,
             glob,
             grep,
             move,
