@@ -48,7 +48,6 @@ backend/data/
 
 # Logs
 *.log
-docs
 LOG.md
 PROMPT.md
 temps
