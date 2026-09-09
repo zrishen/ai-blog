@@ -2,7 +2,7 @@
 
 > 把想法写成体系 —— 一套面向个人创作者的 AI 写作平台。以 Markdown 工作区为事实源，集博客创作、AI 对话、知识库 RAG 与认知记忆图谱于一体，开箱即可自部署。
 
-[English](README.en.md) · [![CI](https://github.com/zhongrishen/ai-blog/actions/workflows/ci.yml/badge.svg)](https://github.com/zhongrishen/ai-blog/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[English](README.en.md) · [![CI](https://github.com/zrishen/ai-blog/actions/workflows/ci.yml/badge.svg)](https://github.com/zrishen/ai-blog/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
   <img src="docs/landing.png" alt="ai-blog 主页界面">

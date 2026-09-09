@@ -2,7 +2,7 @@
 
 > Turn ideas into a body of work — an AI writing platform for individual creators. Built around a Markdown workspace as the single source of truth, it combines blogging, AI chat, a RAG knowledge base, and a cognitive-memory knowledge graph. Self-hostable out of the box.
 
-[中文](README.md) · [![CI](https://github.com/zhongrishen/ai-blog/actions/workflows/ci.yml/badge.svg)](https://github.com/zhongrishen/ai-blog/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[中文](README.md) · [![CI](https://github.com/zrishen/ai-blog/actions/workflows/ci.yml/badge.svg)](https://github.com/zrishen/ai-blog/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
   <img src="docs/landing.png" alt="ai-blog landing page">
