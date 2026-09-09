@@ -13,8 +13,9 @@ venv/
 
 # Environment variables
 .env
-.claude/*
-!.claude/CLAUDE.md
+.claude/
+.codex/
+AGENTS.md
 
 # Database
 *.db
@@ -62,19 +63,6 @@ backups
 =0.1.0
 logs/
 
-.codex
-# Track the shared planning-with-files integration but keep other Codex state local.
-!.codex/
-.codex/*
-!.codex/hooks.json
-!.codex/hooks/
-!.codex/hooks/**
-.codex/hooks/__pycache__/
-!.codex/skills/
-.codex/skills/*
-!.codex/skills/planning-with-files/
-!.codex/skills/planning-with-files/**
-AGENTS.md
 .playwright-mcp
 
 # Planning working files (planning-with-files skill)
