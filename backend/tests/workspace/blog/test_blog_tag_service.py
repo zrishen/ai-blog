@@ -50,7 +50,7 @@ def test_parse_tags_capped_at_five() -> None:
 # ── suggest_tags（mock _call_llm）──
 
 async def test_suggest_tags_success(monkeypatch) -> None:
-    async def fake_call(client, prompt):
+    async def fake_call(prompt):
         return "AI, 机器学习, 深度学习"
 
     monkeypatch.setattr(blog_tag_service, "_call_llm", fake_call)
@@ -61,7 +61,7 @@ async def test_suggest_tags_success(monkeypatch) -> None:
 async def test_suggest_tags_reads_working_body_through_seam(monkeypatch) -> None:
     prompts: list[str] = []
 
-    async def fake_call(client, prompt):
+    async def fake_call(prompt):
         prompts.append(prompt)
         return "AI"
 
@@ -81,7 +81,7 @@ async def test_suggest_tags_empty_input_returns_empty(monkeypatch) -> None:
     # 既无 title 也无 excerpt → 不调 LLM，直接返回 []
     called = False
 
-    async def fake_call(client, prompt):
+    async def fake_call(prompt):
         nonlocal called
         called = True
         return "x"
@@ -100,7 +100,7 @@ async def test_suggest_tags_retries_then_empty(monkeypatch) -> None:
     # LLM 持续返回无法解析的内容 → 重试后返回 []
     calls = 0
 
-    async def fake_call(client, prompt):
+    async def fake_call(prompt):
         nonlocal calls
         calls += 1
         return "   "  # _parse_tags 返回空

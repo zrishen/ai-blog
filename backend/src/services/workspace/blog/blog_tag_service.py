@@ -16,7 +16,8 @@ TAG_SUGGEST_TIMEOUT = 15
 TAG_SUGGEST_RETRIES = 2
 
 
-async def _call_llm(client: AsyncOpenAI, prompt: str) -> str:
+async def _call_llm(prompt: str) -> str:
+    client = AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.base_url)
     async with asyncio.timeout(TAG_SUGGEST_TIMEOUT):
         resp = await client.chat.completions.create(
             model=settings.model_name,
@@ -83,9 +84,8 @@ async def suggest_tags(post: BlogPost) -> list[str]:
         f"标题：{title}\n摘要：{excerpt}"
     )
     try:
-        client = AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.base_url)
         for attempt in range(TAG_SUGGEST_RETRIES):
-            raw = await _call_llm(client, prompt)
+            raw = await _call_llm(prompt)
             tags = _parse_tags(raw)
             if tags:
                 return tags
