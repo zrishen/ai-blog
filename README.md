@@ -1,302 +1,115 @@
 # ai-blog
 
-把想法写成体系 —— 一套面向个人创作者的 AI 写作 + 知识管理 + 研究图谱一体化平台。围绕博客创作、知识库 RAG、研究写作三条主线，配以可拖拽三栏布局、AI 侧栏、用户公开主页与未登录访问能力。
+> 把想法写成体系 —— 一套面向个人创作者的 AI 写作平台。以 Markdown 工作区为事实源，集博客创作、AI 对话、知识库 RAG 与认知记忆图谱于一体，开箱即可自部署。
 
-## 技术栈
+[English](README.en.md) · [![CI](https://github.com/zhongrishen/ai-blog/actions/workflows/ci.yml/badge.svg)](https://github.com/zhongrishen/ai-blog/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-| 层 | 技术 |
-|---|---|
-| 前端 | React 19 + TypeScript + Vite + React Router |
-| UI | shadcn/ui + Tailwind CSS v4 + Radix UI + motion + Lucide |
-| 编辑器 | Vditor（Markdown 所见即所得/分屏/即时渲染）+ react-markdown + remark-gfm + rehype-highlight |
-| 状态/布局 | 自定义 store（chatStore / authStore）+ react-resizable-panels |
-| 图谱 | @xyflow/react + dagre（研究知识图谱可视化） |
-| 后端 | FastAPI + SQLAlchemy 2.x（async）+ Pydantic v2 + uvicorn |
-| AI 编排 | LangChain + LangGraph（含 langchain-openai / langchain-anthropic / langchain-deepseek / langchain-mcp-adapters） |
-| 数据库 | PostgreSQL（业务数据） |
-| 向量与认知记忆 | FalkorDB（Chunk 向量检索 + 知识图谱） |
-| MCP | mcp + langchain-mcp-adapters（stdio / streamable-http） |
-| 认证 | JWT + bcrypt |
-| 包管理 | 前端 pnpm，后端 uv |
-| 测试 | 后端 pytest + pytest-asyncio，前端 vitest |
+<p align="center">
+  <img src="docs/landing.png" alt="ai-blog 主页界面">
+</p>
 
-## 功能
+## 功能特性
 
-### 博客创作
-- Vditor Markdown 编辑器，支持所见即所得、分屏、即时渲染三种模式
-- 文章 CRUD、草稿/发布、分类、标签、封面、摘要
-- AI 一键生成封面
-- 用户公开主页 `/u/:username` 与文章详情页 `/u/:username/posts/:slug`
-- Markdown 工作正文写入真实工作区 `data/workspace/users/<user_id>/posts/`；公开发布仍使用不可变 revision 快照
-- 浏览量统计、置顶、归档
+### 写作工作台
+- Markdown 编辑（Vditor，所见即所得 / 分屏 / 即时渲染），正文以 `.md` 文件为唯一事实源存于用户工作区
+- 文章 CRUD、草稿 / 发布、分类、标签、封面、摘要，AI 一键生成封面
+- 发布采用不可变 revision 快照；用户公开主页 `/u/:username` 与文章详情页对未登录访客开放
+- 工作区文件树管理、回收站、Git 版本化
 
 ### AI 对话
-- SSE 流式对话，多会话管理（创建/重命名/删除）
-- 图片对话：上传图片附加到消息
-- 文件对话：从知识库附加文件作为上下文
-- 上下文压缩：长对话按阈值自动压缩历史
-- 三栏布局里的右侧 AI 侧栏，根据当前页面自动切换上下文（博客、知识库、研究、文章详情）
-- **公开对话**：未登录用户也可在 Landing 页和公开博客页面对话，受字符数/轮数、模型 token 与每 IP 每日 10 次限制
+- SSE 流式对话，多会话管理，长对话自动压缩上下文
+- 聊天附件：图片 + 文档（可配额限制）
+- 右侧 AI 侧栏随页面上下文切换（博客、知识库、文章详情）
+- Agent 工具：博客读写、知识库语义搜索、认知记忆召回、工作区文件读取、受限 Web 抓取（默认关闭）、MCP（默认停用，见 `MCP_ENABLED`）
+- 公开对话：未登录用户可在 Landing 页与公开博客页对话，受字符数、输出 token 与每 IP 每日次数限制
 
 ### 知识库（RAG）
-- 上传 PDF / DOCX / XLSX / Markdown，自动解析分块入库
-- 自动向量化（默认 ONNX 本地 embedding，可切换 OpenAI 兼容 API）
-- 多层级分类管理（树形）
-- 对话时按用户隔离 RAG 检索增强
-- 文件预览（convert_to_html）
+- 上传 PDF / DOCX / XLSX / Markdown，后台任务自动解析分块、向量化入库
+- Embedding 支持 OpenAI 兼容 API 或本地 sentence-transformers 模型
+- 对话时按用户隔离做检索增强
 
-### 研究写作
-完整的"研究 → 写作"工作流，围绕**研究图谱**展开：
-- **Topics**（研究主题）：作为研究容器
-- **Sources**（资料来源）：URL、出版方、可信度、抓取时间
-- **Evidence**（证据）：从资料中摘录的原文片段
-- **Claims**（论断）：从证据中提炼的论点（含信心、状态、采用与否）
-- **Entities**（实体）与 **Relations**（关系）：构成知识图谱节点和边
-- **Proposals**（研究建议）：AI 提出的下一步研究方向
-- **Runs**（运行记录）：多阶段 Agent 流程的执行与状态
-- 知识图谱可视化（基于 React Flow + dagre），节点点击查看详情
-- 草稿预览：根据研究素材生成博客草稿
-- 博客与研究双向联动：文章可引用 Claim / Topic 快照
+### 认知记忆（大脑）
+- 基于 FalkorDB 图谱的长期记忆：从对话中抽取实体、事实、情景与偏好
+- 定时巩固与衰减，召回时图扩展关联记忆
+- `/brain` 页面可视化知识图谱，查看实体详情与记忆统计
 
-### Agent 工具
-后端通过 LangGraph 编排，提供以下工具能力：
-- 博客 CRUD、知识库语义搜索、文件读取
-- 代码执行（沙箱受限）
-- MCP 工具调用（按用户配置的 MCP 服务）
+### 账户与订阅
+- 邀请码注册 / 登录（JWT），密码 bcrypt 哈希
+- 用户级 LLM 配置（BYOK）：协议、Base URL、API Key、模型，Key 加密保存，按用户路由
+- 订阅体系：兑换码激活、平台 Key + 周 token 配额，超额或到期自动回退 BYOK
+- 管理后台 `/admin`：用户管理、兑换码、用量统计
+- 所有用户数据严格 user-scoped 隔离
 
-### MCP 服务
-- 支持 stdio 与 streamable-http 两种类型
-- 用户在前端弹窗中增删改查自己的 MCP 服务
-- 启用后自动注入到 Agent 工具集
-
-### 用户与权限
-- 邀请码注册 / 登录（JWT），密码 bcrypt 哈希；未配置邀请码时关闭注册
-- **用户级 LLM 配置**：每个用户可在「设置」中配置自己的协议（OpenAI / Anthropic）、Base URL、API Key、Model，API Key 加密保存，后端调用时按用户身份路由
-- 数据按用户隔离：博客、知识库、对话、研究、MCP、LLM 配置全部 user-scoped
-- 发布的文章和公开 AI 对未登录用户开放；文件库、研究图谱与 MCP 服务均需登录
-
-### 主题与布局
-- 浅色 / 深色主题切换
-- 三栏可拖拽布局（左侧栏 + 主内容 + AI 侧栏），布局持久化到 localStorage
-- 响应式
+### 界面
+- 浅色 / 深色主题
+- 三栏可拖拽布局（侧栏 + 主内容 + AI 侧栏），布局持久化
+- 响应式设计
 
 ## 快速开始
 
-### Docker 部署（推荐用于云服务器）
+### Docker 部署（推荐）
 
-项目提供前端 Nginx + 后端 FastAPI 的同源容器编排，运行数据继续持久化在 `backend/data`。完整的首次启动、更新、备份与 HTTPS 接入说明见 [`deploy/docker/README.md`](deploy/docker/README.md)。
+提供 Nginx + FastAPI 同源容器编排，包含 PostgreSQL 与 FalkorDB：
 
 ```bash
+# 1. 准备后端环境变量（三个密钥的生成命令见该文件内注释）
+cp backend/.env.example backend/.env
+# 编辑 backend/.env 填入 OPENAI_API_KEY、JWT_SECRET 等
+
+# 2. 构建并启动
 docker compose build
 docker compose up -d
+
+# 3. 健康检查
+curl http://127.0.0.1/health
 ```
 
-未安装 Docker 时仍可按下方步骤直接运行前后端。
+完整的首次启动、更新、备份与 HTTPS 接入说明见 [`deploy/docker/README.md`](deploy/docker/README.md)。
 
-### 前置要求
-- Python 3.11+（推荐用 [uv](https://github.com/astral-sh/uv) 管理）
-- Node.js 20.19+（容器构建固定使用 Node.js 22；本地依赖以 `package-lock.json` 为准）
+### 本地开发
 
-### 1. 配置后端环境变量
-
-在 `backend/` 下创建 `.env`：
-
-```env
-OPENAI_API_KEY=your-api-key
-BASE_URL=https://api.openai.com/v1
-MODEL_NAME=gpt-4o-mini
-JWT_SECRET=用命令生成的高熵随机值
-REGISTRATION_INVITE_CODE=自行分发的邀请码
-LLM_SETTINGS_ENCRYPTION_KEY=用 Fernet.generate_key() 生成的密钥
-```
-
-> 用户也可以登录后在前端「设置」弹窗中配置自己的 LLM Key，会覆盖后端默认值。
-
-### 2. 启动后端
+前置要求：Python 3.11+（推荐 [uv](https://github.com/astral-sh/uv)）、Node.js 20+、Docker（跑 PostgreSQL 与 FalkorDB）。
 
 ```bash
+# 后端环境变量
+cp backend/.env.example backend/.env
+# 编辑 backend/.env：DATABASE_URL / FALKORDB_URL 保持本地默认即可
+```
+
+Windows 下直接双击 `start_backend.bat` 与 `start_frontend.bat`（自动拉起数据库容器并启动服务）；或手动执行：
+
+```bash
+# 启动开发数据库（仅 postgres + falkordb）
+docker compose -f compose.yaml -f compose.dev.yaml up -d --wait postgres falkordb
+
+# 启动后端
 cd backend
 uv run uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir src
-```
 
-或双击 `start_backend.bat`。后端运行在 http://127.0.0.1:8000，健康检查 `GET /health`。
-
-启动时会自动：
-- 执行 DB 迁移
-- 按需创建 `<workspace>/users/<user_id>/` 工作区根
-- 写入项目介绍文章（`ai-blog` 系统账户）
-
-> 当前为开发环境，无生产数据。存储布局变更后直接清空 `backend/data/` 重建即可，不提供迁移脚本。
-
-### 3. 启动前端
-
-```bash
+# 启动前端（另开终端）
 cd frontend
-pnpm install
-pnpm dev
+npm install
+npm run dev
 ```
 
-或双击 `start_frontend.bat`。Vite 代理把 `/api` 转发到后端 8000，浏览器访问 http://localhost:5173。
+浏览器访问 http://localhost:5173，Vite 会把 `/api` 代理到后端 8000。
 
-## 项目结构
+## 配置
 
-```
-ai-blog/
-├── backend/
-│   ├── data/                       # 所有运行时数据统一在此（路径基于 backend/，不依赖 cwd）
-│   │   ├── workspace/users/<user_id>/ # 真实用户工作区：posts/uploads/.trash/.git
-│   │   ├── content/chat_attachments/  # 独立聊天附件（按 user ID 隔离）
-│   │   ├── templates/                 # 系统模板（如项目介绍 md）
-│   │   └── logs/
-│   ├── src/
-│   │   ├── main.py                 # FastAPI 入口 + startup 钩子
-│   │   ├── config.py               # Pydantic Settings，所有路径基于 BASE_DIR 绝对路径
-│   │   ├── api/                    # 路由层（按功能拆分）
-│   │   │   ├── routes.py           # 统一注册入口
-│   │   │   ├── status.py           # 健康检查
-│   │   │   ├── auth.py             # 注册/登录
-│   │   │   ├── settings.py         # 用户级 LLM 配置
-│   │   │   ├── blog.py             # 博客 CRUD + 封面生成
-│   │   │   ├── conversations.py    # 会话管理
-│   │   │   ├── chat.py             # 私有 SSE 流式对话
-│   │   │   ├── public_chat.py      # 公开对话（未登录）
-│   │   │   ├── kb.py               # 知识库 + 分类
-│   │   │   ├── files.py            # 上传 + 公开访问 /public/uploads/{username}/...
-│   │   │   ├── preview.py          # 文件预览
-│   │   │   └── mcp.py              # MCP 服务管理
-│   │   ├── services/               # 业务逻辑层
-│   │   │   ├── blog_service.py             # 博客读写主流程
-│   │   │   ├── markdown_blog_service.py    # Markdown 文件 I/O + frontmatter
-│   │   │   ├── blog_cover_service.py       # AI 封面生成
-│   │   │   ├── blog_tag_service.py
-│   │   │   ├── chat_service.py             # 私有对话编排
-│   │   │   ├── public_chat_service.py      # 公开对话（限额）
-│   │   │   ├── conversation_service.py
-│   │   │   ├── file_service.py             # 上传/读取/向量化
-│   │   │   ├── embedding_service.py        # ONNX 或 API embedding
-│   │   │   ├── memory/                     # FalkorDB 向量检索与认知记忆
-│   │   │   ├── llm_settings_service.py     # 用户级 LLM 配置
-│   │   │   ├── user_service.py
-│   │   │   ├── official_intro_service.py   # 项目介绍模板
-│   │   │   └── mcp/                        # MCP 客户端管理
-│   │   ├── tools/                  # LangGraph Agent 可用工具
-│   │   │   ├── agent_tools.py
-│   │   │   └── mcp_tools.py
-│   │   ├── database/               # ORM 模型、连接、迁移
-│   │   │   ├── models.py           # 所有 SQLAlchemy 模型
-│   │   │   ├── engine.py / session.py
-│   │   │   └── migrations.py       # 数据库迁移入口
-│   │   ├── schemas/                # Pydantic Schema
-│   │   └── utils/                  # 工具函数（slug、user_dir 翻译等）
-│   └── tests/
-│       └── mock/                   # Mock 测试（日常开发与 CI，约 140+ 用例）
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx                 # 根组件：三栏布局 + 路由 + ErrorBoundary
-│   │   ├── api/                    # API 客户端（auth/blog/chat/conversations/files/knowledge/mcp）
-│   │   ├── stores/                 # chatStore、authStore
-│   │   ├── components/             # NavBar / LeftSidebar / AISidebar 触发器 / MCPModal / shadcn ui
-│   │   ├── features/
-│   │   │   ├── landing/            # LandingPage（项目主页 + 公开对话）
-│   │   │   ├── blog/               # 博客列表 / 详情 / 编辑器（Vditor）
-│   │   │   ├── knowledge-base/     # 知识库管理 + 上传
-│   │   │   ├── ai-chat/            # 右侧 AI 侧栏（多上下文）
-│   │   │   └── auth/               # 登录弹窗
-│   │   └── hooks/
-│   ├── public/                     # 静态资源（项目图标 writing.svg）
-│   └── index.html
-├── start_backend.bat
-├── start_frontend.bat
-├── LOG.md                          # 变更日志（按日期追加）
-└── README.md
-```
-
-## 前端路由
-
-| 路径 | 说明 | 是否需登录 |
-|---|---|---|
-| `/` | Landing 项目主页（介绍 + 公开 AI 对话） | 否 |
-| `/u/:username` | 用户公开博客主页 | 否（仅展示已发布文章） |
-| `/u/:username/posts/:slug` | 文章详情页 | 否 |
-| `/knowledge` | 知识库管理 | 是 |
-
-## 核心 API
-
-| 分类 | 方法 | 路径 | 说明 |
-|---|---|---|---|
-| 系统 | GET | `/health` | 健康检查（根级，不在 /api/v1 下） |
-| 认证 | POST | `/api/v1/auth/register` `/api/v1/auth/login` | 注册 / 登录 |
-| 用户设置 | GET/PUT | `/api/v1/settings/llm` | 读取/更新当前用户的 LLM 配置 |
-| 博客 | CRUD | `/api/v1/blog/posts` | 文章列表/详情/创建/更新/删除 |
-| 博客 | PUT | `/api/v1/blog/posts/{id}/publish` | 发布/取消发布 |
-| 博客 | POST | `/api/v1/blog/posts/{id}/generate-cover` | AI 生成封面 |
-| 博客 | CRUD | `/api/v1/blog/categories` | 分类管理 |
-| 对话 | POST | `/api/v1/chat/stream` | 私有 SSE 流式对话 |
-| 对话 | POST | `/api/v1/public/chat/stream` | 公开 SSE 流式对话（匿名、限额） |
-| 对话 | CRUD | `/api/v1/conversations` | 会话管理 |
-| 文件库 | CRUD | `/api/v1/files/documents` `/api/v1/files/categories` | 文档与分类 |
-| 文件 | POST | `/api/v1/upload` | 上传文件 |
-| 文件 | GET | `/api/v1/public/uploads/{username}/{filename}` | 公开访问上传文件 |
-| 文件 | GET | `/api/v1/preview/...` | 文件预览 |
-| MCP | CRUD | `/api/v1/mcp/servers` | MCP 服务管理 |
-
-完整接口见 `backend/src/api/` 下各路由文件。
+全部配置项及注释见 [`backend/.env.example`](backend/.env.example)。
 
 ## 测试
 
 ```bash
+# 后端（testcontainers 起真实容器，全量较慢，建议只跑改动域）
 cd backend
-uv run pytest tests/mock -v
-```
+uv run pytest
 
-覆盖：博客 CRUD、用户隔离、知识库 RAG、向量库隔离、研究 API、研究运行阶段、设置、认证、文件服务元数据、公开对话等。
-
-前端测试：
-
-```bash
+# 前端
 cd frontend
-pnpm test
+npm run test
 ```
 
-## 配置说明
+## 许可证
 
-`backend/.env` 中的主要环境变量（`config.py` 为默认值，可被 `.env` 覆盖）：
-
-| 变量 | 说明 | 默认 |
-|---|---|---|
-| `OPENAI_API_KEY` | 默认 LLM API 密钥 | 必填 |
-| `BASE_URL` | 默认 LLM Base URL | 必填 |
-| `MODEL_NAME` | 默认对话模型 | `Qwen3.6-35B` |
-| `DEEP_THINKING_MODEL_NAME` | 深度思考模型 | 同上 |
-| `DATABASE_URL` | PostgreSQL 连接串 | `postgresql+asyncpg://postgres:postgres@localhost:5432/cortex` |
-| `FALKORDB_URL` | FalkorDB 连接串 | `redis://localhost:6379` |
-| `WORKSPACE_ROOT` | 真实工作区根目录 | `data/workspace` |
-| `CHAT_ATTACHMENT_DIR` | 独立聊天附件根目录 | `data/content/chat_attachments` |
-| `JWT_SECRET` | JWT 签名密钥 | 生产环境务必修改 |
-| `REGISTRATION_INVITE_CODE` | 共享注册邀请码；留空则关闭注册 | 空 |
-| `SUPER_ADMIN_USERNAME` | 首次启动自动创建的超级管理员用户名 | 空 |
-| `SUPER_ADMIN_PASSWORD` | 首次启动自动创建超级管理员的密码；已有同名账号不会被重置 | 空 |
-| `LLM_SETTINGS_ENCRYPTION_KEY` | 用户 LLM API Key 的 Fernet 加密主密钥 | 必填 |
-| `JWT_EXPIRE_SECONDS` | Token 过期时间 | 7 天 |
-| `EMBEDDING_PROVIDER` | embedding 来源 | `onnx`（本地） |
-| `EMBEDDING_MODEL` | embedding 模型 | `Qwen3-Embedding-8B` |
-| `EMBEDDING_DIM` | 向量维度 | 384 |
-| `RAG_TOP_K` | 检索片段数 | 3 |
-| `RAG_DISTANCE_THRESHOLD` | 距离阈值 | 0.7 |
-| `PUBLIC_CHAT_MAX_INPUT_CHARS` | 公开对话单次输入字符上限 | 2000 |
-| `PUBLIC_CHAT_MAX_OUTPUT_TOKENS` | 公开对话单次输出 token 上限 | 800 |
-| `PUBLIC_CHAT_DAILY_IP_LIMIT` | 两个匿名公开聊天入口共享的每 IP 中国自然日额度 | 10 |
-| `MCP_CALL_TIMEOUT_SECONDS` | MCP 工具调用超时 | 30 |
-
-## 数据目录与命名
-
-- 所有运行时数据统一收纳在 `backend/data/`
-- 用户内容统一位于 `data/workspace/users/<user_id>/`；物理 owner 根只使用不可变 user ID，不受 username 大小写、Unicode 规范化或未来改名影响
-- 工作区内的 `posts/`、`uploads/`、`.trash/` 与 `.git/` 都在 owner 根下；数据库只保存工作区相对路径
-- 开发环境无生产数据，存储布局变更直接清空 `backend/data/` 重建，不维护迁移脚本
-
-## 开发约定
-
-- 代码改动后按日志风格追加到 `LOG.md`：`YYYY-MM-DD HH:mm [类别] xxx`
-- git commit 风格：`增加: xxx` `修复: xxx` `优化: xxx` `重构: xxx` `文档: xxx` `测试: xxx` `配置: xxx`
-- 临时脚本/测试文件统一放在主目录 `temps/`
+[MIT](LICENSE)
