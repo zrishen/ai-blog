@@ -92,7 +92,7 @@ npm install
 npm run dev
 ```
 
-浏览器访问 http://localhost:5173，Vite 会把 `/api` 代理到后端 8000。
+浏览器访问 `http://localhost:5173`，Vite 会把 `/api` 代理到后端 8000。
 
 ## 配置
 
