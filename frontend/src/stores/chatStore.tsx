@@ -223,7 +223,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...WORKSPACE_DEFAULTS,
         ...BRAIN_DEFAULTS,
         ...SKILL_DEFAULTS,
-        workspaceSelectedView: "overview" as WorkspaceView,
+        workspaceSelectedView: "overview",
         fileLibraryRevision: state.fileLibraryRevision + 1,
         trashRevision: state.trashRevision + 1,
         aiKnowledgeRevision: state.aiKnowledgeRevision + 1,

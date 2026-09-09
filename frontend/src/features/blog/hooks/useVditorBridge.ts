@@ -90,7 +90,7 @@ export function useVditorBridge({ content, setContent, existingPost, setError }:
         url: "/api/v1/upload",
         setHeaders: () => {
           const token = getAccessToken();
-          return token ? { Authorization: `Bearer ${token}` } : ({} as Record<string, string>);
+          return token ? { Authorization: `Bearer ${token}` } : {};
         },
         format: (files, responseText) => {
           let response: { download_url?: string; original_name?: string; stored_name?: string };

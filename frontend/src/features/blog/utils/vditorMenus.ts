@@ -7,7 +7,7 @@ type VditorI18n = NonNullable<VditorOptions["i18n"]>;
 
 export function getEditorI18n(): VditorI18n {
   return {
-    ...(window as typeof window & { VditorI18n: VditorI18n }).VditorI18n,
+    ...(window).VditorI18n,
     splitView: "源码模式",
   };
 }
@@ -19,7 +19,7 @@ const HIGHLIGHT_THIRD_LANGUAGES_URL = new URL("vditor/dist/js/highlight.js/third
 let highlightLoaderPromise: Promise<void> | null = null;
 
 function loadHighlightJs() {
-  const existingHighlighter = (window as typeof window & { hljs?: unknown }).hljs;
+  const existingHighlighter = (window).hljs;
   if (existingHighlighter) return Promise.resolve();
   if (highlightLoaderPromise) return highlightLoaderPromise;
 
@@ -35,7 +35,7 @@ function loadHighlightJs() {
     if (existing) {
       existing.addEventListener("load", () => settle(true), { once: true });
       existing.addEventListener("error", () => settle(false), { once: true });
-      if ((window as typeof window & { hljs?: unknown }).hljs) settle(true);
+      if ((window).hljs) settle(true);
       return;
     }
 
