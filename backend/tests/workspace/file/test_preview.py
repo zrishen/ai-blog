@@ -275,8 +275,12 @@ async def _upload_image(client: AsyncClient, name: str = "img.png") -> tuple[str
 
 @pytest.mark.asyncio
 async def test_public_image_hidden_when_not_referenced(client: AsyncClient):
-    """未关联任何已发布文章的图片，公开接口应 404（防草稿/未关联图片泄露）。"""
+    """未关联任何已发布文章的图片，匿名访问公开接口应 404（防草稿/未关联图片泄露）。
+
+    匿名 = 无凭证；httpx client 会回带注册时的 refresh cookie，须清空 cookie jar 再请求。
+    """
     _token, _user_id, stored = await _upload_image(client)
+    client.cookies.clear()
     resp = await client.get(f"/api/v1/public/uploads/preview_user/{stored}")
     assert resp.status_code == 404
 
@@ -327,6 +331,7 @@ async def test_public_image_hidden_when_only_draft(client: AsyncClient, db_sessi
     db_session.add(post)
     await db_session.commit()
 
+    client.cookies.clear()
     resp = await client.get(f"/api/v1/public/uploads/preview_user/{stored}")
     assert resp.status_code == 404
 

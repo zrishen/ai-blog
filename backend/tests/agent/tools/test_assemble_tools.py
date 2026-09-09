@@ -117,6 +117,7 @@ def test_workspace_file_provider_is_feature_gated():
         "read",
         "write",
         "edit",
+        "create_folder",
         "glob",
         "grep",
         "move",
@@ -127,10 +128,11 @@ def test_workspace_file_provider_is_feature_gated():
 
 def test_workspace_tools_append_before_web_tools_when_enabled():
     asm = assemble_tools(_ctx(workspace_files_enabled=True, web_tools_enabled=True))
-    assert [tool.name for tool in asm.tools][-10:] == [
+    assert [tool.name for tool in asm.tools][-11:] == [
         "read",
         "write",
         "edit",
+        "create_folder",
         "glob",
         "grep",
         "move",

@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _REFRESH_COOKIE = settings.refresh_cookie_name
-_REFRESH_PATH = "/api/v1/auth"
+_REFRESH_PATH = "/api/v1"
 
 
 class AuthRequest(BaseModel):
