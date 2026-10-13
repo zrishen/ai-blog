@@ -2,7 +2,15 @@
 
 > 把想法写成体系 —— 一套面向个人创作者的 AI 写作平台。以 Markdown 工作区为事实源，集博客创作、AI 对话、知识库 RAG 与认知记忆图谱于一体，开箱即可自部署。
 
-[English](README.en.md) · [![CI](https://github.com/zrishen/ai-blog/actions/workflows/ci.yml/badge.svg)](https://github.com/zrishen/ai-blog/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/tag/zrishen/ai-blog?label=release)](https://github.com/zrishen/ai-blog/tags) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <strong>中文</strong> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/zrishen/ai-blog/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/zrishen/ai-blog/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/zrishen/ai-blog/tags"><img alt="Release" src="https://img.shields.io/github/v/tag/zrishen/ai-blog?label=release"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
+</p>
 
 <p align="center">
   <img src="docs/landing.png" alt="ai-blog 主页界面" width="960">
