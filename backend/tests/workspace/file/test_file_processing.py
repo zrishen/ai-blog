@@ -690,19 +690,31 @@ async def _seed_queued_upload_job(db: AsyncSession, user_id: int) -> FileProcess
     return job
 
 
-def _inflight_tracking_vectorize() -> tuple:
-    """vectorize 替身：记录同时进入执行体的 job 数峰值（asyncio 单线程内自增自减无需加锁）。"""
+def _inflight_tracking_vectorize(gate: asyncio.Event) -> tuple:
+    """vectorize 替身：记录同时进入执行体的 job 数峰值（asyncio 单线程内自增自减无需加锁）。
+
+    进入执行体后挂起等待 gate 放行，由测试观测到目标并发数后再放行，
+    避免用睡眠窗口制造重叠带来的时序抖动。
+    """
     state = {"in_flight": 0, "peak": 0}
 
     async def fake(*args, **kwargs):
         state["in_flight"] += 1
         if state["in_flight"] > state["peak"]:
             state["peak"] = state["in_flight"]
-        await asyncio.sleep(0.05)
+        await gate.wait()
         state["in_flight"] -= 1
         return []
 
     return fake, state
+
+
+async def _wait_in_flight(state: dict, target: int, timeout: float = 10.0) -> None:
+    """轮询等在飞 job 数达到 target 或超时；超时也继续，判定交给测试末尾的峰值断言。"""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while state["in_flight"] < target and loop.time() < deadline:
+        await asyncio.sleep(0.001)
 
 
 @pytest.mark.asyncio
@@ -716,10 +728,14 @@ async def test_global_concurrency_caps_in_flight_jobs(db_session: AsyncSession, 
     await db_session.commit()
     job_ids = [job.id for job in jobs]
 
-    fake, state = _inflight_tracking_vectorize()
+    gate = asyncio.Event()
+    fake, state = _inflight_tracking_vectorize(gate)
     monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake)
 
-    await asyncio.gather(*[_run_job(job_id) for job_id in job_ids])
+    tasks = [asyncio.create_task(_run_job(job_id)) for job_id in job_ids]
+    await _wait_in_flight(state, 2)
+    gate.set()
+    await asyncio.gather(*tasks)
 
     assert state["peak"] == 2
     db_session.expire_all()
@@ -738,10 +754,14 @@ async def test_per_user_concurrency_caps_single_user_jobs(db_session: AsyncSessi
     await db_session.commit()
     job_ids = [job.id for job in jobs]
 
-    fake, state = _inflight_tracking_vectorize()
+    gate = asyncio.Event()
+    fake, state = _inflight_tracking_vectorize(gate)
     monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake)
 
-    await asyncio.gather(*[_run_job(job_id) for job_id in job_ids])
+    tasks = [asyncio.create_task(_run_job(job_id)) for job_id in job_ids]
+    await _wait_in_flight(state, 2)
+    gate.set()
+    await asyncio.gather(*tasks)
 
     assert state["peak"] == 2
     db_session.expire_all()
@@ -760,10 +780,14 @@ async def test_per_user_concurrency_does_not_block_other_users(db_session: Async
     await db_session.commit()
     job_ids = [job.id for job in jobs]
 
-    fake, state = _inflight_tracking_vectorize()
+    gate = asyncio.Event()
+    fake, state = _inflight_tracking_vectorize(gate)
     monkeypatch.setattr(file_processing_service, "vectorize_and_store", fake)
 
-    await asyncio.gather(*[_run_job(job_id) for job_id in job_ids])
+    tasks = [asyncio.create_task(_run_job(job_id)) for job_id in job_ids]
+    await _wait_in_flight(state, 2)
+    gate.set()
+    await asyncio.gather(*tasks)
 
     assert state["peak"] == 2
     db_session.expire_all()
